@@ -1,11 +1,13 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 import {
+  PLAYER_HIT_FLASH_MS,
   PLAYER_HIT_INVULNERABILITY_MS,
   PLAYER_MAX_HP,
   PLAYER_PICKUP_RANGE,
   PLAYER_SPEED,
   PLAYER_START_LEVEL,
   PLAYER_START_XP_TO_NEXT_LEVEL,
+  PLAYER_XP_PER_LEVEL,
 } from '../config/constants';
 
 export class Player extends Phaser.GameObjects.Rectangle {
@@ -75,7 +77,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.invulnerableUntil = currentTime + this.hitInvulnerabilityMs;
     this.setFillStyle(0xf87171);
 
-    this.scene.time.delayedCall(120, () => {
+    this.scene.time.delayedCall(PLAYER_HIT_FLASH_MS, () => {
       this.setFillStyle(this.isAlive() ? 0x6ee7b7 : 0x64748b);
     });
 
@@ -138,6 +140,6 @@ export class Player extends Phaser.GameObjects.Rectangle {
   }
 
   private calculateExperienceToNextLevel(): number {
-    return Math.floor(20 + (this.level - 1) * 10);
+    return Math.floor(PLAYER_START_XP_TO_NEXT_LEVEL + (this.level - 1) * PLAYER_XP_PER_LEVEL);
   }
 }

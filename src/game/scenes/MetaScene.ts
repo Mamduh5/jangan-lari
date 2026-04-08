@@ -1,6 +1,11 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
-import { PERMANENT_UPGRADES, getPermanentUpgradeCost, type PermanentUpgradeDefinition } from '../data/permanentUpgrades';
+import { HEROES } from '../data/heroes';
+import {
+  PERMANENT_UPGRADES,
+  getPermanentUpgradeCost,
+  type PermanentUpgradeDefinition,
+} from '../data/permanentUpgrades';
 import { QUESTS } from '../data/quests';
 import { loadGameSave, type GameSaveData } from '../save/saveData';
 import {
@@ -14,6 +19,7 @@ export class MetaScene extends Phaser.Scene {
   private saveData!: GameSaveData;
   private goldText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
+  private headerText!: Phaser.GameObjects.Text;
   private upgradeButtons: Phaser.GameObjects.Text[] = [];
   private upgradeDetails: Phaser.GameObjects.Text[] = [];
   private questTexts: Phaser.GameObjects.Text[] = [];
@@ -26,8 +32,10 @@ export class MetaScene extends Phaser.Scene {
     this.saveData = loadGameSave();
     const centerX = GAME_WIDTH / 2;
 
+    this.cameras.main.setBackgroundColor('#0b1020');
+
     this.add
-      .text(centerX, 54, 'Meta Progression', {
+      .text(centerX, 52, 'Meta Progression', {
         fontFamily: 'Georgia, serif',
         fontSize: '40px',
         color: '#f8fafc',
@@ -35,28 +43,36 @@ export class MetaScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.goldText = this.add
-      .text(centerX, 96, `Total Gold: ${this.saveData.totalGold}`, {
+      .text(centerX, 94, `Total Gold: ${this.saveData.totalGold}`, {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fde68a',
       })
       .setOrigin(0.5);
 
-    this.statusText = this.add
-      .text(centerX, 132, 'Buy permanent upgrades and clear quests for long-term progress.', {
+    this.headerText = this.add
+      .text(centerX, 126, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '17px',
+        fontSize: '18px',
         color: '#93c5fd',
       })
       .setOrigin(0.5);
 
-    const leftPanel = this.add.rectangle(360, 380, 560, 470, 0x111827, 0.94).setOrigin(0.5);
+    this.statusText = this.add
+      .text(centerX, 154, 'Buy permanent boosts and clear quests for long-term power.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '17px',
+        color: '#cbd5e1',
+      })
+      .setOrigin(0.5);
+
+    const leftPanel = this.add.rectangle(360, 394, 560, 492, 0x111827, 0.94).setOrigin(0.5);
     leftPanel.setStrokeStyle(2, 0x334155, 1);
-    const rightPanel = this.add.rectangle(930, 380, 500, 470, 0x111827, 0.94).setOrigin(0.5);
+    const rightPanel = this.add.rectangle(930, 394, 500, 492, 0x111827, 0.94).setOrigin(0.5);
     rightPanel.setStrokeStyle(2, 0x334155, 1);
 
     this.add
-      .text(130, 178, 'Permanent Upgrades', {
+      .text(130, 194, 'Permanent Upgrades', {
         fontFamily: 'Georgia, serif',
         fontSize: '30px',
         color: '#f8fafc',
@@ -64,14 +80,14 @@ export class MetaScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.add
-      .text(710, 178, 'Quest Board', {
+      .text(710, 194, 'Quest Board', {
         fontFamily: 'Georgia, serif',
         fontSize: '30px',
         color: '#f8fafc',
       })
       .setOrigin(0, 0.5);
 
-    let upgradeY = 240;
+    let upgradeY = 256;
     for (const upgrade of PERMANENT_UPGRADES) {
       const button = this.add
         .text(110, upgradeY, upgrade.title, {
@@ -87,9 +103,7 @@ export class MetaScene extends Phaser.Scene {
       button.on('pointerover', () => {
         button.setStyle({ color: '#ffffff', backgroundColor: '#374151' });
       });
-      button.on('pointerout', () => {
-        button.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
-      });
+      button.on('pointerout', () => this.refreshView());
       button.on('pointerdown', () => this.handlePurchase(upgrade));
 
       const detail = this.add.text(290, upgradeY, '', {
@@ -102,10 +116,10 @@ export class MetaScene extends Phaser.Scene {
 
       this.upgradeButtons.push(button);
       this.upgradeDetails.push(detail);
-      upgradeY += 96;
+      upgradeY += 100;
     }
 
-    let questY = 218;
+    let questY = 232;
     for (const quest of QUESTS) {
       const questText = this.add.text(700, questY, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
@@ -115,11 +129,11 @@ export class MetaScene extends Phaser.Scene {
       });
       questText.setOrigin(0, 0);
       this.questTexts.push(questText);
-      questY += 82;
+      questY += 88;
     }
 
     const backButton = this.add
-      .text(centerX, GAME_HEIGHT - 46, 'Back to Menu', {
+      .text(centerX, GAME_HEIGHT - 44, 'Back to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fef3c7',
@@ -150,7 +164,7 @@ export class MetaScene extends Phaser.Scene {
     const nextSave = purchasePermanentUpgrade(this.saveData, upgrade);
 
     if (!nextSave) {
-      this.statusText.setText('Not enough gold or upgrade already at max rank.');
+      this.statusText.setText('Not enough gold or that upgrade is already maxed.');
       return;
     }
 
@@ -162,6 +176,7 @@ export class MetaScene extends Phaser.Scene {
   private refreshView(): void {
     this.saveData = loadGameSave();
     this.goldText.setText(`Total Gold: ${this.saveData.totalGold}`);
+    this.headerText.setText(`Selected Hero: ${HEROES[this.saveData.selectedHero].name}`);
 
     for (let index = 0; index < PERMANENT_UPGRADES.length; index += 1) {
       const upgrade = PERMANENT_UPGRADES[index];
@@ -169,10 +184,16 @@ export class MetaScene extends Phaser.Scene {
       const cost = getPermanentUpgradeCost(upgrade, level);
       const unlocked = isPermanentUpgradeUnlocked(this.saveData, upgrade.id);
       const canBuy = canPurchasePermanentUpgrade(this.saveData, upgrade);
+      const maxed = level >= upgrade.maxLevel;
+      const state = !unlocked ? 'Quest Locked' : maxed ? 'Maxed' : canBuy ? 'Available' : 'Need More Gold';
 
       this.upgradeButtons[index].setText(`${upgrade.title} ${level}/${upgrade.maxLevel}`);
+      this.upgradeButtons[index].setStyle({
+        color: !unlocked ? '#94a3b8' : maxed ? '#111827' : canBuy ? '#fef3c7' : '#cbd5e1',
+        backgroundColor: !unlocked ? '#233044' : maxed ? '#86efac' : canBuy ? '#1f2937' : '#374151',
+      });
       this.upgradeDetails[index].setText(
-        `${upgrade.description}\nState: ${!unlocked ? 'Quest Locked' : level >= upgrade.maxLevel ? 'Maxed' : canBuy ? 'Available' : 'Need More Gold'}\nCost: ${level >= upgrade.maxLevel ? 'MAX' : cost}`,
+        `${upgrade.description}\nState: ${state}\nCost: ${maxed ? 'MAX' : cost}`,
       );
     }
 
@@ -204,7 +225,7 @@ export class MetaScene extends Phaser.Scene {
       case 'gold':
         return `+${quest.reward.amount} gold`;
       case 'unlockHero':
-        return `Unlock hero: ${quest.reward.heroId}`;
+        return `Unlock hero: ${HEROES[quest.reward.heroId].name}`;
       case 'unlockPermanentUpgrade':
         return `Unlock meta upgrade: ${quest.reward.upgradeId}`;
     }

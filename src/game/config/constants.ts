@@ -7,18 +7,27 @@ export const WORLD_HEIGHT = 1400;
 export const PLAYER_SPEED = 260;
 export const PLAYER_MAX_HP = 100;
 export const PLAYER_HIT_INVULNERABILITY_MS = 700;
+export const PLAYER_HIT_FLASH_MS = 120;
 export const PLAYER_PICKUP_RANGE = 90;
 export const PLAYER_START_LEVEL = 1;
-export const PLAYER_START_XP_TO_NEXT_LEVEL = 20;
+export const PLAYER_START_XP_TO_NEXT_LEVEL = 18;
+export const PLAYER_XP_PER_LEVEL = 8;
 
-export const ENEMY_SPAWN_INTERVAL_MS = 1100;
+export const ENEMY_SPAWN_INTERVAL_MS = 1000;
 export const RUN_TARGET_DURATION_MS = 120000;
-export const BOSS_SPAWN_TIME_MS = 95000;
-export const ELITE_SPAWN_INTERVAL_MS = 28000;
+export const BOSS_SPAWN_TIME_MS = 100000;
+export const ELITE_SPAWN_INTERVAL_MS = 32000;
+export const ENEMY_HIT_FLASH_MS = 80;
 
-export const XP_GEM_ATTRACT_SPEED = 460;
+export const XP_GEM_ATTRACT_SPEED = 520;
 
-export const GOLD_REWARD_BASE = 12;
-export const GOLD_REWARD_PER_LEVEL = 4;
-export const GOLD_REWARD_PER_KILL_STEP = 6;
-export const GOLD_REWARD_VICTORY_BONUS = 24;
+export const LEVEL_UP_FLASH_MS = 170;
+export const PLAYER_HIT_SHAKE_DURATION_MS = 90;
+export const PLAYER_HIT_SHAKE_INTENSITY = 0.0032;
+export const ELITE_SPAWN_INDICATOR_MS = 650;
+export const ENDING_FLASH_MS = 240;
+
+export const GOLD_REWARD_BASE = 14;
+export const GOLD_REWARD_PER_LEVEL = 5;
+export const GOLD_REWARD_PER_KILL_STEP = 5;
+export const GOLD_REWARD_VICTORY_BONUS = 28;

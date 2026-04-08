@@ -5,7 +5,10 @@ export type UpgradeId =
   | 'rapid-fire'
   | 'velocity'
   | 'magnet'
-  | 'reach';
+  | 'reach'
+  | 'unlock-twin-fangs'
+  | 'unlock-ember-lance'
+  | 'unlock-bloom-cannon';
 
 export type UpgradeDefinition = {
   id: UpgradeId;
@@ -22,31 +25,46 @@ export const UPGRADE_POOL: UpgradeDefinition[] = [
   {
     id: 'swiftness',
     title: 'Swiftness',
-    description: '+24 move speed.',
+    description: '+22 move speed.',
   },
   {
     id: 'power',
     title: 'Power',
-    description: '+6 projectile damage.',
+    description: '+5 damage to all owned weapons.',
   },
   {
     id: 'rapid-fire',
     title: 'Rapid Fire',
-    description: '-45 ms attack cooldown.',
+    description: '-40 ms cooldown to all owned weapons.',
   },
   {
     id: 'velocity',
     title: 'Velocity',
-    description: '+110 projectile speed.',
+    description: '+90 projectile speed to all owned weapons.',
   },
   {
     id: 'magnet',
     title: 'Magnet',
-    description: '+40 pickup range.',
+    description: '+35 pickup range.',
   },
   {
     id: 'reach',
     title: 'Reach',
-    description: '+65 attack range.',
+    description: '+55 attack range to all owned weapons.',
+  },
+  {
+    id: 'unlock-twin-fangs',
+    title: 'Twin Fangs',
+    description: 'Add a rapid dual-dart weapon with tight spread.',
+  },
+  {
+    id: 'unlock-ember-lance',
+    title: 'Ember Lance',
+    description: 'Add a slow heavy lance for hard single hits.',
+  },
+  {
+    id: 'unlock-bloom-cannon',
+    title: 'Bloom Cannon',
+    description: 'Add a short-range tri-shot bloom burst.',
   },
 ];

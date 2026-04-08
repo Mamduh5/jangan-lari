@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
 import { loadGameSave, type GameSaveData } from '../save/saveData';
@@ -10,6 +10,7 @@ export class MenuScene extends Phaser.Scene {
   private statusText!: Phaser.GameObjects.Text;
   private heroActionButtons: Phaser.GameObjects.Text[] = [];
   private heroInfoTexts: Phaser.GameObjects.Text[] = [];
+  private heroPanels: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
     super('MenuScene');
@@ -20,16 +21,20 @@ export class MenuScene extends Phaser.Scene {
     const centerX = GAME_WIDTH / 2;
     const centerY = GAME_HEIGHT / 2;
 
+    this.cameras.main.setBackgroundColor('#0b1020');
+
+    this.add.rectangle(centerX, centerY, 1160, 680, 0x0f172a, 0.86).setStrokeStyle(2, 0x223247, 0.8);
+
     this.add
-      .text(centerX, centerY - 290, 'JANGAN LARI', {
+      .text(centerX, centerY - 300, 'JANGAN LARI', {
         fontFamily: 'Georgia, serif',
-        fontSize: '48px',
+        fontSize: '52px',
         color: '#f8fafc',
       })
       .setOrigin(0.5);
 
     this.add
-      .text(centerX, centerY - 238, 'Phase 7 Hero Selection', {
+      .text(centerX, centerY - 250, 'Survive the arena, stack weapons, and cash out stronger runs.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#93c5fd',
@@ -37,35 +42,35 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.goldText = this.add
-      .text(centerX, centerY - 194, `Total Gold: ${this.saveData.totalGold}`, {
+      .text(centerX, centerY - 204, `Total Gold: ${this.saveData.totalGold}`, {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fde68a',
       })
       .setOrigin(0.5);
 
-    const startLabel = this.createMenuButton(centerX - 140, centerY - 128, 'Start Run', () => {
+    const startLabel = this.createMenuButton(centerX - 150, centerY - 138, 'Start Run', () => {
       this.scene.start('RunScene');
       this.scene.launch('UIScene');
     });
 
-    const metaLabel = this.createMenuButton(centerX + 140, centerY - 128, 'Meta Upgrades', () => {
+    const metaLabel = this.createMenuButton(centerX + 150, centerY - 138, 'Meta Progress', () => {
       this.scene.start('MetaScene');
     });
 
-    this.statusText = this.add
-      .text(centerX, centerY + 244, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#93c5fd',
-      })
-      .setOrigin(0.5);
-
     this.add
-      .text(centerX, centerY - 54, 'Choose Hero', {
+      .text(centerX, centerY - 64, 'Choose Hero', {
         fontFamily: 'Georgia, serif',
         fontSize: '32px',
         color: '#f8fafc',
+      })
+      .setOrigin(0.5);
+
+    this.statusText = this.add
+      .text(centerX, centerY + 252, 'Select a hero, then enter the run.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '18px',
+        color: '#93c5fd',
       })
       .setOrigin(0.5);
 
@@ -74,37 +79,38 @@ export class MenuScene extends Phaser.Scene {
     for (let index = 0; index < HERO_LIST.length; index += 1) {
       const hero = HERO_LIST[index];
       const x = panelPositions[index];
-      const panel = this.add.rectangle(x, centerY + 78, 380, 240, 0x111827, 0.95).setOrigin(0.5);
+      const panel = this.add.rectangle(x, centerY + 84, 390, 260, 0x111827, 0.95).setOrigin(0.5);
       panel.setStrokeStyle(2, 0x334155, 1);
 
       this.add
-        .text(x, centerY - 6, hero.name, {
+        .text(x, centerY - 2, hero.name, {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '28px',
+          fontSize: '29px',
           color: '#f8fafc',
         })
         .setOrigin(0.5);
 
       const infoText = this.add
-        .text(x, centerY + 52, this.buildHeroSummary(hero), {
+        .text(x, centerY + 60, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '17px',
           color: '#cbd5e1',
           align: 'center',
-          wordWrap: { width: 320 },
+          wordWrap: { width: 326 },
         })
         .setOrigin(0.5);
 
-      const actionButton = this.createMenuButton(x, centerY + 162, '', () => this.handleHeroAction(hero));
+      const actionButton = this.createMenuButton(x, centerY + 176, '', () => this.handleHeroAction(hero));
       actionButton.setFontSize('24px');
       actionButton.setPadding(18, 10, 18, 10);
 
+      this.heroPanels.push(panel);
       this.heroInfoTexts.push(infoText);
       this.heroActionButtons.push(actionButton);
     }
 
     this.add
-      .text(centerX, centerY + 284, 'Runner is unlocked by default. Vanguard unlocks with gold.', {
+      .text(centerX, centerY + 292, 'Enter or Space starts a run. M opens meta progression.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '17px',
         color: '#cbd5e1',
@@ -151,8 +157,11 @@ export class MenuScene extends Phaser.Scene {
       const selected = this.saveData.selectedHero === hero.id;
       const button = this.heroActionButtons[index];
       const infoText = this.heroInfoTexts[index];
+      const panel = this.heroPanels[index];
 
-      infoText.setText(this.buildHeroSummary(hero));
+      infoText.setText(this.buildHeroSummary(hero, unlocked, selected));
+      panel.setStrokeStyle(selected ? 3 : 2, selected ? 0xfde68a : unlocked ? 0x334155 : 0x3b2f4a, 1);
+      panel.setFillStyle(selected ? 0x172033 : 0x111827, 0.95);
 
       if (selected) {
         button.setText('Selected');
@@ -171,8 +180,8 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
-  private buildHeroSummary(hero: HeroDefinition): string {
-    const lines = [hero.description];
+  private buildHeroSummary(hero: HeroDefinition, unlocked: boolean, selected: boolean): string {
+    const lines = [hero.description, ''];
 
     if (hero.maxHealthBonus !== 0) {
       lines.push(`+${hero.maxHealthBonus} max HP`);
@@ -190,10 +199,14 @@ export class MenuScene extends Phaser.Scene {
       lines.push(`-${hero.fireCooldownReductionMs} ms fire cooldown`);
     }
 
-    if (hero.unlockCost) {
-      lines.push(`Unlock Cost: ${hero.unlockCost} gold`);
+    lines.push('');
+
+    if (selected) {
+      lines.push('Status: Selected for next run');
+    } else if (unlocked) {
+      lines.push('Status: Unlocked');
     } else {
-      lines.push('Available from the start');
+      lines.push(`Status: Locked (${hero.unlockCost ?? 0} gold)`);
     }
 
     return lines.join('\n');
@@ -236,4 +249,3 @@ export class MenuScene extends Phaser.Scene {
     return button;
   }
 }
-

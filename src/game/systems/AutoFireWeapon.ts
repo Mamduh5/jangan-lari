@@ -23,6 +23,10 @@ export class AutoFireWeapon {
     return this.projectileGroup;
   }
 
+  getId(): string {
+    return this.stats.id;
+  }
+
   getStats(): WeaponStats {
     return { ...this.stats };
   }
@@ -52,7 +56,6 @@ export class AutoFireWeapon {
     }
 
     const target = this.findNearestEnemy();
-
     if (!target) {
       return;
     }
@@ -103,8 +106,17 @@ export class AutoFireWeapon {
       return;
     }
 
-    const projectile = this.getInactiveProjectile() ?? this.createProjectile();
-    projectile.fire(this.owner.x, this.owner.y, direction, this.stats);
+    const burstCount = this.stats.burstCount ?? 1;
+    const totalSpread = this.stats.spreadDegrees ?? 0;
+    const baseDirection = direction.clone().normalize();
+
+    for (let index = 0; index < burstCount; index += 1) {
+      const spreadOffset =
+        burstCount === 1 ? 0 : Phaser.Math.Linear(-totalSpread / 2, totalSpread / 2, index / (burstCount - 1));
+      const shotDirection = baseDirection.clone().rotate(Phaser.Math.DegToRad(spreadOffset));
+      const projectile = this.getInactiveProjectile() ?? this.createProjectile();
+      projectile.fire(this.owner.x, this.owner.y, shotDirection, this.stats);
+    }
   }
 
   private getInactiveProjectile(): Projectile | null {

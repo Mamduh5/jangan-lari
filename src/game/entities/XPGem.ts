@@ -14,6 +14,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
 
     this.value = value;
     this.setStrokeStyle(2, 0xdbeafe, 0.8);
+    this.setDepth(3);
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -32,8 +33,12 @@ export class XPGem extends Phaser.GameObjects.Arc {
       return;
     }
 
+    const pulse = 1 + Math.sin((this.scene.time.now + this.x * 2) * 0.01) * 0.08;
+    this.setScale(pulse);
+
     const distance = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
     if (distance > player.getPickupRange()) {
+      this.setAlpha(0.88);
       this.body.setVelocity(0, 0);
       return;
     }
@@ -44,7 +49,9 @@ export class XPGem extends Phaser.GameObjects.Arc {
       return;
     }
 
+    const attractionSpeed = XP_GEM_ATTRACT_SPEED + Math.max(0, player.getPickupRange() - distance) * 2.4;
+    this.setAlpha(1);
     direction.normalize();
-    this.body.setVelocity(direction.x * XP_GEM_ATTRACT_SPEED, direction.y * XP_GEM_ATTRACT_SPEED);
+    this.body.setVelocity(direction.x * attractionSpeed, direction.y * attractionSpeed);
   }
 }

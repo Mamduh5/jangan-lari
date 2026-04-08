@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { ENEMY_HIT_FLASH_MS } from '../config/constants';
 import type { EnemyArchetype } from '../data/enemies';
 
 export class Enemy extends Phaser.GameObjects.Rectangle {
@@ -7,7 +8,6 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   readonly archetype: EnemyArchetype;
   readonly contactDamage: number;
   private readonly speed: number;
-  private readonly maxHealth: number;
   private readonly xpValue: number;
   private health: number;
 
@@ -17,11 +17,12 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.archetype = archetype;
     this.speed = archetype.speed;
     this.contactDamage = archetype.contactDamage;
-    this.maxHealth = archetype.maxHealth;
     this.health = archetype.maxHealth;
     this.xpValue = archetype.xpValue;
 
-    this.setStrokeStyle(2, archetype.strokeColor, 0.72);
+    const strokeWidth = archetype.isBoss ? 4 : archetype.isElite ? 3 : 2;
+    this.setStrokeStyle(strokeWidth, archetype.strokeColor, 0.76);
+    this.setDepth(archetype.isBoss ? 6 : archetype.isElite ? 5 : 4);
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -64,6 +65,20 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.body.setVelocity(direction.x * this.speed, direction.y * this.speed);
   }
 
+  updatePresentation(currentTime: number): void {
+    if (this.isBoss()) {
+      this.setScale(1 + Math.sin((currentTime + this.x) * 0.008) * 0.05);
+      return;
+    }
+
+    if (this.isElite()) {
+      this.setScale(1 + Math.sin((currentTime + this.y) * 0.012) * 0.03);
+      return;
+    }
+
+    this.setScale(1);
+  }
+
   takeDamage(amount: number): boolean {
     if (!this.isAlive()) {
       return false;
@@ -77,7 +92,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
 
     this.setFillStyle(0xffffff);
-    this.scene.time.delayedCall(80, () => {
+    this.scene.time.delayedCall(ENEMY_HIT_FLASH_MS, () => {
       if (this.active) {
         this.setFillStyle(this.archetype.color);
       }

@@ -6,8 +6,50 @@ import {
 } from '../config/constants';
 import { ENEMY_ARCHETYPES, type EnemyArchetype } from '../data/enemies';
 
+type StageRule = {
+  untilMs: number;
+  minCount: number;
+  maxCount: number;
+  pool: Array<{ archetype: EnemyArchetype; weight: number }>;
+};
+
+const STAGE_RULES: StageRule[] = [
+  {
+    untilMs: 28000,
+    minCount: 2,
+    maxCount: 3,
+    pool: [
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 50 },
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 25 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 25 },
+    ],
+  },
+  {
+    untilMs: 65000,
+    minCount: 3,
+    maxCount: 4,
+    pool: [
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 20 },
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 25 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 35 },
+      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 20 },
+    ],
+  },
+  {
+    untilMs: RUN_TARGET_DURATION_MS,
+    minCount: 4,
+    maxCount: 5,
+    pool: [
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 22 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 33 },
+      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 30 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 15 },
+    ],
+  },
+];
+
 export class SpawnDirector {
-  private nextEliteSpawnAtMs = 35000;
+  private nextEliteSpawnAtMs = 30000;
   private bossSpawned = false;
 
   nextWave(elapsedMs: number): EnemyArchetype[] {
@@ -15,12 +57,12 @@ export class SpawnDirector {
       return [];
     }
 
+    const stage = this.getStageRule(elapsedMs);
     const wave: EnemyArchetype[] = [];
-    const stage = this.getStage(elapsedMs);
-    const baseCount = this.getBaseCount(stage);
+    const baseCount = Phaser.Math.Between(stage.minCount, stage.maxCount);
 
     for (let index = 0; index < baseCount; index += 1) {
-      wave.push(this.pickArchetype(stage));
+      wave.push(this.pickWeightedArchetype(stage));
     }
 
     if (elapsedMs >= this.nextEliteSpawnAtMs) {
@@ -36,60 +78,21 @@ export class SpawnDirector {
     return wave;
   }
 
-  hasSpawnedBoss(): boolean {
-    return this.bossSpawned;
+  private getStageRule(elapsedMs: number): StageRule {
+    return STAGE_RULES.find((stage) => elapsedMs < stage.untilMs) ?? STAGE_RULES[STAGE_RULES.length - 1];
   }
 
-  private getStage(elapsedMs: number): number {
-    if (elapsedMs < 30000) {
-      return 0;
-    }
+  private pickWeightedArchetype(stage: StageRule): EnemyArchetype {
+    const totalWeight = stage.pool.reduce((sum, entry) => sum + entry.weight, 0);
+    let roll = Phaser.Math.Between(1, totalWeight);
 
-    if (elapsedMs < 65000) {
-      return 1;
-    }
-
-    return 2;
-  }
-
-  private getBaseCount(stage: number): number {
-    switch (stage) {
-      case 0:
-        return Phaser.Math.Between(2, 3);
-      case 1:
-        return Phaser.Math.Between(3, 5);
-      default:
-        return Phaser.Math.Between(4, 6);
-    }
-  }
-
-  private pickArchetype(stage: number): EnemyArchetype {
-    const roll = Math.random();
-
-    if (stage === 0) {
-      return roll < 0.45 ? ENEMY_ARCHETYPES.scuttler : ENEMY_ARCHETYPES.mauler;
-    }
-
-    if (stage === 1) {
-      if (roll < 0.35) {
-        return ENEMY_ARCHETYPES.scuttler;
+    for (const entry of stage.pool) {
+      roll -= entry.weight;
+      if (roll <= 0) {
+        return entry.archetype;
       }
-
-      if (roll < 0.8) {
-        return ENEMY_ARCHETYPES.mauler;
-      }
-
-      return ENEMY_ARCHETYPES.bulwark;
     }
 
-    if (roll < 0.25) {
-      return ENEMY_ARCHETYPES.scuttler;
-    }
-
-    if (roll < 0.65) {
-      return ENEMY_ARCHETYPES.mauler;
-    }
-
-    return ENEMY_ARCHETYPES.bulwark;
+    return stage.pool[stage.pool.length - 1].archetype;
   }
 }

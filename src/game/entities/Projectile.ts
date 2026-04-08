@@ -14,6 +14,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
+    this.setDepth(7);
     this.body.setAllowGravity(false);
     this.body.setCircle(5);
     this.deactivate();
@@ -28,6 +29,9 @@ export class Projectile extends Phaser.GameObjects.Arc {
 
     this.setRadius(weapon.projectileRadius);
     this.setFillStyle(weapon.projectileColor);
+    this.setStrokeStyle(2, weapon.projectileStrokeColor, 0.9);
+    this.setAlpha(weapon.projectileAlpha ?? 1);
+    this.setScale(1);
     this.setActive(true);
     this.setVisible(true);
     this.setPosition(x, y);

@@ -1,4 +1,10 @@
-export type EnemyArchetypeId = 'scuttler' | 'mauler' | 'bulwark' | 'overlord' | 'behemoth';
+export type EnemyArchetypeId =
+  | 'scuttler'
+  | 'skimmer'
+  | 'mauler'
+  | 'bulwark'
+  | 'overlord'
+  | 'behemoth';
 
 export type EnemyArchetype = {
   id: EnemyArchetypeId;
@@ -21,10 +27,21 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     size: 22,
     color: 0xfb7185,
     strokeColor: 0xffe4e6,
-    maxHealth: 20,
-    speed: 124,
-    contactDamage: 8,
-    xpValue: 6,
+    maxHealth: 18,
+    speed: 136,
+    contactDamage: 7,
+    xpValue: 5,
+  },
+  skimmer: {
+    id: 'skimmer',
+    name: 'Skimmer',
+    size: 26,
+    color: 0x38bdf8,
+    strokeColor: 0xe0f2fe,
+    maxHealth: 26,
+    speed: 118,
+    contactDamage: 10,
+    xpValue: 7,
   },
   mauler: {
     id: 'mauler',
@@ -32,9 +49,9 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     size: 30,
     color: 0xf97316,
     strokeColor: 0xffedd5,
-    maxHealth: 34,
-    speed: 92,
-    contactDamage: 12,
+    maxHealth: 40,
+    speed: 94,
+    contactDamage: 13,
     xpValue: 8,
   },
   bulwark: {
@@ -43,10 +60,10 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     size: 40,
     color: 0x84cc16,
     strokeColor: 0xecfccb,
-    maxHealth: 72,
-    speed: 60,
+    maxHealth: 82,
+    speed: 58,
     contactDamage: 18,
-    xpValue: 12,
+    xpValue: 13,
   },
   overlord: {
     id: 'overlord',
@@ -54,10 +71,10 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     size: 48,
     color: 0xa855f7,
     strokeColor: 0xf3e8ff,
-    maxHealth: 190,
-    speed: 86,
-    contactDamage: 24,
-    xpValue: 30,
+    maxHealth: 230,
+    speed: 90,
+    contactDamage: 22,
+    xpValue: 32,
     isElite: true,
   },
   behemoth: {
@@ -66,10 +83,10 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     size: 72,
     color: 0xdc2626,
     strokeColor: 0xfee2e2,
-    maxHealth: 600,
-    speed: 70,
+    maxHealth: 640,
+    speed: 68,
     contactDamage: 34,
-    xpValue: 80,
+    xpValue: 90,
     isBoss: true,
   },
 };

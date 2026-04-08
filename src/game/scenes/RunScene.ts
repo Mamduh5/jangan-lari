@@ -1,17 +1,22 @@
 import Phaser from 'phaser';
 import {
+  ELITE_SPAWN_INDICATOR_MS,
+  ENDING_FLASH_MS,
   ENEMY_SPAWN_INTERVAL_MS,
   GOLD_REWARD_BASE,
   GOLD_REWARD_PER_KILL_STEP,
   GOLD_REWARD_PER_LEVEL,
   GOLD_REWARD_VICTORY_BONUS,
+  LEVEL_UP_FLASH_MS,
+  PLAYER_HIT_SHAKE_DURATION_MS,
+  PLAYER_HIT_SHAKE_INTENSITY,
   RUN_TARGET_DURATION_MS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
 import { HEROES } from '../data/heroes';
 import { UPGRADE_POOL, type UpgradeDefinition, type UpgradeId } from '../data/upgrades';
-import { STARTER_WEAPON } from '../data/weapons';
+import { STARTER_WEAPON, WEAPON_DEFINITIONS, type WeaponDefinition } from '../data/weapons';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
@@ -28,7 +33,8 @@ export class RunScene extends Phaser.Scene {
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
   private xpGems!: Phaser.Physics.Arcade.Group;
-  private starterWeapon!: AutoFireWeapon;
+  private weapons: AutoFireWeapon[] = [];
+  private ownedWeaponIds = new Set<string>();
   private spawnDirector!: SpawnDirector;
   private saveData!: GameSaveData;
   private movementKeys!: MovementKeys;
@@ -42,6 +48,12 @@ export class RunScene extends Phaser.Scene {
   private isEnded = false;
   private isLevelingUp = false;
 
+  // These modifiers stack from heroes, permanent upgrades, and level-up picks.
+  private globalWeaponDamageBonus = 0;
+  private globalWeaponCooldownReduction = 0;
+  private globalProjectileSpeedBonus = 0;
+  private globalWeaponRangeBonus = 0;
+
   constructor() {
     super('RunScene');
   }
@@ -54,8 +66,14 @@ export class RunScene extends Phaser.Scene {
     this.killCount = 0;
     this.eliteKillCount = 0;
     this.goldEarned = 0;
+    this.globalWeaponDamageBonus = 0;
+    this.globalWeaponCooldownReduction = 0;
+    this.globalProjectileSpeedBonus = 0;
+    this.globalWeaponRangeBonus = 0;
     this.runStartTime = this.time.now;
     this.frozenElapsedMs = 0;
+    this.weapons = [];
+    this.ownedWeaponIds.clear();
 
     this.cameras.main.setBackgroundColor('#111827');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -66,10 +84,11 @@ export class RunScene extends Phaser.Scene {
     this.enemies = this.physics.add.group({ runChildUpdate: false });
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
     this.spawnDirector = new SpawnDirector();
-    this.starterWeapon = new AutoFireWeapon(this, this.player, this.enemies, STARTER_WEAPON);
+    this.movementKeys = createMovementKeys(this);
+
+    this.registerWeapon(STARTER_WEAPON);
     this.applyPermanentUpgrades();
     this.applyHeroBonuses();
-    this.movementKeys = createMovementKeys(this);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setZoom(1);
@@ -78,12 +97,6 @@ export class RunScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.enemies, (_playerObject, enemyObject) => {
       if (enemyObject instanceof Enemy) {
         this.handlePlayerEnemyOverlap(enemyObject);
-      }
-    });
-
-    this.physics.add.overlap(this.starterWeapon.getProjectiles(), this.enemies, (projectileObject, enemyObject) => {
-      if (projectileObject instanceof Projectile && enemyObject instanceof Enemy) {
-        this.handleProjectileEnemyOverlap(projectileObject, enemyObject);
       }
     });
 
@@ -140,7 +153,10 @@ export class RunScene extends Phaser.Scene {
     this.player.updateVisualState(this.time.now);
     this.updateEnemies();
     this.updateGems();
-    this.starterWeapon.update(this.time.now, delta);
+
+    for (const weapon of this.weapons) {
+      weapon.update(this.time.now, delta);
+    }
 
     this.publishHudState();
   }
@@ -179,6 +195,29 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
   }
 
+  private registerWeapon(definition: WeaponDefinition, announce = false): void {
+    if (this.ownedWeaponIds.has(definition.id)) {
+      return;
+    }
+
+    const weapon = new AutoFireWeapon(this, this.player, this.enemies, definition);
+    this.applyWeaponModifiersTo(weapon);
+    this.weapons.push(weapon);
+    this.ownedWeaponIds.add(definition.id);
+
+    this.physics.add.overlap(weapon.getProjectiles(), this.enemies, (projectileObject, enemyObject) => {
+      if (projectileObject instanceof Projectile && enemyObject instanceof Enemy) {
+        this.handleProjectileEnemyOverlap(projectileObject, enemyObject);
+      }
+    });
+
+    if (announce) {
+      this.showFloatingText(this.player.x, this.player.y - 62, `${definition.name} online`, '#bfdbfe', 20);
+      this.createBurstCircle(this.player.x, this.player.y, definition.projectileColor, 22, 70, 220, 0.9);
+      this.cameras.main.flash(120, 140, 190, 255, false);
+    }
+  }
+
   private applyPermanentUpgrades(): void {
     const maxHpLevel = getPermanentUpgradeLevel(this.saveData, 'max-hp');
     const moveSpeedLevel = getPermanentUpgradeLevel(this.saveData, 'move-speed');
@@ -198,7 +237,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (startingDamageLevel > 0) {
-      this.starterWeapon.addDamage(startingDamageLevel * 3);
+      this.applyWeaponDamageBonus(startingDamageLevel * 3);
     }
   }
 
@@ -214,11 +253,11 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (hero.startingDamageBonus !== 0) {
-      this.starterWeapon.addDamage(hero.startingDamageBonus);
+      this.applyWeaponDamageBonus(hero.startingDamageBonus);
     }
 
     if (hero.fireCooldownReductionMs !== 0) {
-      this.starterWeapon.reduceCooldown(hero.fireCooldownReductionMs);
+      this.applyWeaponCooldownReduction(hero.fireCooldownReductionMs);
     }
   }
 
@@ -268,8 +307,10 @@ export class RunScene extends Phaser.Scene {
 
       if (archetype.isBoss) {
         this.registry.set('run.instructions', 'Boss sighted. Defeat it or survive to extraction.');
+        this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
       } else if (archetype.isElite) {
         this.registry.set('run.instructions', 'Elite enemy incoming. Keep moving.');
+        this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
       }
     }
   }
@@ -307,6 +348,7 @@ export class RunScene extends Phaser.Scene {
 
     for (const enemy of enemyChildren) {
       enemy.chase(this.player);
+      enemy.updatePresentation(this.time.now);
     }
   }
 
@@ -328,12 +370,20 @@ export class RunScene extends Phaser.Scene {
     const xpValue = enemy.getXpValue();
     const wasBoss = enemy.isBoss();
     const wasElite = enemy.isElite();
+    const damage = projectile.getDamage();
 
     projectile.deactivate();
-    const enemyDied = enemy.takeDamage(projectile.getDamage());
+    const enemyDied = enemy.takeDamage(damage);
 
     if (enemyDied) {
+      this.showFloatingText(enemyX, enemyY - 16, `${damage}`, wasBoss ? '#fca5a5' : '#fde68a', 18);
+      this.createBurstCircle(enemyX, enemyY, wasBoss ? 0xfca5a5 : 0xfef08a, 10, wasBoss ? 58 : 34, 220, 0.9);
       this.handleEnemyDefeated(enemyX, enemyY, xpValue, wasBoss, wasElite);
+      return;
+    }
+
+    if (wasBoss || wasElite) {
+      this.showFloatingText(enemyX, enemyY - 16, `${damage}`, '#ffffff', 16);
     }
   }
 
@@ -348,7 +398,8 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    this.cameras.main.shake(90, 0.0035);
+    this.cameras.main.shake(PLAYER_HIT_SHAKE_DURATION_MS, PLAYER_HIT_SHAKE_INTENSITY);
+    this.createBurstCircle(this.player.x, this.player.y, 0xf87171, 12, 36, 180, 0.75);
     this.publishHudState();
 
     if (!this.player.isAlive()) {
@@ -381,6 +432,7 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    this.createBurstCircle(gem.x, gem.y, 0x93c5fd, 8, 26, 150, 0.9);
     const levelsGained = this.player.gainExperience(gem.getValue());
     gem.destroy();
 
@@ -405,14 +457,32 @@ export class RunScene extends Phaser.Scene {
       this.spawnTimer.paused = true;
     }
 
+    this.cameras.main.flash(LEVEL_UP_FLASH_MS, 255, 230, 130, false);
+    this.createBurstCircle(this.player.x, this.player.y, 0xfde68a, 18, 82, 260, 0.95);
+    this.showFloatingText(this.player.x, this.player.y - 56, 'LEVEL UP', '#fde68a', 24);
     this.presentLevelUpChoices();
   }
 
   private presentLevelUpChoices(): void {
-    const choices = Phaser.Utils.Array.Shuffle([...UPGRADE_POOL]).slice(0, 3);
+    const choices = Phaser.Utils.Array.Shuffle(this.getAvailableUpgradePool()).slice(0, 3);
     this.registry.set('run.levelUpActive', true);
     this.registry.set('run.levelUpChoices', choices);
     this.registry.set('run.instructions', 'Choose an upgrade to continue.');
+  }
+
+  private getAvailableUpgradePool(): UpgradeDefinition[] {
+    return UPGRADE_POOL.filter((upgrade) => {
+      switch (upgrade.id) {
+        case 'unlock-twin-fangs':
+          return !this.ownedWeaponIds.has('twin-fangs');
+        case 'unlock-ember-lance':
+          return !this.ownedWeaponIds.has('ember-lance');
+        case 'unlock-bloom-cannon':
+          return !this.ownedWeaponIds.has('bloom-cannon');
+        default:
+          return true;
+      }
+    });
   }
 
   private applyUpgrade(upgradeId: UpgradeId): void {
@@ -421,23 +491,78 @@ export class RunScene extends Phaser.Scene {
         this.player.addMaxHealth(25);
         break;
       case 'swiftness':
-        this.player.addMoveSpeed(24);
+        this.player.addMoveSpeed(22);
         break;
       case 'power':
-        this.starterWeapon.addDamage(6);
+        this.applyWeaponDamageBonus(5);
         break;
       case 'rapid-fire':
-        this.starterWeapon.reduceCooldown(45);
+        this.applyWeaponCooldownReduction(40);
         break;
       case 'velocity':
-        this.starterWeapon.addProjectileSpeed(110);
+        this.applyProjectileSpeedBonus(90);
         break;
       case 'magnet':
-        this.player.addPickupRange(40);
+        this.player.addPickupRange(35);
         break;
       case 'reach':
-        this.starterWeapon.addRange(65);
+        this.applyWeaponRangeBonus(55);
         break;
+      case 'unlock-twin-fangs':
+        this.registerWeapon(WEAPON_DEFINITIONS['twin-fangs'], true);
+        break;
+      case 'unlock-ember-lance':
+        this.registerWeapon(WEAPON_DEFINITIONS['ember-lance'], true);
+        break;
+      case 'unlock-bloom-cannon':
+        this.registerWeapon(WEAPON_DEFINITIONS['bloom-cannon'], true);
+        break;
+    }
+  }
+
+  private applyWeaponDamageBonus(amount: number): void {
+    this.globalWeaponDamageBonus += amount;
+    for (const weapon of this.weapons) {
+      weapon.addDamage(amount);
+    }
+  }
+
+  private applyWeaponCooldownReduction(amount: number): void {
+    this.globalWeaponCooldownReduction += amount;
+    for (const weapon of this.weapons) {
+      weapon.reduceCooldown(amount);
+    }
+  }
+
+  private applyProjectileSpeedBonus(amount: number): void {
+    this.globalProjectileSpeedBonus += amount;
+    for (const weapon of this.weapons) {
+      weapon.addProjectileSpeed(amount);
+    }
+  }
+
+  private applyWeaponRangeBonus(amount: number): void {
+    this.globalWeaponRangeBonus += amount;
+    for (const weapon of this.weapons) {
+      weapon.addRange(amount);
+    }
+  }
+
+  private applyWeaponModifiersTo(weapon: AutoFireWeapon): void {
+    if (this.globalWeaponDamageBonus !== 0) {
+      weapon.addDamage(this.globalWeaponDamageBonus);
+    }
+
+    if (this.globalWeaponCooldownReduction !== 0) {
+      weapon.reduceCooldown(this.globalWeaponCooldownReduction);
+    }
+
+    if (this.globalProjectileSpeedBonus !== 0) {
+      weapon.addProjectileSpeed(this.globalProjectileSpeedBonus);
+    }
+
+    if (this.globalWeaponRangeBonus !== 0) {
+      weapon.addRange(this.globalWeaponRangeBonus);
     }
   }
 
@@ -446,6 +571,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.maxHp', this.player.getMaxHealth());
     this.registry.set('run.level', this.player.getLevel());
     this.registry.set('run.kills', this.killCount);
+    this.registry.set('run.weaponCount', this.weapons.length);
     this.registry.set('run.xp', this.player.getExperience());
     this.registry.set('run.xpNext', this.player.getExperienceToNextLevel());
     this.registry.set('run.targetMs', RUN_TARGET_DURATION_MS);
@@ -482,6 +608,15 @@ export class RunScene extends Phaser.Scene {
     this.player.updateVisualState(this.time.now);
     this.physics.pause();
 
+    this.cameras.main.shake(180, victory ? 0.0026 : 0.0034);
+    if (victory) {
+      this.cameras.main.flash(ENDING_FLASH_MS, 255, 234, 150, false);
+      this.createBurstCircle(this.player.x, this.player.y, 0xfde68a, 22, 90, 300, 0.95);
+    } else {
+      this.cameras.main.flash(ENDING_FLASH_MS, 255, 120, 120, false);
+      this.createBurstCircle(this.player.x, this.player.y, 0xf87171, 18, 74, 260, 0.9);
+    }
+
     this.registry.set('save.totalGold', this.saveData.totalGold);
     this.registry.set('run.endActive', true);
     this.registry.set('run.victory', victory);
@@ -502,6 +637,66 @@ export class RunScene extends Phaser.Scene {
     return GOLD_REWARD_BASE + levelReward + killReward + victoryReward;
   }
 
+  private showSpawnIndicator(x: number, y: number, label: string, color: number): void {
+    const ring = this.add.circle(x, y, 14, color, 0.12).setDepth(8);
+    ring.setStrokeStyle(3, color, 0.95);
+
+    this.tweens.add({
+      targets: ring,
+      radius: 78,
+      alpha: 0,
+      duration: ELITE_SPAWN_INDICATOR_MS,
+      ease: 'Cubic.Out',
+      onComplete: () => ring.destroy(),
+    });
+
+    this.showFloatingText(x, y - 34, label, Phaser.Display.Color.IntegerToColor(color).rgba, 18);
+  }
+
+  private createBurstCircle(
+    x: number,
+    y: number,
+    color: number,
+    startRadius: number,
+    endRadius: number,
+    duration: number,
+    alpha: number,
+  ): void {
+    const burst = this.add.circle(x, y, startRadius, color, alpha).setDepth(9);
+    burst.setStrokeStyle(2, color, Math.min(1, alpha + 0.15));
+
+    this.tweens.add({
+      targets: burst,
+      radius: endRadius,
+      alpha: 0,
+      duration,
+      ease: 'Quad.Out',
+      onComplete: () => burst.destroy(),
+    });
+  }
+
+  private showFloatingText(x: number, y: number, text: string, color: string, fontSize: number): void {
+    const label = this.add
+      .text(x, y, text, {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: `${fontSize}px`,
+        color,
+        stroke: '#0f172a',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(10);
+
+    this.tweens.add({
+      targets: label,
+      y: y - 24,
+      alpha: 0,
+      duration: 420,
+      ease: 'Quad.Out',
+      onComplete: () => label.destroy(),
+    });
+  }
+
   private handleExitToMenu(): void {
     this.scene.stop('UIScene');
     this.scene.start('MenuScene');
@@ -510,6 +705,9 @@ export class RunScene extends Phaser.Scene {
   private handleShutdown(): void {
     this.input.keyboard?.off('keydown-ESC', this.handleExitToMenu, this);
     this.spawnTimer?.remove(false);
-    this.starterWeapon.destroy();
+
+    for (const weapon of this.weapons) {
+      weapon.destroy();
+    }
   }
 }
