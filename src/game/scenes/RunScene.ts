@@ -4,13 +4,17 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
+import { STARTER_WEAPON } from '../data/weapons';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
+import { Projectile } from '../entities/Projectile';
 import { createMovementKeys, type MovementKeys } from '../input/createMovementKeys';
+import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 
 export class RunScene extends Phaser.Scene {
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
+  private starterWeapon!: AutoFireWeapon;
   private movementKeys!: MovementKeys;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private runStartTime = 0;
@@ -31,6 +35,7 @@ export class RunScene extends Phaser.Scene {
 
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
     this.enemies = this.physics.add.group({ runChildUpdate: false });
+    this.starterWeapon = new AutoFireWeapon(this, this.player, this.enemies, STARTER_WEAPON);
     this.movementKeys = createMovementKeys(this);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
@@ -45,6 +50,14 @@ export class RunScene extends Phaser.Scene {
       this.handlePlayerEnemyOverlap(enemyObject);
     });
 
+    this.physics.add.overlap(this.starterWeapon.getProjectiles(), this.enemies, (projectileObject, enemyObject) => {
+      if (!(projectileObject instanceof Projectile) || !(enemyObject instanceof Enemy)) {
+        return;
+      }
+
+      this.handleProjectileEnemyOverlap(projectileObject, enemyObject);
+    });
+
     this.spawnTimer = this.time.addEvent({
       delay: ENEMY_SPAWN_INTERVAL_MS,
       loop: true,
@@ -56,13 +69,13 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.maxHp', this.player.getMaxHealth());
     this.registry.set('run.elapsedMs', 0);
     this.registry.set('run.gameOver', false);
-    this.registry.set('run.instructions', 'Move with WASD or Arrow Keys. ESC returns to menu.');
+    this.registry.set('run.instructions', 'Move with WASD or Arrow Keys. Auto-fire attacks nearby enemies.');
 
     this.input.keyboard?.on('keydown-ESC', this.handleExitToMenu, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
   }
 
-  update(): void {
+  update(_time: number, delta: number): void {
     if (this.isGameOver) {
       this.registry.set('run.elapsedMs', this.time.now - this.runStartTime);
       return;
@@ -78,6 +91,7 @@ export class RunScene extends Phaser.Scene {
     this.player.move(new Phaser.Math.Vector2(horizontal, vertical));
     this.player.updateVisualState(this.time.now);
     this.updateEnemies();
+    this.starterWeapon.update(this.time.now, delta);
 
     this.registry.set('run.hp', this.player.getCurrentHealth());
     this.registry.set('run.maxHp', this.player.getMaxHealth());
@@ -124,10 +138,11 @@ export class RunScene extends Phaser.Scene {
     const spawnCount = Phaser.Math.Clamp(1 + Math.floor(elapsedSeconds / 18), 1, 4);
     const speedBonus = Math.min(36, Math.floor(elapsedSeconds / 6) * 4);
     const damageBonus = Math.min(10, Math.floor(elapsedSeconds / 20) * 2);
+    const healthBonus = Math.min(24, Math.floor(elapsedSeconds / 15) * 3);
 
     for (let index = 0; index < spawnCount; index += 1) {
       const spawnPoint = this.getSpawnPoint();
-      const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, speedBonus, damageBonus);
+      const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, speedBonus, damageBonus, healthBonus);
       this.enemies.add(enemy);
     }
   }
@@ -169,6 +184,19 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
+  private handleProjectileEnemyOverlap(projectile: Projectile, enemy: Enemy): void {
+    if (!projectile.active || !enemy.active) {
+      return;
+    }
+
+    projectile.deactivate();
+    const enemyDied = enemy.takeDamage(projectile.getDamage());
+
+    if (enemyDied) {
+      this.handleEnemyDefeated(enemy);
+    }
+  }
+
   private handlePlayerEnemyOverlap(enemy: Enemy): void {
     if (this.isGameOver) {
       return;
@@ -186,6 +214,10 @@ export class RunScene extends Phaser.Scene {
     if (!this.player.isAlive()) {
       this.triggerGameOver();
     }
+  }
+
+  private handleEnemyDefeated(_enemy: Enemy): void {
+    // Hook for XP gems or drops in a later phase.
   }
 
   private triggerGameOver(): void {
@@ -208,5 +240,6 @@ export class RunScene extends Phaser.Scene {
   private handleShutdown(): void {
     this.input.keyboard?.off('keydown-ESC', this.handleExitToMenu, this);
     this.spawnTimer?.remove(false);
+    this.starterWeapon.destroy();
   }
 }

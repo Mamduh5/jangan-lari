@@ -1,17 +1,28 @@
 import Phaser from 'phaser';
-import { ENEMY_BASE_DAMAGE, ENEMY_BASE_SPEED } from '../config/constants';
+import { ENEMY_BASE_DAMAGE, ENEMY_BASE_HP, ENEMY_BASE_SPEED } from '../config/constants';
 
 export class Enemy extends Phaser.GameObjects.Rectangle {
   declare body: Phaser.Physics.Arcade.Body;
 
   readonly contactDamage: number;
   private readonly speed: number;
+  private readonly maxHealth: number;
+  private health: number;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, speedBonus = 0, damageBonus = 0) {
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    speedBonus = 0,
+    damageBonus = 0,
+    healthBonus = 0,
+  ) {
     super(scene, x, y, 28, 28, 0xf97316);
 
     this.speed = ENEMY_BASE_SPEED + speedBonus;
     this.contactDamage = ENEMY_BASE_DAMAGE + damageBonus;
+    this.maxHealth = ENEMY_BASE_HP + healthBonus;
+    this.health = this.maxHealth;
 
     this.setStrokeStyle(2, 0xffedd5, 0.65);
 
@@ -22,7 +33,16 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.body.setMaxVelocity(this.speed, this.speed);
   }
 
+  isAlive(): boolean {
+    return this.health > 0;
+  }
+
   chase(target: Phaser.GameObjects.Components.Transform): void {
+    if (!this.isAlive()) {
+      this.body.setVelocity(0, 0);
+      return;
+    }
+
     const direction = new Phaser.Math.Vector2(target.x - this.x, target.y - this.y);
 
     if (direction.lengthSq() === 0) {
@@ -32,5 +52,33 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     direction.normalize();
     this.body.setVelocity(direction.x * this.speed, direction.y * this.speed);
+  }
+
+  takeDamage(amount: number): boolean {
+    if (!this.isAlive()) {
+      return false;
+    }
+
+    this.health = Math.max(0, this.health - amount);
+
+    if (this.health === 0) {
+      this.destroyEnemy();
+      return true;
+    }
+
+    this.setFillStyle(0xfb923c);
+    this.scene.time.delayedCall(70, () => {
+      if (this.active) {
+        this.setFillStyle(0xf97316);
+      }
+    });
+
+    return false;
+  }
+
+  private destroyEnemy(): void {
+    this.body.stop();
+    this.body.enable = false;
+    this.destroy();
   }
 }

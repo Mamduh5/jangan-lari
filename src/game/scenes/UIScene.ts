@@ -12,12 +12,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
-    const panel = this.add.rectangle(16, 16, 360, 116, 0x020617, 0.72).setOrigin(0);
+    const panel = this.add.rectangle(16, 16, 420, 116, 0x020617, 0.72).setOrigin(0);
     panel.setStrokeStyle(2, 0x334155, 0.9);
     panel.setScrollFactor(0);
 
     this.add
-      .text(32, 26, 'Phase 2 Sandbox', {
+      .text(32, 26, 'Phase 3 Sandbox', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#f8fafc',
@@ -50,7 +50,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.hintText = this.add
-      .text(32, 106, 'Move with WASD or Arrow Keys', {
+      .text(32, 106, 'Auto-fire attacks nearby enemies', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#93c5fd',
