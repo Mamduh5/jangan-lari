@@ -17,3 +17,8 @@ export const BOSS_SPAWN_TIME_MS = 95000;
 export const ELITE_SPAWN_INTERVAL_MS = 28000;
 
 export const XP_GEM_ATTRACT_SPEED = 460;
+
+export const GOLD_REWARD_BASE = 12;
+export const GOLD_REWARD_PER_LEVEL = 4;
+export const GOLD_REWARD_PER_KILL_STEP = 6;
+export const GOLD_REWARD_VICTORY_BONUS = 24;

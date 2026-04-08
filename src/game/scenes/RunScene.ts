@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import {
   ENEMY_SPAWN_INTERVAL_MS,
+  GOLD_REWARD_BASE,
+  GOLD_REWARD_PER_KILL_STEP,
+  GOLD_REWARD_PER_LEVEL,
+  GOLD_REWARD_VICTORY_BONUS,
   RUN_TARGET_DURATION_MS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
@@ -12,6 +16,9 @@ import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 import { XPGem } from '../entities/XPGem';
 import { createMovementKeys, type MovementKeys } from '../input/createMovementKeys';
+import type { GameSaveData } from '../save/saveData';
+import { loadGameSave } from '../save/saveData';
+import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 import { SpawnDirector } from '../systems/SpawnDirector';
 
@@ -21,12 +28,14 @@ export class RunScene extends Phaser.Scene {
   private xpGems!: Phaser.Physics.Arcade.Group;
   private starterWeapon!: AutoFireWeapon;
   private spawnDirector!: SpawnDirector;
+  private saveData!: GameSaveData;
   private movementKeys!: MovementKeys;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private runStartTime = 0;
   private frozenElapsedMs = 0;
   private pendingLevelUps = 0;
   private killCount = 0;
+  private goldEarned = 0;
   private isEnded = false;
   private isLevelingUp = false;
 
@@ -35,10 +44,12 @@ export class RunScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.saveData = loadGameSave();
     this.isEnded = false;
     this.isLevelingUp = false;
     this.pendingLevelUps = 0;
     this.killCount = 0;
+    this.goldEarned = 0;
     this.runStartTime = this.time.now;
     this.frozenElapsedMs = 0;
 
@@ -52,6 +63,7 @@ export class RunScene extends Phaser.Scene {
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
     this.spawnDirector = new SpawnDirector();
     this.starterWeapon = new AutoFireWeapon(this, this.player, this.enemies, STARTER_WEAPON);
+    this.applyPermanentUpgrades();
     this.movementKeys = createMovementKeys(this);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
@@ -159,6 +171,29 @@ export class RunScene extends Phaser.Scene {
     this.physics.resume();
     this.runStartTime = this.time.now - this.frozenElapsedMs;
     this.publishHudState();
+  }
+
+  private applyPermanentUpgrades(): void {
+    const maxHpLevel = getPermanentUpgradeLevel(this.saveData, 'max-hp');
+    const moveSpeedLevel = getPermanentUpgradeLevel(this.saveData, 'move-speed');
+    const pickupRangeLevel = getPermanentUpgradeLevel(this.saveData, 'pickup-range');
+    const startingDamageLevel = getPermanentUpgradeLevel(this.saveData, 'starting-damage');
+
+    if (maxHpLevel > 0) {
+      this.player.addMaxHealth(maxHpLevel * 10);
+    }
+
+    if (moveSpeedLevel > 0) {
+      this.player.addMoveSpeed(moveSpeedLevel * 8);
+    }
+
+    if (pickupRangeLevel > 0) {
+      this.player.addPickupRange(pickupRangeLevel * 12);
+    }
+
+    if (startingDamageLevel > 0) {
+      this.starterWeapon.addDamage(startingDamageLevel * 3);
+    }
   }
 
   private drawArena(): void {
@@ -377,6 +412,8 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.xp', this.player.getExperience());
     this.registry.set('run.xpNext', this.player.getExperienceToNextLevel());
     this.registry.set('run.targetMs', RUN_TARGET_DURATION_MS);
+    this.registry.set('run.goldEarned', this.goldEarned);
+    this.registry.set('run.totalGold', this.saveData.totalGold);
     this.registry.set(
       'run.elapsedMs',
       this.isLevelingUp || this.isEnded ? this.frozenElapsedMs : this.time.now - this.runStartTime,
@@ -391,12 +428,15 @@ export class RunScene extends Phaser.Scene {
     this.isEnded = true;
     this.isLevelingUp = false;
     this.frozenElapsedMs = this.time.now - this.runStartTime;
+    this.goldEarned = this.calculateGoldReward(victory);
+    this.saveData = awardRunGold(this.saveData, this.goldEarned);
 
     this.spawnTimer?.remove(false);
     this.player.move(new Phaser.Math.Vector2(0, 0));
     this.player.updateVisualState(this.time.now);
     this.physics.pause();
 
+    this.registry.set('save.totalGold', this.saveData.totalGold);
     this.registry.set('run.endActive', true);
     this.registry.set('run.victory', victory);
     this.registry.set('run.endTitle', title);
@@ -405,6 +445,14 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.levelUpChoices', []);
     this.registry.set('run.instructions', 'Press Enter, Space, or click the button to return to menu.');
     this.publishHudState();
+  }
+
+  private calculateGoldReward(victory: boolean): number {
+    const levelReward = this.player.getLevel() * GOLD_REWARD_PER_LEVEL;
+    const killReward = Math.floor(this.killCount / GOLD_REWARD_PER_KILL_STEP);
+    const victoryReward = victory ? GOLD_REWARD_VICTORY_BONUS : 0;
+
+    return GOLD_REWARD_BASE + levelReward + killReward + victoryReward;
   }
 
   private handleExitToMenu(): void {
