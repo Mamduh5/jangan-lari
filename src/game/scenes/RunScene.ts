@@ -1,36 +1,73 @@
 import Phaser from 'phaser';
+import {
+  ENEMY_SPAWN_INTERVAL_MS,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
+} from '../config/constants';
+import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { createMovementKeys, type MovementKeys } from '../input/createMovementKeys';
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/constants';
 
 export class RunScene extends Phaser.Scene {
   private player!: Player;
+  private enemies!: Phaser.Physics.Arcade.Group;
   private movementKeys!: MovementKeys;
+  private spawnTimer?: Phaser.Time.TimerEvent;
+  private runStartTime = 0;
+  private isGameOver = false;
 
   constructor() {
     super('RunScene');
   }
 
   create(): void {
+    this.isGameOver = false;
+    this.runStartTime = this.time.now;
+
     this.cameras.main.setBackgroundColor('#111827');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
     this.drawArena();
 
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    this.enemies = this.physics.add.group({ runChildUpdate: false });
     this.movementKeys = createMovementKeys(this);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setZoom(1);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    this.input.keyboard?.on('keydown-ESC', () => {
-      this.scene.stop('UIScene');
-      this.scene.start('MenuScene');
+    this.physics.add.overlap(this.player, this.enemies, (_playerObject, enemyObject) => {
+      if (!(enemyObject instanceof Enemy)) {
+        return;
+      }
+
+      this.handlePlayerEnemyOverlap(enemyObject);
     });
+
+    this.spawnTimer = this.time.addEvent({
+      delay: ENEMY_SPAWN_INTERVAL_MS,
+      loop: true,
+      callback: this.spawnEnemyWave,
+      callbackScope: this,
+    });
+
+    this.registry.set('run.hp', this.player.getCurrentHealth());
+    this.registry.set('run.maxHp', this.player.getMaxHealth());
+    this.registry.set('run.elapsedMs', 0);
+    this.registry.set('run.gameOver', false);
+    this.registry.set('run.instructions', 'Move with WASD or Arrow Keys. ESC returns to menu.');
+
+    this.input.keyboard?.on('keydown-ESC', this.handleExitToMenu, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
   }
 
   update(): void {
+    if (this.isGameOver) {
+      this.registry.set('run.elapsedMs', this.time.now - this.runStartTime);
+      return;
+    }
+
     const horizontal =
       Number(this.movementKeys.right.isDown || this.movementKeys.altRight.isDown) -
       Number(this.movementKeys.left.isDown || this.movementKeys.altLeft.isDown);
@@ -39,6 +76,12 @@ export class RunScene extends Phaser.Scene {
       Number(this.movementKeys.up.isDown || this.movementKeys.altUp.isDown);
 
     this.player.move(new Phaser.Math.Vector2(horizontal, vertical));
+    this.player.updateVisualState(this.time.now);
+    this.updateEnemies();
+
+    this.registry.set('run.hp', this.player.getCurrentHealth());
+    this.registry.set('run.maxHp', this.player.getMaxHealth());
+    this.registry.set('run.elapsedMs', this.time.now - this.runStartTime);
   }
 
   private drawArena(): void {
@@ -70,5 +113,100 @@ export class RunScene extends Phaser.Scene {
 
     const arenaCenter = this.add.circle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 90, 0x1d4ed8, 0.16);
     arenaCenter.setStrokeStyle(4, 0x93c5fd, 0.5);
+  }
+
+  private spawnEnemyWave(): void {
+    if (this.isGameOver) {
+      return;
+    }
+
+    const elapsedSeconds = Math.floor((this.time.now - this.runStartTime) / 1000);
+    const spawnCount = Phaser.Math.Clamp(1 + Math.floor(elapsedSeconds / 18), 1, 4);
+    const speedBonus = Math.min(36, Math.floor(elapsedSeconds / 6) * 4);
+    const damageBonus = Math.min(10, Math.floor(elapsedSeconds / 20) * 2);
+
+    for (let index = 0; index < spawnCount; index += 1) {
+      const spawnPoint = this.getSpawnPoint();
+      const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, speedBonus, damageBonus);
+      this.enemies.add(enemy);
+    }
+  }
+
+  private getSpawnPoint(): Phaser.Math.Vector2 {
+    const side = Phaser.Math.Between(0, 3);
+    const spawnDistance = 520;
+    const offset = Phaser.Math.Between(-260, 260);
+
+    switch (side) {
+      case 0:
+        return new Phaser.Math.Vector2(
+          Phaser.Math.Clamp(this.player.x + offset, 24, WORLD_WIDTH - 24),
+          Phaser.Math.Clamp(this.player.y - spawnDistance, 24, WORLD_HEIGHT - 24),
+        );
+      case 1:
+        return new Phaser.Math.Vector2(
+          Phaser.Math.Clamp(this.player.x + spawnDistance, 24, WORLD_WIDTH - 24),
+          Phaser.Math.Clamp(this.player.y + offset, 24, WORLD_HEIGHT - 24),
+        );
+      case 2:
+        return new Phaser.Math.Vector2(
+          Phaser.Math.Clamp(this.player.x + offset, 24, WORLD_WIDTH - 24),
+          Phaser.Math.Clamp(this.player.y + spawnDistance, 24, WORLD_HEIGHT - 24),
+        );
+      default:
+        return new Phaser.Math.Vector2(
+          Phaser.Math.Clamp(this.player.x - spawnDistance, 24, WORLD_WIDTH - 24),
+          Phaser.Math.Clamp(this.player.y + offset, 24, WORLD_HEIGHT - 24),
+        );
+    }
+  }
+
+  private updateEnemies(): void {
+    const enemyChildren = this.enemies.getChildren() as Enemy[];
+
+    for (const enemy of enemyChildren) {
+      enemy.chase(this.player);
+    }
+  }
+
+  private handlePlayerEnemyOverlap(enemy: Enemy): void {
+    if (this.isGameOver) {
+      return;
+    }
+
+    const tookDamage = this.player.takeDamage(enemy.contactDamage, this.time.now);
+
+    if (!tookDamage) {
+      return;
+    }
+
+    this.cameras.main.shake(90, 0.0035);
+    this.registry.set('run.hp', this.player.getCurrentHealth());
+
+    if (!this.player.isAlive()) {
+      this.triggerGameOver();
+    }
+  }
+
+  private triggerGameOver(): void {
+    this.isGameOver = true;
+    this.spawnTimer?.remove(false);
+    this.player.move(new Phaser.Math.Vector2(0, 0));
+    this.player.updateVisualState(this.time.now);
+    this.physics.pause();
+
+    this.registry.set('run.gameOver', true);
+    this.registry.set('run.elapsedMs', this.time.now - this.runStartTime);
+    this.registry.set('run.instructions', 'Press Enter, Space, or click the button to return to menu.');
+  }
+
+  private handleExitToMenu(): void {
+    this.scene.stop('UIScene');
+    this.scene.start('MenuScene');
+  }
+
+  private handleShutdown(): void {
+    this.input.keyboard?.off('keydown-ESC', this.handleExitToMenu, this);
+    this.spawnTimer?.remove(false);
   }
 }

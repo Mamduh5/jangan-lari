@@ -19,7 +19,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(centerX, centerY - 56, 'Phase 1 Movement Sandbox', {
+      .text(centerX, centerY - 56, 'Phase 2 Survival Sandbox', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#93c5fd',
@@ -50,7 +50,7 @@ export class MenuScene extends Phaser.Scene {
     });
 
     this.add
-      .text(centerX, centerY + 120, 'Move with WASD or Arrow Keys', {
+      .text(centerX, centerY + 120, 'Move with WASD or Arrow Keys, avoid the swarm', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#cbd5e1',
