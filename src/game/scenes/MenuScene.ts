@@ -19,7 +19,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(centerX, centerY - 56, 'Phase 4 Level-Up Sandbox', {
+      .text(centerX, centerY - 56, 'Phase 5 Full Run Sandbox', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#93c5fd',
@@ -50,7 +50,7 @@ export class MenuScene extends Phaser.Scene {
     });
 
     this.add
-      .text(centerX, centerY + 120, 'Fight, collect XP gems, then choose upgrades', {
+      .text(centerX, centerY + 120, 'Survive 2 minutes or kill the final boss', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#cbd5e1',

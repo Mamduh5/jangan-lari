@@ -1,40 +1,50 @@
 import Phaser from 'phaser';
-import { ENEMY_BASE_DAMAGE, ENEMY_BASE_HP, ENEMY_BASE_SPEED } from '../config/constants';
+import type { EnemyArchetype } from '../data/enemies';
 
 export class Enemy extends Phaser.GameObjects.Rectangle {
   declare body: Phaser.Physics.Arcade.Body;
 
+  readonly archetype: EnemyArchetype;
   readonly contactDamage: number;
   private readonly speed: number;
   private readonly maxHealth: number;
+  private readonly xpValue: number;
   private health: number;
 
-  constructor(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    speedBonus = 0,
-    damageBonus = 0,
-    healthBonus = 0,
-  ) {
-    super(scene, x, y, 28, 28, 0xf97316);
+  constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
+    super(scene, x, y, archetype.size, archetype.size, archetype.color);
 
-    this.speed = ENEMY_BASE_SPEED + speedBonus;
-    this.contactDamage = ENEMY_BASE_DAMAGE + damageBonus;
-    this.maxHealth = ENEMY_BASE_HP + healthBonus;
-    this.health = this.maxHealth;
+    this.archetype = archetype;
+    this.speed = archetype.speed;
+    this.contactDamage = archetype.contactDamage;
+    this.maxHealth = archetype.maxHealth;
+    this.health = archetype.maxHealth;
+    this.xpValue = archetype.xpValue;
 
-    this.setStrokeStyle(2, 0xffedd5, 0.65);
+    this.setStrokeStyle(2, archetype.strokeColor, 0.72);
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
-    this.body.setSize(24, 24);
+    const bodySize = Math.max(16, archetype.size - 6);
+    this.body.setSize(bodySize, bodySize);
     this.body.setMaxVelocity(this.speed, this.speed);
   }
 
   isAlive(): boolean {
     return this.health > 0;
+  }
+
+  isBoss(): boolean {
+    return Boolean(this.archetype.isBoss);
+  }
+
+  isElite(): boolean {
+    return Boolean(this.archetype.isElite);
+  }
+
+  getXpValue(): number {
+    return this.xpValue;
   }
 
   chase(target: Phaser.GameObjects.Components.Transform): void {
@@ -66,10 +76,10 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return true;
     }
 
-    this.setFillStyle(0xfb923c);
-    this.scene.time.delayedCall(70, () => {
+    this.setFillStyle(0xffffff);
+    this.scene.time.delayedCall(80, () => {
       if (this.active) {
-        this.setFillStyle(0xf97316);
+        this.setFillStyle(this.archetype.color);
       }
     });
 

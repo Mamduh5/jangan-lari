@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   ENEMY_SPAWN_INTERVAL_MS,
+  RUN_TARGET_DURATION_MS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
@@ -12,18 +13,21 @@ import { Projectile } from '../entities/Projectile';
 import { XPGem } from '../entities/XPGem';
 import { createMovementKeys, type MovementKeys } from '../input/createMovementKeys';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
+import { SpawnDirector } from '../systems/SpawnDirector';
 
 export class RunScene extends Phaser.Scene {
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
   private xpGems!: Phaser.Physics.Arcade.Group;
   private starterWeapon!: AutoFireWeapon;
+  private spawnDirector!: SpawnDirector;
   private movementKeys!: MovementKeys;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private runStartTime = 0;
   private frozenElapsedMs = 0;
   private pendingLevelUps = 0;
-  private isGameOver = false;
+  private killCount = 0;
+  private isEnded = false;
   private isLevelingUp = false;
 
   constructor() {
@@ -31,9 +35,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.isGameOver = false;
+    this.isEnded = false;
     this.isLevelingUp = false;
     this.pendingLevelUps = 0;
+    this.killCount = 0;
     this.runStartTime = this.time.now;
     this.frozenElapsedMs = 0;
 
@@ -45,6 +50,7 @@ export class RunScene extends Phaser.Scene {
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
     this.enemies = this.physics.add.group({ runChildUpdate: false });
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
+    this.spawnDirector = new SpawnDirector();
     this.starterWeapon = new AutoFireWeapon(this, this.player, this.enemies, STARTER_WEAPON);
     this.movementKeys = createMovementKeys(this);
 
@@ -78,23 +84,30 @@ export class RunScene extends Phaser.Scene {
     });
 
     this.publishHudState();
-    this.registry.set('run.gameOver', false);
+    this.registry.set('run.endActive', false);
+    this.registry.set('run.victory', false);
     this.registry.set('run.levelUpActive', false);
     this.registry.set('run.levelUpChoices', []);
-    this.registry.set('run.instructions', 'Move with WASD or Arrow Keys. Auto-fire attacks nearby enemies.');
+    this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
 
     this.input.keyboard?.on('keydown-ESC', this.handleExitToMenu, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
   }
 
   update(_time: number, delta: number): void {
-    if (this.isGameOver) {
-      this.registry.set('run.elapsedMs', this.frozenElapsedMs || this.time.now - this.runStartTime);
+    if (this.isEnded) {
+      this.publishHudState();
       return;
     }
 
     if (this.isLevelingUp) {
       this.publishHudState();
+      return;
+    }
+
+    const elapsedMs = this.time.now - this.runStartTime;
+    if (elapsedMs >= RUN_TARGET_DURATION_MS) {
+      this.endRun(true, 'Victory', 'You survived until extraction.');
       return;
     }
 
@@ -115,7 +128,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   selectLevelUp(index: number): void {
-    if (!this.isLevelingUp) {
+    if (!this.isLevelingUp || this.isEnded) {
       return;
     }
 
@@ -137,7 +150,7 @@ export class RunScene extends Phaser.Scene {
     this.isLevelingUp = false;
     this.registry.set('run.levelUpActive', false);
     this.registry.set('run.levelUpChoices', []);
-    this.registry.set('run.instructions', 'Move with WASD or Arrow Keys. Auto-fire attacks nearby enemies.');
+    this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
 
     if (this.spawnTimer) {
       this.spawnTimer.paused = false;
@@ -180,47 +193,49 @@ export class RunScene extends Phaser.Scene {
   }
 
   private spawnEnemyWave(): void {
-    if (this.isGameOver || this.isLevelingUp) {
+    if (this.isEnded || this.isLevelingUp) {
       return;
     }
 
-    const elapsedSeconds = Math.floor((this.time.now - this.runStartTime) / 1000);
-    const spawnCount = Phaser.Math.Clamp(1 + Math.floor(elapsedSeconds / 18), 1, 4);
-    const speedBonus = Math.min(36, Math.floor(elapsedSeconds / 6) * 4);
-    const damageBonus = Math.min(10, Math.floor(elapsedSeconds / 20) * 2);
-    const healthBonus = Math.min(24, Math.floor(elapsedSeconds / 15) * 3);
+    const elapsedMs = this.time.now - this.runStartTime;
+    const wave = this.spawnDirector.nextWave(elapsedMs);
 
-    for (let index = 0; index < spawnCount; index += 1) {
-      const spawnPoint = this.getSpawnPoint();
-      const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, speedBonus, damageBonus, healthBonus);
+    for (const archetype of wave) {
+      const spawnPoint = this.getSpawnPoint(archetype.isBoss ? 700 : 520);
+      const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, archetype);
       this.enemies.add(enemy);
+
+      if (archetype.isBoss) {
+        this.registry.set('run.instructions', 'Boss sighted. Defeat it or survive to extraction.');
+      } else if (archetype.isElite) {
+        this.registry.set('run.instructions', 'Elite enemy incoming. Keep moving.');
+      }
     }
   }
 
-  private getSpawnPoint(): Phaser.Math.Vector2 {
+  private getSpawnPoint(distance: number): Phaser.Math.Vector2 {
     const side = Phaser.Math.Between(0, 3);
-    const spawnDistance = 520;
     const offset = Phaser.Math.Between(-260, 260);
 
     switch (side) {
       case 0:
         return new Phaser.Math.Vector2(
           Phaser.Math.Clamp(this.player.x + offset, 24, WORLD_WIDTH - 24),
-          Phaser.Math.Clamp(this.player.y - spawnDistance, 24, WORLD_HEIGHT - 24),
+          Phaser.Math.Clamp(this.player.y - distance, 24, WORLD_HEIGHT - 24),
         );
       case 1:
         return new Phaser.Math.Vector2(
-          Phaser.Math.Clamp(this.player.x + spawnDistance, 24, WORLD_WIDTH - 24),
+          Phaser.Math.Clamp(this.player.x + distance, 24, WORLD_WIDTH - 24),
           Phaser.Math.Clamp(this.player.y + offset, 24, WORLD_HEIGHT - 24),
         );
       case 2:
         return new Phaser.Math.Vector2(
           Phaser.Math.Clamp(this.player.x + offset, 24, WORLD_WIDTH - 24),
-          Phaser.Math.Clamp(this.player.y + spawnDistance, 24, WORLD_HEIGHT - 24),
+          Phaser.Math.Clamp(this.player.y + distance, 24, WORLD_HEIGHT - 24),
         );
       default:
         return new Phaser.Math.Vector2(
-          Phaser.Math.Clamp(this.player.x - spawnDistance, 24, WORLD_WIDTH - 24),
+          Phaser.Math.Clamp(this.player.x - distance, 24, WORLD_WIDTH - 24),
           Phaser.Math.Clamp(this.player.y + offset, 24, WORLD_HEIGHT - 24),
         );
     }
@@ -243,20 +258,25 @@ export class RunScene extends Phaser.Scene {
   }
 
   private handleProjectileEnemyOverlap(projectile: Projectile, enemy: Enemy): void {
-    if (!projectile.active || !enemy.active) {
+    if (!projectile.active || !enemy.active || this.isEnded) {
       return;
     }
+
+    const enemyX = enemy.x;
+    const enemyY = enemy.y;
+    const xpValue = enemy.getXpValue();
+    const wasBoss = enemy.isBoss();
 
     projectile.deactivate();
     const enemyDied = enemy.takeDamage(projectile.getDamage());
 
     if (enemyDied) {
-      this.handleEnemyDefeated(enemy.x, enemy.y);
+      this.handleEnemyDefeated(enemyX, enemyY, xpValue, wasBoss);
     }
   }
 
   private handlePlayerEnemyOverlap(enemy: Enemy): void {
-    if (this.isGameOver || this.isLevelingUp) {
+    if (this.isEnded || this.isLevelingUp) {
       return;
     }
 
@@ -270,17 +290,22 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
 
     if (!this.player.isAlive()) {
-      this.triggerGameOver();
+      this.endRun(false, 'Defeat', 'You were overwhelmed.');
     }
   }
 
-  private handleEnemyDefeated(x: number, y: number): void {
-    const gem = new XPGem(this, x, y);
+  private handleEnemyDefeated(x: number, y: number, xpValue: number, wasBoss: boolean): void {
+    this.killCount += 1;
+    const gem = new XPGem(this, x, y, xpValue);
     this.xpGems.add(gem);
+
+    if (wasBoss) {
+      this.endRun(true, 'Victory', 'The Behemoth has fallen.');
+    }
   }
 
   private collectXPGem(gem: XPGem): void {
-    if (!gem.active || this.isLevelingUp || this.isGameOver) {
+    if (!gem.active || this.isLevelingUp || this.isEnded) {
       return;
     }
 
@@ -296,7 +321,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private beginLevelUp(): void {
-    if (this.isLevelingUp || this.pendingLevelUps <= 0 || this.isGameOver) {
+    if (this.isLevelingUp || this.pendingLevelUps <= 0 || this.isEnded) {
       return;
     }
 
@@ -348,23 +373,34 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.hp', this.player.getCurrentHealth());
     this.registry.set('run.maxHp', this.player.getMaxHealth());
     this.registry.set('run.level', this.player.getLevel());
+    this.registry.set('run.kills', this.killCount);
     this.registry.set('run.xp', this.player.getExperience());
     this.registry.set('run.xpNext', this.player.getExperienceToNextLevel());
+    this.registry.set('run.targetMs', RUN_TARGET_DURATION_MS);
     this.registry.set(
       'run.elapsedMs',
-      this.isLevelingUp || this.isGameOver ? this.frozenElapsedMs : this.time.now - this.runStartTime,
+      this.isLevelingUp || this.isEnded ? this.frozenElapsedMs : this.time.now - this.runStartTime,
     );
   }
 
-  private triggerGameOver(): void {
-    this.isGameOver = true;
+  private endRun(victory: boolean, title: string, subtitle: string): void {
+    if (this.isEnded) {
+      return;
+    }
+
+    this.isEnded = true;
+    this.isLevelingUp = false;
     this.frozenElapsedMs = this.time.now - this.runStartTime;
+
     this.spawnTimer?.remove(false);
     this.player.move(new Phaser.Math.Vector2(0, 0));
     this.player.updateVisualState(this.time.now);
     this.physics.pause();
 
-    this.registry.set('run.gameOver', true);
+    this.registry.set('run.endActive', true);
+    this.registry.set('run.victory', victory);
+    this.registry.set('run.endTitle', title);
+    this.registry.set('run.endSubtitle', subtitle);
     this.registry.set('run.levelUpActive', false);
     this.registry.set('run.levelUpChoices', []);
     this.registry.set('run.instructions', 'Press Enter, Space, or click the button to return to menu.');

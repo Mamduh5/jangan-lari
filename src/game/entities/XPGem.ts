@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
-import { XP_GEM_ATTRACT_SPEED, XP_GEM_VALUE } from '../config/constants';
+import { XP_GEM_ATTRACT_SPEED } from '../config/constants';
 import { Player } from './Player';
+
+const DEFAULT_XP_GEM_VALUE = 8;
 
 export class XPGem extends Phaser.GameObjects.Arc {
   declare body: Phaser.Physics.Arcade.Body;
 
-  private value = XP_GEM_VALUE;
+  private value = DEFAULT_XP_GEM_VALUE;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, value = XP_GEM_VALUE) {
+  constructor(scene: Phaser.Scene, x: number, y: number, value = DEFAULT_XP_GEM_VALUE) {
     super(scene, x, y, 7, 0, 360, false, 0x60a5fa);
 
     this.value = value;

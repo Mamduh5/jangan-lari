@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import type { UpgradeDefinition } from '../data/upgrades';
 import { RunScene } from './RunScene';
 
@@ -10,7 +9,10 @@ export class UIScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
   private xpBarFill!: Phaser.GameObjects.Rectangle;
   private xpBarLabel!: Phaser.GameObjects.Text;
-  private gameOverContainer!: Phaser.GameObjects.Container;
+  private endContainer!: Phaser.GameObjects.Container;
+  private endTitleText!: Phaser.GameObjects.Text;
+  private endSubtitleText!: Phaser.GameObjects.Text;
+  private endStatsText!: Phaser.GameObjects.Text;
   private levelUpContainer!: Phaser.GameObjects.Container;
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
   private levelUpDescriptions: Phaser.GameObjects.Text[] = [];
@@ -20,12 +22,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
-    const panel = this.add.rectangle(16, 16, 470, 160, 0x020617, 0.76).setOrigin(0);
+    const panel = this.add.rectangle(16, 16, 500, 160, 0x020617, 0.76).setOrigin(0);
     panel.setStrokeStyle(2, 0x334155, 0.9);
     panel.setScrollFactor(0);
 
     this.add
-      .text(32, 24, 'Phase 4 Sandbox', {
+      .text(32, 24, 'Phase 5 Run', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#f8fafc',
@@ -49,7 +51,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.timerText = this.add
-      .text(32, 78, 'Time: 00:00', {
+      .text(32, 78, 'Time: 00:00 / 00:00', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#93c5fd',
@@ -57,7 +59,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.add
-      .text(GAME_WIDTH - 32, 24, 'ESC: Menu', {
+      .text(1248, 24, 'ESC: Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#cbd5e1',
@@ -81,14 +83,14 @@ export class UIScene extends Phaser.Scene {
     this.xpBarFill.setScrollFactor(0);
 
     this.hintText = this.add
-      .text(32, 148, 'Collect gems to level up', {
+      .text(32, 148, 'Survive the timer or kill the final boss', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#93c5fd',
       })
       .setScrollFactor(0);
 
-    this.gameOverContainer = this.createGameOverOverlay();
+    this.endContainer = this.createEndOverlay();
     this.levelUpContainer = this.createLevelUpOverlay();
 
     this.input.keyboard?.on('keydown-ENTER', this.handleConfirmInput, this);
@@ -103,52 +105,67 @@ export class UIScene extends Phaser.Scene {
     const currentHp = Number(this.registry.get('run.hp') ?? 0);
     const maxHp = Number(this.registry.get('run.maxHp') ?? 0);
     const level = Number(this.registry.get('run.level') ?? 1);
+    const kills = Number(this.registry.get('run.kills') ?? 0);
     const xp = Number(this.registry.get('run.xp') ?? 0);
     const xpNext = Number(this.registry.get('run.xpNext') ?? 1);
     const elapsedMs = Number(this.registry.get('run.elapsedMs') ?? 0);
-    const gameOver = Boolean(this.registry.get('run.gameOver'));
+    const targetMs = Number(this.registry.get('run.targetMs') ?? 0);
+    const endActive = Boolean(this.registry.get('run.endActive'));
     const levelUpActive = Boolean(this.registry.get('run.levelUpActive'));
     const instructions = String(this.registry.get('run.instructions') ?? 'Move with WASD or Arrow Keys');
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
 
     this.hpText.setText(`HP: ${currentHp}/${maxHp}`);
     this.levelText.setText(`Level: ${level}`);
-    this.timerText.setText(`Time: ${this.formatTime(elapsedMs)}`);
-    this.xpBarLabel.setText(`XP ${xp}/${xpNext}`);
+    this.timerText.setText(`Time: ${this.formatTime(elapsedMs)} / ${this.formatTime(targetMs)}`);
+    this.xpBarLabel.setText(`XP ${xp}/${xpNext}   Kills ${kills}`);
     this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 280, 0, 280);
     this.hintText.setText(instructions);
 
-    this.gameOverContainer.setVisible(gameOver);
-    this.levelUpContainer.setVisible(levelUpActive && !gameOver);
+    this.endContainer.setVisible(endActive);
+    this.levelUpContainer.setVisible(levelUpActive && !endActive);
 
-    if (levelUpActive && !gameOver) {
+    if (endActive) {
+      this.refreshEndOverlay(level, kills);
+    }
+
+    if (levelUpActive && !endActive) {
       this.refreshLevelUpChoices(levelUpChoices);
     }
   }
 
-  private createGameOverOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.7).setOrigin(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 460, 220, 0x111827, 0.94);
+  private createEndOverlay(): Phaser.GameObjects.Container {
+    const backdrop = this.add.rectangle(0, 0, 1280, 720, 0x020617, 0.72).setOrigin(0);
+    const panel = this.add.rectangle(640, 360, 520, 300, 0x111827, 0.96);
     panel.setStrokeStyle(3, 0x475569, 1);
 
-    const title = this.add
-      .text(GAME_WIDTH / 2, 300, 'Run Over', {
+    this.endTitleText = this.add
+      .text(640, 260, 'Victory', {
         fontFamily: 'Georgia, serif',
         fontSize: '42px',
         color: '#f8fafc',
       })
       .setOrigin(0.5);
 
-    const subtitle = this.add
-      .text(GAME_WIDTH / 2, 350, 'You were overwhelmed.', {
+    this.endSubtitleText = this.add
+      .text(640, 312, 'Subtitle', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#cbd5e1',
       })
       .setOrigin(0.5);
 
+    this.endStatsText = this.add
+      .text(640, 382, 'Kills: 0\nLevel Reached: 1', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '20px',
+        color: '#bfdbfe',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+
     const button = this.add
-      .text(GAME_WIDTH / 2, 420, 'Return to Menu', {
+      .text(640, 474, 'Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fef3c7',
@@ -158,7 +175,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
 
-    button.on('pointerdown', () => this.returnToMenuIfGameOver());
+    button.on('pointerdown', () => this.returnToMenuIfEnded());
     button.on('pointerover', () => {
       button.setStyle({ color: '#ffffff', backgroundColor: '#374151' });
     });
@@ -167,14 +184,22 @@ export class UIScene extends Phaser.Scene {
     });
 
     const helpText = this.add
-      .text(GAME_WIDTH / 2, 475, 'Press Enter or Space to continue', {
+      .text(640, 530, 'Press Enter or Space to continue', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#93c5fd',
       })
       .setOrigin(0.5);
 
-    const container = this.add.container(0, 0, [backdrop, panel, title, subtitle, button, helpText]);
+    const container = this.add.container(0, 0, [
+      backdrop,
+      panel,
+      this.endTitleText,
+      this.endSubtitleText,
+      this.endStatsText,
+      button,
+      helpText,
+    ]);
     container.setDepth(100);
     container.setVisible(false);
     container.setScrollFactor(0);
@@ -183,12 +208,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createLevelUpOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.72).setOrigin(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 860, 420, 0x111827, 0.96);
+    const backdrop = this.add.rectangle(0, 0, 1280, 720, 0x020617, 0.72).setOrigin(0);
+    const panel = this.add.rectangle(640, 360, 860, 420, 0x111827, 0.96);
     panel.setStrokeStyle(3, 0x60a5fa, 1);
 
     const title = this.add
-      .text(GAME_WIDTH / 2, 190, 'Level Up', {
+      .text(640, 190, 'Level Up', {
         fontFamily: 'Georgia, serif',
         fontSize: '40px',
         color: '#f8fafc',
@@ -196,7 +221,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const subtitle = this.add
-      .text(GAME_WIDTH / 2, 232, 'Choose 1 upgrade', {
+      .text(640, 232, 'Choose 1 upgrade', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#bfdbfe',
@@ -244,7 +269,7 @@ export class UIScene extends Phaser.Scene {
     }
 
     const helpText = this.add
-      .text(GAME_WIDTH / 2, 500, 'Use mouse or press 1, 2, or 3', {
+      .text(640, 500, 'Use mouse or press 1, 2, or 3', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#93c5fd',
@@ -259,6 +284,17 @@ export class UIScene extends Phaser.Scene {
     container.setScrollFactor(0);
 
     return container;
+  }
+
+  private refreshEndOverlay(level: number, kills: number): void {
+    const victory = Boolean(this.registry.get('run.victory'));
+    const title = String(this.registry.get('run.endTitle') ?? (victory ? 'Victory' : 'Defeat'));
+    const subtitle = String(this.registry.get('run.endSubtitle') ?? '');
+
+    this.endTitleText.setText(title);
+    this.endTitleText.setColor(victory ? '#fef08a' : '#fca5a5');
+    this.endSubtitleText.setText(subtitle);
+    this.endStatsText.setText(`Enemies Killed: ${kills}\nLevel Reached: ${level}`);
   }
 
   private refreshLevelUpChoices(choices: UpgradeDefinition[]): void {
@@ -279,7 +315,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private selectUpgrade(index: number): void {
-    if (!this.registry.get('run.levelUpActive') || this.registry.get('run.gameOver')) {
+    if (!this.registry.get('run.levelUpActive') || this.registry.get('run.endActive')) {
       return;
     }
 
@@ -288,13 +324,13 @@ export class UIScene extends Phaser.Scene {
   }
 
   private handleConfirmInput(): void {
-    if (this.registry.get('run.gameOver')) {
-      this.returnToMenuIfGameOver();
+    if (this.registry.get('run.endActive')) {
+      this.returnToMenuIfEnded();
     }
   }
 
-  private returnToMenuIfGameOver(): void {
-    if (!this.registry.get('run.gameOver')) {
+  private returnToMenuIfEnded(): void {
+    if (!this.registry.get('run.endActive')) {
       return;
     }
 
