@@ -2,16 +2,23 @@ import Phaser from 'phaser';
 import {
   PLAYER_HIT_INVULNERABILITY_MS,
   PLAYER_MAX_HP,
+  PLAYER_PICKUP_RANGE,
   PLAYER_SPEED,
+  PLAYER_START_LEVEL,
+  PLAYER_START_XP_TO_NEXT_LEVEL,
 } from '../config/constants';
 
 export class Player extends Phaser.GameObjects.Rectangle {
   declare body: Phaser.Physics.Arcade.Body;
 
-  private readonly speed = PLAYER_SPEED;
-  private readonly maxHealth = PLAYER_MAX_HP;
+  private speed = PLAYER_SPEED;
+  private maxHealth = PLAYER_MAX_HP;
   private readonly hitInvulnerabilityMs = PLAYER_HIT_INVULNERABILITY_MS;
   private health = PLAYER_MAX_HP;
+  private pickupRange = PLAYER_PICKUP_RANGE;
+  private level = PLAYER_START_LEVEL;
+  private experience = 0;
+  private experienceToNextLevel = PLAYER_START_XP_TO_NEXT_LEVEL;
   private invulnerableUntil = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -39,6 +46,22 @@ export class Player extends Phaser.GameObjects.Rectangle {
     return this.speed;
   }
 
+  getPickupRange(): number {
+    return this.pickupRange;
+  }
+
+  getLevel(): number {
+    return this.level;
+  }
+
+  getExperience(): number {
+    return this.experience;
+  }
+
+  getExperienceToNextLevel(): number {
+    return this.experienceToNextLevel;
+  }
+
   isAlive(): boolean {
     return this.health > 0;
   }
@@ -57,6 +80,34 @@ export class Player extends Phaser.GameObjects.Rectangle {
     });
 
     return true;
+  }
+
+  addMaxHealth(amount: number): void {
+    this.maxHealth += amount;
+    this.health = Math.min(this.maxHealth, this.health + amount);
+  }
+
+  addMoveSpeed(amount: number): void {
+    this.speed += amount;
+    this.body.setMaxVelocity(this.speed, this.speed);
+  }
+
+  addPickupRange(amount: number): void {
+    this.pickupRange += amount;
+  }
+
+  gainExperience(amount: number): number {
+    this.experience += amount;
+
+    let levelsGained = 0;
+    while (this.experience >= this.experienceToNextLevel) {
+      this.experience -= this.experienceToNextLevel;
+      this.level += 1;
+      levelsGained += 1;
+      this.experienceToNextLevel = this.calculateExperienceToNextLevel();
+    }
+
+    return levelsGained;
   }
 
   updateVisualState(currentTime: number): void {
@@ -84,5 +135,9 @@ export class Player extends Phaser.GameObjects.Rectangle {
 
     direction.normalize();
     this.body.setVelocity(direction.x * this.speed, direction.y * this.speed);
+  }
+
+  private calculateExperienceToNextLevel(): number {
+    return Math.floor(20 + (this.level - 1) * 10);
   }
 }

@@ -9,6 +9,8 @@ export type WeaponDefinition = {
   projectileColor: number;
 };
 
+export type WeaponStats = WeaponDefinition;
+
 export const STARTER_WEAPON: WeaponDefinition = {
   id: 'arc-bolt',
   name: 'Arc Bolt',

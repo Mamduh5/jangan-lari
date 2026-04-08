@@ -1,24 +1,47 @@
 import Phaser from 'phaser';
-import type { WeaponDefinition } from '../data/weapons';
+import type { WeaponDefinition, WeaponStats } from '../data/weapons';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 
 export class AutoFireWeapon {
   private readonly projectileGroup: Phaser.Physics.Arcade.Group;
+  private readonly stats: WeaponStats;
   private nextFireTime = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly owner: Player,
     private readonly enemies: Phaser.Physics.Arcade.Group,
-    private readonly weapon: WeaponDefinition,
+    weapon: WeaponDefinition,
   ) {
     this.projectileGroup = this.scene.physics.add.group({ runChildUpdate: false });
+    this.stats = { ...weapon };
   }
 
   getProjectiles(): Phaser.Physics.Arcade.Group {
     return this.projectileGroup;
+  }
+
+  getStats(): WeaponStats {
+    return { ...this.stats };
+  }
+
+  addDamage(amount: number): void {
+    this.stats.damage += amount;
+  }
+
+  reduceCooldown(amount: number): void {
+    this.stats.fireCooldownMs = Math.max(120, this.stats.fireCooldownMs - amount);
+    this.nextFireTime = Math.min(this.nextFireTime, this.scene.time.now + this.stats.fireCooldownMs);
+  }
+
+  addProjectileSpeed(amount: number): void {
+    this.stats.projectileSpeed += amount;
+  }
+
+  addRange(amount: number): void {
+    this.stats.range += amount;
   }
 
   update(currentTime: number, deltaMs: number): void {
@@ -35,7 +58,7 @@ export class AutoFireWeapon {
     }
 
     this.fireAt(target);
-    this.nextFireTime = currentTime + this.weapon.fireCooldownMs;
+    this.nextFireTime = currentTime + this.stats.fireCooldownMs;
   }
 
   destroy(): void {
@@ -51,7 +74,7 @@ export class AutoFireWeapon {
   }
 
   private findNearestEnemy(): Enemy | null {
-    const maxRangeSq = this.weapon.range * this.weapon.range;
+    const maxRangeSq = this.stats.range * this.stats.range;
     const enemies = this.enemies.getChildren() as Enemy[];
 
     let nearestEnemy: Enemy | null = null;
@@ -81,7 +104,7 @@ export class AutoFireWeapon {
     }
 
     const projectile = this.getInactiveProjectile() ?? this.createProjectile();
-    projectile.fire(this.owner.x, this.owner.y, direction, this.weapon);
+    projectile.fire(this.owner.x, this.owner.y, direction, this.stats);
   }
 
   private getInactiveProjectile(): Projectile | null {
