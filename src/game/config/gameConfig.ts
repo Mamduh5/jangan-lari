@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+﻿import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from './constants';
 import { BootScene } from '../scenes/BootScene';
 import { MenuScene } from '../scenes/MenuScene';
@@ -12,6 +12,9 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   backgroundColor: '#0b1020',
+  autoRound: true,
+  roundPixels: true,
+  antialias: true,
   physics: {
     default: 'arcade',
     arcade: {

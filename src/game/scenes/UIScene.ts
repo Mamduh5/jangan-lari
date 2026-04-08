@@ -17,6 +17,7 @@ export class UIScene extends Phaser.Scene {
   private endSubtitleText!: Phaser.GameObjects.Text;
   private endStatsText!: Phaser.GameObjects.Text;
   private levelUpContainer!: Phaser.GameObjects.Container;
+  private levelUpTimerText!: Phaser.GameObjects.Text;
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
   private levelUpDescriptions: Phaser.GameObjects.Text[] = [];
 
@@ -25,20 +26,20 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
-    const panel = this.add.rectangle(16, 16, 560, 176, 0x020617, 0.8).setOrigin(0);
-    panel.setStrokeStyle(2, 0x334155, 0.95);
+    const panel = this.add.rectangle(18, 16, 500, 176, 0x030712, 0.82).setOrigin(0);
+    panel.setStrokeStyle(2, 0x334155, 0.98);
     panel.setScrollFactor(0);
 
     this.add
-      .text(32, 24, 'JANGAN LARI', {
+      .text(34, 24, 'JANGAN LARI', {
         fontFamily: 'Georgia, serif',
-        fontSize: '22px',
+        fontSize: '24px',
         color: '#f8fafc',
       })
       .setScrollFactor(0);
 
     this.hpText = this.add
-      .text(32, 56, 'HP: --/--', {
+      .text(34, 58, 'HP: --/--', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#fca5a5',
@@ -46,7 +47,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.levelText = this.add
-      .text(180, 56, 'Level: 1', {
+      .text(180, 58, 'Level: 1', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#fde68a',
@@ -54,7 +55,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.timerText = this.add
-      .text(32, 82, 'Time: 00:00 / 00:00', {
+      .text(34, 84, 'Time: 00:00 / 00:00', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#93c5fd',
@@ -62,7 +63,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.goldText = this.add
-      .text(270, 82, 'Gold Bank: 0', {
+      .text(272, 84, 'Gold Bank: 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#facc15',
@@ -70,15 +71,23 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.weaponText = this.add
-      .text(32, 108, 'Weapons: 1', {
+      .text(34, 110, 'Weapons: 1', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#c4b5fd',
       })
       .setScrollFactor(0);
 
+    this.xpBarLabel = this.add
+      .text(162, 110, 'XP 0/0   Kills 0', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#bfdbfe',
+      })
+      .setScrollFactor(0);
+
     this.add
-      .text(GAME_WIDTH - 32, 24, 'ESC: Menu', {
+      .text(GAME_WIDTH - 30, 24, 'ESC: Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#cbd5e1',
@@ -86,23 +95,15 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
-    this.xpBarLabel = this.add
-      .text(160, 108, 'XP 0/0   Kills 0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
-        color: '#bfdbfe',
-      })
-      .setScrollFactor(0);
-
-    const xpBarFrame = this.add.rectangle(32, 138, 360, 18, 0x172554, 0.95).setOrigin(0, 0.5);
-    xpBarFrame.setStrokeStyle(2, 0x60a5fa, 0.8);
+    const xpBarFrame = this.add.rectangle(34, 140, 356, 18, 0x172554, 0.98).setOrigin(0, 0.5);
+    xpBarFrame.setStrokeStyle(2, 0x60a5fa, 0.85);
     xpBarFrame.setScrollFactor(0);
 
-    this.xpBarFill = this.add.rectangle(32, 138, 0, 12, 0x38bdf8, 1).setOrigin(0, 0.5);
+    this.xpBarFill = this.add.rectangle(34, 140, 0, 12, 0x38bdf8, 1).setOrigin(0, 0.5);
     this.xpBarFill.setScrollFactor(0);
 
     this.hintText = this.add
-      .text(32, 156, 'Survive the timer or kill the final boss', {
+      .text(34, 158, 'Survive the timer or kill the final boss', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#93c5fd',
@@ -131,6 +132,7 @@ export class UIScene extends Phaser.Scene {
     const targetMs = Number(this.registry.get('run.targetMs') ?? 0);
     const totalGold = Number(this.registry.get('run.totalGold') ?? this.registry.get('save.totalGold') ?? 0);
     const weaponCount = Number(this.registry.get('run.weaponCount') ?? 1);
+    const levelUpRemainingMs = Number(this.registry.get('run.levelUpRemainingMs') ?? 0);
     const endActive = Boolean(this.registry.get('run.endActive'));
     const levelUpActive = Boolean(this.registry.get('run.levelUpActive'));
     const instructions = String(this.registry.get('run.instructions') ?? 'Move with WASD or Arrow Keys');
@@ -142,7 +144,7 @@ export class UIScene extends Phaser.Scene {
     this.goldText.setText(`Gold Bank: ${totalGold}`);
     this.weaponText.setText(`Weapons: ${weaponCount}`);
     this.xpBarLabel.setText(`XP ${xp}/${xpNext}   Kills ${kills}`);
-    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 360, 0, 360);
+    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 356, 0, 356);
     this.hintText.setText(instructions);
 
     this.endContainer.setVisible(endActive);
@@ -153,25 +155,25 @@ export class UIScene extends Phaser.Scene {
     }
 
     if (levelUpActive && !endActive) {
-      this.refreshLevelUpChoices(levelUpChoices);
+      this.refreshLevelUpChoices(levelUpChoices, levelUpRemainingMs);
     }
   }
 
   private createEndOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.72).setOrigin(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 640, 410, 0x111827, 0.97);
+    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.76).setOrigin(0);
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 700, 430, 0x0f172a, 0.98);
     panel.setStrokeStyle(3, 0x475569, 1);
 
     this.endTitleText = this.add
-      .text(GAME_WIDTH / 2, 208, 'Victory', {
+      .text(GAME_WIDTH / 2, 196, 'Victory', {
         fontFamily: 'Georgia, serif',
-        fontSize: '44px',
+        fontSize: '46px',
         color: '#f8fafc',
       })
       .setOrigin(0.5);
 
     this.endSubtitleText = this.add
-      .text(GAME_WIDTH / 2, 258, 'Subtitle', {
+      .text(GAME_WIDTH / 2, 248, 'Subtitle', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#cbd5e1',
@@ -179,22 +181,23 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.endStatsText = this.add
-      .text(GAME_WIDTH / 2, 398, 'Kills: 0\nLevel Reached: 1', {
+      .text(GAME_WIDTH / 2, 396, 'Kills: 0\nLevel Reached: 1', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#bfdbfe',
         align: 'center',
-        wordWrap: { width: 540 },
+        wordWrap: { width: 580 },
+        lineSpacing: 4,
       })
       .setOrigin(0.5);
 
     const button = this.add
-      .text(GAME_WIDTH / 2, 558, 'Return to Menu', {
+      .text(GAME_WIDTH / 2, 572, 'Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fef3c7',
         backgroundColor: '#1f2937',
-        padding: { left: 20, right: 20, top: 10, bottom: 10 },
+        padding: { left: 22, right: 22, top: 12, bottom: 12 },
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
@@ -208,7 +211,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     const helpText = this.add
-      .text(GAME_WIDTH / 2, 614, 'Press Enter or Space to continue', {
+      .text(GAME_WIDTH / 2, 632, 'Press Enter or Space to continue', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#93c5fd',
@@ -232,12 +235,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createLevelUpOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.72).setOrigin(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 860, 420, 0x111827, 0.97);
+    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.78).setOrigin(0);
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 920, 440, 0x0f172a, 0.98);
     panel.setStrokeStyle(3, 0x60a5fa, 1);
 
     const title = this.add
-      .text(GAME_WIDTH / 2, 190, 'Level Up', {
+      .text(GAME_WIDTH / 2, 176, 'Power Selection', {
         fontFamily: 'Georgia, serif',
         fontSize: '40px',
         color: '#f8fafc',
@@ -245,55 +248,67 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const subtitle = this.add
-      .text(GAME_WIDTH / 2, 232, 'Choose 1 upgrade or weapon unlock', {
+      .text(GAME_WIDTH / 2, 220, 'Choose 1 upgrade or let the game auto-pick for you.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#bfdbfe',
       })
       .setOrigin(0.5);
 
-    const children: Phaser.GameObjects.GameObject[] = [backdrop, panel, title, subtitle];
+    this.levelUpTimerText = this.add
+      .text(GAME_WIDTH / 2, 252, 'Auto-pick in 15.0s', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '18px',
+        color: '#fef08a',
+      })
+      .setOrigin(0.5);
+
+    const children: Phaser.GameObjects.GameObject[] = [backdrop, panel, title, subtitle, this.levelUpTimerText];
 
     for (let index = 0; index < 3; index += 1) {
-      const x = 300 + index * 260;
+      const x = 300 + index * 340;
+      const card = this.add.rectangle(x, 384, 250, 182, 0x111827, 0.98);
+      card.setStrokeStyle(2, 0x334155, 1);
+
       const button = this.add
         .text(x, 340, `${index + 1}. Upgrade`, {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '24px',
           color: '#f8fafc',
-          backgroundColor: '#1e293b',
-          padding: { left: 18, right: 18, top: 14, bottom: 14 },
           align: 'center',
-          wordWrap: { width: 180 },
+          wordWrap: { width: 210 },
         })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
 
       button.on('pointerdown', () => this.selectUpgrade(index));
       button.on('pointerover', () => {
-        button.setStyle({ backgroundColor: '#334155', color: '#ffffff' });
+        card.setStrokeStyle(2, 0x93c5fd, 1);
+        card.setFillStyle(0x172033, 1);
       });
       button.on('pointerout', () => {
-        button.setStyle({ backgroundColor: '#1e293b', color: '#f8fafc' });
+        card.setStrokeStyle(2, 0x334155, 1);
+        card.setFillStyle(0x111827, 0.98);
       });
 
       const description = this.add
-        .text(x, 410, 'Description', {
+        .text(x, 412, 'Description', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '16px',
           color: '#cbd5e1',
           align: 'center',
-          wordWrap: { width: 190 },
+          wordWrap: { width: 210 },
+          lineSpacing: 4,
         })
         .setOrigin(0.5);
 
       this.levelUpButtons.push(button);
       this.levelUpDescriptions.push(description);
-      children.push(button, description);
+      children.push(card, button, description);
     }
 
     const helpText = this.add
-      .text(GAME_WIDTH / 2, 500, 'Use mouse or press 1, 2, or 3', {
+      .text(GAME_WIDTH / 2, 530, 'Use mouse or press 1, 2, or 3', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#93c5fd',
@@ -328,7 +343,9 @@ export class UIScene extends Phaser.Scene {
     );
   }
 
-  private refreshLevelUpChoices(choices: UpgradeDefinition[]): void {
+  private refreshLevelUpChoices(choices: UpgradeDefinition[], remainingMs: number): void {
+    this.levelUpTimerText.setText(`Auto-pick in ${(remainingMs / 1000).toFixed(1)}s`);
+
     for (let index = 0; index < this.levelUpButtons.length; index += 1) {
       const choice = choices[index];
       const button = this.levelUpButtons[index];
@@ -346,7 +363,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private selectUpgrade(index: number): void {
-    if (!this.registry.get('run.levelUpActive') || this.registry.get('run.endActive')) {
+    if (!this.registry.get('run.levelUpActive') || this.registry.get('run.endActive') || !this.scene.isActive('RunScene')) {
       return;
     }
 
@@ -365,7 +382,12 @@ export class UIScene extends Phaser.Scene {
       return;
     }
 
-    this.scene.stop('RunScene');
+    if (this.scene.isActive('RunScene')) {
+      const runScene = this.scene.get('RunScene') as RunScene;
+      runScene.exitToMenu();
+      return;
+    }
+
     this.scene.stop();
     this.scene.start('MenuScene');
   }

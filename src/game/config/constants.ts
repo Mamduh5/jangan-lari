@@ -1,4 +1,4 @@
-export const GAME_WIDTH = 1280;
+﻿export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 
 export const WORLD_WIDTH = 2000;
@@ -15,6 +15,7 @@ export const PLAYER_XP_PER_LEVEL = 8;
 
 export const ENEMY_SPAWN_INTERVAL_MS = 1000;
 export const RUN_TARGET_DURATION_MS = 120000;
+export const RUN_ACTIVE_DELTA_CAP_MS = 100;
 export const BOSS_SPAWN_TIME_MS = 100000;
 export const ELITE_SPAWN_INTERVAL_MS = 32000;
 export const ENEMY_HIT_FLASH_MS = 80;
@@ -22,6 +23,7 @@ export const ENEMY_HIT_FLASH_MS = 80;
 export const XP_GEM_ATTRACT_SPEED = 520;
 
 export const LEVEL_UP_FLASH_MS = 170;
+export const LEVEL_UP_AUTO_PICK_MS = 15000;
 export const PLAYER_HIT_SHAKE_DURATION_MS = 90;
 export const PLAYER_HIT_SHAKE_INTENSITY = 0.0032;
 export const ELITE_SPAWN_INDICATOR_MS = 650;

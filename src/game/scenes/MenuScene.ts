@@ -22,8 +22,7 @@ export class MenuScene extends Phaser.Scene {
     const centerY = GAME_HEIGHT / 2;
 
     this.cameras.main.setBackgroundColor('#0b1020');
-
-    this.add.rectangle(centerX, centerY, 1160, 680, 0x0f172a, 0.86).setStrokeStyle(2, 0x223247, 0.8);
+    this.add.rectangle(centerX, centerY, 1160, 680, 0x0f172a, 0.88).setStrokeStyle(2, 0x223247, 0.82);
 
     this.add
       .text(centerX, centerY - 300, 'JANGAN LARI', {
@@ -34,7 +33,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(centerX, centerY - 250, 'Survive the arena, stack weapons, and cash out stronger runs.', {
+      .text(centerX, centerY - 248, 'Choose a hero, enter the arena, and survive the swarm.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#93c5fd',
@@ -59,7 +58,7 @@ export class MenuScene extends Phaser.Scene {
     });
 
     this.add
-      .text(centerX, centerY - 64, 'Choose Hero', {
+      .text(centerX, centerY - 58, 'Hero Selection', {
         fontFamily: 'Georgia, serif',
         fontSize: '32px',
         color: '#f8fafc',
@@ -67,7 +66,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.statusText = this.add
-      .text(centerX, centerY + 252, 'Select a hero, then enter the run.', {
+      .text(centerX, centerY + 258, 'Select a hero, then enter the run.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#93c5fd',
@@ -79,11 +78,13 @@ export class MenuScene extends Phaser.Scene {
     for (let index = 0; index < HERO_LIST.length; index += 1) {
       const hero = HERO_LIST[index];
       const x = panelPositions[index];
-      const panel = this.add.rectangle(x, centerY + 84, 390, 260, 0x111827, 0.95).setOrigin(0.5);
+      const panel = this.add.rectangle(x, centerY + 88, 396, 278, 0x111827, 0.96).setOrigin(0.5);
       panel.setStrokeStyle(2, 0x334155, 1);
 
+      this.createHeroPreview(hero, x, centerY + 8);
+
       this.add
-        .text(x, centerY - 2, hero.name, {
+        .text(x, centerY + 48, hero.name, {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '29px',
           color: '#f8fafc',
@@ -91,16 +92,17 @@ export class MenuScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       const infoText = this.add
-        .text(x, centerY + 60, '', {
+        .text(x, centerY + 126, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '17px',
           color: '#cbd5e1',
           align: 'center',
           wordWrap: { width: 326 },
+          lineSpacing: 4,
         })
         .setOrigin(0.5);
 
-      const actionButton = this.createMenuButton(x, centerY + 176, '', () => this.handleHeroAction(hero));
+      const actionButton = this.createMenuButton(x, centerY + 214, '', () => this.handleHeroAction(hero));
       actionButton.setFontSize('24px');
       actionButton.setPadding(18, 10, 18, 10);
 
@@ -110,7 +112,7 @@ export class MenuScene extends Phaser.Scene {
     }
 
     this.add
-      .text(centerX, centerY + 292, 'Enter or Space starts a run. M opens meta progression.', {
+      .text(centerX, centerY + 296, 'Enter or Space starts a run. M opens meta progression.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '17px',
         color: '#cbd5e1',
@@ -160,8 +162,8 @@ export class MenuScene extends Phaser.Scene {
       const panel = this.heroPanels[index];
 
       infoText.setText(this.buildHeroSummary(hero, unlocked, selected));
-      panel.setStrokeStyle(selected ? 3 : 2, selected ? 0xfde68a : unlocked ? 0x334155 : 0x3b2f4a, 1);
-      panel.setFillStyle(selected ? 0x172033 : 0x111827, 0.95);
+      panel.setStrokeStyle(selected ? 3 : 2, selected ? 0xfde68a : hero.appearance.strokeColor, selected ? 1 : 0.75);
+      panel.setFillStyle(selected ? 0x172033 : 0x111827, 0.96);
 
       if (selected) {
         button.setText('Selected');
@@ -210,6 +212,24 @@ export class MenuScene extends Phaser.Scene {
     }
 
     return lines.join('\n');
+  }
+
+  private createHeroPreview(hero: HeroDefinition, x: number, y: number): void {
+    const { appearance } = hero;
+
+    const aura = this.add.circle(x, y, appearance.size * 0.9, appearance.auraColor, 0.16);
+    aura.setBlendMode(Phaser.BlendModes.ADD);
+
+    const body = this.add.rectangle(x, y, appearance.size, appearance.size, appearance.bodyColor);
+    body.setAngle(appearance.angle);
+    body.setStrokeStyle(3, appearance.strokeColor, 0.95);
+
+    if (appearance.markerShape === 'dot') {
+      this.add.circle(x, y - appearance.size * 0.24, Math.max(4, appearance.size * 0.14), appearance.markerColor, 0.95);
+      return;
+    }
+
+    this.add.rectangle(x, y - appearance.size * 0.24, appearance.size * 0.5, 7, appearance.markerColor, 0.95);
   }
 
   private createMenuButton(
