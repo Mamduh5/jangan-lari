@@ -28,7 +28,7 @@ export class UIScene extends Phaser.Scene {
     panel.setScrollFactor(0);
 
     this.add
-      .text(32, 24, 'Phase 6 Run', {
+      .text(32, 24, 'Phase 8 Run', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#f8fafc',
@@ -137,11 +137,11 @@ export class UIScene extends Phaser.Scene {
 
   private createEndOverlay(): Phaser.GameObjects.Container {
     const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.72).setOrigin(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 560, 340, 0x111827, 0.96);
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 620, 380, 0x111827, 0.96);
     panel.setStrokeStyle(3, 0x475569, 1);
 
     this.endTitleText = this.add
-      .text(GAME_WIDTH / 2, 240, 'Victory', {
+      .text(GAME_WIDTH / 2, 220, 'Victory', {
         fontFamily: 'Georgia, serif',
         fontSize: '42px',
         color: '#f8fafc',
@@ -149,7 +149,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.endSubtitleText = this.add
-      .text(GAME_WIDTH / 2, 290, 'Subtitle', {
+      .text(GAME_WIDTH / 2, 268, 'Subtitle', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#cbd5e1',
@@ -157,16 +157,17 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.endStatsText = this.add
-      .text(GAME_WIDTH / 2, 385, 'Kills: 0\nLevel Reached: 1', {
+      .text(GAME_WIDTH / 2, 392, 'Kills: 0\nLevel Reached: 1', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
+        fontSize: '18px',
         color: '#bfdbfe',
         align: 'center',
+        wordWrap: { width: 520 },
       })
       .setOrigin(0.5);
 
     const button = this.add
-      .text(GAME_WIDTH / 2, 510, 'Return to Menu', {
+      .text(GAME_WIDTH / 2, 548, 'Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fef3c7',
@@ -185,7 +186,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     const helpText = this.add
-      .text(GAME_WIDTH / 2, 566, 'Press Enter or Space to continue', {
+      .text(GAME_WIDTH / 2, 604, 'Press Enter or Space to continue', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#93c5fd',
@@ -293,12 +294,14 @@ export class UIScene extends Phaser.Scene {
     const subtitle = String(this.registry.get('run.endSubtitle') ?? '');
     const goldEarned = Number(this.registry.get('run.goldEarned') ?? 0);
     const totalGold = Number(this.registry.get('run.totalGold') ?? 0);
+    const questRewards = (this.registry.get('run.questRewards') ?? []) as string[];
+    const questSummary = questRewards.length > 0 ? `\nQuest Rewards:\n${questRewards.join('\n')}` : '';
 
     this.endTitleText.setText(title);
     this.endTitleText.setColor(victory ? '#fef08a' : '#fca5a5');
     this.endSubtitleText.setText(subtitle);
     this.endStatsText.setText(
-      `Enemies Killed: ${kills}\nLevel Reached: ${level}\nGold Earned: ${goldEarned}\nTotal Gold: ${totalGold}`,
+      `Enemies Killed: ${kills}\nLevel Reached: ${level}\nGold Earned: ${goldEarned}\nTotal Gold: ${totalGold}${questSummary}`,
     );
   }
 

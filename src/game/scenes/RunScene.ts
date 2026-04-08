@@ -19,6 +19,7 @@ import { XPGem } from '../entities/XPGem';
 import { createMovementKeys, type MovementKeys } from '../input/createMovementKeys';
 import type { GameSaveData } from '../save/saveData';
 import { loadGameSave } from '../save/saveData';
+import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 import { SpawnDirector } from '../systems/SpawnDirector';
@@ -36,6 +37,7 @@ export class RunScene extends Phaser.Scene {
   private frozenElapsedMs = 0;
   private pendingLevelUps = 0;
   private killCount = 0;
+  private eliteKillCount = 0;
   private goldEarned = 0;
   private isEnded = false;
   private isLevelingUp = false;
@@ -50,6 +52,7 @@ export class RunScene extends Phaser.Scene {
     this.isLevelingUp = false;
     this.pendingLevelUps = 0;
     this.killCount = 0;
+    this.eliteKillCount = 0;
     this.goldEarned = 0;
     this.runStartTime = this.time.now;
     this.frozenElapsedMs = 0;
@@ -102,6 +105,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.victory', false);
     this.registry.set('run.levelUpActive', false);
     this.registry.set('run.levelUpChoices', []);
+    this.registry.set('run.questRewards', []);
     this.registry.set('run.instructions', `Selected Hero: ${HEROES[this.saveData.selectedHero].name}`);
 
     this.input.keyboard?.on('keydown-ESC', this.handleExitToMenu, this);
@@ -323,12 +327,13 @@ export class RunScene extends Phaser.Scene {
     const enemyY = enemy.y;
     const xpValue = enemy.getXpValue();
     const wasBoss = enemy.isBoss();
+    const wasElite = enemy.isElite();
 
     projectile.deactivate();
     const enemyDied = enemy.takeDamage(projectile.getDamage());
 
     if (enemyDied) {
-      this.handleEnemyDefeated(enemyX, enemyY, xpValue, wasBoss);
+      this.handleEnemyDefeated(enemyX, enemyY, xpValue, wasBoss, wasElite);
     }
   }
 
@@ -351,8 +356,18 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  private handleEnemyDefeated(x: number, y: number, xpValue: number, wasBoss: boolean): void {
+  private handleEnemyDefeated(
+    x: number,
+    y: number,
+    xpValue: number,
+    wasBoss: boolean,
+    wasElite: boolean,
+  ): void {
     this.killCount += 1;
+    if (wasElite) {
+      this.eliteKillCount += 1;
+    }
+
     const gem = new XPGem(this, x, y, xpValue);
     this.xpGems.add(gem);
 
@@ -453,6 +468,15 @@ export class RunScene extends Phaser.Scene {
     this.goldEarned = this.calculateGoldReward(victory);
     this.saveData = awardRunGold(this.saveData, this.goldEarned);
 
+    const questResolution = applyRunProgressToQuests(this.saveData, {
+      kills: this.killCount,
+      survivalMs: this.frozenElapsedMs,
+      levelReached: this.player.getLevel(),
+      goldCollected: this.goldEarned,
+      eliteKills: this.eliteKillCount,
+    });
+    this.saveData = questResolution.saveData;
+
     this.spawnTimer?.remove(false);
     this.player.move(new Phaser.Math.Vector2(0, 0));
     this.player.updateVisualState(this.time.now);
@@ -463,6 +487,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.victory', victory);
     this.registry.set('run.endTitle', title);
     this.registry.set('run.endSubtitle', subtitle);
+    this.registry.set('run.questRewards', questResolution.rewardMessages);
     this.registry.set('run.levelUpActive', false);
     this.registry.set('run.levelUpChoices', []);
     this.registry.set('run.instructions', 'Press Enter, Space, or click the button to return to menu.');

@@ -15,7 +15,9 @@ export function selectHero(saveData: GameSaveData, heroId: HeroId): GameSaveData
     ...saveData,
     selectedHero: heroId,
     unlockedHeroes: [...saveData.unlockedHeroes],
+    unlockedPermanentUpgrades: [...saveData.unlockedPermanentUpgrades],
     completedQuests: [...saveData.completedQuests],
+    progressStats: { ...saveData.progressStats },
     purchasedPermanentUpgrades: { ...saveData.purchasedPermanentUpgrades },
   };
 
@@ -33,7 +35,9 @@ export function unlockHero(saveData: GameSaveData, hero: HeroDefinition): GameSa
     totalGold: saveData.totalGold - hero.unlockCost,
     selectedHero: hero.id,
     unlockedHeroes: [...saveData.unlockedHeroes, hero.id],
+    unlockedPermanentUpgrades: [...saveData.unlockedPermanentUpgrades],
     completedQuests: [...saveData.completedQuests],
+    progressStats: { ...saveData.progressStats },
     purchasedPermanentUpgrades: { ...saveData.purchasedPermanentUpgrades },
   };
 

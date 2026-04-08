@@ -1,4 +1,3 @@
-import type { HeroId } from '../data/heroes';
 import type { PermanentUpgradeDefinition, PermanentUpgradeId } from '../data/permanentUpgrades';
 import { getPermanentUpgradeCost } from '../data/permanentUpgrades';
 import type { GameSaveData } from './saveData';
@@ -8,12 +7,16 @@ export function getPermanentUpgradeLevel(saveData: GameSaveData, id: PermanentUp
   return saveData.purchasedPermanentUpgrades[id] ?? 0;
 }
 
+export function isPermanentUpgradeUnlocked(saveData: GameSaveData, id: PermanentUpgradeId): boolean {
+  return saveData.unlockedPermanentUpgrades.includes(id);
+}
+
 export function canPurchasePermanentUpgrade(
   saveData: GameSaveData,
   upgrade: PermanentUpgradeDefinition,
 ): boolean {
   const currentLevel = getPermanentUpgradeLevel(saveData, upgrade.id);
-  if (currentLevel >= upgrade.maxLevel) {
+  if (currentLevel >= upgrade.maxLevel || !isPermanentUpgradeUnlocked(saveData, upgrade.id)) {
     return false;
   }
 
@@ -25,7 +28,7 @@ export function purchasePermanentUpgrade(
   upgrade: PermanentUpgradeDefinition,
 ): GameSaveData | null {
   const currentLevel = getPermanentUpgradeLevel(saveData, upgrade.id);
-  if (currentLevel >= upgrade.maxLevel) {
+  if (currentLevel >= upgrade.maxLevel || !isPermanentUpgradeUnlocked(saveData, upgrade.id)) {
     return null;
   }
 
@@ -39,7 +42,9 @@ export function purchasePermanentUpgrade(
     totalGold: saveData.totalGold - cost,
     selectedHero: saveData.selectedHero,
     unlockedHeroes: [...saveData.unlockedHeroes],
+    unlockedPermanentUpgrades: [...saveData.unlockedPermanentUpgrades],
     completedQuests: [...saveData.completedQuests],
+    progressStats: { ...saveData.progressStats },
     purchasedPermanentUpgrades: {
       ...saveData.purchasedPermanentUpgrades,
       [upgrade.id]: currentLevel + 1,
@@ -56,7 +61,9 @@ export function awardRunGold(saveData: GameSaveData, amount: number): GameSaveDa
     totalGold: saveData.totalGold + amount,
     selectedHero: saveData.selectedHero,
     unlockedHeroes: [...saveData.unlockedHeroes],
+    unlockedPermanentUpgrades: [...saveData.unlockedPermanentUpgrades],
     completedQuests: [...saveData.completedQuests],
+    progressStats: { ...saveData.progressStats },
     purchasedPermanentUpgrades: { ...saveData.purchasedPermanentUpgrades },
   };
 
