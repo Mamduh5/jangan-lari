@@ -16,6 +16,7 @@ export class UIScene extends Phaser.Scene {
   private endTitleText!: Phaser.GameObjects.Text;
   private endSubtitleText!: Phaser.GameObjects.Text;
   private endStatsText!: Phaser.GameObjects.Text;
+  private endButton!: Phaser.GameObjects.Text;
   private levelUpContainer!: Phaser.GameObjects.Container;
   private levelUpTimerText!: Phaser.GameObjects.Text;
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
@@ -206,7 +207,7 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    const button = this.add
+    this.endButton = this.add
       .text(GAME_WIDTH / 2, 578, 'Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '26px',
@@ -217,12 +218,12 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
 
-    button.on('pointerdown', () => this.returnToMenuIfEnded());
-    button.on('pointerover', () => {
-      button.setStyle({ color: '#ffffff', backgroundColor: '#374151' });
+    this.endButton.on('pointerdown', () => this.returnToMenuIfEnded());
+    this.endButton.on('pointerover', () => {
+      this.endButton.setStyle({ color: '#ffffff', backgroundColor: '#374151' });
     });
-    button.on('pointerout', () => {
-      button.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
+    this.endButton.on('pointerout', () => {
+      this.endButton.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
     });
 
     const helpText = this.add
@@ -239,7 +240,7 @@ export class UIScene extends Phaser.Scene {
       this.endTitleText,
       this.endSubtitleText,
       this.endStatsText,
-      button,
+      this.endButton,
       helpText,
     ]);
     container.setDepth(100);

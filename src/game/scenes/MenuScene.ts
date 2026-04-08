@@ -54,8 +54,8 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.startButton = this.createMenuButton(centerX - 162, centerY - 138, 'Start Run', this.startRun);
-    this.metaButton = this.createMenuButton(centerX + 162, centerY - 138, 'Meta Progress', this.openMeta);
+    this.startButton = this.createMenuButton(centerX - 162, centerY - 138, 'Start Run', () => this.startRun());
+    this.metaButton = this.createMenuButton(centerX + 162, centerY - 138, 'Meta Progress', () => this.openMeta());
 
     this.add.rectangle(centerX, centerY - 92, 920, 2, 0x223247, 0.9);
 
@@ -303,7 +303,7 @@ export class MenuScene extends Phaser.Scene {
       }
     });
 
-    button.on('pointerdown', onClick);
+    button.on('pointerdown', () => onClick());
     return button;
   }
 
