@@ -1,0 +1,29 @@
+:root {
+  color: #f3efe4;
+  background: #0d1117;
+  font-family: 'Trebuchet MS', Verdana, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, rgba(52, 71, 93, 0.55), transparent 40%),
+    linear-gradient(180deg, #111827 0%, #0b1020 100%);
+}
+
+body {
+  min-height: 100vh;
+}
+
+canvas {
+  display: block;
+}
