@@ -65,11 +65,17 @@ export class AutoFireWeapon {
   }
 
   destroy(): void {
-    this.projectileGroup.clear(true, true);
+    const projectiles = [...this.getProjectileEntries()];
+
+    for (const projectile of projectiles) {
+      projectile.destroy();
+    }
+
+    this.projectileGroup.destroy();
   }
 
   private updateProjectiles(deltaMs: number): void {
-    const projectiles = this.projectileGroup.getChildren() as Projectile[];
+    const projectiles = this.getProjectileEntries();
 
     for (const projectile of projectiles) {
       projectile.update(deltaMs);
@@ -120,7 +126,7 @@ export class AutoFireWeapon {
   }
 
   private getInactiveProjectile(): Projectile | null {
-    const projectiles = this.projectileGroup.getChildren() as Projectile[];
+    const projectiles = this.getProjectileEntries();
 
     for (const projectile of projectiles) {
       if (!projectile.active) {
@@ -135,5 +141,13 @@ export class AutoFireWeapon {
     const projectile = new Projectile(this.scene);
     this.projectileGroup.add(projectile);
     return projectile;
+  }
+
+  private getProjectileEntries(): Projectile[] {
+    const internalChildren = (this.projectileGroup as Phaser.Physics.Arcade.Group & {
+      children?: { entries?: Projectile[] };
+    }).children;
+
+    return Array.isArray(internalChildren?.entries) ? internalChildren.entries : [];
   }
 }

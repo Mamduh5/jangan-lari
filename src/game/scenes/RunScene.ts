@@ -1,17 +1,11 @@
-﻿import Phaser from 'phaser';
+import Phaser from 'phaser';
 import {
   ELITE_SPAWN_INDICATOR_MS,
   ENDING_FLASH_MS,
   ENEMY_SPAWN_INTERVAL_MS,
-  GOLD_REWARD_BASE,
-  GOLD_REWARD_PER_KILL_STEP,
-  GOLD_REWARD_PER_LEVEL,
-  GOLD_REWARD_VICTORY_BONUS,
-  LEVEL_UP_AUTO_PICK_MS,
   LEVEL_UP_FLASH_MS,
   PLAYER_HIT_SHAKE_DURATION_MS,
   PLAYER_HIT_SHAKE_INTENSITY,
-  RUN_ACTIVE_DELTA_CAP_MS,
   RUN_TARGET_DURATION_MS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
@@ -30,6 +24,16 @@ import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 import { SpawnDirector } from '../systems/SpawnDirector';
+import {
+  accumulateRunElapsedMs,
+  beginLevelUpCountdown,
+  calculateRunGoldReward,
+  chooseRandomValidIndex,
+  clearRunRegistryState,
+  createFreshRunSessionState,
+  tickLevelUpCountdown,
+  writeFreshRunRegistryState,
+} from '../utils/runSession';
 
 export class RunScene extends Phaser.Scene {
   private player!: Player;
@@ -78,21 +82,23 @@ export class RunScene extends Phaser.Scene {
 
   create(): void {
     this.saveData = loadGameSave();
-    this.isEnded = false;
-    this.isLevelingUp = false;
-    this.isSystemPaused = false;
-    this.isTransitioningToMenu = false;
-    this.isResolvingLevelUpChoice = false;
-    this.pendingLevelUps = 0;
-    this.levelUpRemainingMs = 0;
-    this.runElapsedMs = 0;
-    this.killCount = 0;
-    this.eliteKillCount = 0;
-    this.goldEarned = 0;
-    this.globalWeaponDamageBonus = 0;
-    this.globalWeaponCooldownReduction = 0;
-    this.globalProjectileSpeedBonus = 0;
-    this.globalWeaponRangeBonus = 0;
+
+    const freshSession = createFreshRunSessionState();
+    this.runElapsedMs = freshSession.runElapsedMs;
+    this.pendingLevelUps = freshSession.pendingLevelUps;
+    this.levelUpRemainingMs = freshSession.levelUpRemainingMs;
+    this.killCount = freshSession.killCount;
+    this.eliteKillCount = freshSession.eliteKillCount;
+    this.goldEarned = freshSession.goldEarned;
+    this.isEnded = freshSession.isEnded;
+    this.isLevelingUp = freshSession.isLevelingUp;
+    this.isSystemPaused = freshSession.isSystemPaused;
+    this.isTransitioningToMenu = freshSession.isTransitioningToMenu;
+    this.isResolvingLevelUpChoice = freshSession.isResolvingLevelUpChoice;
+    this.globalWeaponDamageBonus = freshSession.globalWeaponDamageBonus;
+    this.globalWeaponCooldownReduction = freshSession.globalWeaponCooldownReduction;
+    this.globalProjectileSpeedBonus = freshSession.globalProjectileSpeedBonus;
+    this.globalWeaponRangeBonus = freshSession.globalWeaponRangeBonus;
     this.weapons = [];
     this.colliders = [];
     this.ownedWeaponIds.clear();
@@ -141,13 +147,7 @@ export class RunScene extends Phaser.Scene {
       callbackScope: this,
     });
 
-    this.registry.set('run.endActive', false);
-    this.registry.set('run.victory', false);
-    this.registry.set('run.levelUpActive', false);
-    this.registry.set('run.levelUpChoices', []);
-    this.registry.set('run.levelUpRemainingMs', 0);
-    this.registry.set('run.questRewards', []);
-    this.registry.set('run.instructions', `Selected Hero: ${selectedHero.name}`);
+    writeFreshRunRegistryState(this.registry, selectedHero.name, this.saveData.totalGold);
     this.publishHudState();
 
     document.addEventListener('visibilitychange', this.handlePageVisibilityChange);
@@ -164,7 +164,6 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    const activeDeltaMs = Math.min(Math.max(delta, 0), RUN_ACTIVE_DELTA_CAP_MS);
     this.player.updateVisualState(this.time.now);
 
     if (this.isEnded || this.isTransitioningToMenu) {
@@ -178,12 +177,12 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (this.isLevelingUp) {
-      this.updateLevelUpCountdown(activeDeltaMs);
+      this.updateLevelUpCountdown(delta);
       this.publishHudState();
       return;
     }
 
-    this.runElapsedMs = Math.min(RUN_TARGET_DURATION_MS, this.runElapsedMs + activeDeltaMs);
+    this.runElapsedMs = accumulateRunElapsedMs(this.runElapsedMs, delta, true);
     if (this.runElapsedMs >= RUN_TARGET_DURATION_MS) {
       this.endRun(true, 'Victory', 'You survived until extraction.');
       return;
@@ -201,7 +200,7 @@ export class RunScene extends Phaser.Scene {
     this.updateGems();
 
     for (const weapon of this.weapons) {
-      weapon.update(this.time.now, activeDeltaMs);
+      weapon.update(this.time.now, delta);
     }
 
     this.publishHudState();
@@ -214,12 +213,16 @@ export class RunScene extends Phaser.Scene {
 
     this.isTransitioningToMenu = true;
     this.pauseGameplaySystems();
-    this.registry.set('run.endActive', false);
-    this.registry.set('run.levelUpActive', false);
-    this.registry.set('run.levelUpChoices', []);
-    this.registry.set('run.levelUpRemainingMs', 0);
-    this.scene.stop('UIScene');
-    this.scene.start('MenuScene');
+    clearRunRegistryState(this.registry, this.saveData?.totalGold ?? Number(this.registry.get('save.totalGold') ?? 0));
+
+    const sceneManager = this.game.scene;
+
+    if (sceneManager.isActive('UIScene')) {
+      sceneManager.stop('UIScene');
+    }
+
+    sceneManager.stop('RunScene');
+    sceneManager.start('MenuScene');
   }
 
   selectLevelUp(index: number): void {
@@ -523,7 +526,7 @@ export class RunScene extends Phaser.Scene {
   private presentLevelUpChoices(): void {
     const choices = Phaser.Utils.Array.Shuffle(this.getAvailableUpgradePool()).slice(0, 3);
     this.isResolvingLevelUpChoice = false;
-    this.levelUpRemainingMs = LEVEL_UP_AUTO_PICK_MS;
+    this.levelUpRemainingMs = beginLevelUpCountdown();
     this.registry.set('run.levelUpActive', true);
     this.registry.set('run.levelUpChoices', choices);
     this.registry.set('run.levelUpRemainingMs', this.levelUpRemainingMs);
@@ -531,28 +534,24 @@ export class RunScene extends Phaser.Scene {
   }
 
   private updateLevelUpCountdown(deltaMs: number): void {
-    if (this.levelUpRemainingMs <= 0 || this.isResolvingLevelUpChoice) {
-      return;
-    }
-
-    this.levelUpRemainingMs = Math.max(0, this.levelUpRemainingMs - deltaMs);
+    const nextCountdown = tickLevelUpCountdown(this.levelUpRemainingMs, deltaMs, true);
+    this.levelUpRemainingMs = nextCountdown.remainingMs;
     this.registry.set('run.levelUpRemainingMs', this.levelUpRemainingMs);
 
-    if (this.levelUpRemainingMs === 0) {
+    if (nextCountdown.expired && !this.isResolvingLevelUpChoice) {
       this.autoPickLevelUp();
     }
   }
 
   private autoPickLevelUp(): void {
     const choices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
-    const validIndices = choices.flatMap((choice, index) => (choice ? [index] : []));
+    const randomIndex = chooseRandomValidIndex(choices);
 
-    if (validIndices.length === 0) {
+    if (randomIndex === null) {
       this.finishLevelUpSelection();
       return;
     }
 
-    const randomIndex = Phaser.Utils.Array.GetRandom(validIndices);
     this.selectLevelUp(randomIndex);
   }
 
@@ -708,7 +707,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private resumeGameplaySystems(instructionText?: string): void {
-    if (this.isEnded || this.isSystemPaused || this.isLevelingUp) {
+    if (this.isEnded || this.isSystemPaused || this.isLevelingUp || this.isTransitioningToMenu) {
       return;
     }
 
@@ -749,7 +748,7 @@ export class RunScene extends Phaser.Scene {
     this.isLevelingUp = false;
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = 0;
-    this.goldEarned = this.calculateGoldReward(victory);
+    this.goldEarned = calculateRunGoldReward(this.player.getLevel(), this.killCount, victory);
     this.saveData = awardRunGold(this.saveData, this.goldEarned);
 
     const questResolution = applyRunProgressToQuests(this.saveData, {
@@ -786,14 +785,6 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.levelUpRemainingMs', 0);
     this.registry.set('run.instructions', 'Press Enter, Space, or click the button to return to menu.');
     this.publishHudState();
-  }
-
-  private calculateGoldReward(victory: boolean): number {
-    const levelReward = this.player.getLevel() * GOLD_REWARD_PER_LEVEL;
-    const killReward = Math.floor(this.killCount / GOLD_REWARD_PER_KILL_STEP);
-    const victoryReward = victory ? GOLD_REWARD_VICTORY_BONUS : 0;
-
-    return GOLD_REWARD_BASE + levelReward + killReward + victoryReward;
   }
 
   private showSpawnIndicator(x: number, y: number, label: string, color: number): void {
@@ -879,7 +870,32 @@ export class RunScene extends Phaser.Scene {
     }
     this.weapons = [];
 
-    this.enemies?.clear(true, true);
-    this.xpGems?.clear(true, true);
+    this.destroyPhysicsGroup(this.enemies);
+    this.destroyPhysicsGroup(this.xpGems);
+
+    if (this.player?.active) {
+      this.player.destroy();
+    }
+  }
+
+  private destroyPhysicsGroup(group?: Phaser.Physics.Arcade.Group): void {
+    if (!group) {
+      return;
+    }
+
+    const internalChildren = (group as Phaser.Physics.Arcade.Group & {
+      children?: { entries?: Phaser.GameObjects.GameObject[] };
+    }).children;
+    const children = Array.isArray(internalChildren?.entries) ? [...internalChildren.entries] : [];
+
+    for (const child of children) {
+      child.destroy();
+    }
+
+    group.destroy();
   }
 }
+
+
+
+

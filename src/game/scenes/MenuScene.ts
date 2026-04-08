@@ -1,4 +1,4 @@
-﻿import Phaser from 'phaser';
+import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
 import { loadGameSave, type GameSaveData } from '../save/saveData';
@@ -11,6 +11,8 @@ export class MenuScene extends Phaser.Scene {
   private heroActionButtons: Phaser.GameObjects.Text[] = [];
   private heroInfoTexts: Phaser.GameObjects.Text[] = [];
   private heroPanels: Phaser.GameObjects.Rectangle[] = [];
+  private startButton!: Phaser.GameObjects.Text;
+  private metaButton!: Phaser.GameObjects.Text;
 
   constructor() {
     super('MenuScene');
@@ -18,16 +20,20 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     this.saveData = loadGameSave();
+    this.heroActionButtons = [];
+    this.heroInfoTexts = [];
+    this.heroPanels = [];
+
     const centerX = GAME_WIDTH / 2;
     const centerY = GAME_HEIGHT / 2;
 
     this.cameras.main.setBackgroundColor('#0b1020');
-    this.add.rectangle(centerX, centerY, 1160, 680, 0x0f172a, 0.88).setStrokeStyle(2, 0x223247, 0.82);
+    this.add.rectangle(centerX, centerY, 1164, 688, 0x0f172a, 0.9).setStrokeStyle(2, 0x223247, 0.88);
 
     this.add
-      .text(centerX, centerY - 300, 'JANGAN LARI', {
+      .text(centerX, centerY - 302, 'JANGAN LARI', {
         fontFamily: 'Georgia, serif',
-        fontSize: '52px',
+        fontSize: '54px',
         color: '#f8fafc',
       })
       .setOrigin(0.5);
@@ -35,41 +41,37 @@ export class MenuScene extends Phaser.Scene {
     this.add
       .text(centerX, centerY - 248, 'Choose a hero, enter the arena, and survive the swarm.', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
+        fontSize: '21px',
         color: '#93c5fd',
       })
       .setOrigin(0.5);
 
     this.goldText = this.add
-      .text(centerX, centerY - 204, `Total Gold: ${this.saveData.totalGold}`, {
+      .text(centerX, centerY - 204, `Gold Bank: ${this.saveData.totalGold}`, {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '24px',
+        fontSize: '25px',
         color: '#fde68a',
       })
       .setOrigin(0.5);
 
-    const startLabel = this.createMenuButton(centerX - 150, centerY - 138, 'Start Run', () => {
-      this.scene.start('RunScene');
-      this.scene.launch('UIScene');
-    });
+    this.startButton = this.createMenuButton(centerX - 162, centerY - 138, 'Start Run', this.startRun);
+    this.metaButton = this.createMenuButton(centerX + 162, centerY - 138, 'Meta Progress', this.openMeta);
 
-    const metaLabel = this.createMenuButton(centerX + 150, centerY - 138, 'Meta Progress', () => {
-      this.scene.start('MetaScene');
-    });
+    this.add.rectangle(centerX, centerY - 92, 920, 2, 0x223247, 0.9);
 
     this.add
-      .text(centerX, centerY - 58, 'Hero Selection', {
+      .text(centerX, centerY - 48, 'Hero Selection', {
         fontFamily: 'Georgia, serif',
-        fontSize: '32px',
+        fontSize: '33px',
         color: '#f8fafc',
       })
       .setOrigin(0.5);
 
-    this.statusText = this.add
-      .text(centerX, centerY + 258, 'Select a hero, then enter the run.', {
+    this.add
+      .text(centerX, centerY - 12, 'Selected hero changes your opening stats and silhouette in combat.', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#93c5fd',
+        fontSize: '17px',
+        color: '#cbd5e1',
       })
       .setOrigin(0.5);
 
@@ -78,31 +80,31 @@ export class MenuScene extends Phaser.Scene {
     for (let index = 0; index < HERO_LIST.length; index += 1) {
       const hero = HERO_LIST[index];
       const x = panelPositions[index];
-      const panel = this.add.rectangle(x, centerY + 88, 396, 278, 0x111827, 0.96).setOrigin(0.5);
+      const panel = this.add.rectangle(x, centerY + 94, 404, 294, 0x111827, 0.965).setOrigin(0.5);
       panel.setStrokeStyle(2, 0x334155, 1);
 
       this.createHeroPreview(hero, x, centerY + 8);
 
       this.add
-        .text(x, centerY + 48, hero.name, {
+        .text(x, centerY + 50, hero.name, {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '29px',
+          fontSize: '30px',
           color: '#f8fafc',
         })
         .setOrigin(0.5);
 
       const infoText = this.add
-        .text(x, centerY + 126, '', {
+        .text(x, centerY + 132, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '17px',
           color: '#cbd5e1',
           align: 'center',
-          wordWrap: { width: 326 },
+          wordWrap: { width: 334 },
           lineSpacing: 4,
         })
         .setOrigin(0.5);
 
-      const actionButton = this.createMenuButton(x, centerY + 214, '', () => this.handleHeroAction(hero));
+      const actionButton = this.createMenuButton(x, centerY + 224, '', () => this.handleHeroAction(hero));
       actionButton.setFontSize('24px');
       actionButton.setPadding(18, 10, 18, 10);
 
@@ -111,19 +113,55 @@ export class MenuScene extends Phaser.Scene {
       this.heroActionButtons.push(actionButton);
     }
 
+    this.add.rectangle(centerX, centerY + 270, 720, 46, 0x101b2f, 0.92).setStrokeStyle(1, 0x334155, 0.9);
+    this.statusText = this.add
+      .text(centerX, centerY + 270, 'Select a hero, then enter the run.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '18px',
+        color: '#93c5fd',
+        align: 'center',
+      })
+      .setOrigin(0.5);
+
     this.add
-      .text(centerX, centerY + 296, 'Enter or Space starts a run. M opens meta progression.', {
+      .text(centerX, centerY + 312, 'Enter or Space starts a run. M opens meta progression.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '17px',
         color: '#cbd5e1',
       })
       .setOrigin(0.5);
 
-    this.input.keyboard?.once('keydown-ENTER', () => startLabel.emit('pointerdown'));
-    this.input.keyboard?.once('keydown-SPACE', () => startLabel.emit('pointerdown'));
-    this.input.keyboard?.once('keydown-M', () => metaLabel.emit('pointerdown'));
+    this.input.keyboard?.on('keydown-ENTER', this.handleStartShortcut, this);
+    this.input.keyboard?.on('keydown-SPACE', this.handleStartShortcut, this);
+    this.input.keyboard?.on('keydown-M', this.handleMetaShortcut, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
     this.refreshHeroView();
+  }
+
+  private startRun(): void {
+    if (this.scene.isActive('UIScene')) {
+      this.scene.stop('UIScene');
+    }
+
+    if (this.scene.isActive('RunScene')) {
+      this.scene.stop('RunScene');
+    }
+
+    this.scene.start('RunScene');
+    this.scene.launch('UIScene');
+  }
+
+  private openMeta(): void {
+    this.scene.start('MetaScene');
+  }
+
+  private handleStartShortcut(): void {
+    this.startButton.emit('pointerdown');
+  }
+
+  private handleMetaShortcut(): void {
+    this.metaButton.emit('pointerdown');
   }
 
   private handleHeroAction(hero: HeroDefinition): void {
@@ -151,7 +189,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private refreshHeroView(): void {
-    this.goldText.setText(`Total Gold: ${this.saveData.totalGold}`);
+    this.goldText.setText(`Gold Bank: ${this.saveData.totalGold}`);
 
     for (let index = 0; index < HERO_LIST.length; index += 1) {
       const hero = HERO_LIST[index];
@@ -162,8 +200,8 @@ export class MenuScene extends Phaser.Scene {
       const panel = this.heroPanels[index];
 
       infoText.setText(this.buildHeroSummary(hero, unlocked, selected));
-      panel.setStrokeStyle(selected ? 3 : 2, selected ? 0xfde68a : hero.appearance.strokeColor, selected ? 1 : 0.75);
-      panel.setFillStyle(selected ? 0x172033 : 0x111827, 0.96);
+      panel.setStrokeStyle(selected ? 3 : 2, selected ? 0xfde68a : hero.appearance.strokeColor, selected ? 1 : 0.8);
+      panel.setFillStyle(selected ? 0x172033 : 0x111827, 0.965);
 
       if (selected) {
         button.setText('Selected');
@@ -217,7 +255,7 @@ export class MenuScene extends Phaser.Scene {
   private createHeroPreview(hero: HeroDefinition, x: number, y: number): void {
     const { appearance } = hero;
 
-    const aura = this.add.circle(x, y, appearance.size * 0.9, appearance.auraColor, 0.16);
+    const aura = this.add.circle(x, y, appearance.size * 0.92, appearance.auraColor, 0.18);
     aura.setBlendMode(Phaser.BlendModes.ADD);
 
     const body = this.add.rectangle(x, y, appearance.size, appearance.size, appearance.bodyColor);
@@ -267,5 +305,11 @@ export class MenuScene extends Phaser.Scene {
 
     button.on('pointerdown', onClick);
     return button;
+  }
+
+  private handleShutdown(): void {
+    this.input.keyboard?.off('keydown-ENTER', this.handleStartShortcut, this);
+    this.input.keyboard?.off('keydown-SPACE', this.handleStartShortcut, this);
+    this.input.keyboard?.off('keydown-M', this.handleMetaShortcut, this);
   }
 }

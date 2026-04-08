@@ -1,4 +1,4 @@
-﻿import Phaser from 'phaser';
+import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from './constants';
 import { BootScene } from '../scenes/BootScene';
 import { MenuScene } from '../scenes/MenuScene';
