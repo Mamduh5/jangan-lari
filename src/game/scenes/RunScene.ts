@@ -9,6 +9,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
+import { HEROES } from '../data/heroes';
 import { UPGRADE_POOL, type UpgradeDefinition, type UpgradeId } from '../data/upgrades';
 import { STARTER_WEAPON } from '../data/weapons';
 import { Enemy } from '../entities/Enemy';
@@ -64,6 +65,7 @@ export class RunScene extends Phaser.Scene {
     this.spawnDirector = new SpawnDirector();
     this.starterWeapon = new AutoFireWeapon(this, this.player, this.enemies, STARTER_WEAPON);
     this.applyPermanentUpgrades();
+    this.applyHeroBonuses();
     this.movementKeys = createMovementKeys(this);
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
@@ -100,7 +102,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.victory', false);
     this.registry.set('run.levelUpActive', false);
     this.registry.set('run.levelUpChoices', []);
-    this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
+    this.registry.set('run.instructions', `Selected Hero: ${HEROES[this.saveData.selectedHero].name}`);
 
     this.input.keyboard?.on('keydown-ESC', this.handleExitToMenu, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
@@ -193,6 +195,26 @@ export class RunScene extends Phaser.Scene {
 
     if (startingDamageLevel > 0) {
       this.starterWeapon.addDamage(startingDamageLevel * 3);
+    }
+  }
+
+  private applyHeroBonuses(): void {
+    const hero = HEROES[this.saveData.selectedHero];
+
+    if (hero.maxHealthBonus !== 0) {
+      this.player.addMaxHealth(hero.maxHealthBonus);
+    }
+
+    if (hero.moveSpeedBonus !== 0) {
+      this.player.addMoveSpeed(hero.moveSpeedBonus);
+    }
+
+    if (hero.startingDamageBonus !== 0) {
+      this.starterWeapon.addDamage(hero.startingDamageBonus);
+    }
+
+    if (hero.fireCooldownReductionMs !== 0) {
+      this.starterWeapon.reduceCooldown(hero.fireCooldownReductionMs);
     }
   }
 

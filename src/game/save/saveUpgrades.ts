@@ -1,3 +1,4 @@
+import type { HeroId } from '../data/heroes';
 import type { PermanentUpgradeDefinition, PermanentUpgradeId } from '../data/permanentUpgrades';
 import { getPermanentUpgradeCost } from '../data/permanentUpgrades';
 import type { GameSaveData } from './saveData';
@@ -36,6 +37,7 @@ export function purchasePermanentUpgrade(
   const nextSave: GameSaveData = {
     ...saveData,
     totalGold: saveData.totalGold - cost,
+    selectedHero: saveData.selectedHero,
     unlockedHeroes: [...saveData.unlockedHeroes],
     completedQuests: [...saveData.completedQuests],
     purchasedPermanentUpgrades: {
@@ -52,6 +54,7 @@ export function awardRunGold(saveData: GameSaveData, amount: number): GameSaveDa
   const nextSave: GameSaveData = {
     ...saveData,
     totalGold: saveData.totalGold + amount,
+    selectedHero: saveData.selectedHero,
     unlockedHeroes: [...saveData.unlockedHeroes],
     completedQuests: [...saveData.completedQuests],
     purchasedPermanentUpgrades: { ...saveData.purchasedPermanentUpgrades },
