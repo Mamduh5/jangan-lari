@@ -302,6 +302,7 @@ export class RunScene extends Phaser.Scene {
       level: this.player.getLevel(),
       kills: this.killCount,
       weaponCount: this.weapons.length,
+      weaponNames: this.weapons.map((weapon) => weapon.getStats().name),
       goldEarned: this.goldEarned,
       levelUpActive: Boolean(this.registry.get('run.levelUpActive')),
       endActive: Boolean(this.registry.get('run.endActive')),

@@ -111,6 +111,14 @@ const WEAPON_RESPONSE_PROFILES: Partial<Record<WeaponId, WeaponCombatResponsePro
     cueAlpha: 0.16,
     cueScale: 1.22,
   },
+  'phase-disc': {
+    launchScaleX: 1.12,
+    launchScaleY: 1.34,
+    launchTweenMs: 110,
+    impactHitStopMs: 8,
+    cueAlpha: 0.08,
+    cueScale: 1.08,
+  },
 };
 
 export function getEnemyCombatResponseProfile(enemyId: EnemyArchetypeId): EnemyCombatResponseProfile | null {

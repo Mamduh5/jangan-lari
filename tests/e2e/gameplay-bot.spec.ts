@@ -33,6 +33,7 @@ type GameplayBotRunSnapshot = {
   endActive: boolean;
   victory: boolean;
   endTitle: string;
+  weaponNames: string[];
   player: {
     x: number;
     y: number;
@@ -124,7 +125,7 @@ test.describe('gameplay bot smoke', () => {
           result.maxElapsedMs,
         )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | upgrades=${result.upgradeSelections}/${result.levelUpScreensSeen} | weapons=${result.maxWeaponCount} | travel=${Math.round(
           result.totalTravelDistance,
-        )} | range=${Math.round(result.maxDistanceFromStart)} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
+        )} | range=${Math.round(result.maxDistanceFromStart)} | loadout=${finalRun.weaponNames.join(',') || '--'} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
       );
 
       expect(finalRun.endActive, `${runLabel}: expected a natural end state`).toBe(true);

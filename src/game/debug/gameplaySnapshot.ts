@@ -34,6 +34,7 @@ export type GameplayBotRunSnapshot = {
   endActive: boolean;
   victory: boolean;
   endTitle: string;
+  weaponNames: string[];
   player: {
     x: number;
     y: number;

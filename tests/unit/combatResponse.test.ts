@@ -13,7 +13,7 @@ describe('combat response helpers', () => {
 
     expect(getWeaponCombatResponseProfile('arc-bolt')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('ember-lance')).not.toBeNull();
-    expect(getWeaponCombatResponseProfile('phase-disc')).toBeNull();
+    expect(getWeaponCombatResponseProfile('phase-disc')).not.toBeNull();
   });
 
   test('impact response combines weapon and enemy feel cues without affecting unrelated content', () => {
@@ -29,9 +29,22 @@ describe('combat response helpers', () => {
     expect(authoredImpact.hitStopMs).toBeGreaterThan(0);
     expect(authoredImpact.cue).not.toBeNull();
 
-    const unrelatedImpact = resolveCombatImpactResponse({
+    const phaseDiscImpact = resolveCombatImpactResponse({
       enemyId: 'mauler',
       weaponId: 'phase-disc',
+      defeated: false,
+      x: 160,
+      y: 140,
+      color: 0xc084fc,
+      radius: 9,
+    });
+    expect(phaseDiscImpact.hitStopMs).toBeGreaterThan(0);
+    expect(phaseDiscImpact.hitStopMs).toBeLessThan(authoredImpact.hitStopMs);
+    expect(phaseDiscImpact.cue).not.toBeNull();
+
+    const unrelatedImpact = resolveCombatImpactResponse({
+      enemyId: 'mauler',
+      weaponId: 'sunwheel',
       defeated: false,
       x: 100,
       y: 120,
