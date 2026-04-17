@@ -10,7 +10,8 @@ export class UIScene extends Phaser.Scene {
   private levelText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
-  private loadoutText!: Phaser.GameObjects.Text;
+  private loadoutLabel!: Phaser.GameObjects.Text;
+  private loadoutChipTexts: Phaser.GameObjects.Text[] = [];
   private alertText!: Phaser.GameObjects.Text;
   private rewardText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
@@ -43,7 +44,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
-    const panel = this.add.rectangle(18, 16, 560, 228, 0x030712, 0.9).setOrigin(0);
+    const panel = this.add.rectangle(18, 16, 560, 240, 0x030712, 0.9).setOrigin(0);
     panel.setStrokeStyle(2, 0x334155, 0.98);
     panel.setScrollFactor(0);
 
@@ -56,19 +57,23 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.heroText = this.add
-      .text(34, 56, 'Hero: --', {
+      .text(34, 56, '--', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#f5d0fe',
+        fontSize: '16px',
+        color: '#fdf4ff',
+        backgroundColor: '#581c87',
+        padding: { left: 10, right: 10, top: 6, bottom: 6 },
       })
       .setScrollFactor(0);
 
     this.passiveText = this.add
-      .text(150, 56, 'Passive online', {
+      .text(146, 58, 'PASSIVE --', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         color: '#c4b5fd',
-        wordWrap: { width: 404 },
+        backgroundColor: '#221133',
+        padding: { left: 8, right: 8, top: 5, bottom: 5 },
+        wordWrap: { width: 410 },
       })
       .setScrollFactor(0);
 
@@ -104,17 +109,33 @@ export class UIScene extends Phaser.Scene {
       })
       .setScrollFactor(0);
 
-    this.loadoutText = this.add
-      .text(34, 148, 'Loadout: --', {
+    this.loadoutLabel = this.add
+      .text(34, 148, 'KIT', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
-        color: '#c4b5fd',
-        wordWrap: { width: 508 },
+        fontSize: '13px',
+        color: '#d8b4fe',
+        backgroundColor: '#312e81',
+        padding: { left: 8, right: 8, top: 5, bottom: 5 },
       })
       .setScrollFactor(0);
 
+    for (let index = 0; index < 4; index += 1) {
+      const chip = this.add
+        .text(88 + index * 108, 148, '--', {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '13px',
+          color: '#e2e8f0',
+          backgroundColor: '#1f2937',
+          padding: { left: 8, right: 8, top: 5, bottom: 5 },
+        })
+        .setScrollFactor(0)
+        .setVisible(false);
+
+      this.loadoutChipTexts.push(chip);
+    }
+
     this.xpBarLabel = this.add
-      .text(34, 174, 'XP 0/0   Kills 0', {
+      .text(34, 180, 'XP 0/0   Kills 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#bfdbfe',
@@ -133,7 +154,7 @@ export class UIScene extends Phaser.Scene {
     this.alertText = this.add
       .text(GAME_WIDTH - 30, 52, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         color: '#e2e8f0',
         backgroundColor: '#1e293b',
         padding: { left: 12, right: 12, top: 8, bottom: 8 },
@@ -155,15 +176,15 @@ export class UIScene extends Phaser.Scene {
       .setDepth(20)
       .setVisible(false);
 
-    const xpBarFrame = this.add.rectangle(34, 200, 420, 20, 0x172554, 0.98).setOrigin(0, 0.5);
+    const xpBarFrame = this.add.rectangle(34, 206, 420, 20, 0x172554, 0.98).setOrigin(0, 0.5);
     xpBarFrame.setStrokeStyle(2, 0x60a5fa, 0.85);
     xpBarFrame.setScrollFactor(0);
 
-    this.xpBarFill = this.add.rectangle(34, 200, 0, 14, 0x38bdf8, 1).setOrigin(0, 0.5);
+    this.xpBarFill = this.add.rectangle(34, 206, 0, 14, 0x38bdf8, 1).setOrigin(0, 0.5);
     this.xpBarFill.setScrollFactor(0);
 
     this.hintText = this.add
-      .text(34, 218, 'Survive the timer or kill the final boss', {
+      .text(34, 226, 'Survive the timer or kill the final boss', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#93c5fd',
@@ -205,16 +226,16 @@ export class UIScene extends Phaser.Scene {
     const rewardColor = String(this.registry.get('run.rewardColor') ?? '#fcd34d');
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
 
-    this.heroText.setText(`Hero: ${heroName}`);
-    this.passiveText.setText(heroPassive ? `Passive: ${heroPassive}` : 'Passive: --');
-    this.hpText.setText(`HP: ${currentHp}/${maxHp}`);
-    this.levelText.setText(`Level: ${level}`);
-    this.timerText.setText(`Time: ${this.formatTime(elapsedMs)} / ${this.formatTime(targetMs)}`);
-    this.goldText.setText(`Gold Bank: ${totalGold}`);
-    this.loadoutText.setText(`Loadout: ${this.formatWeaponSummary(weaponNames)}`);
-    this.xpBarLabel.setText(`XP ${xp}/${xpNext}   Kills ${kills}`);
+    this.setTextIfChanged(this.heroText, this.formatHeroChip(heroName));
+    this.setTextIfChanged(this.passiveText, heroPassive ? `PASSIVE ${heroPassive}` : 'PASSIVE --');
+    this.setTextIfChanged(this.hpText, `HP: ${currentHp}/${maxHp}`);
+    this.setTextIfChanged(this.levelText, `Level: ${level}`);
+    this.setTextIfChanged(this.timerText, `Time: ${this.formatTime(elapsedMs)} / ${this.formatTime(targetMs)}`);
+    this.setTextIfChanged(this.goldText, `Gold Bank: ${totalGold}`);
+    this.refreshLoadoutChips(weaponNames);
+    this.setTextIfChanged(this.xpBarLabel, `XP ${xp}/${xpNext}   Kills ${kills}`);
     this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 420, 0, 420);
-    this.hintText.setText(instructions);
+    this.setTextIfChanged(this.hintText, instructions);
     this.refreshAlert(alertKind, alertMessage);
     this.refreshRewardToast(rewardMessage, rewardColor);
 
@@ -487,6 +508,32 @@ export class UIScene extends Phaser.Scene {
     return `${weaponNames.slice(0, 3).join(' • ')} +${weaponNames.length - 3} more`;
   }
 
+  private formatHeroChip(heroName: string): string {
+    return heroName ? `[${heroName.toUpperCase()}]` : '[--]';
+  }
+
+  private refreshLoadoutChips(weaponNames: string[]): void {
+    for (let index = 0; index < this.loadoutChipTexts.length; index += 1) {
+      const chip = this.loadoutChipTexts[index];
+      const weaponName = weaponNames[index];
+
+      if (!weaponName) {
+        chip.setVisible(false);
+        continue;
+      }
+
+      const style = this.getWeaponChipStyle(weaponName);
+      this.setTextIfChanged(chip, this.getWeaponChipLabel(weaponName));
+      if (chip.style.color !== style.textColor) {
+        chip.setColor(style.textColor);
+      }
+      if (chip.style.backgroundColor !== style.backgroundColor) {
+        chip.setBackgroundColor(style.backgroundColor);
+      }
+      chip.setVisible(true);
+    }
+  }
+
   private refreshAlert(kind: string, message: string): void {
     if (!message) {
       this.alertText.setVisible(false);
@@ -494,11 +541,13 @@ export class UIScene extends Phaser.Scene {
     }
 
     const palette = this.getAlertPalette(kind);
-    this.alertText.setText(message);
-    this.alertText.setStyle({
-      color: palette.textColor,
-      backgroundColor: palette.backgroundColor,
-    });
+    this.setTextIfChanged(this.alertText, this.formatAlertChip(kind, message));
+    if (this.alertText.style.color !== palette.textColor) {
+      this.alertText.setColor(palette.textColor);
+    }
+    if (this.alertText.style.backgroundColor !== palette.backgroundColor) {
+      this.alertText.setBackgroundColor(palette.backgroundColor);
+    }
     this.alertText.setVisible(true);
   }
 
@@ -508,9 +557,13 @@ export class UIScene extends Phaser.Scene {
       return;
     }
 
-    this.rewardText.setText(message);
-    this.rewardText.setColor(color);
-    this.rewardText.setStyle({ backgroundColor: '#111827' });
+    this.setTextIfChanged(this.rewardText, message);
+    if (this.rewardText.style.color !== color) {
+      this.rewardText.setColor(color);
+    }
+    if (this.rewardText.style.backgroundColor !== '#111827') {
+      this.rewardText.setBackgroundColor('#111827');
+    }
     this.rewardText.setVisible(true);
   }
 
@@ -530,6 +583,77 @@ export class UIScene extends Phaser.Scene {
         return { textColor: '#fecaca', backgroundColor: '#7f1d1d' };
       default:
         return { textColor: '#dbeafe', backgroundColor: '#1e3a8a' };
+    }
+  }
+
+  private formatAlertChip(kind: string, message: string): string {
+    const prefix = (() => {
+      switch (kind) {
+        case 'hero':
+          return 'HERO';
+        case 'elite':
+          return 'ELITE';
+        case 'miniboss':
+          return 'MINI';
+        case 'boss':
+          return 'BOSS';
+        case 'victory':
+          return 'WIN';
+        case 'defeat':
+          return 'DOWN';
+        default:
+          return 'RUN';
+      }
+    })();
+
+    return `${prefix} | ${message.toUpperCase()}`;
+  }
+
+  private getWeaponChipLabel(weaponName: string): string {
+    switch (weaponName) {
+      case 'Arc Bolt':
+        return 'ARC';
+      case 'Twin Fangs':
+        return 'FANG';
+      case 'Ember Lance':
+        return 'LANCE';
+      case 'Bloom Cannon':
+        return 'BLOOM';
+      case 'Phase Disc':
+        return 'DISC';
+      case 'Sunwheel':
+        return 'SUN';
+      case 'Shatterbell':
+        return 'BELL';
+      default:
+        return weaponName.toUpperCase();
+    }
+  }
+
+  private getWeaponChipStyle(weaponName: string): { textColor: string; backgroundColor: string } {
+    switch (weaponName) {
+      case 'Arc Bolt':
+        return { textColor: '#fff7ed', backgroundColor: '#a16207' };
+      case 'Twin Fangs':
+        return { textColor: '#ecfeff', backgroundColor: '#0f766e' };
+      case 'Ember Lance':
+        return { textColor: '#fff1f2', backgroundColor: '#be123c' };
+      case 'Bloom Cannon':
+        return { textColor: '#f0fdf4', backgroundColor: '#15803d' };
+      case 'Phase Disc':
+        return { textColor: '#faf5ff', backgroundColor: '#7e22ce' };
+      case 'Sunwheel':
+        return { textColor: '#fffbeb', backgroundColor: '#ca8a04' };
+      case 'Shatterbell':
+        return { textColor: '#ecfeff', backgroundColor: '#0f766e' };
+      default:
+        return { textColor: '#e2e8f0', backgroundColor: '#1f2937' };
+    }
+  }
+
+  private setTextIfChanged(target: Phaser.GameObjects.Text, nextText: string): void {
+    if (target.text !== nextText) {
+      target.setText(nextText);
     }
   }
 
