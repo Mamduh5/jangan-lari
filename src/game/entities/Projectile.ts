@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
+import { getWeaponCombatResponseProfile } from '../combat/combatResponse';
 import type { WeaponDefinition } from '../data/weapons';
 
 export class Projectile extends Phaser.GameObjects.Arc {
   declare body: Phaser.Physics.Arcade.Body;
 
+  private weaponId: WeaponDefinition['id'] = 'arc-bolt';
   private damage = 0;
   private maxDistance = 0;
   private traveledDistance = 0;
@@ -14,6 +16,8 @@ export class Projectile extends Phaser.GameObjects.Arc {
   private visualRadius = 5;
   private firePattern: WeaponDefinition['firePattern'] = 'targeted';
   private trailAccumulatorMs = 0;
+  private travelScale = 0.9;
+  private readonly responseScale = { x: 1, y: 1 };
 
   constructor(scene: Phaser.Scene) {
     super(scene, -1000, -1000, 5, 0, 360, false, 0xfacc15);
@@ -30,6 +34,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
   fire(x: number, y: number, direction: Phaser.Math.Vector2, weapon: WeaponDefinition): void {
     const normalizedDirection = direction.clone().normalize();
 
+    this.weaponId = weapon.id;
     this.damage = weapon.damage;
     this.maxDistance = weapon.range;
     this.traveledDistance = 0;
@@ -40,6 +45,10 @@ export class Projectile extends Phaser.GameObjects.Arc {
     this.visualRadius = weapon.projectileRadius;
     this.firePattern = weapon.firePattern ?? 'targeted';
     this.trailAccumulatorMs = 0;
+    this.travelScale = weapon.firePattern === 'radial' ? 1.08 : weapon.pierceCount ? 1.12 : 0.9;
+    this.scene.tweens.killTweensOf(this.responseScale);
+    this.responseScale.x = 1;
+    this.responseScale.y = 1;
 
     this.setRadius(weapon.projectileRadius);
     this.setFillStyle(weapon.projectileColor);
@@ -61,6 +70,8 @@ export class Projectile extends Phaser.GameObjects.Arc {
       normalizedDirection.x * weapon.projectileSpeed,
       normalizedDirection.y * weapon.projectileSpeed,
     );
+
+    this.playLaunchResponse(weapon);
   }
 
   getDamage(): number {
@@ -81,6 +92,10 @@ export class Projectile extends Phaser.GameObjects.Arc {
 
   getVisualRadius(): number {
     return this.visualRadius;
+  }
+
+  getWeaponId(): WeaponDefinition['id'] {
+    return this.weaponId;
   }
 
   consumeHit(): boolean {
@@ -110,7 +125,8 @@ export class Projectile extends Phaser.GameObjects.Arc {
           : this.remainingPierces > 0
             ? 1.22
             : 1.08;
-    this.setScale(Math.min(scaleTarget, this.scaleX + deltaSeconds * 0.5));
+    this.travelScale = Math.min(scaleTarget, this.travelScale + deltaSeconds * 0.5);
+    this.setScale(this.travelScale * this.responseScale.x, this.travelScale * this.responseScale.y);
     this.trailAccumulatorMs += deltaMs;
 
     if (this.shouldEmitTrail() && this.trailAccumulatorMs >= 36) {
@@ -124,6 +140,10 @@ export class Projectile extends Phaser.GameObjects.Arc {
   }
 
   deactivate(): void {
+    this.scene.tweens.killTweensOf(this.responseScale);
+    this.travelScale = 0.9;
+    this.responseScale.x = 1;
+    this.responseScale.y = 1;
     this.setActive(false);
     this.setVisible(false);
     this.setPosition(-1000, -1000);
@@ -148,6 +168,24 @@ export class Projectile extends Phaser.GameObjects.Arc {
       duration: 110,
       ease: 'Quad.Out',
       onComplete: () => trail.destroy(),
+    });
+  }
+
+  private playLaunchResponse(weapon: WeaponDefinition): void {
+    const responseProfile = getWeaponCombatResponseProfile(weapon.id);
+    if (!responseProfile) {
+      return;
+    }
+
+    this.responseScale.x = responseProfile.launchScaleX;
+    this.responseScale.y = responseProfile.launchScaleY;
+
+    this.scene.tweens.add({
+      targets: this.responseScale,
+      x: 1,
+      y: 1,
+      duration: responseProfile.launchTweenMs,
+      ease: 'Quad.Out',
     });
   }
 }

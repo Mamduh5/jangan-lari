@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { playCue, playHeroIntroCue } from '../audio/audioCuePlayer';
+import { CombatResponseController, resolveCombatImpactResponse } from '../combat/combatResponse';
 import {
   ELITE_SPAWN_INDICATOR_MS,
   ENDING_FLASH_MS,
@@ -49,6 +50,7 @@ export class RunScene extends Phaser.Scene {
   private movementKeys!: MovementKeys;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
+  private combatResponse!: CombatResponseController;
   private shockwaveAttacks: Array<{
     ring: Phaser.GameObjects.Arc;
     halo: Phaser.GameObjects.Arc;
@@ -138,6 +140,13 @@ export class RunScene extends Phaser.Scene {
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
     this.spawnDirector = new SpawnDirector();
     this.movementKeys = createMovementKeys(this);
+    this.combatResponse = new CombatResponseController({
+      onHitStopStart: () => this.pauseCombatResponseSystems(),
+      onHitStopEnd: () => this.resumeCombatResponseSystems(),
+      onImpactCue: (cue) => {
+        this.createBurstCircle(cue.x, cue.y, cue.color, cue.startRadius, cue.endRadius, cue.durationMs, cue.alpha);
+      },
+    });
 
     this.registerWeapon(WEAPON_DEFINITIONS[selectedHero.startingWeaponId]);
     this.applyPermanentUpgrades();
@@ -188,6 +197,7 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    this.combatResponse.update(delta);
     this.player.updateVisualState(this.time.now);
 
     if (this.isEnded || this.isTransitioningToMenu) {
@@ -196,6 +206,11 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (this.isSystemPaused) {
+      this.publishHudState();
+      return;
+    }
+
+    if (this.combatResponse.isHitStopActive()) {
       this.publishHudState();
       return;
     }
@@ -594,12 +609,23 @@ export class RunScene extends Phaser.Scene {
     const shouldDeactivate = projectile.consumeHit();
     const explosionRadius = projectile.getExplosionRadius();
     const explosionDamage = projectile.getExplosionDamage();
-    const enemyDied = enemy.takeDamage(damage);
+    const enemyDied = enemy.takeDamage(damage, { x: projectile.x, y: projectile.y });
     const baseBurstRadius = Math.max(12, impactRadius * 2.2);
     const impactFlashRadius = explosionRadius > 0 ? Math.max(baseBurstRadius, explosionRadius * 0.45) : baseBurstRadius;
+    const impactResponse = resolveCombatImpactResponse({
+      enemyId: enemy.archetype.id,
+      weaponId: projectile.getWeaponId(),
+      defeated: enemyDied,
+      x: enemyX,
+      y: enemyY,
+      color: impactColor,
+      radius: impactRadius,
+    });
 
     this.createBurstCircle(enemyX, enemyY, impactColor, Math.max(5, impactRadius * 0.7), impactFlashRadius, 90, 0.22);
     this.createBurstCircle(enemyX, enemyY, 0xffffff, Math.max(3, impactRadius * 0.28), Math.max(8, impactRadius * 1.15), 70, 0.18);
+    this.combatResponse.triggerHitStop(impactResponse.hitStopMs);
+    this.combatResponse.emitImpactCue(impactResponse.cue);
 
     if (enemyDied) {
       this.showFloatingText(enemyX, enemyY - 16, `${damage}`, wasBoss ? '#fca5a5' : Phaser.Display.Color.IntegerToColor(impactColor).rgba, 18);
@@ -700,7 +726,7 @@ export class RunScene extends Phaser.Scene {
         continue;
       }
 
-      const enemyDied = enemy.takeDamage(damage);
+      const enemyDied = enemy.takeDamage(damage, { x, y });
       this.createBurstCircle(enemy.x, enemy.y, 0xffffff, 4, 14, 80, 0.16);
       if (!enemyDied) {
         continue;
@@ -1227,6 +1253,7 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    this.combatResponse.clear();
     this.isEnded = true;
     this.isLevelingUp = false;
     this.isResolvingLevelUpChoice = false;
@@ -1482,6 +1509,7 @@ export class RunScene extends Phaser.Scene {
     document.removeEventListener('visibilitychange', this.handlePageVisibilityChange);
     window.removeEventListener('blur', this.handleWindowBlur);
     window.removeEventListener('focus', this.handleWindowFocus);
+    this.combatResponse.clear();
 
     this.spawnTimer?.remove(false);
     this.spawnTimer = undefined;
@@ -1525,6 +1553,31 @@ export class RunScene extends Phaser.Scene {
     }
 
     group.destroy();
+  }
+
+  private pauseCombatResponseSystems(): void {
+    if (this.isEnded || this.isLevelingUp || this.isSystemPaused || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.physics.pause();
+    this.tweens.pauseAll();
+    if (this.spawnTimer) {
+      this.spawnTimer.paused = true;
+    }
+  }
+
+  private resumeCombatResponseSystems(): void {
+    this.tweens.resumeAll();
+
+    if (this.isEnded || this.isLevelingUp || this.isSystemPaused || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.physics.resume();
+    if (this.spawnTimer) {
+      this.spawnTimer.paused = false;
+    }
   }
 }
 

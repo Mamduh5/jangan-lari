@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getEnemyCombatResponseProfile, type EnemyCombatResponseProfile } from '../combat/combatResponse';
 import { ENEMY_HIT_FLASH_MS } from '../config/constants';
 import type { EnemyArchetype } from '../data/enemies';
 
@@ -40,6 +41,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private shockwaveDamage = 0;
   private shockwaveQueued = false;
   private hitReactionUntil = 0;
+  private readonly responseProfile: EnemyCombatResponseProfile | null;
+  private readonly responseScale = { x: 1, y: 1 };
+  private deathPresentationActive = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -49,6 +53,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.contactDamage = archetype.contactDamage;
     this.health = archetype.maxHealth;
     this.xpValue = archetype.xpValue;
+    this.responseProfile = getEnemyCombatResponseProfile(archetype.id);
     this.strafeDirection = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
     this.nextDashAt = scene.time.now + Phaser.Math.Between(500, 1200);
     if (archetype.isBoss) {
@@ -136,6 +141,11 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setAngle(Phaser.Math.RadToDeg(Math.atan2(velocity.y, velocity.x)) + 90);
     }
 
+    if (this.deathPresentationActive) {
+      this.setScale(this.responseScale.x, this.responseScale.y);
+      return;
+    }
+
     const chargingDash = this.isChargingDash(currentTime);
     const pulse = 1 + Math.sin((currentTime + this.y) * 0.012) * 0.03;
     const hitReactionActive = currentTime < this.hitReactionUntil;
@@ -143,46 +153,46 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     if (chargingDash) {
       const chargeWindowMs = 260;
       const chargeProgress = Phaser.Math.Clamp(1 - (this.nextDashAt - currentTime) / chargeWindowMs, 0, 1);
-      this.setScale(1.02 + chargeProgress * 0.2);
+      this.setResponseScale(1.02 + chargeProgress * 0.2);
       this.setStrokeStyle(this.baseStrokeWidth + 1, 0xfef2f2, 1);
       this.setAlpha(0.82 + chargeProgress * 0.18);
       return;
     }
 
     if (this.isBoss()) {
-      this.setScale((1 + Math.sin((currentTime + this.x) * 0.008) * 0.07) * (hitReactionActive ? 0.94 : 1));
+      this.setResponseScale((1 + Math.sin((currentTime + this.x) * 0.008) * 0.07) * (hitReactionActive ? 0.94 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.96);
       this.setAlpha(hitReactionActive ? 0.82 : 1);
       return;
     }
 
     if (this.isMiniboss()) {
-      this.setScale((1 + Math.sin((currentTime + this.y) * 0.01) * 0.05) * (hitReactionActive ? 0.92 : 1));
+      this.setResponseScale((1 + Math.sin((currentTime + this.y) * 0.01) * 0.05) * (hitReactionActive ? 0.92 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.9);
       this.setAlpha(hitReactionActive ? 0.8 : 1);
       return;
     }
 
     if (this.isElite()) {
-      this.setScale((1 + Math.sin((currentTime + this.y) * 0.012) * 0.03) * (hitReactionActive ? 0.9 : 1));
+      this.setResponseScale((1 + Math.sin((currentTime + this.y) * 0.012) * 0.03) * (hitReactionActive ? 0.9 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.92);
       this.setAlpha(hitReactionActive ? 0.78 : 1);
       return;
     }
 
     if (this.archetype.behavior === 'strafe') {
-      this.setScale(pulse * (hitReactionActive ? 0.88 : 1));
+      this.setResponseScale(pulse * (hitReactionActive ? 0.88 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.86);
       this.setAlpha(hitReactionActive ? 0.74 : 0.94);
       return;
     }
 
-    this.setScale(hitReactionActive ? 0.86 : 1);
+    this.setResponseScale(hitReactionActive ? 0.86 : 1);
     this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.76);
     this.setAlpha(hitReactionActive ? 0.72 : 1);
   }
 
-  takeDamage(amount: number): boolean {
+  takeDamage(amount: number, impactPoint?: { x: number; y: number }): boolean {
     if (!this.isAlive()) {
       return false;
     }
@@ -190,15 +200,17 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.health = Math.max(0, this.health - amount);
 
     if (this.health === 0) {
-      this.destroyEnemy();
+      this.playDeathResponse(impactPoint);
       return true;
     }
 
-    this.hitReactionUntil = this.scene.time.now + ENEMY_HIT_FLASH_MS + 28;
-    this.body.velocity.scale(0.72);
+    const hurtFlashMs = this.responseProfile?.hurtFlashMs ?? ENEMY_HIT_FLASH_MS;
+    this.hitReactionUntil = this.scene.time.now + hurtFlashMs + 28;
+    this.applyHitMotion(impactPoint);
     this.setFillStyle(0xffffff);
     this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffffff, 1);
-    this.scene.time.delayedCall(ENEMY_HIT_FLASH_MS, () => {
+    this.playHitScaleResponse();
+    this.scene.time.delayedCall(hurtFlashMs, () => {
       if (this.active) {
         this.setFillStyle(this.archetype.color);
         this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, this.isElite() || this.isMiniboss() || this.isBoss() ? 0.92 : 0.76);
@@ -323,6 +335,10 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   }
 
   private destroyEnemy(): void {
+    if (!this.active) {
+      return;
+    }
+
     this.body.stop();
     this.body.enable = false;
     this.destroy();
@@ -332,5 +348,86 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const signal = this.pendingAttackSignal;
     this.pendingAttackSignal = null;
     return signal;
+  }
+
+  private applyHitMotion(impactPoint?: { x: number; y: number }): void {
+    const velocityScale = this.responseProfile?.flinchVelocityScale ?? 0.72;
+    const nextVelocityX = this.body.velocity.x * velocityScale;
+    const nextVelocityY = this.body.velocity.y * velocityScale;
+
+    if (!impactPoint || !this.responseProfile) {
+      this.body.setVelocity(nextVelocityX, nextVelocityY);
+      return;
+    }
+
+    const recoil = new Phaser.Math.Vector2(this.x - impactPoint.x, this.y - impactPoint.y);
+    if (recoil.lengthSq() === 0) {
+      this.body.setVelocity(nextVelocityX, nextVelocityY);
+      return;
+    }
+
+    recoil.normalize().scale(this.responseProfile.recoilSpeed);
+    this.body.setVelocity(nextVelocityX + recoil.x, nextVelocityY + recoil.y);
+  }
+
+  private playHitScaleResponse(): void {
+    if (!this.responseProfile || this.deathPresentationActive) {
+      return;
+    }
+
+    this.scene.tweens.killTweensOf(this.responseScale);
+    this.responseScale.x = this.responseProfile.hitScaleX;
+    this.responseScale.y = this.responseProfile.hitScaleY;
+
+    this.scene.tweens.add({
+      targets: this.responseScale,
+      x: 1,
+      y: 1,
+      duration: this.responseProfile.hitTweenMs,
+      ease: 'Quad.Out',
+    });
+  }
+
+  private playDeathResponse(impactPoint?: { x: number; y: number }): void {
+    if (!this.responseProfile) {
+      this.destroyEnemy();
+      return;
+    }
+
+    this.deathPresentationActive = true;
+    this.hitReactionUntil = 0;
+    this.pendingAttackSignal = null;
+    this.applyHitMotion(impactPoint);
+    this.body.stop();
+    this.body.enable = false;
+    this.setFillStyle(0xffffff);
+    this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffffff, 1);
+
+    this.scene.tweens.killTweensOf(this.responseScale);
+    this.responseScale.x = 1;
+    this.responseScale.y = 1;
+
+    this.scene.tweens.add({
+      targets: this.responseScale,
+      x: this.responseProfile.deathScaleX,
+      y: this.responseProfile.deathScaleY,
+      duration: this.responseProfile.deathTweenMs,
+      ease: 'Cubic.Out',
+    });
+
+    this.scene.tweens.add({
+      targets: this,
+      alpha: 0.14,
+      duration: this.responseProfile.deathTweenMs,
+      ease: 'Cubic.Out',
+    });
+
+    this.scene.time.delayedCall(this.responseProfile.deathBeatMs, () => {
+      this.destroyEnemy();
+    });
+  }
+
+  private setResponseScale(baseScale: number): void {
+    this.setScale(baseScale * this.responseScale.x, baseScale * this.responseScale.y);
   }
 }
