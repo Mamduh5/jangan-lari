@@ -79,14 +79,6 @@ async function clickMetaBackButton(page: import('@playwright/test').Page): Promi
   });
 }
 
-async function clickEndReturnButton(page: import('@playwright/test').Page): Promise<void> {
-  await page.evaluate(() => {
-    const game = window.__JANGAN_LARI_GAME__!;
-    const uiScene = game.scene.getScene('UIScene') as Record<string, { emit: (eventName: string) => void }>;
-    uiScene.endButton.emit('pointerdown');
-  });
-}
-
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
   const runtimeErrors: string[] = [];
 
@@ -152,7 +144,7 @@ test.describe('menu and run scene flow', () => {
     });
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.registry.get('run.endActive')));
 
-    await clickEndReturnButton(page);
+    await page.keyboard.press('Enter');
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;
       return Boolean(game?.scene.isActive('MenuScene') && !game.scene.isActive('RunScene') && !game.scene.isActive('UIScene'));
