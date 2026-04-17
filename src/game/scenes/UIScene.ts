@@ -432,16 +432,17 @@ export class UIScene extends Phaser.Scene {
     const questRewards = (this.registry.get('run.questRewards') ?? []) as string[];
     const questSummary = questRewards.length > 0 ? `\n\nQuest Rewards\n${questRewards.join('\n')}` : '';
 
-    this.endTitleText.setText(title);
+    this.setTextIfChanged(this.endTitleText, title);
     this.endTitleText.setColor(victory ? '#fef08a' : '#fca5a5');
-    this.endSubtitleText.setText(subtitle);
-    this.endStatsText.setText(
+    this.setTextIfChanged(this.endSubtitleText, subtitle);
+    this.setTextIfChanged(
+      this.endStatsText,
       `Hero: ${heroName}\nTime Survived: ${this.formatTime(elapsedMs)}\nEnemies Killed: ${kills}\nLevel Reached: ${level}\nWeapons Online: ${weaponCount}\nLoadout: ${this.formatWeaponSummary(weaponNames)}\nGold Earned: ${goldEarned}\nTotal Gold: ${totalGold}${questSummary}`,
     );
   }
 
   private refreshLevelUpChoices(choices: UpgradeDefinition[], remainingMs: number): void {
-    this.levelUpTimerText.setText(`Auto-pick in ${(remainingMs / 1000).toFixed(1)}s`);
+    this.setTextIfChanged(this.levelUpTimerText, `Auto-pick in ${(remainingMs / 1000).toFixed(1)}s`);
 
     for (let index = 0; index < this.levelUpButtons.length; index += 1) {
       const choice = choices[index];
@@ -449,13 +450,13 @@ export class UIScene extends Phaser.Scene {
       const description = this.levelUpDescriptions[index];
 
       if (!choice) {
-        button.setText(`${index + 1}. --`);
-        description.setText('');
+        this.setTextIfChanged(button, `${index + 1}. --`);
+        this.setTextIfChanged(description, '');
         continue;
       }
 
-      button.setText(`${index + 1}. ${choice.title}`);
-      description.setText(choice.description);
+      this.setTextIfChanged(button, `${index + 1}. ${choice.title}`);
+      this.setTextIfChanged(description, choice.description);
     }
   }
 
