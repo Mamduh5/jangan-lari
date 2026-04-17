@@ -69,13 +69,24 @@ async function clickMenuButton(
 }
 
 async function clickMetaBackButton(page: import('@playwright/test').Page): Promise<void> {
-  await page.evaluate(() => {
-    const game = window.__JANGAN_LARI_GAME__!;
-    const metaScene = game.scene.getScene('MetaScene') as {
-      children: { list: Array<{ text?: string; emit: (eventName: string) => void }> };
-    };
-    const button = metaScene.children.list.find((child) => child.text === 'Back to Menu');
-    button?.emit('pointerdown');
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error('Game canvas is not available for Meta back click.');
+  }
+
+  const gameWidth = 1280;
+  const gameHeight = 720;
+  const backButtonX = gameWidth / 2;
+  const backButtonY = gameHeight - 44;
+
+  await canvas.click({
+    position: {
+      x: (backButtonX / gameWidth) * box.width,
+      y: (backButtonY / gameHeight) * box.height,
+    },
   });
 }
 
