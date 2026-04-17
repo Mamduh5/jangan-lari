@@ -167,6 +167,46 @@ test.describe('gameplay bot smoke', () => {
     ).toBe(true);
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
+
+  test('bot can run a deterministic Phase Disc loadout without hit-stop instability', async ({ page }) => {
+    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
+
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickStartRun(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+    });
+
+    await forceUpgrade(page, 'unlock-phase-disc');
+    await page.waitForFunction(() =>
+      Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames.includes('Phase Disc')),
+    );
+
+    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
+    const finalRun = result.finalSnapshot.run!;
+
+    console.log(
+      `[gameplay-bot] phase-disc | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
+        result.maxElapsedMs,
+      )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | loadout=${finalRun.weaponNames.join(',') || '--'} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
+    );
+
+    expect(finalRun.endActive, 'expected the Phase Disc validation run to end naturally').toBe(true);
+    expect(finalRun.weaponNames, `expected final loadout to include Phase Disc, got ${finalRun.weaponNames.join(',') || '--'}`).toContain(
+      'Phase Disc',
+    );
+    expect(result.hitStopStarts, 'expected Phase Disc run to produce authored impact hit-stop').toBeGreaterThan(0);
+    expect(
+      result.hitStopRefreshes,
+      `expected hit-stop refreshes to stay low during the Phase Disc run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
+    ).toBeLessThanOrEqual(3);
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
+  });
 });
 
 async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: number): Promise<BotResult> {
@@ -429,6 +469,26 @@ async function clickLevelUpChoice(page: import('@playwright/test').Page, choiceI
       y: (buttonY / gameHeight) * box.height,
     },
   });
+}
+
+async function forceUpgrade(
+  page: import('@playwright/test').Page,
+  upgradeId: 'unlock-phase-disc',
+): Promise<void> {
+  await page.evaluate((id) => {
+    const game = window.__JANGAN_LARI_GAME__;
+    if (!game?.scene.isActive('RunScene')) {
+      throw new Error('RunScene is not active for forced upgrade validation.');
+    }
+
+    const runScene = game.scene.getScene('RunScene') as {
+      applyUpgrade?: (nextUpgradeId: string) => void;
+      publishHudState?: () => void;
+    };
+
+    runScene.applyUpgrade?.(id);
+    runScene.publishHudState?.();
+  }, upgradeId);
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
