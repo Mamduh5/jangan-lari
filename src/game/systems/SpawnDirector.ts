@@ -16,8 +16,8 @@ type StageRule = {
 const STAGE_RULES: StageRule[] = [
   {
     untilMs: 28000,
-    minCount: 2,
-    maxCount: 3,
+    minCount: 1,
+    maxCount: 2,
     pool: [
       { archetype: ENEMY_ARCHETYPES.scuttler, weight: 50 },
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 25 },
