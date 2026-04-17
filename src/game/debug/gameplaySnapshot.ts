@@ -24,17 +24,13 @@ export type GameplayBotUpgradeChoice = {
 
 export type GameplayBotRunSnapshot = {
   elapsedMs: number;
-  targetMs: number;
   hp: number;
   maxHp: number;
   level: number;
   kills: number;
   weaponCount: number;
   goldEarned: number;
-  totalGold: number;
-  instructions: string;
   levelUpActive: boolean;
-  levelUpRemainingMs: number;
   endActive: boolean;
   victory: boolean;
   endTitle: string;

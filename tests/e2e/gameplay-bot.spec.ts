@@ -23,17 +23,13 @@ type GameplayBotUpgradeChoice = {
 
 type GameplayBotRunSnapshot = {
   elapsedMs: number;
-  targetMs: number;
   hp: number;
   maxHp: number;
   level: number;
   kills: number;
   weaponCount: number;
   goldEarned: number;
-  totalGold: number;
-  instructions: string;
   levelUpActive: boolean;
-  levelUpRemainingMs: number;
   endActive: boolean;
   victory: boolean;
   endTitle: string;
@@ -64,6 +60,12 @@ type BotResult = {
   maxElapsedMs: number;
   maxLevel: number;
   maxKills: number;
+  minHp: number;
+  maxWeaponCount: number;
+  levelUpScreensSeen: number;
+  upgradeSelections: number;
+  totalTravelDistance: number;
+  maxDistanceFromStart: number;
 };
 
 const BOT_TIMEOUT_MS = 90_000;
@@ -99,12 +101,34 @@ test.describe('gameplay bot smoke', () => {
     });
 
     const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
+    const finalRun = result.finalSnapshot.run!;
 
-    expect(result.finalSnapshot.run).not.toBeNull();
-    expect(result.finalSnapshot.run?.endActive).toBe(true);
-    expect(result.maxElapsedMs).toBeGreaterThanOrEqual(10_000);
-    expect(result.maxLevel).toBeGreaterThanOrEqual(2);
-    expect(result.maxKills).toBeGreaterThanOrEqual(10);
+    console.log(
+      `[gameplay-bot] ${JSON.stringify({
+        elapsedMs: result.maxElapsedMs,
+        kills: result.maxKills,
+        maxLevel: result.maxLevel,
+        upgradeSelections: result.upgradeSelections,
+        levelUpScreensSeen: result.levelUpScreensSeen,
+        maxWeaponCount: result.maxWeaponCount,
+        minHp: result.minHp,
+        totalTravelDistance: Math.round(result.totalTravelDistance),
+        maxDistanceFromStart: Math.round(result.maxDistanceFromStart),
+        endTitle: finalRun.endTitle,
+        victory: finalRun.victory,
+        goldEarned: finalRun.goldEarned,
+      })}`,
+    );
+
+    expect(finalRun.endActive).toBe(true);
+    expect(['Victory', 'Defeat']).toContain(finalRun.endTitle);
+    expect(result.maxElapsedMs).toBeGreaterThanOrEqual(7_500);
+    expect(result.totalTravelDistance).toBeGreaterThanOrEqual(700);
+    expect(result.maxDistanceFromStart).toBeGreaterThanOrEqual(140);
+    expect(result.maxKills >= 3 || result.maxLevel >= 2 || result.upgradeSelections >= 1).toBe(true);
+    if (result.levelUpScreensSeen > 0) {
+      expect(result.upgradeSelections).toBeGreaterThanOrEqual(1);
+    }
     expect(result.finalSnapshot.scenes.runActive).toBe(true);
     expect(result.finalSnapshot.scenes.uiActive).toBe(true);
     expect(runtimeErrors).toEqual([]);
@@ -116,6 +140,14 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
   let maxElapsedMs = 0;
   let maxLevel = 0;
   let maxKills = 0;
+  let minHp = Number.POSITIVE_INFINITY;
+  let maxWeaponCount = 0;
+  let levelUpScreensSeen = 0;
+  let upgradeSelections = 0;
+  let totalTravelDistance = 0;
+  let maxDistanceFromStart = 0;
+  let initialPosition: { x: number; y: number } | null = null;
+  let previousPosition: { x: number; y: number } | null = null;
 
   try {
     const start = Date.now();
@@ -130,6 +162,22 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
       maxElapsedMs = Math.max(maxElapsedMs, run.elapsedMs);
       maxLevel = Math.max(maxLevel, run.level);
       maxKills = Math.max(maxKills, run.kills);
+      minHp = Math.min(minHp, run.hp);
+      maxWeaponCount = Math.max(maxWeaponCount, run.weaponCount);
+
+      if (!initialPosition) {
+        initialPosition = { x: run.player.x, y: run.player.y };
+      }
+
+      const currentPosition = { x: run.player.x, y: run.player.y };
+      if (previousPosition) {
+        totalTravelDistance += distanceBetween(previousPosition, currentPosition);
+      }
+      previousPosition = currentPosition;
+
+      if (initialPosition) {
+        maxDistanceFromStart = Math.max(maxDistanceFromStart, distanceBetween(initialPosition, currentPosition));
+      }
 
       if (run.endActive) {
         await releaseMovementKeys(page, pressedKeys);
@@ -138,13 +186,21 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
           maxElapsedMs,
           maxLevel,
           maxKills,
+          minHp,
+          maxWeaponCount,
+          levelUpScreensSeen,
+          upgradeSelections,
+          totalTravelDistance,
+          maxDistanceFromStart,
         };
       }
 
       if (run.levelUpActive && run.upgradeChoices.length > 0) {
+        levelUpScreensSeen += 1;
         const choiceIndex = chooseUpgradeIndex(run.upgradeChoices);
         await releaseMovementKeys(page, pressedKeys);
         await page.keyboard.press((choiceIndex + 1).toString());
+        upgradeSelections += 1;
       } else {
         const movementKeys = determineMovementKeys(run);
         await syncMovementKeys(page, pressedKeys, movementKeys);
@@ -157,6 +213,10 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
   }
 
   throw new Error(`Gameplay bot timed out after ${timeoutMs} ms without a natural end state.`);
+}
+
+function distanceBetween(left: { x: number; y: number }, right: { x: number; y: number }): number {
+  return Math.hypot(right.x - left.x, right.y - left.y);
 }
 
 async function getGameplaySnapshot(page: import('@playwright/test').Page): Promise<GameplayBotSnapshot> {

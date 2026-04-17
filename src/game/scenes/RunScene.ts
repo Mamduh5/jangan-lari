@@ -257,17 +257,13 @@ export class RunScene extends Phaser.Scene {
 
     return {
       elapsedMs: this.runElapsedMs,
-      targetMs: RUN_TARGET_DURATION_MS,
       hp: this.player.getCurrentHealth(),
       maxHp: this.player.getMaxHealth(),
       level: this.player.getLevel(),
       kills: this.killCount,
       weaponCount: this.weapons.length,
       goldEarned: this.goldEarned,
-      totalGold: this.saveData.totalGold,
-      instructions: String(this.registry.get('run.instructions') ?? ''),
       levelUpActive: Boolean(this.registry.get('run.levelUpActive')),
-      levelUpRemainingMs: Number(this.registry.get('run.levelUpRemainingMs') ?? 0),
       endActive: Boolean(this.registry.get('run.endActive')),
       victory: Boolean(this.registry.get('run.victory')),
       endTitle: String(this.registry.get('run.endTitle') ?? ''),
