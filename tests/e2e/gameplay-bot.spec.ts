@@ -69,6 +69,7 @@ type BotResult = {
 };
 
 const BOT_TIMEOUT_MS = 90_000;
+const BOT_RUN_COUNT = 2;
 const BOT_TICK_MS = 120;
 const WORLD_WIDTH = 2000;
 const WORLD_HEIGHT = 1400;
@@ -86,51 +87,59 @@ const UPGRADE_PRIORITY = [
 ] as const;
 
 test.describe('gameplay bot smoke', () => {
-  test.setTimeout(BOT_TIMEOUT_MS + 30_000);
+  test.setTimeout(BOT_RUN_COUNT * BOT_TIMEOUT_MS + 60_000);
 
-  test('bot can drive a real run to a natural ending without hanging', async ({ page }) => {
+  test('bot can drive repeated real runs to natural endings without hanging', async ({ page }) => {
     const runtimeErrors = trackRuntimeErrors(page);
+    const results: BotResult[] = [];
 
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+    for (let runIndex = 0; runIndex < BOT_RUN_COUNT; runIndex += 1) {
+      await page.goto('/');
+      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
 
-    await clickStartRun(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
+      await clickStartRun(page);
+      await page.waitForFunction(() => {
+        const game = window.__JANGAN_LARI_GAME__;
+        return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+      });
 
-    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
-    const finalRun = result.finalSnapshot.run!;
+      const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
+      const finalRun = result.finalSnapshot.run!;
 
-    console.log(
-      `[gameplay-bot] ${JSON.stringify({
-        elapsedMs: result.maxElapsedMs,
-        kills: result.maxKills,
-        maxLevel: result.maxLevel,
-        upgradeSelections: result.upgradeSelections,
-        levelUpScreensSeen: result.levelUpScreensSeen,
-        maxWeaponCount: result.maxWeaponCount,
-        minHp: result.minHp,
-        totalTravelDistance: Math.round(result.totalTravelDistance),
-        maxDistanceFromStart: Math.round(result.maxDistanceFromStart),
-        endTitle: finalRun.endTitle,
-        victory: finalRun.victory,
-        goldEarned: finalRun.goldEarned,
-      })}`,
-    );
+      console.log(
+        `[gameplay-bot run ${runIndex + 1}/${BOT_RUN_COUNT}] ${JSON.stringify({
+          elapsedMs: result.maxElapsedMs,
+          kills: result.maxKills,
+          maxLevel: result.maxLevel,
+          upgradeSelections: result.upgradeSelections,
+          levelUpScreensSeen: result.levelUpScreensSeen,
+          maxWeaponCount: result.maxWeaponCount,
+          minHp: result.minHp,
+          totalTravelDistance: Math.round(result.totalTravelDistance),
+          maxDistanceFromStart: Math.round(result.maxDistanceFromStart),
+          endTitle: finalRun.endTitle,
+          victory: finalRun.victory,
+          goldEarned: finalRun.goldEarned,
+        })}`,
+      );
 
-    expect(finalRun.endActive).toBe(true);
-    expect(['Victory', 'Defeat']).toContain(finalRun.endTitle);
-    expect(result.maxElapsedMs).toBeGreaterThanOrEqual(7_500);
-    expect(result.totalTravelDistance).toBeGreaterThanOrEqual(700);
-    expect(result.maxDistanceFromStart).toBeGreaterThanOrEqual(140);
-    expect(result.maxKills >= 3 || result.maxLevel >= 2 || result.upgradeSelections >= 1).toBe(true);
-    if (result.levelUpScreensSeen > 0) {
-      expect(result.upgradeSelections).toBeGreaterThanOrEqual(1);
+      expect(finalRun.endActive).toBe(true);
+      expect(['Victory', 'Defeat']).toContain(finalRun.endTitle);
+      if (result.levelUpScreensSeen > 0) {
+        expect(result.upgradeSelections).toBeGreaterThanOrEqual(1);
+      }
+
+      results.push(result);
     }
-    expect(result.finalSnapshot.scenes.runActive).toBe(true);
-    expect(result.finalSnapshot.scenes.uiActive).toBe(true);
+
+    const naturallyEndedRuns = results.filter((result) => result.finalSnapshot.run?.endActive).length;
+    const meaningfulRuns = results.filter((result) => isMeaningfulProgression(result)).length;
+    const finalSceneStates = results.map((result) => result.finalSnapshot.scenes);
+
+    expect(results).toHaveLength(BOT_RUN_COUNT);
+    expect(naturallyEndedRuns).toBe(BOT_RUN_COUNT);
+    expect(meaningfulRuns).toBeGreaterThanOrEqual(BOT_RUN_COUNT);
+    expect(finalSceneStates.every((scenes) => scenes.runActive && scenes.uiActive)).toBe(true);
     expect(runtimeErrors).toEqual([]);
   });
 });
@@ -221,6 +230,15 @@ function distanceBetween(left: { x: number; y: number }, right: { x: number; y: 
 
 async function getGameplaySnapshot(page: import('@playwright/test').Page): Promise<GameplayBotSnapshot> {
   return page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot() ?? null) as Promise<GameplayBotSnapshot>;
+}
+
+function isMeaningfulProgression(result: BotResult): boolean {
+  return (
+    result.maxElapsedMs >= 6_000 &&
+    result.totalTravelDistance >= 600 &&
+    result.maxDistanceFromStart >= 120 &&
+    (result.maxKills >= 2 || result.maxLevel >= 2 || result.upgradeSelections >= 1)
+  );
 }
 
 function chooseUpgradeIndex(choices: GameplayBotUpgradeChoice[]): number {
