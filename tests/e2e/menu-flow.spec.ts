@@ -7,6 +7,7 @@ type GameState = {
   uiActive: boolean;
   endActive: boolean;
   elapsedMs: number;
+  goldEarned: number;
 };
 
 async function getGameState(page: import('@playwright/test').Page): Promise<GameState> {
@@ -19,6 +20,7 @@ async function getGameState(page: import('@playwright/test').Page): Promise<Game
       uiActive: game?.scene.isActive('UIScene') ?? false,
       endActive: Boolean(game?.registry.get('run.endActive')),
       elapsedMs: Number(game?.registry.get('run.elapsedMs') ?? -1),
+      goldEarned: Number(game?.registry.get('run.goldEarned') ?? -1),
     };
   });
 }
@@ -140,6 +142,9 @@ test.describe('menu and run scene flow', () => {
     expect(state.uiActive).toBe(true);
     expect(state.elapsedMs).toBeGreaterThanOrEqual(0);
 
+    await page.waitForFunction(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.elapsedMs') ?? -1) >= 2000);
+    const firstRunState = await getGameState(page);
+
     await page.evaluate(() => {
       const runScene = window.__JANGAN_LARI_GAME__!.scene.getScene('RunScene') as any;
       runScene.endRun(false, 'Defeat', 'Playwright defeat check');
@@ -168,7 +173,9 @@ test.describe('menu and run scene flow', () => {
     state = await getGameState(page);
     expect(state.runActive).toBe(true);
     expect(state.uiActive).toBe(true);
-    expect(state.elapsedMs).toBeLessThan(500);
+    expect(state.endActive).toBe(false);
+    expect(state.goldEarned).toBe(0);
+    expect(state.elapsedMs).toBeLessThan(firstRunState.elapsedMs);
     expectNoBrokenSceneApiErrors(runtimeErrors);
     expect(runtimeErrors).toEqual([]);
   });
