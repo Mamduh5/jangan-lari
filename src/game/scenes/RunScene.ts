@@ -14,7 +14,7 @@ import {
 import { HEROES } from '../data/heroes';
 import { UPGRADE_POOL, type UpgradeDefinition, type UpgradeId } from '../data/upgrades';
 import { WEAPON_DEFINITIONS, type WeaponDefinition } from '../data/weapons';
-import { Enemy } from '../entities/Enemy';
+import { Enemy, type EnemyAttackSignal } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 import { XPGem } from '../entities/XPGem';
@@ -48,6 +48,18 @@ export class RunScene extends Phaser.Scene {
   private movementKeys!: MovementKeys;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
+  private shockwaveAttacks: Array<{
+    ring: Phaser.GameObjects.Arc;
+    x: number;
+    y: number;
+    maxRadius: number;
+    currentRadius: number;
+    durationMs: number;
+    elapsedMs: number;
+    thickness: number;
+    damage: number;
+    hasHitPlayer: boolean;
+  }> = [];
   private runElapsedMs = 0;
   private pendingLevelUps = 0;
   private levelUpRemainingMs = 0;
@@ -103,6 +115,7 @@ export class RunScene extends Phaser.Scene {
     this.globalWeaponRangeBonus = freshSession.globalWeaponRangeBonus;
     this.weapons = [];
     this.colliders = [];
+    this.shockwaveAttacks = [];
     this.ownedWeaponIds.clear();
 
     const selectedHero = HEROES[this.saveData.selectedHero];
@@ -200,6 +213,7 @@ export class RunScene extends Phaser.Scene {
 
     this.player.move(new Phaser.Math.Vector2(horizontal, vertical));
     this.updateEnemies();
+    this.updateShockwaveAttacks(delta);
     this.updateGems();
 
     for (const weapon of this.weapons) {
@@ -481,9 +495,56 @@ export class RunScene extends Phaser.Scene {
     const enemyChildren = this.enemies.getChildren() as Enemy[];
 
     for (const enemy of enemyChildren) {
-      enemy.chase(this.player, this.time.now);
+      const attackSignal = enemy.chase(this.player, this.time.now);
+      if (attackSignal) {
+        this.handleEnemyAttackSignal(enemy, attackSignal);
+      }
       enemy.updatePresentation(this.time.now);
     }
+  }
+
+  private updateShockwaveAttacks(deltaMs: number): void {
+    if (this.shockwaveAttacks.length === 0) {
+      return;
+    }
+
+    const nextAttacks: typeof this.shockwaveAttacks = [];
+
+    for (const attack of this.shockwaveAttacks) {
+      attack.elapsedMs += deltaMs;
+      const progress = Phaser.Math.Clamp(attack.elapsedMs / attack.durationMs, 0, 1);
+      attack.currentRadius = Phaser.Math.Linear(52, attack.maxRadius, progress);
+      attack.ring.setRadius(attack.currentRadius);
+      attack.ring.setAlpha(0.78 - progress * 0.62);
+
+      if (!attack.hasHitPlayer) {
+        const playerDistance = Phaser.Math.Distance.Between(this.player.x, this.player.y, attack.x, attack.y);
+        if (Math.abs(playerDistance - attack.currentRadius) <= attack.thickness + 18) {
+          attack.hasHitPlayer = true;
+          const tookDamage = this.player.takeDamage(attack.damage, this.time.now);
+          if (tookDamage) {
+            this.cameras.main.shake(110, PLAYER_HIT_SHAKE_INTENSITY * 1.15);
+            this.createBurstCircle(this.player.x, this.player.y, 0xfca5a5, 14, 42, 220, 0.8);
+            this.showFloatingText(this.player.x, this.player.y - 24, `${attack.damage}`, '#fecaca', 18);
+
+            if (!this.player.isAlive()) {
+              attack.ring.destroy();
+              this.endRun(false, 'Defeat', 'You were overwhelmed.');
+              continue;
+            }
+          }
+        }
+      }
+
+      if (progress >= 1) {
+        attack.ring.destroy();
+        continue;
+      }
+
+      nextAttacks.push(attack);
+    }
+
+    this.shockwaveAttacks = nextAttacks;
   }
 
   private updateGems(): void {
@@ -663,6 +724,131 @@ export class RunScene extends Phaser.Scene {
         this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
       }
     });
+  }
+
+  private handleEnemyAttackSignal(enemy: Enemy, signal: EnemyAttackSignal): void {
+    switch (signal.type) {
+      case 'miniboss-line-telegraph':
+        this.registry.set('run.instructions', 'Miniboss charge lane forming. Step out before it fires.');
+        this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, signal.length, 58, 0xfda4af, 320);
+        break;
+      case 'miniboss-line-execute':
+        this.registry.set('run.instructions', 'Dreadnought line charge released. Reposition and punish the recovery.');
+        this.executeMinibossLineStrike(enemy, signal.x, signal.y, signal.direction, signal.length);
+        break;
+      case 'boss-shockwave-telegraph':
+        this.registry.set('run.instructions', 'Behemoth is winding up a shockwave. Back out before the ring expands.');
+        this.showBossShockwaveTelegraph(signal.x, signal.y, signal.radius);
+        break;
+      case 'boss-shockwave-execute':
+        this.registry.set('run.instructions', 'Shockwave released. Keep clear of the expanding ring.');
+        this.spawnBossShockwave(signal.x, signal.y, signal.radius, signal.damage, signal.durationMs ?? 980);
+        break;
+    }
+  }
+
+  private executeMinibossLineStrike(
+    enemy: Enemy,
+    x: number,
+    y: number,
+    direction: { x: number; y: number },
+    length: number,
+  ): void {
+    this.showLineAttackTelegraph(x, y, direction, length, 62, 0xfb7185, 180);
+    this.createBurstCircle(x, y, 0xfb7185, 22, 70, 260, 0.75);
+    this.cameras.main.shake(100, 0.0022);
+
+    if (this.isPlayerInsideLineAttack(x, y, direction, length, 38)) {
+      const lineDamage = Math.max(18, enemy.contactDamage - 4);
+      const tookDamage = this.player.takeDamage(lineDamage, this.time.now);
+      if (tookDamage) {
+        this.createBurstCircle(this.player.x, this.player.y, 0xfb7185, 16, 54, 220, 0.85);
+        this.showFloatingText(this.player.x, this.player.y - 28, `${lineDamage}`, '#fecdd3', 18);
+        if (!this.player.isAlive()) {
+          this.endRun(false, 'Defeat', 'The Dreadnought broke through your position.');
+        }
+      }
+    }
+  }
+
+  private showLineAttackTelegraph(
+    x: number,
+    y: number,
+    direction: { x: number; y: number },
+    length: number,
+    width: number,
+    color: number,
+    durationMs: number,
+  ): void {
+    const centerX = x + direction.x * (length / 2);
+    const centerY = y + direction.y * (length / 2);
+    const angle = Math.atan2(direction.y, direction.x);
+    const lane = this.add.rectangle(centerX, centerY, length, width, color, 0.12).setDepth(8);
+    lane.setRotation(angle);
+    lane.setStrokeStyle(3, color, 0.92);
+
+    const impactCap = this.add.circle(x + direction.x * length, y + direction.y * length, width * 0.4, color, 0.18).setDepth(8);
+    impactCap.setStrokeStyle(3, color, 0.95);
+
+    this.tweens.add({
+      targets: [lane, impactCap],
+      alpha: 0,
+      duration: durationMs,
+      ease: 'Quad.Out',
+      onComplete: () => {
+        lane.destroy();
+        impactCap.destroy();
+      },
+    });
+  }
+
+  private showBossShockwaveTelegraph(x: number, y: number, radius: number): void {
+    const warning = this.add.circle(x, y, radius * 0.32, 0xfca5a5, 0.08).setDepth(8);
+    warning.setStrokeStyle(4, 0xfca5a5, 0.98);
+
+    this.tweens.add({
+      targets: warning,
+      radius,
+      alpha: 0,
+      duration: 780,
+      ease: 'Cubic.Out',
+      onComplete: () => warning.destroy(),
+    });
+  }
+
+  private spawnBossShockwave(x: number, y: number, radius: number, damage: number, durationMs: number): void {
+    const ring = this.add.circle(x, y, 52, 0xfca5a5, 0).setDepth(8);
+    ring.setStrokeStyle(12, 0xfca5a5, 0.78);
+    this.createBurstCircle(x, y, 0xfca5a5, 28, 80, 260, 0.65);
+    this.cameras.main.flash(120, 255, 170, 170, false);
+
+    this.shockwaveAttacks.push({
+      ring,
+      x,
+      y,
+      maxRadius: radius,
+      currentRadius: 52,
+      durationMs,
+      elapsedMs: 0,
+      thickness: 16,
+      damage,
+      hasHitPlayer: false,
+    });
+  }
+
+  private isPlayerInsideLineAttack(
+    originX: number,
+    originY: number,
+    direction: { x: number; y: number },
+    length: number,
+    halfWidth: number,
+  ): boolean {
+    const relativeX = this.player.x - originX;
+    const relativeY = this.player.y - originY;
+    const along = relativeX * direction.x + relativeY * direction.y;
+    const perpendicular = Math.abs(relativeX * -direction.y + relativeY * direction.x);
+
+    return along >= 0 && along <= length && perpendicular <= halfWidth + 18;
   }
 
   private collectXPGem(gem: XPGem): void {
@@ -951,6 +1137,10 @@ export class RunScene extends Phaser.Scene {
     this.player.move(new Phaser.Math.Vector2(0, 0));
     this.player.updateVisualState(this.time.now);
     this.physics.pause();
+    for (const attack of this.shockwaveAttacks) {
+      attack.ring.destroy();
+    }
+    this.shockwaveAttacks = [];
 
     this.cameras.main.shake(180, victory ? 0.0026 : 0.0034);
     if (victory) {
@@ -1104,6 +1294,11 @@ export class RunScene extends Phaser.Scene {
       weapon.destroy();
     }
     this.weapons = [];
+
+    for (const attack of this.shockwaveAttacks) {
+      attack.ring.destroy();
+    }
+    this.shockwaveAttacks = [];
 
     this.destroyPhysicsGroup(this.enemies);
     this.destroyPhysicsGroup(this.xpGems);

@@ -2,6 +2,23 @@ import Phaser from 'phaser';
 import { ENEMY_HIT_FLASH_MS } from '../config/constants';
 import type { EnemyArchetype } from '../data/enemies';
 
+export type EnemyAttackSignal =
+  | {
+      type: 'miniboss-line-telegraph' | 'miniboss-line-execute';
+      x: number;
+      y: number;
+      direction: { x: number; y: number };
+      length: number;
+    }
+  | {
+      type: 'boss-shockwave-telegraph' | 'boss-shockwave-execute';
+      x: number;
+      y: number;
+      radius: number;
+      damage: number;
+      durationMs?: number;
+    };
+
 export class Enemy extends Phaser.GameObjects.Rectangle {
   declare body: Phaser.Physics.Arcade.Body;
 
@@ -15,6 +32,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private nextDashAt = 0;
   private dashVector = new Phaser.Math.Vector2(0, 0);
   private readonly baseStrokeWidth: number;
+  private primedMinibossCharge: Phaser.Math.Vector2 | null = null;
+  private pendingAttackSignal: EnemyAttackSignal | null = null;
+  private nextShockwaveAt = 0;
+  private shockwaveWindupUntil = 0;
+  private shockwaveRadius = 0;
+  private shockwaveDamage = 0;
+  private shockwaveQueued = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -26,6 +50,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.xpValue = archetype.xpValue;
     this.strafeDirection = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
     this.nextDashAt = scene.time.now + Phaser.Math.Between(500, 1200);
+    if (archetype.isBoss) {
+      this.nextShockwaveAt = scene.time.now + Phaser.Math.Between(3200, 4200);
+    }
 
     const strokeWidth = archetype.isBoss ? 4 : archetype.isMiniboss ? 4 : archetype.isElite ? 3 : 2;
     this.baseStrokeWidth = strokeWidth;
@@ -68,16 +95,23 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     return this.archetype.rewardLevelUps ?? 0;
   }
 
-  chase(target: Phaser.GameObjects.Components.Transform, currentTime: number): void {
+  chase(target: Phaser.GameObjects.Components.Transform, currentTime: number): EnemyAttackSignal | null {
     if (!this.isAlive()) {
       this.body.setVelocity(0, 0);
-      return;
+      return this.consumePendingAttackSignal();
     }
 
     const towardTarget = new Phaser.Math.Vector2(target.x - this.x, target.y - this.y);
     if (towardTarget.lengthSq() === 0) {
       this.body.setVelocity(0, 0);
-      return;
+      return this.consumePendingAttackSignal();
+    }
+
+    this.updateSignatureAttackState(towardTarget, currentTime);
+
+    if (this.isBoss() && currentTime < this.shockwaveWindupUntil) {
+      this.body.setVelocity(0, 0);
+      return this.consumePendingAttackSignal();
     }
 
     switch (this.archetype.behavior) {
@@ -91,6 +125,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
         this.applyChaseMovement(towardTarget);
         break;
     }
+
+    return this.consumePendingAttackSignal();
   }
 
   updatePresentation(currentTime: number): void {
@@ -190,17 +226,86 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
 
     if (currentTime >= this.nextDashAt) {
-      const dashDirection = towardTarget.clone().normalize();
+      const dashDirection = (this.primedMinibossCharge ?? towardTarget).clone().normalize();
       const dashSpeed = this.speed * (this.archetype.dashSpeedMultiplier ?? 2);
       this.dashVector = dashDirection.scale(dashSpeed);
       this.dashUntil = currentTime + (this.archetype.dashDurationMs ?? 240);
       this.nextDashAt = this.dashUntil + (this.archetype.dashCooldownMs ?? 1400);
+      if (this.isMiniboss() && this.primedMinibossCharge) {
+        this.pendingAttackSignal = {
+          type: 'miniboss-line-execute',
+          x: this.x,
+          y: this.y,
+          direction: { x: dashDirection.x, y: dashDirection.y },
+          length: 420,
+        };
+        this.primedMinibossCharge = null;
+      }
       this.body.setVelocity(this.dashVector.x, this.dashVector.y);
+      return;
+    }
+
+    if (this.isMiniboss() && this.primedMinibossCharge) {
+      this.body.setVelocity(0, 0);
       return;
     }
 
     towardTarget.normalize();
     this.body.setVelocity(towardTarget.x * this.speed * 0.62, towardTarget.y * this.speed * 0.62);
+  }
+
+  private updateSignatureAttackState(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
+    if (this.isMiniboss()) {
+      const chargeWindowMs = 420;
+      if (
+        !this.primedMinibossCharge &&
+        currentTime >= this.nextDashAt - chargeWindowMs &&
+        currentTime < this.nextDashAt &&
+        towardTarget.lengthSq() > 0
+      ) {
+        const chargeDirection = towardTarget.clone().normalize();
+        this.primedMinibossCharge = chargeDirection;
+        this.pendingAttackSignal = {
+          type: 'miniboss-line-telegraph',
+          x: this.x,
+          y: this.y,
+          direction: { x: chargeDirection.x, y: chargeDirection.y },
+          length: 420,
+        };
+      }
+    }
+
+    if (!this.isBoss()) {
+      return;
+    }
+
+    if (!this.shockwaveQueued && currentTime >= this.nextShockwaveAt) {
+      this.shockwaveQueued = true;
+      this.shockwaveWindupUntil = currentTime + 780;
+      this.shockwaveRadius = 250;
+      this.shockwaveDamage = Math.max(18, this.contactDamage - 8);
+      this.pendingAttackSignal = {
+        type: 'boss-shockwave-telegraph',
+        x: this.x,
+        y: this.y,
+        radius: this.shockwaveRadius,
+        damage: this.shockwaveDamage,
+      };
+      return;
+    }
+
+    if (this.shockwaveQueued && currentTime >= this.shockwaveWindupUntil) {
+      this.shockwaveQueued = false;
+      this.pendingAttackSignal = {
+        type: 'boss-shockwave-execute',
+        x: this.x,
+        y: this.y,
+        radius: this.shockwaveRadius,
+        damage: this.shockwaveDamage,
+        durationMs: 980,
+      };
+      this.nextShockwaveAt = currentTime + Phaser.Math.Between(5200, 6500);
+    }
   }
 
   private isChargingDash(currentTime: number): boolean {
@@ -215,5 +320,11 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.body.stop();
     this.body.enable = false;
     this.destroy();
+  }
+
+  private consumePendingAttackSignal(): EnemyAttackSignal | null {
+    const signal = this.pendingAttackSignal;
+    this.pendingAttackSignal = null;
+    return signal;
   }
 }
