@@ -39,6 +39,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private shockwaveRadius = 0;
   private shockwaveDamage = 0;
   private shockwaveQueued = false;
+  private hitReactionUntil = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -137,6 +138,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     const chargingDash = this.isChargingDash(currentTime);
     const pulse = 1 + Math.sin((currentTime + this.y) * 0.012) * 0.03;
+    const hitReactionActive = currentTime < this.hitReactionUntil;
 
     if (chargingDash) {
       const chargeWindowMs = 260;
@@ -148,36 +150,36 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
 
     if (this.isBoss()) {
-      this.setScale(1 + Math.sin((currentTime + this.x) * 0.008) * 0.07);
+      this.setScale((1 + Math.sin((currentTime + this.x) * 0.008) * 0.07) * (hitReactionActive ? 0.94 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.96);
-      this.setAlpha(1);
+      this.setAlpha(hitReactionActive ? 0.82 : 1);
       return;
     }
 
     if (this.isMiniboss()) {
-      this.setScale(1 + Math.sin((currentTime + this.y) * 0.01) * 0.05);
+      this.setScale((1 + Math.sin((currentTime + this.y) * 0.01) * 0.05) * (hitReactionActive ? 0.92 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.9);
-      this.setAlpha(1);
+      this.setAlpha(hitReactionActive ? 0.8 : 1);
       return;
     }
 
     if (this.isElite()) {
-      this.setScale(1 + Math.sin((currentTime + this.y) * 0.012) * 0.03);
+      this.setScale((1 + Math.sin((currentTime + this.y) * 0.012) * 0.03) * (hitReactionActive ? 0.9 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.92);
-      this.setAlpha(1);
+      this.setAlpha(hitReactionActive ? 0.78 : 1);
       return;
     }
 
     if (this.archetype.behavior === 'strafe') {
-      this.setScale(pulse);
+      this.setScale(pulse * (hitReactionActive ? 0.88 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.86);
-      this.setAlpha(0.94);
+      this.setAlpha(hitReactionActive ? 0.74 : 0.94);
       return;
     }
 
-    this.setScale(1);
+    this.setScale(hitReactionActive ? 0.86 : 1);
     this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.76);
-    this.setAlpha(1);
+    this.setAlpha(hitReactionActive ? 0.72 : 1);
   }
 
   takeDamage(amount: number): boolean {
@@ -192,10 +194,14 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return true;
     }
 
+    this.hitReactionUntil = this.scene.time.now + ENEMY_HIT_FLASH_MS + 28;
+    this.body.velocity.scale(0.72);
     this.setFillStyle(0xffffff);
+    this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffffff, 1);
     this.scene.time.delayedCall(ENEMY_HIT_FLASH_MS, () => {
       if (this.active) {
         this.setFillStyle(this.archetype.color);
+        this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, this.isElite() || this.isMiniboss() || this.isBoss() ? 0.92 : 0.76);
       }
     });
 

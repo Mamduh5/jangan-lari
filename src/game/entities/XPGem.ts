@@ -51,7 +51,13 @@ export class XPGem extends Phaser.GameObjects.Arc {
 
     const attractionSpeed = XP_GEM_ATTRACT_SPEED + Math.max(0, player.getPickupRange() - distance) * 2.4;
     this.setAlpha(1);
+    this.setScale(1.08 + Math.sin(this.scene.time.now * 0.02) * 0.12);
     direction.normalize();
     this.body.setVelocity(direction.x * attractionSpeed, direction.y * attractionSpeed);
+  }
+
+  playCollectFeedback(): void {
+    this.setScale(1.45);
+    this.setAlpha(1);
   }
 }

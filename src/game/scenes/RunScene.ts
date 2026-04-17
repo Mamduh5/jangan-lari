@@ -595,15 +595,19 @@ export class RunScene extends Phaser.Scene {
     const explosionRadius = projectile.getExplosionRadius();
     const explosionDamage = projectile.getExplosionDamage();
     const enemyDied = enemy.takeDamage(damage);
+    const baseBurstRadius = Math.max(12, impactRadius * 2.2);
+    const impactFlashRadius = explosionRadius > 0 ? Math.max(baseBurstRadius, explosionRadius * 0.45) : baseBurstRadius;
 
-    this.createBurstCircle(enemyX, enemyY, impactColor, Math.max(5, impactRadius * 0.7), Math.max(12, impactRadius * 2.2), 90, 0.22);
+    this.createBurstCircle(enemyX, enemyY, impactColor, Math.max(5, impactRadius * 0.7), impactFlashRadius, 90, 0.22);
+    this.createBurstCircle(enemyX, enemyY, 0xffffff, Math.max(3, impactRadius * 0.28), Math.max(8, impactRadius * 1.15), 70, 0.18);
 
     if (enemyDied) {
       this.showFloatingText(enemyX, enemyY - 16, `${damage}`, wasBoss ? '#fca5a5' : Phaser.Display.Color.IntegerToColor(impactColor).rgba, 18);
       this.createBurstCircle(enemyX, enemyY, wasBoss ? 0xfca5a5 : impactColor, 10, wasBoss ? 58 : Math.max(34, impactRadius * 4), 220, 0.9);
+      this.createBurstCircle(enemyX, enemyY, 0xffffff, 6, wasBoss ? 74 : Math.max(26, impactRadius * 2.8), 160, 0.3);
       this.handleEnemyDefeated(enemy, enemyX, enemyY, xpValue, wasBoss, wasMiniboss, wasElite);
-    } else if (wasBoss || wasMiniboss || wasElite) {
-      this.showFloatingText(enemyX, enemyY - 16, `${damage}`, '#ffffff', 16);
+    } else if (wasBoss || wasMiniboss || wasElite || damage >= 18) {
+      this.showFloatingText(enemyX, enemyY - 16, `${damage}`, wasBoss || wasMiniboss ? '#ffffff' : '#dbeafe', 16);
     }
 
     if (explosionRadius > 0 && explosionDamage > 0) {
@@ -697,6 +701,7 @@ export class RunScene extends Phaser.Scene {
       }
 
       const enemyDied = enemy.takeDamage(damage);
+      this.createBurstCircle(enemy.x, enemy.y, 0xffffff, 4, 14, 80, 0.16);
       if (!enemyDied) {
         continue;
       }
@@ -953,8 +958,14 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    const gemValue = gem.getValue();
+    gem.playCollectFeedback();
     this.createBurstCircle(gem.x, gem.y, 0x93c5fd, 8, 26, 150, 0.9);
-    const levelsGained = this.player.gainExperience(gem.getValue());
+    this.createBurstCircle(this.player.x, this.player.y, 0x60a5fa, 6, 24, 130, 0.2);
+    if (gemValue >= 8) {
+      this.showFloatingText(this.player.x, this.player.y - 22, `+${gemValue} XP`, '#bfdbfe', 14);
+    }
+    const levelsGained = this.player.gainExperience(gemValue);
     gem.destroy();
 
     if (levelsGained > 0) {

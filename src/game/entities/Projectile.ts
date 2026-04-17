@@ -13,6 +13,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
   private visualColor = 0xfacc15;
   private visualRadius = 5;
   private firePattern: WeaponDefinition['firePattern'] = 'targeted';
+  private trailAccumulatorMs = 0;
 
   constructor(scene: Phaser.Scene) {
     super(scene, -1000, -1000, 5, 0, 360, false, 0xfacc15);
@@ -38,6 +39,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
     this.visualColor = weapon.projectileColor;
     this.visualRadius = weapon.projectileRadius;
     this.firePattern = weapon.firePattern ?? 'targeted';
+    this.trailAccumulatorMs = 0;
 
     this.setRadius(weapon.projectileRadius);
     this.setFillStyle(weapon.projectileColor);
@@ -109,6 +111,12 @@ export class Projectile extends Phaser.GameObjects.Arc {
             ? 1.22
             : 1.08;
     this.setScale(Math.min(scaleTarget, this.scaleX + deltaSeconds * 0.5));
+    this.trailAccumulatorMs += deltaMs;
+
+    if (this.shouldEmitTrail() && this.trailAccumulatorMs >= 36) {
+      this.trailAccumulatorMs = 0;
+      this.emitTrail();
+    }
 
     if (this.traveledDistance >= this.maxDistance) {
       this.deactivate();
@@ -121,5 +129,25 @@ export class Projectile extends Phaser.GameObjects.Arc {
     this.setPosition(-1000, -1000);
     this.body.stop();
     this.body.enable = false;
+  }
+
+  private shouldEmitTrail(): boolean {
+    return this.firePattern === 'radial' || this.remainingPierces > 0 || this.explosionRadius > 0;
+  }
+
+  private emitTrail(): void {
+    const trail = this.scene.add
+      .circle(this.x, this.y, Math.max(3, this.visualRadius * 0.72), this.visualColor, this.firePattern === 'radial' ? 0.16 : 0.2)
+      .setDepth(6);
+    trail.setBlendMode(Phaser.BlendModes.ADD);
+
+    this.scene.tweens.add({
+      targets: trail,
+      scale: 0.72,
+      alpha: 0,
+      duration: 110,
+      ease: 'Quad.Out',
+      onComplete: () => trail.destroy(),
+    });
   }
 }
