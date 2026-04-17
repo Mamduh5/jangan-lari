@@ -105,28 +105,25 @@ test.describe('gameplay bot smoke', () => {
 
       const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
       const finalRun = result.finalSnapshot.run!;
+      const runLabel = `run ${runIndex + 1}/${BOT_RUN_COUNT}`;
 
       console.log(
-        `[gameplay-bot run ${runIndex + 1}/${BOT_RUN_COUNT}] ${JSON.stringify({
-          elapsedMs: result.maxElapsedMs,
-          kills: result.maxKills,
-          maxLevel: result.maxLevel,
-          upgradeSelections: result.upgradeSelections,
-          levelUpScreensSeen: result.levelUpScreensSeen,
-          maxWeaponCount: result.maxWeaponCount,
-          minHp: result.minHp,
-          totalTravelDistance: Math.round(result.totalTravelDistance),
-          maxDistanceFromStart: Math.round(result.maxDistanceFromStart),
-          endTitle: finalRun.endTitle,
-          victory: finalRun.victory,
-          goldEarned: finalRun.goldEarned,
-        })}`,
+        `[gameplay-bot] ${runLabel} | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
+          result.maxElapsedMs,
+        )}ms | kills=${result.maxKills} | level=${result.maxLevel} | upgrades=${result.upgradeSelections}/${result.levelUpScreensSeen} | weapons=${result.maxWeaponCount} | travel=${Math.round(
+          result.totalTravelDistance,
+        )} | range=${Math.round(result.maxDistanceFromStart)} | gold=${finalRun.goldEarned}`,
       );
 
-      expect(finalRun.endActive).toBe(true);
-      expect(['Victory', 'Defeat']).toContain(finalRun.endTitle);
+      expect(finalRun.endActive, `${runLabel}: expected a natural end state`).toBe(true);
+      expect(['Victory', 'Defeat'], `${runLabel}: expected endTitle to be Victory or Defeat, got ${finalRun.endTitle}`).toContain(
+        finalRun.endTitle,
+      );
       if (result.levelUpScreensSeen > 0) {
-        expect(result.upgradeSelections).toBeGreaterThanOrEqual(1);
+        expect(
+          result.upgradeSelections,
+          `${runLabel}: saw ${result.levelUpScreensSeen} level-up screens but selected ${result.upgradeSelections} upgrades`,
+        ).toBeGreaterThanOrEqual(1);
       }
 
       results.push(result);
@@ -135,12 +132,27 @@ test.describe('gameplay bot smoke', () => {
     const naturallyEndedRuns = results.filter((result) => result.finalSnapshot.run?.endActive).length;
     const meaningfulRuns = results.filter((result) => isMeaningfulProgression(result)).length;
     const finalSceneStates = results.map((result) => result.finalSnapshot.scenes);
+    const victoryCount = results.filter((result) => result.finalSnapshot.run?.victory).length;
+    const defeatCount = results.length - victoryCount;
+    const averageElapsedMs = Math.round(results.reduce((sum, result) => sum + result.maxElapsedMs, 0) / results.length);
+    const averageKills = roundToOneDecimal(results.reduce((sum, result) => sum + result.maxKills, 0) / results.length);
+    const averageLevel = roundToOneDecimal(results.reduce((sum, result) => sum + result.maxLevel, 0) / results.length);
+
+    console.log(
+      `[gameplay-bot] aggregate | runs=${results.length}/${BOT_RUN_COUNT} | avgElapsed=${averageElapsedMs}ms | avgKills=${averageKills} | avgLevel=${averageLevel} | wins=${victoryCount} | defeats=${defeatCount} | meaningful=${meaningfulRuns}/${results.length}`,
+    );
 
     expect(results).toHaveLength(BOT_RUN_COUNT);
-    expect(naturallyEndedRuns).toBe(BOT_RUN_COUNT);
-    expect(meaningfulRuns).toBeGreaterThanOrEqual(BOT_RUN_COUNT);
-    expect(finalSceneStates.every((scenes) => scenes.runActive && scenes.uiActive)).toBe(true);
-    expect(runtimeErrors).toEqual([]);
+    expect(naturallyEndedRuns, `expected all ${BOT_RUN_COUNT} runs to end naturally, got ${naturallyEndedRuns}`).toBe(BOT_RUN_COUNT);
+    expect(
+      meaningfulRuns,
+      `expected all ${results.length} runs to show meaningful progression, got ${meaningfulRuns}`,
+    ).toBeGreaterThanOrEqual(BOT_RUN_COUNT);
+    expect(
+      finalSceneStates.every((scenes) => scenes.runActive && scenes.uiActive),
+      'expected RunScene and UIScene to remain active until the natural end state of each run',
+    ).toBe(true);
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 });
 
@@ -226,6 +238,10 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
 
 function distanceBetween(left: { x: number; y: number }, right: { x: number; y: number }): number {
   return Math.hypot(right.x - left.x, right.y - left.y);
+}
+
+function roundToOneDecimal(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 async function getGameplaySnapshot(page: import('@playwright/test').Page): Promise<GameplayBotSnapshot> {
