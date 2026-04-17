@@ -282,6 +282,7 @@ export class RunScene extends Phaser.Scene {
     const enemies = activeEnemies
       .filter((enemy) => enemy.active && enemy.isAlive())
       .map((enemy) => ({
+        id: enemy.archetype.id,
         x: enemy.x,
         y: enemy.y,
         distance: Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y),

@@ -149,6 +149,26 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const chargingDash = this.isChargingDash(currentTime);
     const pulse = 1 + Math.sin((currentTime + this.y) * 0.012) * 0.03;
     const hitReactionActive = currentTime < this.hitReactionUntil;
+    const minibossChargePrimed = this.isMiniboss() && Boolean(this.primedMinibossCharge) && currentTime < this.nextDashAt;
+    const shockwaveCharging = this.isBoss() && this.shockwaveQueued && currentTime < this.shockwaveWindupUntil;
+
+    if (shockwaveCharging) {
+      const windupProgress = Phaser.Math.Clamp(1 - (this.shockwaveWindupUntil - currentTime) / 780, 0, 1);
+      const chargePulse = 1 + Math.sin((currentTime + this.x) * 0.015) * 0.04;
+      this.setResponseScale((1.03 + windupProgress * 0.07) * chargePulse * (hitReactionActive ? 0.97 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffedd5, 1);
+      this.setAlpha(hitReactionActive ? 0.88 : 0.96);
+      return;
+    }
+
+    if (minibossChargePrimed) {
+      const chargeWindowMs = 420;
+      const chargeProgress = Phaser.Math.Clamp(1 - (this.nextDashAt - currentTime) / chargeWindowMs, 0, 1);
+      this.setResponseScale((1.02 + chargeProgress * 0.13) * (hitReactionActive ? 0.96 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffe4e6, 0.98);
+      this.setAlpha(hitReactionActive ? 0.84 : 0.92);
+      return;
+    }
 
     if (chargingDash) {
       const chargeWindowMs = 260;

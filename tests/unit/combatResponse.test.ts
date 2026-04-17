@@ -6,7 +6,7 @@ import {
 } from '../../src/game/combat/combatResponse';
 
 describe('combat response helpers', () => {
-  test('profiles cover the current rollout batch while leaving encounter enemies for later', () => {
+  test('profiles cover the current roster plus encounter enemies with distinct authored tuning', () => {
     expect(getEnemyCombatResponseProfile('scuttler')).not.toBeNull();
     expect(getEnemyCombatResponseProfile('skimmer')).not.toBeNull();
     expect(getEnemyCombatResponseProfile('harrier')).not.toBeNull();
@@ -15,8 +15,8 @@ describe('combat response helpers', () => {
     expect(getEnemyCombatResponseProfile('bulwark')).not.toBeNull();
     expect(getEnemyCombatResponseProfile('overlord')).not.toBeNull();
     expect(getEnemyCombatResponseProfile('riftblade')).not.toBeNull();
-    expect(getEnemyCombatResponseProfile('dreadnought')).toBeNull();
-    expect(getEnemyCombatResponseProfile('behemoth')).toBeNull();
+    expect(getEnemyCombatResponseProfile('dreadnought')).not.toBeNull();
+    expect(getEnemyCombatResponseProfile('behemoth')).not.toBeNull();
 
     expect(getWeaponCombatResponseProfile('arc-bolt')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('twin-fangs')).not.toBeNull();
@@ -116,6 +116,20 @@ describe('combat response helpers', () => {
     expect(specialEncounterImpact.hitStopMs).toBeGreaterThan(0);
     expect(specialEncounterImpact.hitStopMs).toBeLessThan(bloomCannonImpact.hitStopMs);
     expect(specialEncounterImpact.cue).not.toBeNull();
+
+    const bossEncounterImpact = resolveCombatImpactResponse({
+      enemyId: 'behemoth',
+      weaponId: 'bloom-cannon',
+      defeated: false,
+      x: 112,
+      y: 128,
+      color: 0x86efac,
+      radius: 5,
+    });
+    expect(bossEncounterImpact.hitStopMs).toBeGreaterThan(0);
+    expect(bossEncounterImpact.hitStopMs).toBeLessThanOrEqual(specialEncounterImpact.hitStopMs + 1);
+    expect(bossEncounterImpact.cue).not.toBeNull();
+    expect(bossEncounterImpact.cue?.alpha).toBeLessThanOrEqual(specialEncounterImpact.cue?.alpha ?? 1);
   });
 
   test('combat response controller starts, extends, and clears hit-stop cleanly', () => {

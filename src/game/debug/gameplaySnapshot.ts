@@ -4,6 +4,7 @@ import type { UpgradeId } from '../data/upgrades';
 import type { WeaponId } from '../data/weapons';
 
 export type GameplayBotEnemySummary = {
+  id: EnemyArchetypeId;
   x: number;
   y: number;
   distance: number;

@@ -110,6 +110,40 @@ const DASH_BRUISER_RESPONSE: EnemyCombatResponseProfile = {
   cueScale: 1.24,
 };
 
+const ENCOUNTER_MINIBOSS_RESPONSE: EnemyCombatResponseProfile = {
+  hurtFlashMs: 132,
+  flinchVelocityScale: 0.76,
+  recoilSpeed: 48,
+  hitScaleX: 1.07,
+  hitScaleY: 0.93,
+  hitTweenMs: 118,
+  hitStopMs: 7,
+  deathBeatMs: 126,
+  deathScaleX: 1.16,
+  deathScaleY: 0.82,
+  deathTweenMs: 126,
+  deathHitStopMs: 22,
+  cueAlpha: 0.1,
+  cueScale: 1.22,
+};
+
+const ENCOUNTER_BOSS_RESPONSE: EnemyCombatResponseProfile = {
+  hurtFlashMs: 144,
+  flinchVelocityScale: 0.84,
+  recoilSpeed: 30,
+  hitScaleX: 1.05,
+  hitScaleY: 0.96,
+  hitTweenMs: 132,
+  hitStopMs: 8,
+  deathBeatMs: 164,
+  deathScaleX: 1.14,
+  deathScaleY: 0.84,
+  deathTweenMs: 164,
+  deathHitStopMs: 28,
+  cueAlpha: 0.09,
+  cueScale: 1.34,
+};
+
 const BURST_TARGETED_WEAPON_RESPONSE: WeaponCombatResponseProfile = {
   launchScaleX: 1.16,
   launchScaleY: 0.84,
@@ -209,6 +243,12 @@ const ENEMY_RESPONSE_PROFILES: Partial<Record<EnemyArchetypeId, EnemyCombatRespo
     deathHitStopMs: 20,
     cueAlpha: 0.2,
     cueScale: 1.32,
+  },
+  dreadnought: {
+    ...ENCOUNTER_MINIBOSS_RESPONSE,
+  },
+  behemoth: {
+    ...ENCOUNTER_BOSS_RESPONSE,
   },
 };
 

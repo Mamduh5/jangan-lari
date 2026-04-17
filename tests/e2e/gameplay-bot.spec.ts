@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 type GameplayBotEnemySummary = {
+  id: string;
   x: number;
   y: number;
   distance: number;
@@ -360,6 +361,54 @@ test.describe('gameplay bot smoke', () => {
     ).toBeLessThanOrEqual(3);
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
+
+  test('bot can exercise deterministic encounter enemies without encounter-response instability', async ({ page }) => {
+    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
+
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickStartRun(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+    });
+
+    await forceUpgrade(page, 'unlock-phase-disc');
+    await forceUpgrade(page, 'unlock-shatterbell');
+    await forceUpgrade(page, 'unlock-sunwheel');
+    await forceEncounterWave(page, 100_000);
+    await page.waitForFunction(() => {
+      const enemies = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.enemies ?? [];
+      return enemies.some((enemy) => enemy.id === 'dreadnought') && enemies.some((enemy) => enemy.id === 'behemoth');
+    });
+
+    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
+    const finalRun = result.finalSnapshot.run!;
+    const dreadnoughtImpacts = finalRun.combatResponse.enemyImpactCounts.dreadnought ?? 0;
+    const behemothImpacts = finalRun.combatResponse.enemyImpactCounts.behemoth ?? 0;
+
+    console.log(
+      `[gameplay-bot] encounters | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
+        result.maxElapsedMs,
+      )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | loadout=${finalRun.weaponNames.join(',') || '--'} | encounterImpacts=${dreadnoughtImpacts}/${behemothImpacts} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
+    );
+
+    expect(finalRun.endActive, 'expected the encounter validation run to end naturally').toBe(true);
+    expect(
+      dreadnoughtImpacts,
+      `expected runtime authored impact coverage for Dreadnought, got ${dreadnoughtImpacts}`,
+    ).toBeGreaterThan(0);
+    expect(behemothImpacts, `expected runtime authored impact coverage for Behemoth, got ${behemothImpacts}`).toBeGreaterThan(0);
+    expect(result.hitStopStarts, 'expected encounter validation run to produce authored impact hit-stop').toBeGreaterThan(0);
+    expect(
+      result.hitStopRefreshes,
+      `expected hit-stop refreshes to stay low during the encounter run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
+    ).toBeLessThanOrEqual(3);
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
+  });
 });
 
 async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: number): Promise<BotResult> {
@@ -647,6 +696,25 @@ async function forceUpgrade(
     runScene.applyUpgrade?.(id);
     runScene.publishHudState?.();
   }, upgradeId);
+}
+
+async function forceEncounterWave(page: import('@playwright/test').Page, elapsedMs: number): Promise<void> {
+  await page.evaluate((nextElapsedMs) => {
+    const game = window.__JANGAN_LARI_GAME__;
+    if (!game?.scene.isActive('RunScene')) {
+      throw new Error('RunScene is not active for forced encounter validation.');
+    }
+
+    const runScene = game.scene.getScene('RunScene') as {
+      runElapsedMs?: number;
+      spawnEnemyWave?: () => void;
+      publishHudState?: () => void;
+    };
+
+    runScene.runElapsedMs = nextElapsedMs;
+    runScene.spawnEnemyWave?.();
+    runScene.publishHudState?.();
+  }, elapsedMs);
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
