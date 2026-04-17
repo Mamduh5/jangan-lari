@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playWeaponFireCue } from '../audio/audioCuePlayer';
 import type { WeaponDefinition, WeaponStats } from '../data/weapons';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
@@ -67,6 +68,7 @@ export class AutoFireWeapon {
     }
 
     this.createMuzzleFlash();
+    playWeaponFireCue(this.stats);
     this.nextFireTime = currentTime + this.stats.fireCooldownMs;
   }
 

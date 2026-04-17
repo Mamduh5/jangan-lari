@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { primeAudioContext } from '../audio/audioCuePlayer';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
 import { WEAPON_DEFINITIONS } from '../data/weapons';
@@ -145,6 +146,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private startRun(): void {
+    primeAudioContext();
+
     if (this.scene.isActive('UIScene')) {
       this.scene.stop('UIScene');
     }

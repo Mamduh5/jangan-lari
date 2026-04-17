@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playCue, playHeroIntroCue } from '../audio/audioCuePlayer';
 import {
   ELITE_SPAWN_INDICATOR_MS,
   ENDING_FLASH_MS,
@@ -446,11 +447,13 @@ export class RunScene extends Phaser.Scene {
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
         this.showEncounterBanner('FINAL BOSS', `${archetype.name} has arrived. Watch the charge and break it for victory.`, 0xf87171, 2600);
         this.cameras.main.flash(180, 255, 120, 120, false);
+        playCue('boss-arrival');
       } else if (archetype.isMiniboss) {
         this.registry.set('run.instructions', 'Miniboss approaching. Break the charge and claim the reward.');
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'MINIBOSS', 0xfda4af);
         this.showEncounterBanner('MINIBOSS', `${archetype.name} enters the arena. Beat it for bonus gold and a free upgrade.`, 0xfda4af, 2200);
         this.cameras.main.flash(120, 255, 180, 180, false);
+        playCue('miniboss-arrival');
       } else if (archetype.isElite) {
         this.registry.set('run.instructions', 'Elite enemy incoming. Keep moving.');
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
@@ -717,6 +720,14 @@ export class RunScene extends Phaser.Scene {
     if (rewardLevelUps > 0 && !this.isLevelingUp) {
       this.beginLevelUp();
     }
+
+    if (enemy.isBoss()) {
+      playCue('boss-reward');
+    } else if (enemy.isMiniboss()) {
+      playCue('miniboss-reward');
+    } else if (enemy.isElite()) {
+      playCue('elite-reward');
+    }
   }
 
   private presentHeroIntro(hero: (typeof HEROES)[keyof typeof HEROES]): void {
@@ -724,6 +735,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.instructions', `${hero.name}: ${hero.passiveLabel}`);
     this.showEncounterBanner(hero.name, `${startingWeapon.name} online. ${hero.passiveLabel}`, startingWeapon.projectileColor, 2200);
     this.showFloatingText(this.player.x, this.player.y - 78, `${startingWeapon.name} ready`, '#dbeafe', 18);
+    playHeroIntroCue(hero, startingWeapon);
 
     this.time.delayedCall(2600, () => {
       if (!this.isEnded && !this.isLevelingUp && !this.isSystemPaused && !this.isTransitioningToMenu) {
@@ -737,18 +749,22 @@ export class RunScene extends Phaser.Scene {
       case 'miniboss-line-telegraph':
         this.registry.set('run.instructions', 'Miniboss charge lane forming. Step sideways before it fires.');
         this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, signal.length, 58, 0xfda4af, 420, 'warning');
+        playCue('dash-warning');
         break;
       case 'miniboss-line-execute':
         this.registry.set('run.instructions', 'Dreadnought line charge released. Reposition and punish the recovery.');
         this.executeMinibossLineStrike(enemy, signal.x, signal.y, signal.direction, signal.length);
+        playCue('miniboss-release');
         break;
       case 'boss-shockwave-telegraph':
         this.registry.set('run.instructions', 'Behemoth is winding up a shockwave. Back out before the ring expands.');
         this.showBossShockwaveTelegraph(signal.x, signal.y, signal.radius);
+        playCue('dash-warning');
         break;
       case 'boss-shockwave-execute':
         this.registry.set('run.instructions', 'Shockwave released. Keep clear of the expanding ring.');
         this.spawnBossShockwave(signal.x, signal.y, signal.radius, signal.damage, signal.durationMs ?? 980);
+        playCue('boss-release');
         break;
     }
   }
@@ -1202,9 +1218,11 @@ export class RunScene extends Phaser.Scene {
 
     this.cameras.main.shake(180, victory ? 0.0026 : 0.0034);
     if (victory) {
+      playCue('victory');
       this.cameras.main.flash(ENDING_FLASH_MS, 255, 234, 150, false);
       this.createBurstCircle(this.player.x, this.player.y, 0xfde68a, 22, 90, 300, 0.95);
     } else {
+      playCue('defeat');
       this.cameras.main.flash(ENDING_FLASH_MS, 255, 120, 120, false);
       this.createBurstCircle(this.player.x, this.player.y, 0xf87171, 18, 74, 260, 0.9);
     }
