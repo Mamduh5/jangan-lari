@@ -161,23 +161,26 @@ export class AutoFireWeapon {
   }
 
   private createMuzzleFlash(): void {
-    const flash = this.scene.add.circle(
-      this.owner.x,
-      this.owner.y,
-      Math.max(8, this.stats.projectileRadius * 1.8),
-      this.stats.projectileColor,
-      0.3,
-    );
+    const flashRadius = Math.max(8, this.stats.projectileRadius * (this.stats.firePattern === 'radial' ? 2.6 : 1.8));
+    const flash = this.scene.add.circle(this.owner.x, this.owner.y, flashRadius, this.stats.projectileColor, 0.3);
     flash.setBlendMode(Phaser.BlendModes.ADD);
     flash.setDepth(8);
 
+    const outerRing = this.scene.add.circle(this.owner.x, this.owner.y, flashRadius * 0.7, this.stats.projectileColor, 0.1);
+    outerRing.setStrokeStyle(2, this.stats.projectileStrokeColor, 0.95);
+    outerRing.setBlendMode(Phaser.BlendModes.ADD);
+    outerRing.setDepth(8);
+
     this.scene.tweens.add({
-      targets: flash,
-      scale: 1.8,
+      targets: [flash, outerRing],
+      scale: this.stats.firePattern === 'radial' ? 2.4 : this.stats.burstCount && this.stats.burstCount > 1 ? 2 : 1.8,
       alpha: 0,
-      duration: 120,
+      duration: this.stats.firePattern === 'radial' ? 170 : 120,
       ease: 'Quad.Out',
-      onComplete: () => flash.destroy(),
+      onComplete: () => {
+        flash.destroy();
+        outerRing.destroy();
+      },
     });
   }
 

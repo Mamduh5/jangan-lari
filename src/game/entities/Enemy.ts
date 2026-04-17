@@ -14,6 +14,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private dashUntil = 0;
   private nextDashAt = 0;
   private dashVector = new Phaser.Math.Vector2(0, 0);
+  private readonly baseStrokeWidth: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -27,6 +28,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.nextDashAt = scene.time.now + Phaser.Math.Between(500, 1200);
 
     const strokeWidth = archetype.isBoss ? 4 : archetype.isMiniboss ? 4 : archetype.isElite ? 3 : 2;
+    this.baseStrokeWidth = strokeWidth;
     this.setStrokeStyle(strokeWidth, archetype.strokeColor, 0.76);
     this.setDepth(archetype.isBoss ? 6 : archetype.isMiniboss ? 5.5 : archetype.isElite ? 5 : 4);
 
@@ -97,22 +99,49 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setAngle(Phaser.Math.RadToDeg(Math.atan2(velocity.y, velocity.x)) + 90);
     }
 
+    const chargingDash = this.isChargingDash(currentTime);
+    const pulse = 1 + Math.sin((currentTime + this.y) * 0.012) * 0.03;
+
+    if (chargingDash) {
+      const chargeWindowMs = 260;
+      const chargeProgress = Phaser.Math.Clamp(1 - (this.nextDashAt - currentTime) / chargeWindowMs, 0, 1);
+      this.setScale(1.02 + chargeProgress * 0.2);
+      this.setStrokeStyle(this.baseStrokeWidth + 1, 0xfef2f2, 1);
+      this.setAlpha(0.82 + chargeProgress * 0.18);
+      return;
+    }
+
     if (this.isBoss()) {
       this.setScale(1 + Math.sin((currentTime + this.x) * 0.008) * 0.07);
+      this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.96);
+      this.setAlpha(1);
       return;
     }
 
     if (this.isMiniboss()) {
       this.setScale(1 + Math.sin((currentTime + this.y) * 0.01) * 0.05);
+      this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.9);
+      this.setAlpha(1);
       return;
     }
 
     if (this.isElite()) {
       this.setScale(1 + Math.sin((currentTime + this.y) * 0.012) * 0.03);
+      this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.92);
+      this.setAlpha(1);
+      return;
+    }
+
+    if (this.archetype.behavior === 'strafe') {
+      this.setScale(pulse);
+      this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.86);
+      this.setAlpha(0.94);
       return;
     }
 
     this.setScale(1);
+    this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.76);
+    this.setAlpha(1);
   }
 
   takeDamage(amount: number): boolean {
@@ -172,6 +201,14 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     towardTarget.normalize();
     this.body.setVelocity(towardTarget.x * this.speed * 0.62, towardTarget.y * this.speed * 0.62);
+  }
+
+  private isChargingDash(currentTime: number): boolean {
+    if (this.archetype.behavior !== 'dash' || currentTime < this.dashUntil) {
+      return false;
+    }
+
+    return currentTime >= this.nextDashAt - 260 && currentTime < this.nextDashAt;
   }
 
   private destroyEnemy(): void {

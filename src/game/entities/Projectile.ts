@@ -10,6 +10,9 @@ export class Projectile extends Phaser.GameObjects.Arc {
   private remainingPierces = 0;
   private explosionRadius = 0;
   private explosionDamageMultiplier = 0;
+  private visualColor = 0xfacc15;
+  private visualRadius = 5;
+  private firePattern: WeaponDefinition['firePattern'] = 'targeted';
 
   constructor(scene: Phaser.Scene) {
     super(scene, -1000, -1000, 5, 0, 360, false, 0xfacc15);
@@ -32,12 +35,20 @@ export class Projectile extends Phaser.GameObjects.Arc {
     this.remainingPierces = weapon.pierceCount ?? 0;
     this.explosionRadius = weapon.explosionRadius ?? 0;
     this.explosionDamageMultiplier = weapon.explosionDamageMultiplier ?? 0;
+    this.visualColor = weapon.projectileColor;
+    this.visualRadius = weapon.projectileRadius;
+    this.firePattern = weapon.firePattern ?? 'targeted';
 
     this.setRadius(weapon.projectileRadius);
     this.setFillStyle(weapon.projectileColor);
-    this.setStrokeStyle(2, weapon.projectileStrokeColor, 0.9);
+    this.setStrokeStyle(weapon.explosionRadius ? 4 : weapon.pierceCount ? 3 : 2, weapon.projectileStrokeColor, 0.95);
     this.setAlpha(weapon.projectileAlpha ?? 1);
-    this.setScale(0.9);
+    this.setScale(weapon.firePattern === 'radial' ? 1.08 : weapon.pierceCount ? 1.12 : 0.9);
+    this.setBlendMode(
+      weapon.firePattern === 'radial' || weapon.pierceCount || weapon.explosionRadius
+        ? Phaser.BlendModes.ADD
+        : Phaser.BlendModes.NORMAL,
+    );
     this.setActive(true);
     this.setVisible(true);
     this.setPosition(x, y);
@@ -62,6 +73,14 @@ export class Projectile extends Phaser.GameObjects.Arc {
     return Math.max(0, Math.round(this.damage * this.explosionDamageMultiplier));
   }
 
+  getVisualColor(): number {
+    return this.visualColor;
+  }
+
+  getVisualRadius(): number {
+    return this.visualRadius;
+  }
+
   consumeHit(): boolean {
     if (this.remainingPierces > 0) {
       this.remainingPierces -= 1;
@@ -80,7 +99,16 @@ export class Projectile extends Phaser.GameObjects.Arc {
     const deltaSeconds = deltaMs / 1000;
     const speed = this.body.velocity.length();
     this.traveledDistance += speed * deltaSeconds;
-    this.setScale(Math.min(1.18, this.scaleX + deltaSeconds * 0.5));
+
+    const scaleTarget =
+      this.firePattern === 'radial'
+        ? 1.2
+        : this.explosionRadius > 0
+          ? 1.26
+          : this.remainingPierces > 0
+            ? 1.22
+            : 1.08;
+    this.setScale(Math.min(scaleTarget, this.scaleX + deltaSeconds * 0.5));
 
     if (this.traveledDistance >= this.maxDistance) {
       this.deactivate();

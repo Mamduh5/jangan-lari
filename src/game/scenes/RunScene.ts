@@ -3,6 +3,7 @@ import {
   ELITE_SPAWN_INDICATOR_MS,
   ENDING_FLASH_MS,
   ENEMY_SPAWN_INTERVAL_MS,
+  GAME_WIDTH,
   LEVEL_UP_FLASH_MS,
   PLAYER_HIT_SHAKE_DURATION_MS,
   PLAYER_HIT_SHAKE_INTENSITY,
@@ -150,6 +151,7 @@ export class RunScene extends Phaser.Scene {
 
     writeFreshRunRegistryState(this.registry, selectedHero.name, this.saveData.totalGold);
     this.publishHudState();
+    this.presentHeroIntro(selectedHero);
 
     document.addEventListener('visibilitychange', this.handlePageVisibilityChange);
     window.addEventListener('blur', this.handleWindowBlur);
@@ -427,14 +429,17 @@ export class RunScene extends Phaser.Scene {
       if (archetype.isBoss) {
         this.registry.set('run.instructions', 'Boss sighted. Defeat it or survive to extraction.');
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
+        this.showEncounterBanner('FINAL BOSS', `${archetype.name} has arrived. Watch the charge and break it for victory.`, 0xf87171, 2600);
         this.cameras.main.flash(180, 255, 120, 120, false);
       } else if (archetype.isMiniboss) {
         this.registry.set('run.instructions', 'Miniboss approaching. Break the charge and claim the reward.');
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'MINIBOSS', 0xfda4af);
+        this.showEncounterBanner('MINIBOSS', `${archetype.name} enters the arena. Beat it for bonus gold and a free upgrade.`, 0xfda4af, 2200);
         this.cameras.main.flash(120, 255, 180, 180, false);
       } else if (archetype.isElite) {
         this.registry.set('run.instructions', 'Elite enemy incoming. Keep moving.');
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
+        this.showEncounterBanner('ELITE TARGET', `${archetype.name} is carrying a reward cache.`, 0xe9d5ff, 1500);
         this.cameras.main.flash(90, 190, 150, 255, false);
       }
     }
@@ -505,21 +510,25 @@ export class RunScene extends Phaser.Scene {
     const wasMiniboss = enemy.isMiniboss();
     const wasElite = enemy.isElite();
     const damage = projectile.getDamage();
+    const impactColor = projectile.getVisualColor();
+    const impactRadius = projectile.getVisualRadius();
     const shouldDeactivate = projectile.consumeHit();
     const explosionRadius = projectile.getExplosionRadius();
     const explosionDamage = projectile.getExplosionDamage();
     const enemyDied = enemy.takeDamage(damage);
 
+    this.createBurstCircle(enemyX, enemyY, impactColor, Math.max(5, impactRadius * 0.7), Math.max(12, impactRadius * 2.2), 90, 0.22);
+
     if (enemyDied) {
-      this.showFloatingText(enemyX, enemyY - 16, `${damage}`, wasBoss ? '#fca5a5' : '#fde68a', 18);
-      this.createBurstCircle(enemyX, enemyY, wasBoss ? 0xfca5a5 : 0xfef08a, 10, wasBoss ? 58 : 34, 220, 0.9);
+      this.showFloatingText(enemyX, enemyY - 16, `${damage}`, wasBoss ? '#fca5a5' : Phaser.Display.Color.IntegerToColor(impactColor).rgba, 18);
+      this.createBurstCircle(enemyX, enemyY, wasBoss ? 0xfca5a5 : impactColor, 10, wasBoss ? 58 : Math.max(34, impactRadius * 4), 220, 0.9);
       this.handleEnemyDefeated(enemy, enemyX, enemyY, xpValue, wasBoss, wasMiniboss, wasElite);
     } else if (wasBoss || wasMiniboss || wasElite) {
       this.showFloatingText(enemyX, enemyY - 16, `${damage}`, '#ffffff', 16);
     }
 
     if (explosionRadius > 0 && explosionDamage > 0) {
-      this.applyProjectileExplosion(enemyX, enemyY, explosionRadius, explosionDamage, enemy);
+      this.applyProjectileExplosion(enemyX, enemyY, explosionRadius, explosionDamage, enemy, impactColor);
     }
 
     if (shouldDeactivate) {
@@ -587,13 +596,14 @@ export class RunScene extends Phaser.Scene {
     radius: number,
     damage: number,
     primaryTarget: Enemy,
+    color: number,
   ): void {
     const enemies = this.enemies?.getChildren() as Enemy[] | undefined;
     if (!enemies) {
       return;
     }
 
-    this.createBurstCircle(x, y, 0x67e8f9, 14, radius, 220, 0.45);
+    this.createBurstCircle(x, y, color, 14, radius, 220, 0.45);
 
     for (const enemy of enemies) {
       if (!enemy.active || enemy === primaryTarget) {
@@ -640,6 +650,19 @@ export class RunScene extends Phaser.Scene {
     if (rewardLevelUps > 0 && !this.isLevelingUp) {
       this.beginLevelUp();
     }
+  }
+
+  private presentHeroIntro(hero: (typeof HEROES)[keyof typeof HEROES]): void {
+    const startingWeapon = WEAPON_DEFINITIONS[hero.startingWeaponId];
+    this.registry.set('run.instructions', `${hero.name}: ${hero.passiveLabel}`);
+    this.showEncounterBanner(hero.name, `${startingWeapon.name} online. ${hero.passiveLabel}`, startingWeapon.projectileColor, 2200);
+    this.showFloatingText(this.player.x, this.player.y - 78, `${startingWeapon.name} ready`, '#dbeafe', 18);
+
+    this.time.delayedCall(2600, () => {
+      if (!this.isEnded && !this.isLevelingUp && !this.isSystemPaused && !this.isTransitioningToMenu) {
+        this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
+      }
+    });
   }
 
   private collectXPGem(gem: XPGem): void {
@@ -965,6 +988,54 @@ export class RunScene extends Phaser.Scene {
     });
 
     this.showFloatingText(x, y - 34, label, Phaser.Display.Color.IntegerToColor(color).rgba, 18);
+  }
+
+  private showEncounterBanner(title: string, subtitle: string, color: number, duration: number): void {
+    const bannerY = 86;
+    const backdrop = this.add.rectangle(GAME_WIDTH / 2, bannerY, 620, 92, 0x020617, 0.86).setDepth(30).setScrollFactor(0);
+    backdrop.setStrokeStyle(2, color, 0.95);
+    const accent = this.add.rectangle(GAME_WIDTH / 2, bannerY - 38, 560, 4, color, 0.9).setDepth(31).setScrollFactor(0);
+    const titleText = this.add
+      .text(GAME_WIDTH / 2, bannerY - 10, title, {
+        fontFamily: 'Georgia, serif',
+        fontSize: '30px',
+        color: '#f8fafc',
+      })
+      .setOrigin(0.5)
+      .setDepth(31)
+      .setScrollFactor(0);
+    const subtitleText = this.add
+      .text(GAME_WIDTH / 2, bannerY + 22, subtitle, {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '16px',
+        color: '#dbeafe',
+        align: 'center',
+        wordWrap: { width: 540 },
+      })
+      .setOrigin(0.5)
+      .setDepth(31)
+      .setScrollFactor(0);
+
+    for (const object of [backdrop, accent, titleText, subtitleText]) {
+      object.setAlpha(0);
+      object.y -= 18;
+    }
+
+    this.tweens.add({
+      targets: [backdrop, accent, titleText, subtitleText],
+      alpha: 1,
+      y: `+=18`,
+      duration: 180,
+      ease: 'Quad.Out',
+      hold: duration,
+      yoyo: true,
+      onComplete: () => {
+        backdrop.destroy();
+        accent.destroy();
+        titleText.destroy();
+        subtitleText.destroy();
+      },
+    });
   }
 
   private createBurstCircle(
