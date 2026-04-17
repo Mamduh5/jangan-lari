@@ -43,6 +43,12 @@ export type GameplayBotRunSnapshot = {
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
+  combatResponse: {
+    hitStopStarts: number;
+    hitStopRefreshes: number;
+    hitStopSuppressions: number;
+    hitStopActive: boolean;
+  };
 };
 
 export type GameplayBotSceneSnapshot = {

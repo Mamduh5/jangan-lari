@@ -43,6 +43,12 @@ type CombatResponseHooks = {
   onImpactCue?: (cue: CombatImpactCue) => void;
 };
 
+type CombatResponseMetrics = {
+  hitStopStarts: number;
+  hitStopRefreshes: number;
+  hitStopSuppressions: number;
+};
+
 type CombatImpactResponseOptions = {
   enemyId: EnemyArchetypeId;
   weaponId: WeaponId;
@@ -150,15 +156,26 @@ export function resolveCombatImpactResponse(options: CombatImpactResponseOptions
 
 export class CombatResponseController {
   private hitStopRemainingMs = 0;
+  private refreshGuardRemainingMs = 0;
+  private readonly metrics: CombatResponseMetrics = {
+    hitStopStarts: 0,
+    hitStopRefreshes: 0,
+    hitStopSuppressions: 0,
+  };
 
   constructor(private readonly hooks: CombatResponseHooks = {}) {}
 
   update(deltaMs: number): void {
+    const elapsedMs = Math.max(0, deltaMs);
+    if (this.refreshGuardRemainingMs > 0) {
+      this.refreshGuardRemainingMs = Math.max(0, this.refreshGuardRemainingMs - elapsedMs);
+    }
+
     if (this.hitStopRemainingMs <= 0) {
       return;
     }
 
-    this.hitStopRemainingMs = Math.max(0, this.hitStopRemainingMs - Math.max(0, deltaMs));
+    this.hitStopRemainingMs = Math.max(0, this.hitStopRemainingMs - elapsedMs);
     if (this.hitStopRemainingMs === 0) {
       this.hooks.onHitStopEnd?.();
     }
@@ -174,9 +191,28 @@ export class CombatResponseController {
     }
 
     const wasInactive = this.hitStopRemainingMs === 0;
-    this.hitStopRemainingMs = Math.max(this.hitStopRemainingMs, durationMs);
+    if (!wasInactive) {
+      const refreshBlocked =
+        this.refreshGuardRemainingMs > 0 || this.hitStopRemainingMs >= durationMs * 0.7;
+      if (refreshBlocked) {
+        this.metrics.hitStopSuppressions += 1;
+        return;
+      }
+    }
+
+    const nextDurationMs = Math.max(this.hitStopRemainingMs, durationMs);
+    const didRefresh = !wasInactive && nextDurationMs > this.hitStopRemainingMs;
+    this.hitStopRemainingMs = nextDurationMs;
+    this.refreshGuardRemainingMs = Math.min(10, durationMs);
+
     if (wasInactive) {
+      this.metrics.hitStopStarts += 1;
       this.hooks.onHitStopStart?.();
+      return;
+    }
+
+    if (didRefresh) {
+      this.metrics.hitStopRefreshes += 1;
     }
   }
 
@@ -186,10 +222,17 @@ export class CombatResponseController {
     }
   }
 
-  clear(): void {
+  clear(options?: { suppressCallbacks?: boolean }): void {
     if (this.hitStopRemainingMs > 0) {
       this.hitStopRemainingMs = 0;
-      this.hooks.onHitStopEnd?.();
+      this.refreshGuardRemainingMs = 0;
+      if (!options?.suppressCallbacks) {
+        this.hooks.onHitStopEnd?.();
+      }
     }
+  }
+
+  getMetrics(): CombatResponseMetrics {
+    return { ...this.metrics };
   }
 }

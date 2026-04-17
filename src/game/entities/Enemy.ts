@@ -211,7 +211,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffffff, 1);
     this.playHitScaleResponse();
     this.scene.time.delayedCall(hurtFlashMs, () => {
-      if (this.active) {
+      if (this.active && !this.deathPresentationActive) {
         this.setFillStyle(this.archetype.color);
         this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, this.isElite() || this.isMiniboss() || this.isBoss() ? 0.92 : 0.76);
       }
@@ -429,5 +429,15 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   private setResponseScale(baseScale: number): void {
     this.setScale(baseScale * this.responseScale.x, baseScale * this.responseScale.y);
+  }
+
+  destroy(fromScene?: boolean): void {
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.killTweensOf(this.responseScale);
+    this.responseScale.x = 1;
+    this.responseScale.y = 1;
+    this.deathPresentationActive = false;
+    this.hitReactionUntil = 0;
+    super.destroy(fromScene);
   }
 }

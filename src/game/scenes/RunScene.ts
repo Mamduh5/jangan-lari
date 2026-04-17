@@ -293,6 +293,7 @@ export class RunScene extends Phaser.Scene {
       }))
       .sort((left, right) => left.distance - right.distance)
       .slice(0, 10);
+    const combatResponseMetrics = this.combatResponse.getMetrics();
 
     return {
       elapsedMs: this.runElapsedMs,
@@ -318,6 +319,12 @@ export class RunScene extends Phaser.Scene {
         id: choice.id,
         title: choice.title,
       })),
+      combatResponse: {
+        hitStopStarts: combatResponseMetrics.hitStopStarts,
+        hitStopRefreshes: combatResponseMetrics.hitStopRefreshes,
+        hitStopSuppressions: combatResponseMetrics.hitStopSuppressions,
+        hitStopActive: this.combatResponse.isHitStopActive(),
+      },
     };
   }
 
@@ -1253,11 +1260,11 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    this.combatResponse.clear();
     this.isEnded = true;
     this.isLevelingUp = false;
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = 0;
+    this.combatResponse.clear({ suppressCallbacks: true });
     this.goldEarned += calculateRunGoldReward(this.player.getLevel(), this.killCount, victory);
     this.saveData = awardRunGold(this.saveData, this.goldEarned);
 
@@ -1509,7 +1516,7 @@ export class RunScene extends Phaser.Scene {
     document.removeEventListener('visibilitychange', this.handlePageVisibilityChange);
     window.removeEventListener('blur', this.handleWindowBlur);
     window.removeEventListener('focus', this.handleWindowFocus);
-    this.combatResponse.clear();
+    this.combatResponse.clear({ suppressCallbacks: true });
 
     this.spawnTimer?.remove(false);
     this.spawnTimer = undefined;
@@ -1556,7 +1563,13 @@ export class RunScene extends Phaser.Scene {
   }
 
   private pauseCombatResponseSystems(): void {
-    if (this.isEnded || this.isLevelingUp || this.isSystemPaused || this.isTransitioningToMenu) {
+    if (
+      this.isEnded ||
+      this.isLevelingUp ||
+      this.isSystemPaused ||
+      this.isTransitioningToMenu ||
+      !this.sys.isActive()
+    ) {
       return;
     }
 
@@ -1568,6 +1581,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   private resumeCombatResponseSystems(): void {
+    if (!this.sys.isActive()) {
+      return;
+    }
+
     this.tweens.resumeAll();
 
     if (this.isEnded || this.isLevelingUp || this.isSystemPaused || this.isTransitioningToMenu) {

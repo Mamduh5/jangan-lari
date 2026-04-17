@@ -101,7 +101,8 @@ export class Projectile extends Phaser.GameObjects.Arc {
   consumeHit(): boolean {
     if (this.remainingPierces > 0) {
       this.remainingPierces -= 1;
-      this.setScale(Math.max(0.72, this.scaleX * 0.92));
+      this.travelScale = Math.max(0.72, this.travelScale * 0.92);
+      this.setScale(this.travelScale * this.responseScale.x, this.travelScale * this.responseScale.y);
       return false;
     }
 
@@ -187,5 +188,12 @@ export class Projectile extends Phaser.GameObjects.Arc {
       duration: responseProfile.launchTweenMs,
       ease: 'Quad.Out',
     });
+  }
+
+  destroy(fromScene?: boolean): void {
+    this.scene.tweens.killTweensOf(this.responseScale);
+    this.responseScale.x = 1;
+    this.responseScale.y = 1;
+    super.destroy(fromScene);
   }
 }

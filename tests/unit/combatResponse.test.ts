@@ -66,4 +66,32 @@ describe('combat response helpers', () => {
     expect(controller.isHitStopActive()).toBe(false);
     expect(events).toEqual(['start', 'end', 'start', 'end']);
   });
+
+  test('combat response controller coalesces clustered hit-stop refreshes', () => {
+    const controller = new CombatResponseController();
+
+    controller.triggerHitStop(18);
+    controller.triggerHitStop(18);
+    controller.update(5);
+    controller.triggerHitStop(18);
+
+    const metrics = controller.getMetrics();
+    expect(metrics.hitStopStarts).toBe(1);
+    expect(metrics.hitStopRefreshes).toBe(0);
+    expect(metrics.hitStopSuppressions).toBe(2);
+  });
+
+  test('combat response controller can clear without resuming callbacks during teardown', () => {
+    const events: string[] = [];
+    const controller = new CombatResponseController({
+      onHitStopStart: () => events.push('start'),
+      onHitStopEnd: () => events.push('end'),
+    });
+
+    controller.triggerHitStop(12);
+    controller.clear({ suppressCallbacks: true });
+
+    expect(controller.isHitStopActive()).toBe(false);
+    expect(events).toEqual(['start']);
+  });
 });

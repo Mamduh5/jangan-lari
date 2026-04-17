@@ -42,6 +42,12 @@ type GameplayBotRunSnapshot = {
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
+  combatResponse: {
+    hitStopStarts: number;
+    hitStopRefreshes: number;
+    hitStopSuppressions: number;
+    hitStopActive: boolean;
+  };
 };
 
 type GameplayBotSnapshot = {
@@ -66,6 +72,9 @@ type BotResult = {
   upgradeSelections: number;
   totalTravelDistance: number;
   maxDistanceFromStart: number;
+  hitStopStarts: number;
+  hitStopRefreshes: number;
+  hitStopSuppressions: number;
 };
 
 const BOT_TIMEOUT_MS = 90_000;
@@ -113,9 +122,9 @@ test.describe('gameplay bot smoke', () => {
       console.log(
         `[gameplay-bot] ${runLabel} | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
           result.maxElapsedMs,
-        )}ms | kills=${result.maxKills} | level=${result.maxLevel} | upgrades=${result.upgradeSelections}/${result.levelUpScreensSeen} | weapons=${result.maxWeaponCount} | travel=${Math.round(
+        )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | upgrades=${result.upgradeSelections}/${result.levelUpScreensSeen} | weapons=${result.maxWeaponCount} | travel=${Math.round(
           result.totalTravelDistance,
-        )} | range=${Math.round(result.maxDistanceFromStart)} | gold=${finalRun.goldEarned}`,
+        )} | range=${Math.round(result.maxDistanceFromStart)} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
       );
 
       expect(finalRun.endActive, `${runLabel}: expected a natural end state`).toBe(true);
@@ -188,6 +197,7 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
       maxKills = Math.max(maxKills, run.kills);
       minHp = Math.min(minHp, run.hp);
       maxWeaponCount = Math.max(maxWeaponCount, run.weaponCount);
+      const combatResponse = run.combatResponse;
 
       if (!initialPosition) {
         initialPosition = { x: run.player.x, y: run.player.y };
@@ -216,6 +226,9 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
           upgradeSelections,
           totalTravelDistance,
           maxDistanceFromStart,
+          hitStopStarts: combatResponse.hitStopStarts,
+          hitStopRefreshes: combatResponse.hitStopRefreshes,
+          hitStopSuppressions: combatResponse.hitStopSuppressions,
         };
       }
 
