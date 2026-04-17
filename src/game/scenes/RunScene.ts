@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import { playCue, playHeroIntroCue } from '../audio/audioCuePlayer';
-import { CombatResponseController, resolveCombatImpactResponse } from '../combat/combatResponse';
+import {
+  CombatResponseController,
+  getEnemyCombatResponseProfile,
+  resolveCombatImpactResponse,
+} from '../combat/combatResponse';
 import {
   ELITE_SPAWN_INDICATOR_MS,
   ENDING_FLASH_MS,
@@ -28,6 +32,7 @@ import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 import { SpawnDirector } from '../systems/SpawnDirector';
+import type { EnemyArchetypeId } from '../data/enemies';
 import {
   accumulateRunElapsedMs,
   beginLevelUpCountdown,
@@ -52,6 +57,7 @@ export class RunScene extends Phaser.Scene {
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private combatResponse!: CombatResponseController;
   private combatResponseImpactCounts: Partial<Record<WeaponId, number>> = {};
+  private combatResponseEnemyImpactCounts: Partial<Record<EnemyArchetypeId, number>> = {};
   private shockwaveAttacks: Array<{
     ring: Phaser.GameObjects.Arc;
     halo: Phaser.GameObjects.Arc;
@@ -129,6 +135,7 @@ export class RunScene extends Phaser.Scene {
     this.shockwaveAttacks = [];
     this.ownedWeaponIds.clear();
     this.combatResponseImpactCounts = {};
+    this.combatResponseEnemyImpactCounts = {};
 
     const selectedHero = HEROES[this.saveData.selectedHero];
 
@@ -328,6 +335,7 @@ export class RunScene extends Phaser.Scene {
         hitStopSuppressions: combatResponseMetrics.hitStopSuppressions,
         hitStopActive: this.combatResponse.isHitStopActive(),
         weaponImpactCounts: { ...this.combatResponseImpactCounts },
+        enemyImpactCounts: { ...this.combatResponseEnemyImpactCounts },
       },
     };
   }
@@ -1582,6 +1590,10 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.combatResponseImpactCounts[weaponId] = (this.combatResponseImpactCounts[weaponId] ?? 0) + 1;
+    if (getEnemyCombatResponseProfile(enemy.archetype.id)) {
+      this.combatResponseEnemyImpactCounts[enemy.archetype.id] =
+        (this.combatResponseEnemyImpactCounts[enemy.archetype.id] ?? 0) + 1;
+    }
     this.combatResponse.triggerHitStop(impactResponse.hitStopMs);
 
     if (emitCue) {

@@ -49,6 +49,7 @@ type GameplayBotRunSnapshot = {
     hitStopSuppressions: number;
     hitStopActive: boolean;
     weaponImpactCounts: Partial<Record<string, number>>;
+    enemyImpactCounts: Partial<Record<string, number>>;
   };
 };
 
@@ -293,6 +294,69 @@ test.describe('gameplay bot smoke', () => {
     expect(
       result.hitStopRefreshes,
       `expected hit-stop refreshes to stay low during the Sunwheel run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
+    ).toBeLessThanOrEqual(3);
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
+  });
+
+  test('bot can run a deterministic burst-loadout batch without broad combat-response instability', async ({ page }) => {
+    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
+
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickStartRun(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+    });
+
+    await forceUpgrade(page, 'unlock-twin-fangs');
+    await forceUpgrade(page, 'unlock-bloom-cannon');
+    await page.waitForFunction(() => {
+      const weaponNames = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames ?? [];
+      return weaponNames.includes('Twin Fangs') && weaponNames.includes('Bloom Cannon');
+    });
+
+    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
+    const finalRun = result.finalSnapshot.run!;
+    const twinFangsImpacts = finalRun.combatResponse.weaponImpactCounts['twin-fangs'] ?? 0;
+    const bloomCannonImpacts = finalRun.combatResponse.weaponImpactCounts['bloom-cannon'] ?? 0;
+    const authoredRegularEnemyImpacts = ['skimmer', 'harrier', 'mauler', 'crusher', 'bulwark', 'riftblade'].reduce(
+      (sum, enemyId) => sum + (finalRun.combatResponse.enemyImpactCounts[enemyId] ?? 0),
+      0,
+    );
+
+    console.log(
+      `[gameplay-bot] rollout-batch | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
+        result.maxElapsedMs,
+      )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | loadout=${finalRun.weaponNames.join(',') || '--'} | burstImpacts=${twinFangsImpacts}/${bloomCannonImpacts} | regularEnemyImpacts=${authoredRegularEnemyImpacts} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
+    );
+
+    expect(finalRun.endActive, 'expected the rollout batch validation run to end naturally').toBe(true);
+    expect(finalRun.weaponNames, `expected final loadout to include Twin Fangs, got ${finalRun.weaponNames.join(',') || '--'}`).toContain(
+      'Twin Fangs',
+    );
+    expect(
+      finalRun.weaponNames,
+      `expected final loadout to include Bloom Cannon, got ${finalRun.weaponNames.join(',') || '--'}`,
+    ).toContain('Bloom Cannon');
+    expect(twinFangsImpacts, `expected runtime authored impact coverage for Twin Fangs, got ${twinFangsImpacts}`).toBeGreaterThan(
+      0,
+    );
+    expect(
+      bloomCannonImpacts,
+      `expected runtime authored impact coverage for Bloom Cannon, got ${bloomCannonImpacts}`,
+    ).toBeGreaterThan(0);
+    expect(
+      authoredRegularEnemyImpacts,
+      `expected runtime authored enemy impact coverage for the rollout batch, got ${authoredRegularEnemyImpacts}`,
+    ).toBeGreaterThan(0);
+    expect(result.hitStopStarts, 'expected burst rollout validation run to produce authored impact hit-stop').toBeGreaterThan(0);
+    expect(
+      result.hitStopRefreshes,
+      `expected hit-stop refreshes to stay low during the burst rollout run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
     ).toBeLessThanOrEqual(3);
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
@@ -562,7 +626,12 @@ async function clickLevelUpChoice(page: import('@playwright/test').Page, choiceI
 
 async function forceUpgrade(
   page: import('@playwright/test').Page,
-  upgradeId: 'unlock-phase-disc' | 'unlock-shatterbell' | 'unlock-sunwheel',
+  upgradeId:
+    | 'unlock-phase-disc'
+    | 'unlock-shatterbell'
+    | 'unlock-sunwheel'
+    | 'unlock-twin-fangs'
+    | 'unlock-bloom-cannon',
 ): Promise<void> {
   await page.evaluate((id) => {
     const game = window.__JANGAN_LARI_GAME__;

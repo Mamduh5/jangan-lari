@@ -6,12 +6,21 @@ import {
 } from '../../src/game/combat/combatResponse';
 
 describe('combat response helpers', () => {
-  test('profiles are only defined for the narrow authored slice', () => {
+  test('profiles cover the current rollout batch while leaving encounter enemies for later', () => {
     expect(getEnemyCombatResponseProfile('scuttler')).not.toBeNull();
+    expect(getEnemyCombatResponseProfile('skimmer')).not.toBeNull();
+    expect(getEnemyCombatResponseProfile('harrier')).not.toBeNull();
+    expect(getEnemyCombatResponseProfile('mauler')).not.toBeNull();
+    expect(getEnemyCombatResponseProfile('crusher')).not.toBeNull();
+    expect(getEnemyCombatResponseProfile('bulwark')).not.toBeNull();
     expect(getEnemyCombatResponseProfile('overlord')).not.toBeNull();
-    expect(getEnemyCombatResponseProfile('mauler')).toBeNull();
+    expect(getEnemyCombatResponseProfile('riftblade')).not.toBeNull();
+    expect(getEnemyCombatResponseProfile('dreadnought')).toBeNull();
+    expect(getEnemyCombatResponseProfile('behemoth')).toBeNull();
 
     expect(getWeaponCombatResponseProfile('arc-bolt')).not.toBeNull();
+    expect(getWeaponCombatResponseProfile('twin-fangs')).not.toBeNull();
+    expect(getWeaponCombatResponseProfile('bloom-cannon')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('ember-lance')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('phase-disc')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('sunwheel')).not.toBeNull();
@@ -41,8 +50,34 @@ describe('combat response helpers', () => {
       radius: 9,
     });
     expect(phaseDiscImpact.hitStopMs).toBeGreaterThan(0);
-    expect(phaseDiscImpact.hitStopMs).toBeLessThan(authoredImpact.hitStopMs);
+    expect(phaseDiscImpact.hitStopMs).toBeLessThanOrEqual(authoredImpact.hitStopMs);
     expect(phaseDiscImpact.cue).not.toBeNull();
+
+    const twinFangsImpact = resolveCombatImpactResponse({
+      enemyId: 'harrier',
+      weaponId: 'twin-fangs',
+      defeated: false,
+      x: 132,
+      y: 118,
+      color: 0x7dd3fc,
+      radius: 4,
+    });
+    expect(twinFangsImpact.hitStopMs).toBeGreaterThan(0);
+    expect(twinFangsImpact.hitStopMs).toBeLessThanOrEqual(authoredImpact.hitStopMs);
+    expect(twinFangsImpact.cue).not.toBeNull();
+
+    const bloomCannonImpact = resolveCombatImpactResponse({
+      enemyId: 'bulwark',
+      weaponId: 'bloom-cannon',
+      defeated: false,
+      x: 148,
+      y: 122,
+      color: 0x86efac,
+      radius: 5,
+    });
+    expect(bloomCannonImpact.hitStopMs).toBeGreaterThan(twinFangsImpact.hitStopMs);
+    expect(bloomCannonImpact.hitStopMs).toBeLessThanOrEqual(authoredImpact.hitStopMs + 2);
+    expect(bloomCannonImpact.cue).not.toBeNull();
 
     const shatterbellImpact = resolveCombatImpactResponse({
       enemyId: 'mauler',
@@ -69,17 +104,18 @@ describe('combat response helpers', () => {
     expect(sunwheelImpact.hitStopMs).toBeLessThanOrEqual(phaseDiscImpact.hitStopMs);
     expect(sunwheelImpact.cue).not.toBeNull();
 
-    const unrelatedImpact = resolveCombatImpactResponse({
-      enemyId: 'mauler',
+    const specialEncounterImpact = resolveCombatImpactResponse({
+      enemyId: 'dreadnought',
       weaponId: 'bloom-cannon',
       defeated: false,
       x: 100,
       y: 120,
-      color: 0xffffff,
-      radius: 8,
+      color: 0x86efac,
+      radius: 5,
     });
-    expect(unrelatedImpact.hitStopMs).toBe(0);
-    expect(unrelatedImpact.cue).toBeNull();
+    expect(specialEncounterImpact.hitStopMs).toBeGreaterThan(0);
+    expect(specialEncounterImpact.hitStopMs).toBeLessThan(bloomCannonImpact.hitStopMs);
+    expect(specialEncounterImpact.cue).not.toBeNull();
   });
 
   test('combat response controller starts, extends, and clears hit-stop cleanly', () => {

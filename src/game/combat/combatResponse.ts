@@ -59,6 +59,66 @@ type CombatImpactResponseOptions = {
   radius: number;
 };
 
+const LIGHT_STRAFER_RESPONSE: EnemyCombatResponseProfile = {
+  hurtFlashMs: 96,
+  flinchVelocityScale: 0.62,
+  recoilSpeed: 82,
+  hitScaleX: 1.1,
+  hitScaleY: 0.88,
+  hitTweenMs: 84,
+  hitStopMs: 8,
+  deathBeatMs: 64,
+  deathScaleX: 1.22,
+  deathScaleY: 0.7,
+  deathTweenMs: 66,
+  deathHitStopMs: 14,
+  cueAlpha: 0.11,
+  cueScale: 1.12,
+};
+
+const BRUISER_CHASE_RESPONSE: EnemyCombatResponseProfile = {
+  hurtFlashMs: 114,
+  flinchVelocityScale: 0.66,
+  recoilSpeed: 76,
+  hitScaleX: 1.12,
+  hitScaleY: 0.86,
+  hitTweenMs: 92,
+  hitStopMs: 10,
+  deathBeatMs: 82,
+  deathScaleX: 1.26,
+  deathScaleY: 0.68,
+  deathTweenMs: 84,
+  deathHitStopMs: 17,
+  cueAlpha: 0.15,
+  cueScale: 1.2,
+};
+
+const DASH_BRUISER_RESPONSE: EnemyCombatResponseProfile = {
+  hurtFlashMs: 118,
+  flinchVelocityScale: 0.64,
+  recoilSpeed: 72,
+  hitScaleX: 1.14,
+  hitScaleY: 0.84,
+  hitTweenMs: 96,
+  hitStopMs: 11,
+  deathBeatMs: 88,
+  deathScaleX: 1.28,
+  deathScaleY: 0.66,
+  deathTweenMs: 92,
+  deathHitStopMs: 18,
+  cueAlpha: 0.16,
+  cueScale: 1.24,
+};
+
+const BURST_TARGETED_WEAPON_RESPONSE: WeaponCombatResponseProfile = {
+  launchScaleX: 1.16,
+  launchScaleY: 0.84,
+  launchTweenMs: 84,
+  impactHitStopMs: 7,
+  cueAlpha: 0.08,
+  cueScale: 1.04,
+};
+
 const ENEMY_RESPONSE_PROFILES: Partial<Record<EnemyArchetypeId, EnemyCombatResponseProfile>> = {
   scuttler: {
     hurtFlashMs: 105,
@@ -76,6 +136,48 @@ const ENEMY_RESPONSE_PROFILES: Partial<Record<EnemyArchetypeId, EnemyCombatRespo
     cueAlpha: 0.16,
     cueScale: 1.18,
   },
+  skimmer: {
+    ...LIGHT_STRAFER_RESPONSE,
+    flinchVelocityScale: 0.6,
+    recoilSpeed: 88,
+    cueAlpha: 0.12,
+  },
+  harrier: {
+    ...LIGHT_STRAFER_RESPONSE,
+    hurtFlashMs: 92,
+    recoilSpeed: 94,
+    hitScaleX: 1.12,
+    hitStopMs: 7,
+    cueAlpha: 0.1,
+    cueScale: 1.1,
+  },
+  mauler: {
+    ...BRUISER_CHASE_RESPONSE,
+    recoilSpeed: 84,
+    cueScale: 1.18,
+  },
+  crusher: {
+    ...DASH_BRUISER_RESPONSE,
+    flinchVelocityScale: 0.62,
+    recoilSpeed: 70,
+    hitStopMs: 12,
+    deathHitStopMs: 19,
+  },
+  bulwark: {
+    ...BRUISER_CHASE_RESPONSE,
+    flinchVelocityScale: 0.74,
+    recoilSpeed: 52,
+    hitScaleX: 1.08,
+    hitScaleY: 0.92,
+    hitStopMs: 12,
+    deathBeatMs: 96,
+    deathScaleX: 1.18,
+    deathScaleY: 0.8,
+    deathTweenMs: 96,
+    deathHitStopMs: 18,
+    cueAlpha: 0.18,
+    cueScale: 1.3,
+  },
   overlord: {
     hurtFlashMs: 125,
     flinchVelocityScale: 0.66,
@@ -92,6 +194,22 @@ const ENEMY_RESPONSE_PROFILES: Partial<Record<EnemyArchetypeId, EnemyCombatRespo
     cueAlpha: 0.22,
     cueScale: 1.38,
   },
+  riftblade: {
+    ...LIGHT_STRAFER_RESPONSE,
+    hurtFlashMs: 116,
+    flinchVelocityScale: 0.68,
+    recoilSpeed: 78,
+    hitScaleX: 1.12,
+    hitTweenMs: 92,
+    hitStopMs: 12,
+    deathBeatMs: 96,
+    deathScaleX: 1.24,
+    deathScaleY: 0.72,
+    deathTweenMs: 96,
+    deathHitStopMs: 20,
+    cueAlpha: 0.2,
+    cueScale: 1.32,
+  },
 };
 
 const WEAPON_RESPONSE_PROFILES: Partial<Record<WeaponId, WeaponCombatResponseProfile>> = {
@@ -103,6 +221,12 @@ const WEAPON_RESPONSE_PROFILES: Partial<Record<WeaponId, WeaponCombatResponsePro
     cueAlpha: 0.12,
     cueScale: 1.06,
   },
+  'twin-fangs': {
+    ...BURST_TARGETED_WEAPON_RESPONSE,
+    launchScaleX: 1.18,
+    launchScaleY: 0.82,
+    cueAlpha: 0.07,
+  },
   'ember-lance': {
     launchScaleX: 1.42,
     launchScaleY: 0.68,
@@ -110,6 +234,14 @@ const WEAPON_RESPONSE_PROFILES: Partial<Record<WeaponId, WeaponCombatResponsePro
     impactHitStopMs: 18,
     cueAlpha: 0.16,
     cueScale: 1.22,
+  },
+  'bloom-cannon': {
+    ...BURST_TARGETED_WEAPON_RESPONSE,
+    launchScaleX: 1.14,
+    launchTweenMs: 92,
+    impactHitStopMs: 8,
+    cueAlpha: 0.09,
+    cueScale: 1.08,
   },
   'phase-disc': {
     launchScaleX: 1.12,
