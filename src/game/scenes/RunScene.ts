@@ -18,6 +18,7 @@ import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 import { XPGem } from '../entities/XPGem';
 import { createMovementKeys, type MovementKeys } from '../input/createMovementKeys';
+import type { GameplayBotRunSnapshot } from '../debug/gameplaySnapshot';
 import type { GameSaveData } from '../save/saveData';
 import { loadGameSave } from '../save/saveData';
 import { applyRunProgressToQuests } from '../save/saveQuests';
@@ -223,6 +224,66 @@ export class RunScene extends Phaser.Scene {
 
     sceneManager.stop('RunScene');
     sceneManager.start('MenuScene');
+  }
+
+  public getGameplayBotSnapshot(): GameplayBotRunSnapshot {
+    const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
+    const activeEnemies = this.enemies?.active ? (this.enemies.getChildren() as Enemy[]) : [];
+    const activeGems = this.xpGems?.active ? (this.xpGems.getChildren() as XPGem[]) : [];
+
+    const enemies = activeEnemies
+      .filter((enemy) => enemy.active && enemy.isAlive())
+      .map((enemy) => ({
+        x: enemy.x,
+        y: enemy.y,
+        distance: Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y),
+        contactDamage: enemy.contactDamage,
+        isElite: enemy.isElite(),
+        isBoss: enemy.isBoss(),
+      }))
+      .sort((left, right) => left.distance - right.distance)
+      .slice(0, 14);
+
+    const xpGems = activeGems
+      .filter((gem) => gem.active)
+      .map((gem) => ({
+        x: gem.x,
+        y: gem.y,
+        distance: Phaser.Math.Distance.Between(this.player.x, this.player.y, gem.x, gem.y),
+        value: gem.getValue(),
+      }))
+      .sort((left, right) => left.distance - right.distance)
+      .slice(0, 10);
+
+    return {
+      elapsedMs: this.runElapsedMs,
+      targetMs: RUN_TARGET_DURATION_MS,
+      hp: this.player.getCurrentHealth(),
+      maxHp: this.player.getMaxHealth(),
+      level: this.player.getLevel(),
+      kills: this.killCount,
+      weaponCount: this.weapons.length,
+      goldEarned: this.goldEarned,
+      totalGold: this.saveData.totalGold,
+      instructions: String(this.registry.get('run.instructions') ?? ''),
+      levelUpActive: Boolean(this.registry.get('run.levelUpActive')),
+      levelUpRemainingMs: Number(this.registry.get('run.levelUpRemainingMs') ?? 0),
+      endActive: Boolean(this.registry.get('run.endActive')),
+      victory: Boolean(this.registry.get('run.victory')),
+      endTitle: String(this.registry.get('run.endTitle') ?? ''),
+      player: {
+        x: this.player.x,
+        y: this.player.y,
+        moveSpeed: this.player.getMoveSpeed(),
+        pickupRange: this.player.getPickupRange(),
+      },
+      enemies,
+      xpGems,
+      upgradeChoices: levelUpChoices.map((choice) => ({
+        id: choice.id,
+        title: choice.title,
+      })),
+    };
   }
 
   selectLevelUp(index: number): void {

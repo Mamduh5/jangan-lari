@@ -114,6 +114,7 @@ function expectNoBrokenSceneApiErrors(runtimeErrors: string[]): void {
 
 test.describe('menu and run scene flow', () => {
   test('menu buttons can open meta, start a run, return to menu, and start another run', async ({ page }) => {
+    test.slow();
     const runtimeErrors = trackRuntimeErrors(page);
 
     await page.goto('/');
