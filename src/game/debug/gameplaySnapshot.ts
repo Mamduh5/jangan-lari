@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import type { UpgradeId } from '../data/upgrades';
+import type { WeaponId } from '../data/weapons';
 
 export type GameplayBotEnemySummary = {
   x: number;
@@ -49,6 +50,7 @@ export type GameplayBotRunSnapshot = {
     hitStopRefreshes: number;
     hitStopSuppressions: number;
     hitStopActive: boolean;
+    weaponImpactCounts: Partial<Record<WeaponId, number>>;
   };
 };
 

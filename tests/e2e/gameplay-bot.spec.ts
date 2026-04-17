@@ -48,6 +48,7 @@ type GameplayBotRunSnapshot = {
     hitStopRefreshes: number;
     hitStopSuppressions: number;
     hitStopActive: boolean;
+    weaponImpactCounts: Partial<Record<string, number>>;
   };
 };
 
@@ -204,6 +205,52 @@ test.describe('gameplay bot smoke', () => {
     expect(
       result.hitStopRefreshes,
       `expected hit-stop refreshes to stay low during the Phase Disc run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
+    ).toBeLessThanOrEqual(3);
+    expect(
+      finalRun.combatResponse.weaponImpactCounts['phase-disc'] ?? 0,
+      `expected runtime authored impact coverage for Phase Disc, got ${finalRun.combatResponse.weaponImpactCounts['phase-disc'] ?? 0}`,
+    ).toBeGreaterThan(0);
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
+  });
+
+  test('bot can run a deterministic Shatterbell loadout without explosive hit-stop instability', async ({ page }) => {
+    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
+
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickStartRun(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+    });
+
+    await forceUpgrade(page, 'unlock-shatterbell');
+    await page.waitForFunction(() =>
+      Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames.includes('Shatterbell')),
+    );
+
+    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
+    const finalRun = result.finalSnapshot.run!;
+    const shatterbellImpacts = finalRun.combatResponse.weaponImpactCounts['shatterbell'] ?? 0;
+
+    console.log(
+      `[gameplay-bot] shatterbell | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
+        result.maxElapsedMs,
+      )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | loadout=${finalRun.weaponNames.join(',') || '--'} | shatterbellImpacts=${shatterbellImpacts} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
+    );
+
+    expect(finalRun.endActive, 'expected the Shatterbell validation run to end naturally').toBe(true);
+    expect(finalRun.weaponNames, `expected final loadout to include Shatterbell, got ${finalRun.weaponNames.join(',') || '--'}`).toContain(
+      'Shatterbell',
+    );
+    expect(shatterbellImpacts, `expected runtime authored impact coverage for Shatterbell, got ${shatterbellImpacts}`).toBeGreaterThan(0);
+    expect(result.hitStopStarts, 'expected explosive validation run to produce authored impact hit-stop').toBeGreaterThan(0);
+    expect(
+      result.hitStopRefreshes,
+      `expected hit-stop refreshes to stay low during the Shatterbell run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
     ).toBeLessThanOrEqual(3);
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
@@ -473,7 +520,7 @@ async function clickLevelUpChoice(page: import('@playwright/test').Page, choiceI
 
 async function forceUpgrade(
   page: import('@playwright/test').Page,
-  upgradeId: 'unlock-phase-disc',
+  upgradeId: 'unlock-phase-disc' | 'unlock-shatterbell',
 ): Promise<void> {
   await page.evaluate((id) => {
     const game = window.__JANGAN_LARI_GAME__;

@@ -15,7 +15,7 @@ import {
 } from '../config/constants';
 import { HEROES } from '../data/heroes';
 import { UPGRADE_POOL, type UpgradeDefinition, type UpgradeId } from '../data/upgrades';
-import { WEAPON_DEFINITIONS, type WeaponDefinition } from '../data/weapons';
+import { WEAPON_DEFINITIONS, type WeaponDefinition, type WeaponId } from '../data/weapons';
 import { Enemy, type EnemyAttackSignal } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
@@ -51,6 +51,7 @@ export class RunScene extends Phaser.Scene {
   private spawnTimer?: Phaser.Time.TimerEvent;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private combatResponse!: CombatResponseController;
+  private combatResponseImpactCounts: Partial<Record<WeaponId, number>> = {};
   private shockwaveAttacks: Array<{
     ring: Phaser.GameObjects.Arc;
     halo: Phaser.GameObjects.Arc;
@@ -127,6 +128,7 @@ export class RunScene extends Phaser.Scene {
     this.colliders = [];
     this.shockwaveAttacks = [];
     this.ownedWeaponIds.clear();
+    this.combatResponseImpactCounts = {};
 
     const selectedHero = HEROES[this.saveData.selectedHero];
 
@@ -325,6 +327,7 @@ export class RunScene extends Phaser.Scene {
         hitStopRefreshes: combatResponseMetrics.hitStopRefreshes,
         hitStopSuppressions: combatResponseMetrics.hitStopSuppressions,
         hitStopActive: this.combatResponse.isHitStopActive(),
+        weaponImpactCounts: { ...this.combatResponseImpactCounts },
       },
     };
   }
@@ -620,20 +623,10 @@ export class RunScene extends Phaser.Scene {
     const enemyDied = enemy.takeDamage(damage, { x: projectile.x, y: projectile.y });
     const baseBurstRadius = Math.max(12, impactRadius * 2.2);
     const impactFlashRadius = explosionRadius > 0 ? Math.max(baseBurstRadius, explosionRadius * 0.45) : baseBurstRadius;
-    const impactResponse = resolveCombatImpactResponse({
-      enemyId: enemy.archetype.id,
-      weaponId: projectile.getWeaponId(),
-      defeated: enemyDied,
-      x: enemyX,
-      y: enemyY,
-      color: impactColor,
-      radius: impactRadius,
-    });
 
     this.createBurstCircle(enemyX, enemyY, impactColor, Math.max(5, impactRadius * 0.7), impactFlashRadius, 90, 0.22);
     this.createBurstCircle(enemyX, enemyY, 0xffffff, Math.max(3, impactRadius * 0.28), Math.max(8, impactRadius * 1.15), 70, 0.18);
-    this.combatResponse.triggerHitStop(impactResponse.hitStopMs);
-    this.combatResponse.emitImpactCue(impactResponse.cue);
+    this.applyCombatImpactResponse(projectile.getWeaponId(), enemy, enemyDied, enemyX, enemyY, impactColor, impactRadius, true);
 
     if (enemyDied) {
       this.showFloatingText(enemyX, enemyY - 16, `${damage}`, wasBoss ? '#fca5a5' : Phaser.Display.Color.IntegerToColor(impactColor).rgba, 18);
@@ -736,6 +729,7 @@ export class RunScene extends Phaser.Scene {
 
       const enemyDied = enemy.takeDamage(damage, { x, y });
       this.createBurstCircle(enemy.x, enemy.y, 0xffffff, 4, 14, 80, 0.16);
+      this.applyCombatImpactResponse('shatterbell', enemy, enemyDied, x, y, color, Math.max(8, radius * 0.22), false);
       if (!enemyDied) {
         continue;
       }
@@ -1561,6 +1555,38 @@ export class RunScene extends Phaser.Scene {
     }
 
     group.destroy();
+  }
+
+  private applyCombatImpactResponse(
+    weaponId: WeaponId,
+    enemy: Enemy,
+    defeated: boolean,
+    x: number,
+    y: number,
+    color: number,
+    radius: number,
+    emitCue: boolean,
+  ): void {
+    const impactResponse = resolveCombatImpactResponse({
+      enemyId: enemy.archetype.id,
+      weaponId,
+      defeated,
+      x,
+      y,
+      color,
+      radius,
+    });
+
+    if (impactResponse.hitStopMs <= 0 && !impactResponse.cue) {
+      return;
+    }
+
+    this.combatResponseImpactCounts[weaponId] = (this.combatResponseImpactCounts[weaponId] ?? 0) + 1;
+    this.combatResponse.triggerHitStop(impactResponse.hitStopMs);
+
+    if (emitCue) {
+      this.combatResponse.emitImpactCue(impactResponse.cue);
+    }
   }
 
   private pauseCombatResponseSystems(): void {

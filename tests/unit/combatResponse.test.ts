@@ -14,6 +14,7 @@ describe('combat response helpers', () => {
     expect(getWeaponCombatResponseProfile('arc-bolt')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('ember-lance')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('phase-disc')).not.toBeNull();
+    expect(getWeaponCombatResponseProfile('shatterbell')).not.toBeNull();
   });
 
   test('impact response combines weapon and enemy feel cues without affecting unrelated content', () => {
@@ -41,6 +42,18 @@ describe('combat response helpers', () => {
     expect(phaseDiscImpact.hitStopMs).toBeGreaterThan(0);
     expect(phaseDiscImpact.hitStopMs).toBeLessThan(authoredImpact.hitStopMs);
     expect(phaseDiscImpact.cue).not.toBeNull();
+
+    const shatterbellImpact = resolveCombatImpactResponse({
+      enemyId: 'mauler',
+      weaponId: 'shatterbell',
+      defeated: false,
+      x: 150,
+      y: 150,
+      color: 0x67e8f9,
+      radius: 8,
+    });
+    expect(shatterbellImpact.hitStopMs).toBeGreaterThanOrEqual(phaseDiscImpact.hitStopMs);
+    expect(shatterbellImpact.cue).not.toBeNull();
 
     const unrelatedImpact = resolveCombatImpactResponse({
       enemyId: 'mauler',
