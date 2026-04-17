@@ -4,11 +4,15 @@ import type { UpgradeDefinition } from '../data/upgrades';
 import { RunScene } from './RunScene';
 
 export class UIScene extends Phaser.Scene {
+  private heroText!: Phaser.GameObjects.Text;
+  private passiveText!: Phaser.GameObjects.Text;
   private hpText!: Phaser.GameObjects.Text;
   private levelText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
-  private weaponText!: Phaser.GameObjects.Text;
+  private loadoutText!: Phaser.GameObjects.Text;
+  private alertText!: Phaser.GameObjects.Text;
+  private rewardText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
   private xpBarFill!: Phaser.GameObjects.Rectangle;
   private xpBarLabel!: Phaser.GameObjects.Text;
@@ -39,7 +43,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
-    const panel = this.add.rectangle(18, 16, 536, 190, 0x030712, 0.9).setOrigin(0);
+    const panel = this.add.rectangle(18, 16, 560, 228, 0x030712, 0.9).setOrigin(0);
     panel.setStrokeStyle(2, 0x334155, 0.98);
     panel.setScrollFactor(0);
 
@@ -51,8 +55,25 @@ export class UIScene extends Phaser.Scene {
       })
       .setScrollFactor(0);
 
+    this.heroText = this.add
+      .text(34, 56, 'Hero: --', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '18px',
+        color: '#f5d0fe',
+      })
+      .setScrollFactor(0);
+
+    this.passiveText = this.add
+      .text(150, 56, 'Passive online', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#c4b5fd',
+        wordWrap: { width: 404 },
+      })
+      .setScrollFactor(0);
+
     this.hpText = this.add
-      .text(34, 58, 'HP: --/--', {
+      .text(34, 88, 'HP: --/--', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#fca5a5',
@@ -60,7 +81,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.levelText = this.add
-      .text(190, 58, 'Level: 1', {
+      .text(190, 88, 'Level: 1', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#fde68a',
@@ -68,7 +89,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.timerText = this.add
-      .text(34, 88, 'Time: 00:00 / 00:00', {
+      .text(34, 118, 'Time: 00:00 / 00:00', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#93c5fd',
@@ -76,23 +97,24 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.goldText = this.add
-      .text(298, 88, 'Gold Bank: 0', {
+      .text(298, 118, 'Gold Bank: 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#facc15',
       })
       .setScrollFactor(0);
 
-    this.weaponText = this.add
-      .text(34, 120, 'Weapons: 1', {
+    this.loadoutText = this.add
+      .text(34, 148, 'Loadout: --', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#c4b5fd',
+        wordWrap: { width: 508 },
       })
       .setScrollFactor(0);
 
     this.xpBarLabel = this.add
-      .text(188, 120, 'XP 0/0   Kills 0', {
+      .text(34, 174, 'XP 0/0   Kills 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#bfdbfe',
@@ -108,19 +130,44 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
-    const xpBarFrame = this.add.rectangle(34, 150, 396, 20, 0x172554, 0.98).setOrigin(0, 0.5);
+    this.alertText = this.add
+      .text(GAME_WIDTH - 30, 52, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '16px',
+        color: '#e2e8f0',
+        backgroundColor: '#1e293b',
+        padding: { left: 12, right: 12, top: 8, bottom: 8 },
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.rewardText = this.add
+      .text(GAME_WIDTH / 2, 26, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '17px',
+        color: '#fef3c7',
+        backgroundColor: '#111827',
+        padding: { left: 14, right: 14, top: 8, bottom: 8 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(20)
+      .setVisible(false);
+
+    const xpBarFrame = this.add.rectangle(34, 200, 420, 20, 0x172554, 0.98).setOrigin(0, 0.5);
     xpBarFrame.setStrokeStyle(2, 0x60a5fa, 0.85);
     xpBarFrame.setScrollFactor(0);
 
-    this.xpBarFill = this.add.rectangle(34, 150, 0, 14, 0x38bdf8, 1).setOrigin(0, 0.5);
+    this.xpBarFill = this.add.rectangle(34, 200, 0, 14, 0x38bdf8, 1).setOrigin(0, 0.5);
     this.xpBarFill.setScrollFactor(0);
 
     this.hintText = this.add
-      .text(34, 172, 'Survive the timer or kill the final boss', {
+      .text(34, 218, 'Survive the timer or kill the final boss', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         color: '#93c5fd',
-        wordWrap: { width: 480 },
+        wordWrap: { width: 516 },
       })
       .setScrollFactor(0);
 
@@ -145,21 +192,31 @@ export class UIScene extends Phaser.Scene {
     const elapsedMs = Number(this.registry.get('run.elapsedMs') ?? 0);
     const targetMs = Number(this.registry.get('run.targetMs') ?? 0);
     const totalGold = Number(this.registry.get('run.totalGold') ?? this.registry.get('save.totalGold') ?? 0);
-    const weaponCount = Number(this.registry.get('run.weaponCount') ?? 1);
+    const heroName = String(this.registry.get('run.heroName') ?? '--');
+    const heroPassive = String(this.registry.get('run.heroPassive') ?? '');
+    const weaponNames = (this.registry.get('run.weaponNames') ?? []) as string[];
     const levelUpRemainingMs = Number(this.registry.get('run.levelUpRemainingMs') ?? 0);
     const endActive = Boolean(this.registry.get('run.endActive'));
     const levelUpActive = Boolean(this.registry.get('run.levelUpActive'));
     const instructions = String(this.registry.get('run.instructions') ?? 'Move with WASD or Arrow Keys');
+    const alertKind = String(this.registry.get('run.alertKind') ?? 'objective');
+    const alertMessage = String(this.registry.get('run.alertText') ?? '');
+    const rewardMessage = String(this.registry.get('run.rewardText') ?? '');
+    const rewardColor = String(this.registry.get('run.rewardColor') ?? '#fcd34d');
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
 
+    this.heroText.setText(`Hero: ${heroName}`);
+    this.passiveText.setText(heroPassive ? `Passive: ${heroPassive}` : 'Passive: --');
     this.hpText.setText(`HP: ${currentHp}/${maxHp}`);
     this.levelText.setText(`Level: ${level}`);
     this.timerText.setText(`Time: ${this.formatTime(elapsedMs)} / ${this.formatTime(targetMs)}`);
     this.goldText.setText(`Gold Bank: ${totalGold}`);
-    this.weaponText.setText(`Weapons: ${weaponCount}`);
+    this.loadoutText.setText(`Loadout: ${this.formatWeaponSummary(weaponNames)}`);
     this.xpBarLabel.setText(`XP ${xp}/${xpNext}   Kills ${kills}`);
-    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 396, 0, 396);
+    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 420, 0, 420);
     this.hintText.setText(instructions);
+    this.refreshAlert(alertKind, alertMessage);
+    this.refreshRewardToast(rewardMessage, rewardColor);
 
     this.endContainer.setVisible(endActive);
     this.levelUpContainer.setVisible(levelUpActive && !endActive);
@@ -347,6 +404,8 @@ export class UIScene extends Phaser.Scene {
     const subtitle = String(this.registry.get('run.endSubtitle') ?? '');
     const goldEarned = Number(this.registry.get('run.goldEarned') ?? 0);
     const totalGold = Number(this.registry.get('run.totalGold') ?? 0);
+    const heroName = String(this.registry.get('run.heroName') ?? '--');
+    const weaponNames = (this.registry.get('run.weaponNames') ?? []) as string[];
     const weaponCount = Number(this.registry.get('run.weaponCount') ?? 1);
     const questRewards = (this.registry.get('run.questRewards') ?? []) as string[];
     const questSummary = questRewards.length > 0 ? `\n\nQuest Rewards\n${questRewards.join('\n')}` : '';
@@ -355,7 +414,7 @@ export class UIScene extends Phaser.Scene {
     this.endTitleText.setColor(victory ? '#fef08a' : '#fca5a5');
     this.endSubtitleText.setText(subtitle);
     this.endStatsText.setText(
-      `Time Survived: ${this.formatTime(elapsedMs)}\nEnemies Killed: ${kills}\nLevel Reached: ${level}\nWeapons Online: ${weaponCount}\nGold Earned: ${goldEarned}\nTotal Gold: ${totalGold}${questSummary}`,
+      `Hero: ${heroName}\nTime Survived: ${this.formatTime(elapsedMs)}\nEnemies Killed: ${kills}\nLevel Reached: ${level}\nWeapons Online: ${weaponCount}\nLoadout: ${this.formatWeaponSummary(weaponNames)}\nGold Earned: ${goldEarned}\nTotal Gold: ${totalGold}${questSummary}`,
     );
   }
 
@@ -414,6 +473,64 @@ export class UIScene extends Phaser.Scene {
     const seconds = totalSeconds % 60;
 
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  private formatWeaponSummary(weaponNames: string[]): string {
+    if (weaponNames.length === 0) {
+      return '--';
+    }
+
+    if (weaponNames.length <= 3) {
+      return weaponNames.join(' • ');
+    }
+
+    return `${weaponNames.slice(0, 3).join(' • ')} +${weaponNames.length - 3} more`;
+  }
+
+  private refreshAlert(kind: string, message: string): void {
+    if (!message) {
+      this.alertText.setVisible(false);
+      return;
+    }
+
+    const palette = this.getAlertPalette(kind);
+    this.alertText.setText(message);
+    this.alertText.setStyle({
+      color: palette.textColor,
+      backgroundColor: palette.backgroundColor,
+    });
+    this.alertText.setVisible(true);
+  }
+
+  private refreshRewardToast(message: string, color: string): void {
+    if (!message) {
+      this.rewardText.setVisible(false);
+      return;
+    }
+
+    this.rewardText.setText(message);
+    this.rewardText.setColor(color);
+    this.rewardText.setStyle({ backgroundColor: '#111827' });
+    this.rewardText.setVisible(true);
+  }
+
+  private getAlertPalette(kind: string): { textColor: string; backgroundColor: string } {
+    switch (kind) {
+      case 'hero':
+        return { textColor: '#f5d0fe', backgroundColor: '#3b0764' };
+      case 'elite':
+        return { textColor: '#e9d5ff', backgroundColor: '#4c1d95' };
+      case 'miniboss':
+        return { textColor: '#fbcfe8', backgroundColor: '#831843' };
+      case 'boss':
+        return { textColor: '#fecaca', backgroundColor: '#7f1d1d' };
+      case 'victory':
+        return { textColor: '#fef08a', backgroundColor: '#713f12' };
+      case 'defeat':
+        return { textColor: '#fecaca', backgroundColor: '#7f1d1d' };
+      default:
+        return { textColor: '#dbeafe', backgroundColor: '#1e3a8a' };
+    }
   }
 
   private handleShutdown(): void {

@@ -73,6 +73,7 @@ export class RunScene extends Phaser.Scene {
   private isSystemPaused = false;
   private isTransitioningToMenu = false;
   private isResolvingLevelUpChoice = false;
+  private rewardToastToken = 0;
 
   // These modifiers stack from heroes, permanent upgrades, and level-up picks.
   private globalWeaponDamageBonus = 0;
@@ -705,16 +706,19 @@ export class RunScene extends Phaser.Scene {
   private grantEncounterRewards(enemy: Enemy, x: number, y: number): void {
     const rewardGold = enemy.getRewardGold();
     const rewardLevelUps = enemy.getRewardLevelUps();
+    const rewardMessages: string[] = [];
 
     if (rewardGold > 0) {
       this.goldEarned += rewardGold;
       this.showFloatingText(x, y - 38, `+${rewardGold} gold`, '#fcd34d', 16);
       this.createBurstCircle(x, y, 0xfbbf24, 14, 48, 220, 0.45);
+      rewardMessages.push(`+${rewardGold} gold`);
     }
 
     if (rewardLevelUps > 0) {
       this.pendingLevelUps += rewardLevelUps;
       this.showFloatingText(x, y - 58, rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade', '#bfdbfe', 18);
+      rewardMessages.push(rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade');
     }
 
     if (rewardLevelUps > 0 && !this.isLevelingUp) {
@@ -722,10 +726,13 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (enemy.isBoss()) {
+      this.showRewardToast(`Boss reward secured: ${rewardMessages.join(' • ') || 'Victory payout'}`, '#fde68a');
       playCue('boss-reward');
     } else if (enemy.isMiniboss()) {
+      this.showRewardToast(`Miniboss reward: ${rewardMessages.join(' • ')}`, '#f9a8d4');
       playCue('miniboss-reward');
     } else if (enemy.isElite()) {
+      this.showRewardToast(`Elite reward: ${rewardMessages.join(' • ')}`, '#ddd6fe');
       playCue('elite-reward');
     }
   }
@@ -733,6 +740,9 @@ export class RunScene extends Phaser.Scene {
   private presentHeroIntro(hero: (typeof HEROES)[keyof typeof HEROES]): void {
     const startingWeapon = WEAPON_DEFINITIONS[hero.startingWeaponId];
     this.registry.set('run.instructions', `${hero.name}: ${hero.passiveLabel}`);
+    this.registry.set('run.heroName', hero.name);
+    this.registry.set('run.heroPassive', hero.passiveLabel);
+    this.setAlert('hero', `${hero.name} deployed`);
     this.showEncounterBanner(hero.name, `${startingWeapon.name} online. ${hero.passiveLabel}`, startingWeapon.projectileColor, 2200);
     this.showFloatingText(this.player.x, this.player.y - 78, `${startingWeapon.name} ready`, '#dbeafe', 18);
     playHeroIntroCue(hero, startingWeapon);
@@ -748,21 +758,25 @@ export class RunScene extends Phaser.Scene {
     switch (signal.type) {
       case 'miniboss-line-telegraph':
         this.registry.set('run.instructions', 'Miniboss charge lane forming. Step sideways before it fires.');
+        this.setAlert('miniboss', 'Miniboss charge lane');
         this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, signal.length, 58, 0xfda4af, 420, 'warning');
         playCue('dash-warning');
         break;
       case 'miniboss-line-execute':
         this.registry.set('run.instructions', 'Dreadnought line charge released. Reposition and punish the recovery.');
+        this.setAlert('miniboss', 'Line charge live');
         this.executeMinibossLineStrike(enemy, signal.x, signal.y, signal.direction, signal.length);
         playCue('miniboss-release');
         break;
       case 'boss-shockwave-telegraph':
         this.registry.set('run.instructions', 'Behemoth is winding up a shockwave. Back out before the ring expands.');
+        this.setAlert('boss', 'Shockwave winding up');
         this.showBossShockwaveTelegraph(signal.x, signal.y, signal.radius);
         playCue('dash-warning');
         break;
       case 'boss-shockwave-execute':
         this.registry.set('run.instructions', 'Shockwave released. Keep clear of the expanding ring.');
+        this.setAlert('boss', 'Shockwave live');
         this.spawnBossShockwave(signal.x, signal.y, signal.radius, signal.damage, signal.durationMs ?? 980);
         playCue('boss-release');
         break;
@@ -999,6 +1013,7 @@ export class RunScene extends Phaser.Scene {
       this.resumeGameplaySystems('Survive the full timer or kill the final boss.');
     }
 
+    this.setAlert('objective', 'Objective active');
     this.publishHudState();
   }
 
@@ -1183,6 +1198,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.goldEarned', this.goldEarned);
     this.registry.set('run.totalGold', this.saveData.totalGold);
     this.registry.set('run.elapsedMs', this.runElapsedMs);
+    this.registry.set('run.weaponNames', this.weapons.map((weapon) => weapon.getStats().name));
   }
 
   private endRun(victory: boolean, title: string, subtitle: string): void {
@@ -1237,7 +1253,29 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.levelUpChoices', []);
     this.registry.set('run.levelUpRemainingMs', 0);
     this.registry.set('run.instructions', 'Press Enter, Space, or click the button to return to menu.');
+    this.setAlert(victory ? 'victory' : 'defeat', title);
+    this.showRewardToast(victory ? `Victory payout: +${this.goldEarned} gold` : `Run payout: +${this.goldEarned} gold`, victory ? '#fde68a' : '#fca5a5');
     this.publishHudState();
+  }
+
+  private setAlert(kind: string, text: string): void {
+    this.registry.set('run.alertKind', kind);
+    this.registry.set('run.alertText', text);
+  }
+
+  private showRewardToast(text: string, color: string): void {
+    const token = this.rewardToastToken + 1;
+    this.rewardToastToken = token;
+    this.registry.set('run.rewardText', text);
+    this.registry.set('run.rewardColor', color);
+
+    this.time.delayedCall(2400, () => {
+      if (this.rewardToastToken !== token) {
+        return;
+      }
+
+      this.registry.set('run.rewardText', '');
+    });
   }
 
   private showSpawnIndicator(x: number, y: number, label: string, color: number): void {
