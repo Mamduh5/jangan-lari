@@ -74,6 +74,11 @@ export class RunScene extends Phaser.Scene {
   private isTransitioningToMenu = false;
   private isResolvingLevelUpChoice = false;
   private rewardToastToken = 0;
+  private alertToken = 0;
+  private activeAlertPriority = 0;
+  private activeAlertKind = 'objective';
+  private activeAlertUntil = 0;
+  private queuedRewardToast: { text: string; color: string } | null = null;
 
   // These modifiers stack from heroes, permanent upgrades, and level-up picks.
   private globalWeaponDamageBonus = 0;
@@ -445,18 +450,21 @@ export class RunScene extends Phaser.Scene {
 
       if (archetype.isBoss) {
         this.registry.set('run.instructions', 'Boss sighted. Defeat it or survive to extraction.');
+        this.setAlert('boss', 'Final boss active', 2600);
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
         this.showEncounterBanner('FINAL BOSS', `${archetype.name} has arrived. Watch the charge and break it for victory.`, 0xf87171, 2600);
         this.cameras.main.flash(180, 255, 120, 120, false);
         playCue('boss-arrival');
       } else if (archetype.isMiniboss) {
         this.registry.set('run.instructions', 'Miniboss approaching. Break the charge and claim the reward.');
+        this.setAlert('miniboss', 'Miniboss active', 2200);
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'MINIBOSS', 0xfda4af);
         this.showEncounterBanner('MINIBOSS', `${archetype.name} enters the arena. Beat it for bonus gold and a free upgrade.`, 0xfda4af, 2200);
         this.cameras.main.flash(120, 255, 180, 180, false);
         playCue('miniboss-arrival');
       } else if (archetype.isElite) {
         this.registry.set('run.instructions', 'Elite enemy incoming. Keep moving.');
+        this.setAlert('elite', 'Elite target active', 1600);
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
         this.showEncounterBanner('ELITE TARGET', `${archetype.name} is carrying a reward cache.`, 0xe9d5ff, 1500);
         this.cameras.main.flash(90, 190, 150, 255, false);
@@ -653,11 +661,13 @@ export class RunScene extends Phaser.Scene {
 
     if (wasMiniboss) {
       this.registry.set('run.instructions', 'Miniboss broken. Claim the power spike and keep moving.');
+      this.setAlert('objective', 'Miniboss broken', 1600);
       return;
     }
 
     if (wasElite) {
       this.registry.set('run.instructions', 'Elite defeated. Spend the reward before the next wave arrives.');
+      this.setAlert('objective', 'Elite reward claimed', 1400);
     }
   }
 
@@ -742,7 +752,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.instructions', `${hero.name}: ${hero.passiveLabel}`);
     this.registry.set('run.heroName', hero.name);
     this.registry.set('run.heroPassive', hero.passiveLabel);
-    this.setAlert('hero', `${hero.name} deployed`);
+    this.setAlert('hero', `${hero.name} deployed`, 2400);
     this.showEncounterBanner(hero.name, `${startingWeapon.name} online. ${hero.passiveLabel}`, startingWeapon.projectileColor, 2200);
     this.showFloatingText(this.player.x, this.player.y - 78, `${startingWeapon.name} ready`, '#dbeafe', 18);
     playHeroIntroCue(hero, startingWeapon);
@@ -758,25 +768,25 @@ export class RunScene extends Phaser.Scene {
     switch (signal.type) {
       case 'miniboss-line-telegraph':
         this.registry.set('run.instructions', 'Miniboss charge lane forming. Step sideways before it fires.');
-        this.setAlert('miniboss', 'Miniboss charge lane');
+        this.setAlert('miniboss', 'Miniboss charge lane', 900);
         this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, signal.length, 58, 0xfda4af, 420, 'warning');
         playCue('dash-warning');
         break;
       case 'miniboss-line-execute':
         this.registry.set('run.instructions', 'Dreadnought line charge released. Reposition and punish the recovery.');
-        this.setAlert('miniboss', 'Line charge live');
+        this.setAlert('miniboss', 'Line charge live', 900);
         this.executeMinibossLineStrike(enemy, signal.x, signal.y, signal.direction, signal.length);
         playCue('miniboss-release');
         break;
       case 'boss-shockwave-telegraph':
         this.registry.set('run.instructions', 'Behemoth is winding up a shockwave. Back out before the ring expands.');
-        this.setAlert('boss', 'Shockwave winding up');
+        this.setAlert('boss', 'Shockwave winding up', 980);
         this.showBossShockwaveTelegraph(signal.x, signal.y, signal.radius);
         playCue('dash-warning');
         break;
       case 'boss-shockwave-execute':
         this.registry.set('run.instructions', 'Shockwave released. Keep clear of the expanding ring.');
-        this.setAlert('boss', 'Shockwave live');
+        this.setAlert('boss', 'Shockwave live', 1100);
         this.spawnBossShockwave(signal.x, signal.y, signal.radius, signal.damage, signal.durationMs ?? 980);
         playCue('boss-release');
         break;
@@ -1258,12 +1268,50 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
   }
 
-  private setAlert(kind: string, text: string): void {
+  private setAlert(kind: string, text: string, durationMs = 0): void {
+    const priority = this.getAlertPriority(kind);
+    const now = this.time.now;
+
+    if (now < this.activeAlertUntil && priority < this.activeAlertPriority) {
+      return;
+    }
+
+    this.activeAlertPriority = priority;
+    this.activeAlertKind = kind;
+    this.activeAlertUntil = durationMs > 0 ? now + durationMs : 0;
     this.registry.set('run.alertKind', kind);
     this.registry.set('run.alertText', text);
+
+    if (durationMs <= 0) {
+      return;
+    }
+
+    const token = this.alertToken + 1;
+    this.alertToken = token;
+    this.time.delayedCall(durationMs, () => {
+      if (this.alertToken !== token || this.isEnded) {
+        return;
+      }
+
+      this.activeAlertPriority = 0;
+      this.activeAlertKind = 'objective';
+      this.activeAlertUntil = 0;
+      this.registry.set('run.alertKind', 'objective');
+      this.registry.set('run.alertText', '');
+      this.flushQueuedRewardToast();
+    });
   }
 
   private showRewardToast(text: string, color: string): void {
+    if (
+      !this.isEnded &&
+      this.time.now < this.activeAlertUntil &&
+      this.getAlertPriority(this.activeAlertKind) >= this.getAlertPriority('miniboss')
+    ) {
+      this.queuedRewardToast = { text, color };
+      return;
+    }
+
     const token = this.rewardToastToken + 1;
     this.rewardToastToken = token;
     this.registry.set('run.rewardText', text);
@@ -1276,6 +1324,34 @@ export class RunScene extends Phaser.Scene {
 
       this.registry.set('run.rewardText', '');
     });
+  }
+
+  private flushQueuedRewardToast(): void {
+    if (!this.queuedRewardToast) {
+      return;
+    }
+
+    const queuedToast = this.queuedRewardToast;
+    this.queuedRewardToast = null;
+    this.showRewardToast(queuedToast.text, queuedToast.color);
+  }
+
+  private getAlertPriority(kind: string): number {
+    switch (kind) {
+      case 'victory':
+      case 'defeat':
+      case 'boss':
+        return 5;
+      case 'miniboss':
+        return 4;
+      case 'elite':
+        return 3;
+      case 'hero':
+        return 2;
+      case 'objective':
+      default:
+        return 1;
+    }
   }
 
   private showSpawnIndicator(x: number, y: number, label: string, color: number): void {

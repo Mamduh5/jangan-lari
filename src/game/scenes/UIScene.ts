@@ -238,6 +238,7 @@ export class UIScene extends Phaser.Scene {
     this.setTextIfChanged(this.hintText, instructions);
     this.refreshAlert(alertKind, alertMessage);
     this.refreshRewardToast(rewardMessage, rewardColor);
+    this.refreshHintPriority(alertKind, alertMessage, rewardMessage);
 
     this.endContainer.setVisible(endActive);
     this.levelUpContainer.setVisible(levelUpActive && !endActive);
@@ -565,6 +566,30 @@ export class UIScene extends Phaser.Scene {
       this.rewardText.setBackgroundColor('#111827');
     }
     this.rewardText.setVisible(true);
+  }
+
+  private refreshHintPriority(alertKind: string, alertMessage: string, rewardMessage: string): void {
+    const dangerAlertActive = Boolean(alertMessage) && (alertKind === 'boss' || alertKind === 'miniboss' || alertKind === 'victory' || alertKind === 'defeat');
+    const secondaryAlertActive = Boolean(alertMessage) && alertKind === 'elite';
+    const rewardVisible = Boolean(rewardMessage);
+
+    if (dangerAlertActive) {
+      this.hintText.setAlpha(0.28);
+      this.rewardText.setY(58);
+      this.rewardText.setAlpha(0.78);
+      return;
+    }
+
+    if (secondaryAlertActive) {
+      this.hintText.setAlpha(0.45);
+      this.rewardText.setY(42);
+      this.rewardText.setAlpha(0.9);
+      return;
+    }
+
+    this.hintText.setAlpha(rewardVisible ? 0.72 : 1);
+    this.rewardText.setY(26);
+    this.rewardText.setAlpha(1);
   }
 
   private getAlertPalette(kind: string): { textColor: string; backgroundColor: string } {
