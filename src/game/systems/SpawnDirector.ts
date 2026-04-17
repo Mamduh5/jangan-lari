@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   BOSS_SPAWN_TIME_MS,
   ELITE_SPAWN_INTERVAL_MS,
+  MINIBOSS_SPAWN_TIME_MS,
   RUN_TARGET_DURATION_MS,
 } from '../config/constants';
 import { ENEMY_ARCHETYPES, type EnemyArchetype } from '../data/enemies';
@@ -19,9 +20,11 @@ const STAGE_RULES: StageRule[] = [
     minCount: 1,
     maxCount: 2,
     pool: [
-      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 50 },
-      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 25 },
-      { archetype: ENEMY_ARCHETYPES.mauler, weight: 25 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 38 },
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 16 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 10 },
     ],
   },
   {
@@ -29,27 +32,35 @@ const STAGE_RULES: StageRule[] = [
     minCount: 3,
     maxCount: 4,
     pool: [
-      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 20 },
-      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 25 },
-      { archetype: ENEMY_ARCHETYPES.mauler, weight: 35 },
-      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 20 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 16 },
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 20 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 22 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 12 },
+      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 12 },
     ],
   },
   {
     untilMs: RUN_TARGET_DURATION_MS,
     minCount: 4,
-    maxCount: 5,
+    maxCount: 6,
     pool: [
-      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 22 },
-      { archetype: ENEMY_ARCHETYPES.mauler, weight: 33 },
-      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 30 },
-      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 15 },
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 14 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 20 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 20 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 10 },
     ],
   },
 ];
 
+const ELITE_ROTATION: EnemyArchetype[] = [ENEMY_ARCHETYPES.overlord, ENEMY_ARCHETYPES.riftblade];
+
 export class SpawnDirector {
   private nextEliteSpawnAtMs = 30000;
+  private nextEliteIndex = 0;
+  private minibossSpawned = false;
   private bossSpawned = false;
 
   nextWave(elapsedMs: number): EnemyArchetype[] {
@@ -66,8 +77,14 @@ export class SpawnDirector {
     }
 
     if (elapsedMs >= this.nextEliteSpawnAtMs) {
-      wave.push(ENEMY_ARCHETYPES.overlord);
+      wave.push(ELITE_ROTATION[this.nextEliteIndex % ELITE_ROTATION.length]);
+      this.nextEliteIndex += 1;
       this.nextEliteSpawnAtMs += ELITE_SPAWN_INTERVAL_MS;
+    }
+
+    if (!this.minibossSpawned && elapsedMs >= MINIBOSS_SPAWN_TIME_MS) {
+      wave.push(ENEMY_ARCHETYPES.dreadnought);
+      this.minibossSpawned = true;
     }
 
     if (!this.bossSpawned && elapsedMs >= BOSS_SPAWN_TIME_MS) {

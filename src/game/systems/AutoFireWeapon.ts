@@ -60,7 +60,13 @@ export class AutoFireWeapon {
       return;
     }
 
-    this.fireAt(target);
+    if (this.stats.firePattern === 'radial') {
+      this.fireRadialBurst();
+    } else {
+      this.fireAt(target);
+    }
+
+    this.createMuzzleFlash();
     this.nextFireTime = currentTime + this.stats.fireCooldownMs;
   }
 
@@ -125,6 +131,17 @@ export class AutoFireWeapon {
     }
   }
 
+  private fireRadialBurst(): void {
+    const radialCount = Math.max(3, this.stats.radialCount ?? this.stats.burstCount ?? 6);
+
+    for (let index = 0; index < radialCount; index += 1) {
+      const angle = (Math.PI * 2 * index) / radialCount;
+      const shotDirection = new Phaser.Math.Vector2(Math.cos(angle), Math.sin(angle));
+      const projectile = this.getInactiveProjectile() ?? this.createProjectile();
+      projectile.fire(this.owner.x, this.owner.y, shotDirection, this.stats);
+    }
+  }
+
   private getInactiveProjectile(): Projectile | null {
     const projectiles = this.getProjectileEntries();
 
@@ -141,6 +158,27 @@ export class AutoFireWeapon {
     const projectile = new Projectile(this.scene);
     this.projectileGroup.add(projectile);
     return projectile;
+  }
+
+  private createMuzzleFlash(): void {
+    const flash = this.scene.add.circle(
+      this.owner.x,
+      this.owner.y,
+      Math.max(8, this.stats.projectileRadius * 1.8),
+      this.stats.projectileColor,
+      0.3,
+    );
+    flash.setBlendMode(Phaser.BlendModes.ADD);
+    flash.setDepth(8);
+
+    this.scene.tweens.add({
+      targets: flash,
+      scale: 1.8,
+      alpha: 0,
+      duration: 120,
+      ease: 'Quad.Out',
+      onComplete: () => flash.destroy(),
+    });
   }
 
   private getProjectileEntries(): Projectile[] {

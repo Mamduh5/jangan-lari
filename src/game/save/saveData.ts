@@ -1,4 +1,4 @@
-import type { HeroId } from '../data/heroes';
+import { HERO_IDS, type HeroId } from '../data/heroes';
 import type { PermanentUpgradeId } from '../data/permanentUpgrades';
 import type { QuestId } from '../data/quests';
 
@@ -60,13 +60,12 @@ export function loadGameSave(): GameSaveData {
 
     const parsed = JSON.parse(rawValue) as Partial<GameSaveData>;
     const unlockedHeroes = Array.isArray(parsed.unlockedHeroes)
-      ? parsed.unlockedHeroes.filter((hero): hero is HeroId => hero === 'runner' || hero === 'vanguard')
+      ? parsed.unlockedHeroes.filter((hero): hero is HeroId => HERO_IDS.includes(hero as HeroId))
       : fallback.unlockedHeroes;
 
-    const selectedHero =
-      parsed.selectedHero === 'runner' || parsed.selectedHero === 'vanguard'
-        ? parsed.selectedHero
-        : fallback.selectedHero;
+    const selectedHero = HERO_IDS.includes(parsed.selectedHero as HeroId)
+      ? (parsed.selectedHero as HeroId)
+      : fallback.selectedHero;
 
     const unlockedPermanentUpgrades = Array.isArray(parsed.unlockedPermanentUpgrades)
       ? parsed.unlockedPermanentUpgrades.filter(

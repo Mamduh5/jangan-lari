@@ -77,13 +77,16 @@ const UPGRADE_PRIORITY = [
   'vitality',
   'magnet',
   'unlock-twin-fangs',
+  'unlock-phase-disc',
   'swiftness',
   'power',
   'rapid-fire',
   'unlock-bloom-cannon',
+  'unlock-sunwheel',
   'velocity',
   'reach',
   'unlock-ember-lance',
+  'unlock-shatterbell',
 ] as const;
 
 test.describe('gameplay bot smoke', () => {

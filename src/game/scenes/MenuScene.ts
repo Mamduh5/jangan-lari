@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
+import { WEAPON_DEFINITIONS } from '../data/weapons';
 import { loadGameSave, type GameSaveData } from '../save/saveData';
 import { isHeroUnlocked, selectHero, unlockHero } from '../save/saveHeroes';
 
@@ -68,27 +69,31 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(centerX, centerY - 12, 'Selected hero changes your opening stats and silhouette in combat.', {
+      .text(centerX, centerY - 12, 'Each hero begins with a different weapon, passive, and combat silhouette.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '17px',
         color: '#cbd5e1',
       })
       .setOrigin(0.5);
 
-    const panelPositions = [centerX - 260, centerX + 260];
+    const panelWidth = 250;
+    const panelHeight = 300;
+    const panelSpacing = 18;
+    const firstPanelX = centerX - ((panelWidth * HERO_LIST.length + panelSpacing * (HERO_LIST.length - 1)) / 2) + panelWidth / 2;
+    const panelY = centerY + 100;
 
     for (let index = 0; index < HERO_LIST.length; index += 1) {
       const hero = HERO_LIST[index];
-      const x = panelPositions[index];
-      const panel = this.add.rectangle(x, centerY + 94, 404, 294, 0x111827, 0.965).setOrigin(0.5);
+      const x = firstPanelX + index * (panelWidth + panelSpacing);
+      const panel = this.add.rectangle(x, panelY, panelWidth, panelHeight, 0x111827, 0.965).setOrigin(0.5);
       panel.setStrokeStyle(2, 0x334155, 1);
 
-      this.createHeroPreview(hero, x, centerY + 8);
+      this.createHeroPreview(hero, x, centerY + 6);
 
       this.add
-        .text(x, centerY + 50, hero.name, {
+        .text(x, centerY + 48, hero.name, {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '30px',
+          fontSize: '24px',
           color: '#f8fafc',
         })
         .setOrigin(0.5);
@@ -96,26 +101,26 @@ export class MenuScene extends Phaser.Scene {
       const infoText = this.add
         .text(x, centerY + 132, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '17px',
+          fontSize: '14px',
           color: '#cbd5e1',
           align: 'center',
-          wordWrap: { width: 334 },
-          lineSpacing: 4,
+          wordWrap: { width: 214 },
+          lineSpacing: 3,
         })
         .setOrigin(0.5);
 
-      const actionButton = this.createMenuButton(x, centerY + 224, '', () => this.handleHeroAction(hero));
-      actionButton.setFontSize('24px');
-      actionButton.setPadding(18, 10, 18, 10);
+      const actionButton = this.createMenuButton(x, centerY + 226, '', () => this.handleHeroAction(hero));
+      actionButton.setFontSize('20px');
+      actionButton.setPadding(14, 8, 14, 8);
 
       this.heroPanels.push(panel);
       this.heroInfoTexts.push(infoText);
       this.heroActionButtons.push(actionButton);
     }
 
-    this.add.rectangle(centerX, centerY + 270, 720, 46, 0x101b2f, 0.92).setStrokeStyle(1, 0x334155, 0.9);
+    this.add.rectangle(centerX, centerY + 276, 900, 46, 0x101b2f, 0.92).setStrokeStyle(1, 0x334155, 0.9);
     this.statusText = this.add
-      .text(centerX, centerY + 270, 'Select a hero, then enter the run.', {
+      .text(centerX, centerY + 276, 'Select a hero, then enter the run.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#93c5fd',
@@ -124,7 +129,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(centerX, centerY + 312, 'Enter or Space starts a run. M opens meta progression.', {
+      .text(centerX, centerY + 314, 'Enter or Space starts a run. M opens meta progression.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '17px',
         color: '#cbd5e1',
@@ -221,7 +226,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private buildHeroSummary(hero: HeroDefinition, unlocked: boolean, selected: boolean): string {
-    const lines = [hero.description, ''];
+    const startingWeapon = WEAPON_DEFINITIONS[hero.startingWeaponId];
+    const lines = [hero.description, '', `Starts with: ${startingWeapon.name}`, hero.passiveLabel];
 
     if (hero.maxHealthBonus !== 0) {
       lines.push(`+${hero.maxHealthBonus} max HP`);
@@ -229,6 +235,10 @@ export class MenuScene extends Phaser.Scene {
 
     if (hero.moveSpeedBonus !== 0) {
       lines.push(`+${hero.moveSpeedBonus} move speed`);
+    }
+
+    if (hero.pickupRangeBonus !== 0) {
+      lines.push(`+${hero.pickupRangeBonus} pickup range`);
     }
 
     if (hero.startingDamageBonus !== 0) {

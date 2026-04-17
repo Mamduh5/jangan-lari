@@ -8,7 +8,10 @@ export type UpgradeId =
   | 'reach'
   | 'unlock-twin-fangs'
   | 'unlock-ember-lance'
-  | 'unlock-bloom-cannon';
+  | 'unlock-bloom-cannon'
+  | 'unlock-phase-disc'
+  | 'unlock-sunwheel'
+  | 'unlock-shatterbell';
 
 export type UpgradeDefinition = {
   id: UpgradeId;
@@ -66,5 +69,20 @@ export const UPGRADE_POOL: UpgradeDefinition[] = [
     id: 'unlock-bloom-cannon',
     title: 'Bloom Cannon',
     description: 'Add a short-range tri-shot bloom burst.',
+  },
+  {
+    id: 'unlock-phase-disc',
+    title: 'Phase Disc',
+    description: 'Add a wide spectral disc that pierces through packs.',
+  },
+  {
+    id: 'unlock-sunwheel',
+    title: 'Sunwheel',
+    description: 'Add a radial nova weapon that clears the space around you.',
+  },
+  {
+    id: 'unlock-shatterbell',
+    title: 'Shatterbell',
+    description: 'Add a crystal shell that explodes on impact.',
   },
 ];

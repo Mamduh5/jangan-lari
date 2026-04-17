@@ -1,10 +1,16 @@
 export type EnemyArchetypeId =
   | 'scuttler'
   | 'skimmer'
+  | 'harrier'
   | 'mauler'
+  | 'crusher'
   | 'bulwark'
   | 'overlord'
+  | 'riftblade'
+  | 'dreadnought'
   | 'behemoth';
+
+export type EnemyBehavior = 'chase' | 'strafe' | 'dash';
 
 export type EnemyArchetype = {
   id: EnemyArchetypeId;
@@ -16,7 +22,16 @@ export type EnemyArchetype = {
   speed: number;
   contactDamage: number;
   xpValue: number;
+  behavior: EnemyBehavior;
+  preferredDistance?: number;
+  strafeStrength?: number;
+  dashCooldownMs?: number;
+  dashDurationMs?: number;
+  dashSpeedMultiplier?: number;
+  rewardGold?: number;
+  rewardLevelUps?: number;
   isElite?: boolean;
+  isMiniboss?: boolean;
   isBoss?: boolean;
 };
 
@@ -31,6 +46,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     speed: 136,
     contactDamage: 7,
     xpValue: 5,
+    behavior: 'chase',
   },
   skimmer: {
     id: 'skimmer',
@@ -42,6 +58,23 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     speed: 118,
     contactDamage: 10,
     xpValue: 7,
+    behavior: 'strafe',
+    preferredDistance: 160,
+    strafeStrength: 0.7,
+  },
+  harrier: {
+    id: 'harrier',
+    name: 'Harrier',
+    size: 24,
+    color: 0xa78bfa,
+    strokeColor: 0xede9fe,
+    maxHealth: 22,
+    speed: 144,
+    contactDamage: 8,
+    xpValue: 6,
+    behavior: 'strafe',
+    preferredDistance: 220,
+    strafeStrength: 1,
   },
   mauler: {
     id: 'mauler',
@@ -53,6 +86,22 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     speed: 94,
     contactDamage: 13,
     xpValue: 8,
+    behavior: 'chase',
+  },
+  crusher: {
+    id: 'crusher',
+    name: 'Crusher',
+    size: 34,
+    color: 0xef4444,
+    strokeColor: 0xfee2e2,
+    maxHealth: 58,
+    speed: 80,
+    contactDamage: 15,
+    xpValue: 10,
+    behavior: 'dash',
+    dashCooldownMs: 1700,
+    dashDurationMs: 280,
+    dashSpeedMultiplier: 2.35,
   },
   bulwark: {
     id: 'bulwark',
@@ -64,6 +113,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     speed: 58,
     contactDamage: 18,
     xpValue: 13,
+    behavior: 'chase',
   },
   overlord: {
     id: 'overlord',
@@ -75,7 +125,48 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     speed: 90,
     contactDamage: 22,
     xpValue: 32,
+    behavior: 'dash',
+    dashCooldownMs: 1600,
+    dashDurationMs: 340,
+    dashSpeedMultiplier: 2.1,
+    rewardGold: 12,
+    rewardLevelUps: 1,
     isElite: true,
+  },
+  riftblade: {
+    id: 'riftblade',
+    name: 'Riftblade',
+    size: 42,
+    color: 0x06b6d4,
+    strokeColor: 0xecfeff,
+    maxHealth: 180,
+    speed: 116,
+    contactDamage: 18,
+    xpValue: 28,
+    behavior: 'strafe',
+    preferredDistance: 250,
+    strafeStrength: 1.25,
+    rewardGold: 10,
+    rewardLevelUps: 1,
+    isElite: true,
+  },
+  dreadnought: {
+    id: 'dreadnought',
+    name: 'Dreadnought',
+    size: 58,
+    color: 0xf43f5e,
+    strokeColor: 0xffe4e6,
+    maxHealth: 380,
+    speed: 92,
+    contactDamage: 26,
+    xpValue: 52,
+    behavior: 'dash',
+    dashCooldownMs: 1350,
+    dashDurationMs: 380,
+    dashSpeedMultiplier: 2.45,
+    rewardGold: 26,
+    rewardLevelUps: 1,
+    isMiniboss: true,
   },
   behemoth: {
     id: 'behemoth',
@@ -83,10 +174,15 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     size: 72,
     color: 0xdc2626,
     strokeColor: 0xfee2e2,
-    maxHealth: 640,
+    maxHealth: 820,
     speed: 68,
     contactDamage: 34,
     xpValue: 90,
+    behavior: 'dash',
+    dashCooldownMs: 1250,
+    dashDurationMs: 460,
+    dashSpeedMultiplier: 2.2,
+    rewardGold: 40,
     isBoss: true,
   },
 };

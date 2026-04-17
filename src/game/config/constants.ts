@@ -16,6 +16,7 @@ export const PLAYER_XP_PER_LEVEL = 8;
 export const ENEMY_SPAWN_INTERVAL_MS = 1000;
 export const RUN_TARGET_DURATION_MS = 120000;
 export const RUN_ACTIVE_DELTA_CAP_MS = 100;
+export const MINIBOSS_SPAWN_TIME_MS = 70000;
 export const BOSS_SPAWN_TIME_MS = 100000;
 export const ELITE_SPAWN_INTERVAL_MS = 32000;
 export const ENEMY_HIT_FLASH_MS = 80;

@@ -12,7 +12,7 @@ import {
 } from '../config/constants';
 import { HEROES } from '../data/heroes';
 import { UPGRADE_POOL, type UpgradeDefinition, type UpgradeId } from '../data/upgrades';
-import { STARTER_WEAPON, WEAPON_DEFINITIONS, type WeaponDefinition } from '../data/weapons';
+import { WEAPON_DEFINITIONS, type WeaponDefinition } from '../data/weapons';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
@@ -117,7 +117,7 @@ export class RunScene extends Phaser.Scene {
     this.spawnDirector = new SpawnDirector();
     this.movementKeys = createMovementKeys(this);
 
-    this.registerWeapon(STARTER_WEAPON);
+    this.registerWeapon(WEAPON_DEFINITIONS[selectedHero.startingWeaponId]);
     this.applyPermanentUpgrades();
     this.applyHeroBonuses();
 
@@ -238,7 +238,7 @@ export class RunScene extends Phaser.Scene {
         y: enemy.y,
         distance: Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y),
         contactDamage: enemy.contactDamage,
-        isElite: enemy.isElite(),
+        isElite: enemy.isElite() || enemy.isMiniboss(),
         isBoss: enemy.isBoss(),
       }))
       .sort((left, right) => left.distance - right.distance)
@@ -368,6 +368,10 @@ export class RunScene extends Phaser.Scene {
       this.player.addMoveSpeed(hero.moveSpeedBonus);
     }
 
+    if (hero.pickupRangeBonus !== 0) {
+      this.player.addPickupRange(hero.pickupRangeBonus);
+    }
+
     if (hero.startingDamageBonus !== 0) {
       this.applyWeaponDamageBonus(hero.startingDamageBonus);
     }
@@ -423,9 +427,15 @@ export class RunScene extends Phaser.Scene {
       if (archetype.isBoss) {
         this.registry.set('run.instructions', 'Boss sighted. Defeat it or survive to extraction.');
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
+        this.cameras.main.flash(180, 255, 120, 120, false);
+      } else if (archetype.isMiniboss) {
+        this.registry.set('run.instructions', 'Miniboss approaching. Break the charge and claim the reward.');
+        this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'MINIBOSS', 0xfda4af);
+        this.cameras.main.flash(120, 255, 180, 180, false);
       } else if (archetype.isElite) {
         this.registry.set('run.instructions', 'Elite enemy incoming. Keep moving.');
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
+        this.cameras.main.flash(90, 190, 150, 255, false);
       }
     }
   }
@@ -466,7 +476,7 @@ export class RunScene extends Phaser.Scene {
     const enemyChildren = this.enemies.getChildren() as Enemy[];
 
     for (const enemy of enemyChildren) {
-      enemy.chase(this.player);
+      enemy.chase(this.player, this.time.now);
       enemy.updatePresentation(this.time.now);
     }
   }
@@ -492,21 +502,28 @@ export class RunScene extends Phaser.Scene {
     const enemyY = enemy.y;
     const xpValue = enemy.getXpValue();
     const wasBoss = enemy.isBoss();
+    const wasMiniboss = enemy.isMiniboss();
     const wasElite = enemy.isElite();
     const damage = projectile.getDamage();
-
-    projectile.deactivate();
+    const shouldDeactivate = projectile.consumeHit();
+    const explosionRadius = projectile.getExplosionRadius();
+    const explosionDamage = projectile.getExplosionDamage();
     const enemyDied = enemy.takeDamage(damage);
 
     if (enemyDied) {
       this.showFloatingText(enemyX, enemyY - 16, `${damage}`, wasBoss ? '#fca5a5' : '#fde68a', 18);
       this.createBurstCircle(enemyX, enemyY, wasBoss ? 0xfca5a5 : 0xfef08a, 10, wasBoss ? 58 : 34, 220, 0.9);
-      this.handleEnemyDefeated(enemyX, enemyY, xpValue, wasBoss, wasElite);
-      return;
+      this.handleEnemyDefeated(enemy, enemyX, enemyY, xpValue, wasBoss, wasMiniboss, wasElite);
+    } else if (wasBoss || wasMiniboss || wasElite) {
+      this.showFloatingText(enemyX, enemyY - 16, `${damage}`, '#ffffff', 16);
     }
 
-    if (wasBoss || wasElite) {
-      this.showFloatingText(enemyX, enemyY - 16, `${damage}`, '#ffffff', 16);
+    if (explosionRadius > 0 && explosionDamage > 0) {
+      this.applyProjectileExplosion(enemyX, enemyY, explosionRadius, explosionDamage, enemy);
+    }
+
+    if (shouldDeactivate) {
+      projectile.deactivate();
     }
   }
 
@@ -531,10 +548,12 @@ export class RunScene extends Phaser.Scene {
   }
 
   private handleEnemyDefeated(
+    enemy: Enemy,
     x: number,
     y: number,
     xpValue: number,
     wasBoss: boolean,
+    wasMiniboss: boolean,
     wasElite: boolean,
   ): void {
     this.killCount += 1;
@@ -545,8 +564,81 @@ export class RunScene extends Phaser.Scene {
     const gem = new XPGem(this, x, y, xpValue);
     this.xpGems.add(gem);
 
+    this.grantEncounterRewards(enemy, x, y);
+
     if (wasBoss) {
       this.endRun(true, 'Victory', 'The Behemoth has fallen.');
+      return;
+    }
+
+    if (wasMiniboss) {
+      this.registry.set('run.instructions', 'Miniboss broken. Claim the power spike and keep moving.');
+      return;
+    }
+
+    if (wasElite) {
+      this.registry.set('run.instructions', 'Elite defeated. Spend the reward before the next wave arrives.');
+    }
+  }
+
+  private applyProjectileExplosion(
+    x: number,
+    y: number,
+    radius: number,
+    damage: number,
+    primaryTarget: Enemy,
+  ): void {
+    const enemies = this.enemies?.getChildren() as Enemy[] | undefined;
+    if (!enemies) {
+      return;
+    }
+
+    this.createBurstCircle(x, y, 0x67e8f9, 14, radius, 220, 0.45);
+
+    for (const enemy of enemies) {
+      if (!enemy.active || enemy === primaryTarget) {
+        continue;
+      }
+
+      const distance = Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y);
+      if (distance > radius) {
+        continue;
+      }
+
+      const enemyDied = enemy.takeDamage(damage);
+      if (!enemyDied) {
+        continue;
+      }
+
+      this.handleEnemyDefeated(
+        enemy,
+        enemy.x,
+        enemy.y,
+        enemy.getXpValue(),
+        enemy.isBoss(),
+        enemy.isMiniboss(),
+        enemy.isElite(),
+      );
+    }
+  }
+
+  private grantEncounterRewards(enemy: Enemy, x: number, y: number): void {
+    const rewardGold = enemy.getRewardGold();
+    const rewardLevelUps = enemy.getRewardLevelUps();
+
+    if (rewardGold > 0) {
+      this.goldEarned += rewardGold;
+      this.showFloatingText(x, y - 38, `+${rewardGold} gold`, '#fcd34d', 16);
+      this.createBurstCircle(x, y, 0xfbbf24, 14, 48, 220, 0.45);
+    }
+
+    if (rewardLevelUps > 0) {
+      this.pendingLevelUps += rewardLevelUps;
+      this.showFloatingText(x, y - 58, rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade', '#bfdbfe', 18);
+    }
+
+    if (rewardLevelUps > 0 && !this.isLevelingUp) {
+      this.beginLevelUp();
     }
   }
 
@@ -637,6 +729,12 @@ export class RunScene extends Phaser.Scene {
           return !this.ownedWeaponIds.has('ember-lance');
         case 'unlock-bloom-cannon':
           return !this.ownedWeaponIds.has('bloom-cannon');
+        case 'unlock-phase-disc':
+          return !this.ownedWeaponIds.has('phase-disc');
+        case 'unlock-sunwheel':
+          return !this.ownedWeaponIds.has('sunwheel');
+        case 'unlock-shatterbell':
+          return !this.ownedWeaponIds.has('shatterbell');
         default:
           return true;
       }
@@ -674,6 +772,15 @@ export class RunScene extends Phaser.Scene {
         break;
       case 'unlock-bloom-cannon':
         this.registerWeapon(WEAPON_DEFINITIONS['bloom-cannon'], true);
+        break;
+      case 'unlock-phase-disc':
+        this.registerWeapon(WEAPON_DEFINITIONS['phase-disc'], true);
+        break;
+      case 'unlock-sunwheel':
+        this.registerWeapon(WEAPON_DEFINITIONS.sunwheel, true);
+        break;
+      case 'unlock-shatterbell':
+        this.registerWeapon(WEAPON_DEFINITIONS.shatterbell, true);
         break;
     }
   }
@@ -805,7 +912,7 @@ export class RunScene extends Phaser.Scene {
     this.isLevelingUp = false;
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = 0;
-    this.goldEarned = calculateRunGoldReward(this.player.getLevel(), this.killCount, victory);
+    this.goldEarned += calculateRunGoldReward(this.player.getLevel(), this.killCount, victory);
     this.saveData = awardRunGold(this.saveData, this.goldEarned);
 
     const questResolution = applyRunProgressToQuests(this.saveData, {

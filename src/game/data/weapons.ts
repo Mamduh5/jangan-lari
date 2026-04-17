@@ -1,4 +1,13 @@
-export type WeaponId = 'arc-bolt' | 'twin-fangs' | 'ember-lance' | 'bloom-cannon';
+export type WeaponId =
+  | 'arc-bolt'
+  | 'twin-fangs'
+  | 'ember-lance'
+  | 'bloom-cannon'
+  | 'phase-disc'
+  | 'sunwheel'
+  | 'shatterbell';
+
+export type WeaponFirePattern = 'targeted' | 'radial';
 
 export type WeaponDefinition = {
   id: WeaponId;
@@ -13,6 +22,11 @@ export type WeaponDefinition = {
   projectileAlpha?: number;
   burstCount?: number;
   spreadDegrees?: number;
+  firePattern?: WeaponFirePattern;
+  radialCount?: number;
+  pierceCount?: number;
+  explosionRadius?: number;
+  explosionDamageMultiplier?: number;
 };
 
 export type WeaponStats = WeaponDefinition;
@@ -70,6 +84,47 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
     burstCount: 3,
     spreadDegrees: 20,
   },
+  'phase-disc': {
+    id: 'phase-disc',
+    name: 'Phase Disc',
+    damage: 15,
+    fireCooldownMs: 860,
+    projectileSpeed: 520,
+    range: 440,
+    projectileRadius: 9,
+    projectileColor: 0xc084fc,
+    projectileStrokeColor: 0xf5d0fe,
+    projectileAlpha: 0.92,
+    pierceCount: 2,
+  },
+  sunwheel: {
+    id: 'sunwheel',
+    name: 'Sunwheel',
+    damage: 10,
+    fireCooldownMs: 1220,
+    projectileSpeed: 420,
+    range: 235,
+    projectileRadius: 5,
+    projectileColor: 0xfbbf24,
+    projectileStrokeColor: 0xfef3c7,
+    projectileAlpha: 0.88,
+    firePattern: 'radial',
+    radialCount: 6,
+  },
+  shatterbell: {
+    id: 'shatterbell',
+    name: 'Shatterbell',
+    damage: 22,
+    fireCooldownMs: 1300,
+    projectileSpeed: 410,
+    range: 360,
+    projectileRadius: 8,
+    projectileColor: 0x67e8f9,
+    projectileStrokeColor: 0xecfeff,
+    projectileAlpha: 0.9,
+    explosionRadius: 94,
+    explosionDamageMultiplier: 0.65,
+  },
 };
 
 export const STARTER_WEAPON: WeaponDefinition = WEAPON_DEFINITIONS['arc-bolt'];
@@ -78,4 +133,7 @@ export const UNLOCKABLE_WEAPONS: WeaponDefinition[] = [
   WEAPON_DEFINITIONS['twin-fangs'],
   WEAPON_DEFINITIONS['ember-lance'],
   WEAPON_DEFINITIONS['bloom-cannon'],
+  WEAPON_DEFINITIONS['phase-disc'],
+  WEAPON_DEFINITIONS['sunwheel'],
+  WEAPON_DEFINITIONS['shatterbell'],
 ];
