@@ -208,7 +208,7 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
         levelUpScreensSeen += 1;
         const choiceIndex = chooseUpgradeIndex(run.upgradeChoices);
         await releaseMovementKeys(page, pressedKeys);
-        await page.keyboard.press((choiceIndex + 1).toString());
+        await clickLevelUpChoice(page, choiceIndex);
         upgradeSelections += 1;
       } else {
         const movementKeys = determineMovementKeys(run);
@@ -372,6 +372,28 @@ async function clickStartRun(page: import('@playwright/test').Page): Promise<voi
     position: {
       x: (startButtonX / gameWidth) * box.width,
       y: (startButtonY / gameHeight) * box.height,
+    },
+  });
+}
+
+async function clickLevelUpChoice(page: import('@playwright/test').Page, choiceIndex: number): Promise<void> {
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error('Game canvas is not available for level-up choice click.');
+  }
+
+  const gameWidth = 1280;
+  const gameHeight = 720;
+  const buttonX = 270 + choiceIndex * 370;
+  const buttonY = 340;
+
+  await canvas.click({
+    position: {
+      x: (buttonX / gameWidth) * box.width,
+      y: (buttonY / gameHeight) * box.height,
     },
   });
 }
