@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { getCombatResponseTuningSnapshot, type CombatResponseTuningSnapshot } from '../combat/combatResponse';
 import type { EnemyArchetypeId } from '../data/enemies';
 import type { UpgradeId } from '../data/upgrades';
 import type { WeaponId } from '../data/weapons';
@@ -72,6 +73,7 @@ export type GameplayBotSnapshot = {
 
 export type GameplayDebugHandle = {
   getGameplaySnapshot: () => GameplayBotSnapshot;
+  getCombatResponseTuning: () => CombatResponseTuningSnapshot;
 };
 
 export function createGameplayDebugHandle(game: Phaser.Game): GameplayDebugHandle {
@@ -98,5 +100,6 @@ export function createGameplayDebugHandle(game: Phaser.Game): GameplayDebugHandl
         run,
       };
     },
+    getCombatResponseTuning: () => getCombatResponseTuningSnapshot(),
   };
 }

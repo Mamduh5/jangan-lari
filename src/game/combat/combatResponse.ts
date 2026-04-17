@@ -59,6 +59,18 @@ type CombatImpactResponseOptions = {
   radius: number;
 };
 
+export const HIT_STOP_REFRESH_BLOCK_RATIO = 0.7;
+export const HIT_STOP_REFRESH_GUARD_MAX_MS = 10;
+
+export type CombatResponseTuningSnapshot = {
+  hitStopGuard: {
+    refreshBlockRatio: number;
+    refreshGuardMaxMs: number;
+  };
+  enemyProfiles: Partial<Record<EnemyArchetypeId, EnemyCombatResponseProfile>>;
+  weaponProfiles: Partial<Record<WeaponId, WeaponCombatResponseProfile>>;
+};
+
 const LIGHT_STRAFER_RESPONSE: EnemyCombatResponseProfile = {
   hurtFlashMs: 96,
   flinchVelocityScale: 0.62,
@@ -317,6 +329,17 @@ export function getWeaponCombatResponseProfile(weaponId: WeaponId): WeaponCombat
   return WEAPON_RESPONSE_PROFILES[weaponId] ?? null;
 }
 
+export function getCombatResponseTuningSnapshot(): CombatResponseTuningSnapshot {
+  return {
+    hitStopGuard: {
+      refreshBlockRatio: HIT_STOP_REFRESH_BLOCK_RATIO,
+      refreshGuardMaxMs: HIT_STOP_REFRESH_GUARD_MAX_MS,
+    },
+    enemyProfiles: { ...ENEMY_RESPONSE_PROFILES },
+    weaponProfiles: { ...WEAPON_RESPONSE_PROFILES },
+  };
+}
+
 export function resolveCombatImpactResponse(options: CombatImpactResponseOptions): {
   hitStopMs: number;
   cue: CombatImpactCue | null;
@@ -389,7 +412,7 @@ export class CombatResponseController {
     const wasInactive = this.hitStopRemainingMs === 0;
     if (!wasInactive) {
       const refreshBlocked =
-        this.refreshGuardRemainingMs > 0 || this.hitStopRemainingMs >= durationMs * 0.7;
+        this.refreshGuardRemainingMs > 0 || this.hitStopRemainingMs >= durationMs * HIT_STOP_REFRESH_BLOCK_RATIO;
       if (refreshBlocked) {
         this.metrics.hitStopSuppressions += 1;
         return;
@@ -399,7 +422,7 @@ export class CombatResponseController {
     const nextDurationMs = Math.max(this.hitStopRemainingMs, durationMs);
     const didRefresh = !wasInactive && nextDurationMs > this.hitStopRemainingMs;
     this.hitStopRemainingMs = nextDurationMs;
-    this.refreshGuardRemainingMs = Math.min(10, durationMs);
+    this.refreshGuardRemainingMs = Math.min(HIT_STOP_REFRESH_GUARD_MAX_MS, durationMs);
 
     if (wasInactive) {
       this.metrics.hitStopStarts += 1;

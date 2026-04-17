@@ -1,5 +1,8 @@
 import {
   CombatResponseController,
+  HIT_STOP_REFRESH_BLOCK_RATIO,
+  HIT_STOP_REFRESH_GUARD_MAX_MS,
+  getCombatResponseTuningSnapshot,
   getEnemyCombatResponseProfile,
   getWeaponCombatResponseProfile,
   resolveCombatImpactResponse,
@@ -183,5 +186,16 @@ describe('combat response helpers', () => {
 
     expect(controller.isHitStopActive()).toBe(false);
     expect(events).toEqual(['start']);
+  });
+
+  test('tuning snapshot exposes the current authored profiles and guard values for review', () => {
+    const snapshot = getCombatResponseTuningSnapshot();
+
+    expect(snapshot.hitStopGuard.refreshBlockRatio).toBe(HIT_STOP_REFRESH_BLOCK_RATIO);
+    expect(snapshot.hitStopGuard.refreshGuardMaxMs).toBe(HIT_STOP_REFRESH_GUARD_MAX_MS);
+    expect(snapshot.enemyProfiles.dreadnought?.deathBeatMs).toBeGreaterThan(snapshot.enemyProfiles.scuttler?.deathBeatMs ?? 0);
+    expect(snapshot.weaponProfiles['sunwheel']?.impactHitStopMs).toBeLessThan(
+      snapshot.weaponProfiles['shatterbell']?.impactHitStopMs ?? Number.POSITIVE_INFINITY,
+    );
   });
 });
