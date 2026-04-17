@@ -14,6 +14,7 @@ describe('combat response helpers', () => {
     expect(getWeaponCombatResponseProfile('arc-bolt')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('ember-lance')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('phase-disc')).not.toBeNull();
+    expect(getWeaponCombatResponseProfile('sunwheel')).not.toBeNull();
     expect(getWeaponCombatResponseProfile('shatterbell')).not.toBeNull();
   });
 
@@ -55,9 +56,22 @@ describe('combat response helpers', () => {
     expect(shatterbellImpact.hitStopMs).toBeGreaterThanOrEqual(phaseDiscImpact.hitStopMs);
     expect(shatterbellImpact.cue).not.toBeNull();
 
-    const unrelatedImpact = resolveCombatImpactResponse({
+    const sunwheelImpact = resolveCombatImpactResponse({
       enemyId: 'mauler',
       weaponId: 'sunwheel',
+      defeated: false,
+      x: 140,
+      y: 140,
+      color: 0xfbbf24,
+      radius: 5,
+    });
+    expect(sunwheelImpact.hitStopMs).toBeGreaterThan(0);
+    expect(sunwheelImpact.hitStopMs).toBeLessThanOrEqual(phaseDiscImpact.hitStopMs);
+    expect(sunwheelImpact.cue).not.toBeNull();
+
+    const unrelatedImpact = resolveCombatImpactResponse({
+      enemyId: 'mauler',
+      weaponId: 'bloom-cannon',
       defeated: false,
       x: 100,
       y: 120,

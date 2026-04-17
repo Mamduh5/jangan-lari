@@ -119,6 +119,14 @@ const WEAPON_RESPONSE_PROFILES: Partial<Record<WeaponId, WeaponCombatResponsePro
     cueAlpha: 0.08,
     cueScale: 1.08,
   },
+  sunwheel: {
+    launchScaleX: 1.06,
+    launchScaleY: 1.22,
+    launchTweenMs: 96,
+    impactHitStopMs: 6,
+    cueAlpha: 0.06,
+    cueScale: 1.02,
+  },
   shatterbell: {
     launchScaleX: 1.26,
     launchScaleY: 0.76,
