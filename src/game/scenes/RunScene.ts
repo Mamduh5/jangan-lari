@@ -50,6 +50,7 @@ export class RunScene extends Phaser.Scene {
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private shockwaveAttacks: Array<{
     ring: Phaser.GameObjects.Arc;
+    halo: Phaser.GameObjects.Arc;
     x: number;
     y: number;
     maxRadius: number;
@@ -515,7 +516,10 @@ export class RunScene extends Phaser.Scene {
       const progress = Phaser.Math.Clamp(attack.elapsedMs / attack.durationMs, 0, 1);
       attack.currentRadius = Phaser.Math.Linear(52, attack.maxRadius, progress);
       attack.ring.setRadius(attack.currentRadius);
-      attack.ring.setAlpha(0.78 - progress * 0.62);
+      attack.ring.setAlpha(0.92 - progress * 0.48);
+      attack.ring.setStrokeStyle(Math.max(8, 14 - progress * 4), progress < 0.22 ? 0xffffff : 0xfca5a5, 0.95);
+      attack.halo.setRadius(attack.currentRadius + attack.thickness * 0.7);
+      attack.halo.setAlpha(0.16 - progress * 0.12);
 
       if (!attack.hasHitPlayer) {
         const playerDistance = Phaser.Math.Distance.Between(this.player.x, this.player.y, attack.x, attack.y);
@@ -529,6 +533,7 @@ export class RunScene extends Phaser.Scene {
 
             if (!this.player.isAlive()) {
               attack.ring.destroy();
+              attack.halo.destroy();
               this.endRun(false, 'Defeat', 'You were overwhelmed.');
               continue;
             }
@@ -538,6 +543,7 @@ export class RunScene extends Phaser.Scene {
 
       if (progress >= 1) {
         attack.ring.destroy();
+        attack.halo.destroy();
         continue;
       }
 
@@ -729,8 +735,8 @@ export class RunScene extends Phaser.Scene {
   private handleEnemyAttackSignal(enemy: Enemy, signal: EnemyAttackSignal): void {
     switch (signal.type) {
       case 'miniboss-line-telegraph':
-        this.registry.set('run.instructions', 'Miniboss charge lane forming. Step out before it fires.');
-        this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, signal.length, 58, 0xfda4af, 320);
+        this.registry.set('run.instructions', 'Miniboss charge lane forming. Step sideways before it fires.');
+        this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, signal.length, 58, 0xfda4af, 420, 'warning');
         break;
       case 'miniboss-line-execute':
         this.registry.set('run.instructions', 'Dreadnought line charge released. Reposition and punish the recovery.');
@@ -754,7 +760,7 @@ export class RunScene extends Phaser.Scene {
     direction: { x: number; y: number },
     length: number,
   ): void {
-    this.showLineAttackTelegraph(x, y, direction, length, 62, 0xfb7185, 180);
+    this.showLineAttackTelegraph(x, y, direction, length, 62, 0xfb7185, 180, 'active');
     this.createBurstCircle(x, y, 0xfb7185, 22, 70, 260, 0.75);
     this.cameras.main.shake(100, 0.0022);
 
@@ -779,51 +785,102 @@ export class RunScene extends Phaser.Scene {
     width: number,
     color: number,
     durationMs: number,
+    phase: 'warning' | 'active',
   ): void {
     const centerX = x + direction.x * (length / 2);
     const centerY = y + direction.y * (length / 2);
     const angle = Math.atan2(direction.y, direction.x);
-    const lane = this.add.rectangle(centerX, centerY, length, width, color, 0.12).setDepth(8);
+    const fillAlpha = phase === 'warning' ? 0.1 : 0.26;
+    const lane = this.add.rectangle(centerX, centerY, length, width, color, fillAlpha).setDepth(8);
     lane.setRotation(angle);
-    lane.setStrokeStyle(3, color, 0.92);
+    lane.setStrokeStyle(phase === 'warning' ? 2 : 4, color, phase === 'warning' ? 0.88 : 1);
+
+    const laneCore = this.add
+      .rectangle(
+        centerX,
+        centerY,
+        length,
+        phase === 'warning' ? Math.max(10, width * 0.14) : Math.max(12, width * 0.22),
+        0xffffff,
+        phase === 'warning' ? 0.16 : 0.4,
+      )
+      .setDepth(8);
+    laneCore.setRotation(angle);
+
+    const upperEdge = this.add.rectangle(centerX, centerY - width / 2, length, 3, color, phase === 'warning' ? 0.75 : 1).setDepth(8);
+    upperEdge.setRotation(angle);
+    const lowerEdge = this.add.rectangle(centerX, centerY + width / 2, length, 3, color, phase === 'warning' ? 0.75 : 1).setDepth(8);
+    lowerEdge.setRotation(angle);
 
     const impactCap = this.add.circle(x + direction.x * length, y + direction.y * length, width * 0.4, color, 0.18).setDepth(8);
-    impactCap.setStrokeStyle(3, color, 0.95);
+    impactCap.setStrokeStyle(phase === 'warning' ? 3 : 4, phase === 'warning' ? color : 0xffffff, 0.95);
+
+    if (phase === 'warning') {
+      this.tweens.add({
+        targets: [lane, laneCore, upperEdge, lowerEdge, impactCap],
+        alpha: '+=0.18',
+        duration: Math.max(120, durationMs - 120),
+        ease: 'Sine.InOut',
+        yoyo: true,
+      });
+    }
 
     this.tweens.add({
-      targets: [lane, impactCap],
+      targets: [lane, laneCore, upperEdge, lowerEdge, impactCap],
       alpha: 0,
       duration: durationMs,
       ease: 'Quad.Out',
       onComplete: () => {
         lane.destroy();
+        laneCore.destroy();
+        upperEdge.destroy();
+        lowerEdge.destroy();
         impactCap.destroy();
       },
     });
   }
 
   private showBossShockwaveTelegraph(x: number, y: number, radius: number): void {
-    const warning = this.add.circle(x, y, radius * 0.32, 0xfca5a5, 0.08).setDepth(8);
+    const warningCore = this.add.circle(x, y, 48, 0xfca5a5, 0.14).setDepth(8);
+    warningCore.setBlendMode(Phaser.BlendModes.ADD);
+    const warning = this.add.circle(x, y, radius * 0.32, 0xfca5a5, 0.06).setDepth(8);
     warning.setStrokeStyle(4, 0xfca5a5, 0.98);
+    const outerEdge = this.add.circle(x, y, radius * 0.32, 0xffffff, 0).setDepth(8);
+    outerEdge.setStrokeStyle(2, 0xffffff, 0.95);
 
     this.tweens.add({
-      targets: warning,
+      targets: [warning, outerEdge],
       radius,
       alpha: 0,
       duration: 780,
       ease: 'Cubic.Out',
-      onComplete: () => warning.destroy(),
+      onComplete: () => {
+        warning.destroy();
+        outerEdge.destroy();
+      },
+    });
+
+    this.tweens.add({
+      targets: warningCore,
+      scale: 2.4,
+      alpha: 0,
+      duration: 780,
+      ease: 'Quad.Out',
+      onComplete: () => warningCore.destroy(),
     });
   }
 
   private spawnBossShockwave(x: number, y: number, radius: number, damage: number, durationMs: number): void {
     const ring = this.add.circle(x, y, 52, 0xfca5a5, 0).setDepth(8);
-    ring.setStrokeStyle(12, 0xfca5a5, 0.78);
+    ring.setStrokeStyle(14, 0xffffff, 0.98);
+    const halo = this.add.circle(x, y, 52, 0xfca5a5, 0.12).setDepth(7);
+    halo.setBlendMode(Phaser.BlendModes.ADD);
     this.createBurstCircle(x, y, 0xfca5a5, 28, 80, 260, 0.65);
     this.cameras.main.flash(120, 255, 170, 170, false);
 
     this.shockwaveAttacks.push({
       ring,
+      halo,
       x,
       y,
       maxRadius: radius,
@@ -1139,6 +1196,7 @@ export class RunScene extends Phaser.Scene {
     this.physics.pause();
     for (const attack of this.shockwaveAttacks) {
       attack.ring.destroy();
+      attack.halo.destroy();
     }
     this.shockwaveAttacks = [];
 
@@ -1297,6 +1355,7 @@ export class RunScene extends Phaser.Scene {
 
     for (const attack of this.shockwaveAttacks) {
       attack.ring.destroy();
+      attack.halo.destroy();
     }
     this.shockwaveAttacks = [];
 
