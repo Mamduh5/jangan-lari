@@ -27,6 +27,29 @@ async function clickMenuButton(
   page: import('@playwright/test').Page,
   buttonKey: 'startButton' | 'metaButton',
 ): Promise<void> {
+  if (buttonKey === 'startButton') {
+    const canvas = page.locator('canvas');
+    await expect(canvas).toBeVisible();
+
+    const box = await canvas.boundingBox();
+    if (!box) {
+      throw new Error('Game canvas is not available for Start Run click.');
+    }
+
+    const gameWidth = 1280;
+    const gameHeight = 720;
+    const startButtonX = gameWidth / 2 - 162;
+    const startButtonY = gameHeight / 2 - 138;
+
+    await canvas.click({
+      position: {
+        x: (startButtonX / gameWidth) * box.width,
+        y: (startButtonY / gameHeight) * box.height,
+      },
+    });
+    return;
+  }
+
   await page.evaluate((key) => {
     const game = window.__JANGAN_LARI_GAME__!;
     const menuScene = game.scene.getScene('MenuScene') as Record<string, { emit: (eventName: string) => void }>;
