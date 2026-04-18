@@ -130,10 +130,12 @@ describe('runSession helpers', () => {
     writeFreshRunRegistryState(registry, 'Runner', 90);
     expect(registry.writes['run.endActive']).toBe(false);
     expect(registry.writes['run.instructions']).toBe('Selected Hero: Runner');
+    expect(registry.writes['run.levelUpMode']).toBe('normal');
     expect(registry.writes['run.totalGold']).toBe(90);
 
     clearRunRegistryState(registry, 120);
     expect(registry.writes['run.levelUpActive']).toBe(false);
+    expect(registry.writes['run.levelUpMode']).toBe('normal');
     expect(registry.writes['run.instructions']).toBe('Return to menu complete.');
     expect(registry.writes['run.totalGold']).toBe(120);
   });

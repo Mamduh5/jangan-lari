@@ -2,6 +2,7 @@ import {
   UPGRADE_POOL,
   buildLevelUpChoices,
   getEligibleSignatureUpgrades,
+  shouldQueueBreakthroughChoice,
 } from '../../src/game/data/upgrades';
 
 describe('signature upgrade helpers', () => {
@@ -42,5 +43,62 @@ describe('signature upgrade helpers', () => {
 
     expect(choices).toHaveLength(3);
     expect(choices.every((choice) => choice.kind === 'core')).toBe(true);
+  });
+
+  test('breakthrough mode injects one signature and fills from the high-impact core pool first', () => {
+    const choices = buildLevelUpChoices({
+      upgrades: UPGRADE_POOL,
+      ownedWeaponIds: ['arc-bolt'],
+      takenSignatureIds: [],
+      forceSignature: false,
+      mode: 'breakthrough',
+      shuffle: <T>(items: T[]): T[] => [...items],
+    });
+
+    expect(choices).toHaveLength(3);
+    expect(choices[0].id).toBe('signature-arc-bolt-volt-volley');
+    expect(choices.slice(1).map((choice) => choice.id)).toEqual(['power', 'rapid-fire']);
+  });
+
+  test('breakthrough mode falls back to non-utility core upgrades when the high-impact pool is short', () => {
+    const choices = buildLevelUpChoices({
+      upgrades: [
+        UPGRADE_POOL.find((upgrade) => upgrade.id === 'power')!,
+        UPGRADE_POOL.find((upgrade) => upgrade.id === 'vitality')!,
+        UPGRADE_POOL.find((upgrade) => upgrade.id === 'unlock-twin-fangs')!,
+        UPGRADE_POOL.find((upgrade) => upgrade.id === 'signature-arc-bolt-volt-volley')!,
+      ],
+      ownedWeaponIds: ['arc-bolt'],
+      takenSignatureIds: [],
+      forceSignature: false,
+      mode: 'breakthrough',
+      shuffle: <T>(items: T[]): T[] => [...items],
+    });
+
+    expect(choices.map((choice) => choice.id)).toEqual([
+      'signature-arc-bolt-volt-volley',
+      'power',
+      'unlock-twin-fangs',
+    ]);
+  });
+
+  test('breakthrough queue helper only returns true before the milestone is consumed', () => {
+    expect(
+      shouldQueueBreakthroughChoice({
+        upgrades: UPGRADE_POOL,
+        ownedWeaponIds: ['arc-bolt'],
+        takenSignatureIds: [],
+        milestoneConsumed: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldQueueBreakthroughChoice({
+        upgrades: UPGRADE_POOL,
+        ownedWeaponIds: ['arc-bolt'],
+        takenSignatureIds: [],
+        milestoneConsumed: true,
+      }),
+    ).toBe(false);
   });
 });

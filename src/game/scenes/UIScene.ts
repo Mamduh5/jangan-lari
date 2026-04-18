@@ -23,6 +23,7 @@ export class UIScene extends Phaser.Scene {
   private endStatsText!: Phaser.GameObjects.Text;
   private endButton!: Phaser.GameObjects.Text;
   private levelUpContainer!: Phaser.GameObjects.Container;
+  private levelUpHeadingText!: Phaser.GameObjects.Text;
   private levelUpTimerText!: Phaser.GameObjects.Text;
   private levelUpCards: Phaser.GameObjects.Rectangle[] = [];
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
@@ -208,6 +209,7 @@ export class UIScene extends Phaser.Scene {
     const alertMessage = String(this.registry.get('run.alertText') ?? '');
     const rewardMessage = String(this.registry.get('run.rewardText') ?? '');
     const rewardColor = String(this.registry.get('run.rewardColor') ?? '#fcd34d');
+    const levelUpMode = String(this.registry.get('run.levelUpMode') ?? 'normal');
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
 
     this.setTextIfChanged(this.heroText, heroName || '--');
@@ -230,7 +232,7 @@ export class UIScene extends Phaser.Scene {
     }
 
     if (levelUpActive && !endActive) {
-      this.refreshLevelUpChoices(levelUpChoices, levelUpRemainingMs);
+      this.refreshLevelUpChoices(levelUpChoices, levelUpRemainingMs, levelUpMode === 'breakthrough' ? 'breakthrough' : 'normal');
     }
   }
 
@@ -315,6 +317,15 @@ export class UIScene extends Phaser.Scene {
 
   private createLevelUpOverlay(): Phaser.GameObjects.Container {
     const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.8).setOrigin(0).setScrollFactor(0);
+    this.levelUpHeadingText = this.add
+      .text(GAME_WIDTH / 2, 126, 'LEVEL UP', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '24px',
+        color: '#bfdbfe',
+        letterSpacing: 2,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
     this.levelUpTimerText = this.add
       .text(GAME_WIDTH / 2, 184, '15.0', {
         fontFamily: 'Georgia, serif',
@@ -324,7 +335,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    const children: Phaser.GameObjects.GameObject[] = [backdrop, this.levelUpTimerText];
+    const children: Phaser.GameObjects.GameObject[] = [backdrop, this.levelUpHeadingText, this.levelUpTimerText];
 
     for (let index = 0; index < 3; index += 1) {
       const x = 258 + index * 382;
@@ -397,7 +408,14 @@ export class UIScene extends Phaser.Scene {
     );
   }
 
-  private refreshLevelUpChoices(choices: UpgradeDefinition[], remainingMs: number): void {
+  private refreshLevelUpChoices(
+    choices: UpgradeDefinition[],
+    remainingMs: number,
+    mode: 'normal' | 'breakthrough',
+  ): void {
+    this.setTextIfChanged(this.levelUpHeadingText, mode === 'breakthrough' ? 'BREAKTHROUGH' : 'LEVEL UP');
+    this.levelUpHeadingText.setColor(mode === 'breakthrough' ? '#f9a8d4' : '#bfdbfe');
+    this.levelUpTimerText.setColor(mode === 'breakthrough' ? '#f9a8d4' : '#fef08a');
     this.setTextIfChanged(this.levelUpTimerText, `${(remainingMs / 1000).toFixed(1)}`);
 
     for (let index = 0; index < this.levelUpButtons.length; index += 1) {

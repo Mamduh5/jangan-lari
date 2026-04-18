@@ -21,6 +21,7 @@ export type UpgradeId =
   | 'signature-shatterbell-aftershock';
 
 export type UpgradeKind = 'core' | 'signature';
+export type UpgradeChoiceMode = 'normal' | 'breakthrough';
 
 export type UpgradeDefinition = {
   id: UpgradeId;
@@ -209,16 +210,33 @@ export function getEligibleSignatureUpgrades(
   );
 }
 
+const BREAKTHROUGH_PRIORITY_CORE_UPGRADE_IDS = new Set<UpgradeId>(['power', 'rapid-fire', 'velocity', 'reach']);
+const BREAKTHROUGH_EXCLUDED_FALLBACK_UPGRADE_IDS = new Set<UpgradeId>(['vitality', 'swiftness', 'magnet']);
+
+export function shouldQueueBreakthroughChoice(options: {
+  upgrades: UpgradeDefinition[];
+  ownedWeaponIds: Iterable<WeaponId>;
+  takenSignatureIds: Iterable<UpgradeId>;
+  milestoneConsumed: boolean;
+}): boolean {
+  return (
+    !options.milestoneConsumed &&
+    getEligibleSignatureUpgrades(options.upgrades, options.ownedWeaponIds, options.takenSignatureIds).length > 0
+  );
+}
+
 export function buildLevelUpChoices(options: {
   upgrades: UpgradeDefinition[];
   ownedWeaponIds: Iterable<WeaponId>;
   takenSignatureIds: Iterable<UpgradeId>;
   forceSignature: boolean;
+  mode?: UpgradeChoiceMode;
   shuffle?: <T>(items: T[]) => T[];
   maxChoices?: number;
 }): UpgradeDefinition[] {
   const shuffle = options.shuffle ?? ((items) => [...items]);
   const maxChoices = options.maxChoices ?? 3;
+  const mode = options.mode ?? 'normal';
   const eligibleSignatures = getEligibleSignatureUpgrades(
     options.upgrades,
     options.ownedWeaponIds,
@@ -227,13 +245,40 @@ export function buildLevelUpChoices(options: {
   const nonSignatureUpgrades = options.upgrades.filter((upgrade) => upgrade.kind !== 'signature');
   const regularPool = shuffle([...nonSignatureUpgrades, ...eligibleSignatures]);
   const picks: UpgradeDefinition[] = [];
+  const shouldInjectSignature = options.forceSignature || mode === 'breakthrough';
 
-  if (options.forceSignature && eligibleSignatures.length > 0) {
+  if (shouldInjectSignature && eligibleSignatures.length > 0) {
     picks.push(shuffle([...eligibleSignatures])[0]);
   }
 
-  const fillerPool =
-    options.forceSignature && picks.length > 0 ? shuffle([...nonSignatureUpgrades]) : regularPool;
+  if (mode === 'breakthrough') {
+    const breakthroughPriorityPool = shuffle(
+      nonSignatureUpgrades.filter((upgrade) => BREAKTHROUGH_PRIORITY_CORE_UPGRADE_IDS.has(upgrade.id)),
+    );
+    const breakthroughFallbackPool = shuffle(
+      nonSignatureUpgrades.filter(
+        (upgrade) =>
+          !BREAKTHROUGH_PRIORITY_CORE_UPGRADE_IDS.has(upgrade.id) &&
+          !BREAKTHROUGH_EXCLUDED_FALLBACK_UPGRADE_IDS.has(upgrade.id),
+      ),
+    );
+
+    for (const upgrade of [...breakthroughPriorityPool, ...breakthroughFallbackPool]) {
+      if (picks.length >= maxChoices) {
+        break;
+      }
+
+      if (picks.some((existing) => existing.id === upgrade.id)) {
+        continue;
+      }
+
+      picks.push(upgrade);
+    }
+
+    return picks.slice(0, maxChoices);
+  }
+
+  const fillerPool = options.forceSignature && picks.length > 0 ? shuffle([...nonSignatureUpgrades]) : regularPool;
 
   for (const upgrade of fillerPool) {
     if (picks.length >= maxChoices) {

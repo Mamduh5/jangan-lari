@@ -23,6 +23,8 @@ import {
   buildLevelUpChoices,
   findUpgradeDefinitionById,
   getEligibleSignatureUpgrades,
+  shouldQueueBreakthroughChoice,
+  type UpgradeChoiceMode,
   type UpgradeDefinition,
   type UpgradeId,
 } from '../data/upgrades';
@@ -114,6 +116,8 @@ export class RunScene extends Phaser.Scene {
   private isResolvingLevelUpChoice = false;
   private levelUpStartQueued = false;
   private guaranteedSignatureChoices = 0;
+  private guaranteedBreakthroughChoices = 0;
+  private breakthroughMilestoneConsumed = false;
   private rewardToastToken = 0;
   private alertToken = 0;
   private activeAlertPriority = 0;
@@ -161,6 +165,8 @@ export class RunScene extends Phaser.Scene {
     this.isResolvingLevelUpChoice = freshSession.isResolvingLevelUpChoice;
     this.levelUpStartQueued = false;
     this.guaranteedSignatureChoices = 0;
+    this.guaranteedBreakthroughChoices = 0;
+    this.breakthroughMilestoneConsumed = false;
     this.rewardToastToken = 0;
     this.alertToken = 0;
     this.activeAlertPriority = 0;
@@ -932,6 +938,18 @@ export class RunScene extends Phaser.Scene {
 
       if (enemy.isMiniboss()) {
         this.guaranteedSignatureChoices += 1;
+
+        if (
+          shouldQueueBreakthroughChoice({
+            upgrades: this.getAvailableUpgradePool(),
+            ownedWeaponIds: this.ownedWeaponIds as Iterable<WeaponId>,
+            takenSignatureIds: this.takenSignatureUpgradeIds,
+            milestoneConsumed: this.breakthroughMilestoneConsumed,
+          })
+        ) {
+          this.guaranteedBreakthroughChoices += 1;
+          this.breakthroughMilestoneConsumed = true;
+        }
       }
     }
 
@@ -1246,14 +1264,20 @@ export class RunScene extends Phaser.Scene {
   }
 
   private presentLevelUpChoices(): void {
-    const forceSignature = this.guaranteedSignatureChoices > 0;
+    const levelUpMode: UpgradeChoiceMode = this.guaranteedBreakthroughChoices > 0 ? 'breakthrough' : 'normal';
+    const forceSignature = levelUpMode === 'breakthrough' || this.guaranteedSignatureChoices > 0;
     const choices = buildLevelUpChoices({
       upgrades: this.getAvailableUpgradePool(),
       ownedWeaponIds: Array.from(this.ownedWeaponIds) as WeaponId[],
       takenSignatureIds: this.takenSignatureUpgradeIds,
       forceSignature,
+      mode: levelUpMode,
       shuffle: <T>(items: T[]): T[] => Phaser.Utils.Array.Shuffle(items),
     });
+
+    if (levelUpMode === 'breakthrough') {
+      this.guaranteedBreakthroughChoices = Math.max(0, this.guaranteedBreakthroughChoices - 1);
+    }
 
     if (forceSignature) {
       this.guaranteedSignatureChoices = Math.max(0, this.guaranteedSignatureChoices - 1);
@@ -1262,6 +1286,7 @@ export class RunScene extends Phaser.Scene {
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = beginLevelUpCountdown();
     this.registry.set('run.levelUpActive', true);
+    this.registry.set('run.levelUpMode', levelUpMode);
     this.registry.set('run.levelUpChoices', choices);
     this.registry.set('run.levelUpRemainingMs', this.levelUpRemainingMs);
     this.registry.set('run.instructions', 'Choose an upgrade. Auto-pick starts in 15 seconds.');
@@ -1294,6 +1319,7 @@ export class RunScene extends Phaser.Scene {
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = 0;
     this.registry.set('run.levelUpActive', false);
+    this.registry.set('run.levelUpMode', 'normal');
     this.registry.set('run.levelUpChoices', []);
     this.registry.set('run.levelUpRemainingMs', 0);
     this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
