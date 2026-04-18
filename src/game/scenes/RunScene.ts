@@ -40,6 +40,7 @@ import {
   chooseRandomValidIndex,
   clearRunRegistryState,
   createFreshRunSessionState,
+  shouldBeginQueuedLevelUp,
   tickLevelUpCountdown,
   writeFreshRunRegistryState,
 } from '../utils/runSession';
@@ -93,6 +94,7 @@ export class RunScene extends Phaser.Scene {
   private isSystemPaused = false;
   private isTransitioningToMenu = false;
   private isResolvingLevelUpChoice = false;
+  private levelUpStartQueued = false;
   private rewardToastToken = 0;
   private alertToken = 0;
   private activeAlertPriority = 0;
@@ -137,6 +139,7 @@ export class RunScene extends Phaser.Scene {
     this.isSystemPaused = freshSession.isSystemPaused;
     this.isTransitioningToMenu = freshSession.isTransitioningToMenu;
     this.isResolvingLevelUpChoice = freshSession.isResolvingLevelUpChoice;
+    this.levelUpStartQueued = false;
     this.globalWeaponDamageBonus = freshSession.globalWeaponDamageBonus;
     this.globalWeaponCooldownReduction = freshSession.globalWeaponCooldownReduction;
     this.globalProjectileSpeedBonus = freshSession.globalProjectileSpeedBonus;
@@ -232,6 +235,23 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (this.combatResponse.isHitStopActive()) {
+      this.publishHudState();
+      return;
+    }
+
+    if (
+      shouldBeginQueuedLevelUp({
+        levelUpQueued: this.levelUpStartQueued,
+        pendingLevelUps: this.pendingLevelUps,
+        isEnded: this.isEnded,
+        isTransitioningToMenu: this.isTransitioningToMenu,
+        isSystemPaused: this.isSystemPaused,
+        isHitStopActive: false,
+        isLevelingUp: this.isLevelingUp,
+      })
+    ) {
+      this.levelUpStartQueued = false;
+      this.beginLevelUp();
       this.publishHudState();
       return;
     }
@@ -819,7 +839,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (rewardLevelUps > 0 && !this.isLevelingUp) {
-      this.beginLevelUp();
+      this.queueLevelUpStart();
     }
 
     if (enemy.isBoss()) {
@@ -1070,7 +1090,7 @@ export class RunScene extends Phaser.Scene {
 
     if (levelsGained > 0) {
       this.pendingLevelUps += levelsGained;
-      this.beginLevelUp();
+      this.queueLevelUpStart();
     }
 
     this.publishHudState();
@@ -1087,6 +1107,14 @@ export class RunScene extends Phaser.Scene {
     this.createBurstCircle(this.player.x, this.player.y, 0xfde68a, 18, 82, 260, 0.95);
     this.showFloatingText(this.player.x, this.player.y - 56, 'LEVEL UP', '#fde68a', 24);
     this.presentLevelUpChoices();
+  }
+
+  private queueLevelUpStart(): void {
+    if (this.pendingLevelUps <= 0 || this.isLevelingUp || this.isEnded) {
+      return;
+    }
+
+    this.levelUpStartQueued = true;
   }
 
   private presentLevelUpChoices(): void {

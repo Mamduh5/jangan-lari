@@ -5,6 +5,7 @@
   chooseRandomValidIndex,
   clearRunRegistryState,
   createFreshRunSessionState,
+  shouldBeginQueuedLevelUp,
   tickLevelUpCountdown,
   writeFreshRunRegistryState,
 } from '../../src/game/utils/runSession';
@@ -66,6 +67,56 @@ describe('runSession helpers', () => {
     expect(chooseRandomValidIndex(choices, 0)).toBe(1);
     expect(chooseRandomValidIndex(choices, 0.99)).toBe(3);
     expect(chooseRandomValidIndex([undefined, null], 0.5)).toBeNull();
+  });
+
+  test('shouldBeginQueuedLevelUp only allows deferred level-up starts from a safe boundary', () => {
+    expect(
+      shouldBeginQueuedLevelUp({
+        levelUpQueued: true,
+        pendingLevelUps: 1,
+        isEnded: false,
+        isTransitioningToMenu: false,
+        isSystemPaused: false,
+        isHitStopActive: false,
+        isLevelingUp: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldBeginQueuedLevelUp({
+        levelUpQueued: true,
+        pendingLevelUps: 1,
+        isEnded: false,
+        isTransitioningToMenu: false,
+        isSystemPaused: true,
+        isHitStopActive: false,
+        isLevelingUp: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldBeginQueuedLevelUp({
+        levelUpQueued: true,
+        pendingLevelUps: 1,
+        isEnded: false,
+        isTransitioningToMenu: false,
+        isSystemPaused: false,
+        isHitStopActive: true,
+        isLevelingUp: false,
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldBeginQueuedLevelUp({
+        levelUpQueued: false,
+        pendingLevelUps: 1,
+        isEnded: false,
+        isTransitioningToMenu: false,
+        isSystemPaused: false,
+        isHitStopActive: false,
+        isLevelingUp: false,
+      }),
+    ).toBe(false);
   });
 
   test('calculateRunGoldReward stays deterministic', () => {

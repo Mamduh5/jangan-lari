@@ -99,6 +99,26 @@ export function chooseRandomValidIndex<T>(
   return validIndices[pickedIndex];
 }
 
+export function shouldBeginQueuedLevelUp(options: {
+  levelUpQueued: boolean;
+  pendingLevelUps: number;
+  isEnded: boolean;
+  isTransitioningToMenu: boolean;
+  isSystemPaused: boolean;
+  isHitStopActive: boolean;
+  isLevelingUp: boolean;
+}): boolean {
+  return (
+    options.levelUpQueued &&
+    options.pendingLevelUps > 0 &&
+    !options.isEnded &&
+    !options.isTransitioningToMenu &&
+    !options.isSystemPaused &&
+    !options.isHitStopActive &&
+    !options.isLevelingUp
+  );
+}
+
 export function calculateRunGoldReward(level: number, kills: number, victory: boolean): number {
   const levelReward = level * GOLD_REWARD_PER_LEVEL;
   const killReward = Math.floor(kills / GOLD_REWARD_PER_KILL_STEP);
