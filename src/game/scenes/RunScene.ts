@@ -294,6 +294,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.isTransitioningToMenu = true;
+    this.levelUpStartQueued = false;
     this.pauseGameplaySystems();
     clearRunRegistryState(this.registry, this.saveData?.totalGold ?? Number(this.registry.get('save.totalGold') ?? 0));
 
@@ -1356,6 +1357,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.isEnded = true;
+    this.levelUpStartQueued = false;
     this.isLevelingUp = false;
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = 0;
