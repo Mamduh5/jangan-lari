@@ -23,9 +23,11 @@ export class MenuScene extends Phaser.Scene {
   private focusedHeroId: HeroDefinition['id'] = 'runner';
   private codexHeroName!: Phaser.GameObjects.Text;
   private codexHeroBody!: Phaser.GameObjects.Text;
+  private codexHeroMeta!: Phaser.GameObjects.Text;
   private codexWeaponBadge!: Phaser.GameObjects.Text;
   private codexWeaponName!: Phaser.GameObjects.Text;
   private codexWeaponBody!: Phaser.GameObjects.Text;
+  private codexWeaponStats!: Phaser.GameObjects.Text;
   private codexThreatTexts: Phaser.GameObjects.Text[] = [];
 
   constructor() {
@@ -150,31 +152,97 @@ export class MenuScene extends Phaser.Scene {
     codexBackdrop.on('pointerdown', () => this.closeCodex());
 
     const codexPanel = this.add
-      .rectangle(centerX, GAME_HEIGHT / 2, 844, 538, 0x111827, 0.98)
+      .rectangle(centerX, GAME_HEIGHT / 2, 900, 564, 0x111827, 0.99)
       .setStrokeStyle(2, 0x334155, 0.95);
+    const codexHeader = this.add.rectangle(centerX, 118, 900, 86, 0x0f172a, 0.96).setStrokeStyle(0, 0, 0);
+    const codexRail = this.add.rectangle(238, 380, 156, 426, 0x0c1424, 0.92).setStrokeStyle(1, 0x223247, 0.95);
+    const codexContentFrame = this.add.rectangle(688, 392, 646, 454, 0x101b2f, 0.38).setStrokeStyle(1, 0x223247, 0.8);
+    const codexProfilePanel = this.add.rectangle(470, 274, 304, 190, 0x172033, 0.98).setStrokeStyle(1, 0x334155, 0.92);
+    const codexWeaponPanel = this.add.rectangle(788, 274, 328, 190, 0x172033, 0.98).setStrokeStyle(1, 0x334155, 0.92);
+    const codexThreatStrip = this.add.rectangle(630, 472, 598, 44, 0x0f172a, 0.86).setStrokeStyle(1, 0x223247, 0.9);
+
+    const codexEyebrow = this.add
+      .text(270, 88, 'ARCHIVE / FIELD BRIEF', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#93c5fd',
+        letterSpacing: 1.8,
+      })
+      .setOrigin(0, 0.5);
 
     const codexTitle = this.add
-      .text(260, 128, 'Field Codex', {
+      .text(270, 122, 'Field Codex', {
         fontFamily: 'Georgia, serif',
-        fontSize: '34px',
+        fontSize: '36px',
         color: '#f8fafc',
       })
       .setOrigin(0, 0.5);
 
     const codexSubtitle = this.add
-      .text(260, 162, 'Focused notes for the selected runner, weapon, and current threats.', {
+      .text(270, 154, 'Selected runner briefings now. Weapon and threat archives can grow into this layout later.', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         color: '#94a3b8',
       })
       .setOrigin(0, 0.5);
 
-    this.codexCloseButton = this.createMenuButton(960, 130, 'Close', () => this.closeCodex());
-    this.codexCloseButton.setFontSize('22px');
+    const codexRailTitle = this.add
+      .text(188, 194, 'Browse', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#94a3b8',
+        letterSpacing: 1.2,
+      })
+      .setOrigin(0, 0.5);
+    const codexCategories = [
+      { label: 'Runner', active: true },
+      { label: 'Weapon', active: true },
+      { label: 'Threats', active: true },
+      { label: 'Archive', active: false },
+    ];
+    const codexCategoryObjects: Phaser.GameObjects.GameObject[] = [];
+    for (let index = 0; index < codexCategories.length; index += 1) {
+      const category = codexCategories[index];
+      const y = 236 + index * 62;
+      const capsule = this.add.rectangle(238, y, 112, 40, category.active ? 0x1e3a5f : 0x172033, 0.96).setStrokeStyle(
+        1,
+        category.active ? 0x60a5fa : 0x334155,
+        0.95,
+      );
+      const label = this.add
+        .text(238, y, category.label, {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '16px',
+          color: category.active ? '#eff6ff' : '#94a3b8',
+        })
+        .setOrigin(0.5);
+      codexCategoryObjects.push(capsule, label);
+    }
+    const codexRailHint = this.add
+      .text(186, 446, 'This pass keeps one clean runner briefing view, with room for more codex categories later.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '13px',
+        color: '#7c93ae',
+        wordWrap: { width: 104 },
+        lineSpacing: 5,
+      })
+      .setOrigin(0, 0);
+
+    this.codexCloseButton = this.createMenuButton(972, 118, 'Back', () => this.closeCodex());
+    this.codexCloseButton.setFontSize('20px');
     this.codexCloseButton.setPadding(18, 10, 18, 10);
 
+    const codexProfileLabel = this.add
+      .text(334, 202, 'RUNNER PROFILE', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#93c5fd',
+        letterSpacing: 1.8,
+      })
+      .setOrigin(0, 0.5);
+
     this.codexHeroName = this.add
-      .text(292, 222, '', {
+      .text(334, 244, '', {
         fontFamily: 'Georgia, serif',
         fontSize: '30px',
         color: '#f8fafc',
@@ -182,20 +250,35 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.codexHeroBody = this.add
-      .text(292, 260, '', {
+      .text(334, 284, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#cbd5e1',
-        wordWrap: { width: 316 },
+        wordWrap: { width: 248 },
+        lineSpacing: 6,
+      })
+      .setOrigin(0, 0);
+
+    this.codexHeroMeta = this.add
+      .text(334, 384, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#93c5fd',
+        wordWrap: { width: 248 },
         lineSpacing: 5,
       })
       .setOrigin(0, 0);
 
-    const codexWeaponPanel = this.add
-      .rectangle(746, 304, 340, 152, 0x172033, 0.96)
-      .setStrokeStyle(1, 0x334155, 0.9);
+    const codexWeaponLabel = this.add
+      .text(636, 202, 'STARTER WEAPON', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#93c5fd',
+        letterSpacing: 1.8,
+      })
+      .setOrigin(0, 0.5);
     this.codexWeaponBadge = this.add
-      .text(614, 258, '--', {
+      .text(664, 248, '--', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#eff6ff',
@@ -204,42 +287,59 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.codexWeaponName = this.add
-      .text(658, 252, '', {
+      .text(708, 242, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '22px',
+        fontSize: '24px',
         color: '#f8fafc',
       })
       .setOrigin(0, 0.5);
     this.codexWeaponBody = this.add
-      .text(614, 286, '', {
+      .text(636, 280, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#cbd5e1',
-        wordWrap: { width: 264 },
+        wordWrap: { width: 274 },
+        lineSpacing: 5,
+      })
+      .setOrigin(0, 0);
+
+    this.codexWeaponStats = this.add
+      .text(636, 358, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '13px',
+        color: '#93c5fd',
+        wordWrap: { width: 274 },
         lineSpacing: 4,
       })
       .setOrigin(0, 0);
 
     const codexThreatTitle = this.add
-      .text(614, 414, 'Threats', {
+      .text(332, 472, 'Threat Brief', {
         fontFamily: 'Georgia, serif',
         fontSize: '24px',
         color: '#f8fafc',
+      })
+      .setOrigin(0, 0.5);
+    const codexThreatSubtitle = this.add
+      .text(476, 472, 'Three encounter notes to keep the selected runner alive.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#94a3b8',
       })
       .setOrigin(0, 0.5);
 
     const codexThreatFrames: Phaser.GameObjects.Rectangle[] = [];
     for (let index = 0; index < 3; index += 1) {
       const threatFrame = this.add
-        .rectangle(746, 474 + index * 82, 340, 66, 0x172033, 0.96)
+        .rectangle(630, 534 + index * 74, 596, 58, 0x172033, 0.98)
         .setStrokeStyle(1, 0x334155, 0.88);
       const threatText = this.add
-        .text(614, 452 + index * 82, '', {
+        .text(352, 516 + index * 74, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '14px',
           color: '#cbd5e1',
-          wordWrap: { width: 260 },
-          lineSpacing: 3,
+          wordWrap: { width: 524 },
+          lineSpacing: 4,
         })
         .setOrigin(0, 0);
       this.codexThreatTexts.push(threatText);
@@ -249,16 +349,30 @@ export class MenuScene extends Phaser.Scene {
     this.codexOverlay = this.add.container(0, 0, [
       codexBackdrop,
       codexPanel,
+      codexHeader,
+      codexRail,
+      codexContentFrame,
+      codexThreatStrip,
+      codexProfilePanel,
+      codexWeaponPanel,
+      codexEyebrow,
       codexTitle,
       codexSubtitle,
+      codexRailTitle,
+      ...codexCategoryObjects,
+      codexRailHint,
       this.codexCloseButton,
+      codexProfileLabel,
       this.codexHeroName,
       this.codexHeroBody,
-      codexWeaponPanel,
+      this.codexHeroMeta,
+      codexWeaponLabel,
       this.codexWeaponBadge,
       this.codexWeaponName,
       this.codexWeaponBody,
+      this.codexWeaponStats,
       codexThreatTitle,
+      codexThreatSubtitle,
       ...codexThreatFrames,
       ...this.codexThreatTexts,
     ]);
@@ -507,30 +621,83 @@ export class MenuScene extends Phaser.Scene {
     const threatEntries = [
       {
         enemy: ENEMY_ARCHETYPES.skimmer,
+        label: 'Scout',
         note: 'Strafes wide. Keep a clean lane before closing in.',
       },
       {
         enemy: ENEMY_ARCHETYPES.dreadnought,
+        label: 'Miniboss',
         note: 'Telegraphs a line charge. Sidestep before release.',
       },
       {
         enemy: ENEMY_ARCHETYPES.behemoth,
+        label: 'Boss',
         note: 'Controls space with a shockwave ring near the end of the run.',
       },
     ];
 
     this.codexHeroName.setText(hero.name);
-    this.codexHeroBody.setText(`${hero.description}\n\n${hero.passiveLabel}`);
+    this.codexHeroBody.setText(hero.description);
+    this.codexHeroMeta.setText(`Passive  ${hero.passiveLabel}\nLoadout  ${this.getHeroLoadoutSummary(hero, weapon)}`);
     this.codexWeaponBadge.setText(weapon.shortLabel);
     this.codexWeaponBadge.setBackgroundColor(`#${weapon.projectileColor.toString(16).padStart(6, '0')}`);
     this.codexWeaponName.setText(weapon.name);
     this.codexWeaponBody.setText(weapon.codexSummary);
+    this.codexWeaponStats.setText(this.getWeaponStatSummary(weapon));
 
     for (let index = 0; index < this.codexThreatTexts.length; index += 1) {
       const entry = threatEntries[index];
-      this.codexThreatTexts[index].setText(`${entry.enemy.name}\n${entry.note}`);
+      this.codexThreatTexts[index].setText(`${entry.label}  ${entry.enemy.name}\n${entry.note}`);
       this.codexThreatTexts[index].setColor(index === 0 ? '#bae6fd' : index === 1 ? '#fbcfe8' : '#fecaca');
     }
+  }
+
+  private getHeroLoadoutSummary(hero: HeroDefinition, weapon: (typeof WEAPON_DEFINITIONS)[keyof typeof WEAPON_DEFINITIONS]): string {
+    const traits: string[] = [weapon.name];
+
+    if (hero.maxHealthBonus > 0) {
+      traits.push(`+${hero.maxHealthBonus} HP`);
+    }
+
+    if (hero.moveSpeedBonus > 0) {
+      traits.push(`+${hero.moveSpeedBonus} speed`);
+    }
+
+    if (hero.pickupRangeBonus > 0) {
+      traits.push(`+${hero.pickupRangeBonus} pickup`);
+    }
+
+    if (hero.startingDamageBonus > 0) {
+      traits.push(`+${hero.startingDamageBonus} damage`);
+    }
+
+    if (hero.fireCooldownReductionMs > 0) {
+      traits.push(`-${hero.fireCooldownReductionMs} ms cadence`);
+    }
+
+    return traits.join('  •  ');
+  }
+
+  private getWeaponStatSummary(weapon: (typeof WEAPON_DEFINITIONS)[keyof typeof WEAPON_DEFINITIONS]): string {
+    const traits = [`Damage ${weapon.damage}`, `Cadence ${weapon.fireCooldownMs} ms`, `Reach ${weapon.range}`];
+
+    if (weapon.burstCount) {
+      traits.push(`Burst ${weapon.burstCount}`);
+    }
+
+    if (weapon.pierceCount) {
+      traits.push(`Pierce ${weapon.pierceCount}`);
+    }
+
+    if (weapon.radialCount) {
+      traits.push(`Radial ${weapon.radialCount}`);
+    }
+
+    if (weapon.explosionRadius) {
+      traits.push(`Blast ${weapon.explosionRadius}`);
+    }
+
+    return traits.join('  •  ');
   }
 
   private handleShutdown(): void {
