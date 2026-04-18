@@ -544,6 +544,17 @@ export class UIScene extends Phaser.Scene {
     title: string;
     summary: string;
   } {
+    if (choice.kind === 'signature' && choice.requiresWeaponId) {
+      const weapon = WEAPON_DEFINITIONS[choice.requiresWeaponId];
+      return {
+        badgeText: `${weapon.shortLabel}+`,
+        badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
+        cardColor: 0x1a2235,
+        title: choice.title,
+        summary: choice.description,
+      };
+    }
+
     const weapon = this.getWeaponUpgrade(choice.id);
     if (weapon) {
       return {

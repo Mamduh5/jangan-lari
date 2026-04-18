@@ -31,6 +31,21 @@ export type WeaponDefinition = {
   explosionDamageMultiplier?: number;
 };
 
+export type WeaponStatPatch = Partial<
+  Pick<
+    WeaponDefinition,
+    | 'burstCount'
+    | 'spreadDegrees'
+    | 'pierceCount'
+    | 'projectileSpeed'
+    | 'projectileRadius'
+    | 'range'
+    | 'explosionRadius'
+    | 'explosionDamageMultiplier'
+    | 'fireCooldownMs'
+  >
+>;
+
 export type WeaponStats = WeaponDefinition;
 
 export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {

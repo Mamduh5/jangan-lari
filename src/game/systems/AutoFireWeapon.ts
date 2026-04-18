@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { playWeaponFireCue } from '../audio/audioCuePlayer';
-import type { WeaponDefinition, WeaponStats } from '../data/weapons';
+import type { WeaponDefinition, WeaponStatPatch, WeaponStats } from '../data/weapons';
 import { Enemy } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
@@ -47,6 +47,48 @@ export class AutoFireWeapon {
 
   addRange(amount: number): void {
     this.stats.range += amount;
+  }
+
+  applyStatPatch(patch: WeaponStatPatch): void {
+    if (patch.burstCount !== undefined) {
+      this.stats.burstCount = Math.max(1, patch.burstCount);
+    }
+
+    if (patch.spreadDegrees !== undefined) {
+      this.stats.spreadDegrees = Math.max(0, patch.spreadDegrees);
+    }
+
+    if (patch.pierceCount !== undefined) {
+      this.stats.pierceCount = Math.max(0, patch.pierceCount);
+    }
+
+    if (patch.projectileSpeed !== undefined) {
+      this.stats.projectileSpeed = Math.max(120, this.stats.projectileSpeed + patch.projectileSpeed);
+    }
+
+    if (patch.projectileRadius !== undefined) {
+      this.stats.projectileRadius = Math.max(2, this.stats.projectileRadius + patch.projectileRadius);
+    }
+
+    if (patch.range !== undefined) {
+      this.stats.range = Math.max(80, this.stats.range + patch.range);
+    }
+
+    if (patch.explosionRadius !== undefined) {
+      this.stats.explosionRadius = Math.max(0, (this.stats.explosionRadius ?? 0) + patch.explosionRadius);
+    }
+
+    if (patch.explosionDamageMultiplier !== undefined) {
+      this.stats.explosionDamageMultiplier = Math.max(
+        0,
+        (this.stats.explosionDamageMultiplier ?? 0) + patch.explosionDamageMultiplier,
+      );
+    }
+
+    if (patch.fireCooldownMs !== undefined) {
+      this.stats.fireCooldownMs = Math.max(120, this.stats.fireCooldownMs + patch.fireCooldownMs);
+      this.nextFireTime = Math.min(this.nextFireTime, this.scene.time.now + this.stats.fireCooldownMs);
+    }
   }
 
   update(currentTime: number, deltaMs: number): void {

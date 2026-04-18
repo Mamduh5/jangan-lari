@@ -18,7 +18,14 @@ import {
   WORLD_WIDTH,
 } from '../config/constants';
 import { HEROES } from '../data/heroes';
-import { UPGRADE_POOL, type UpgradeDefinition, type UpgradeId } from '../data/upgrades';
+import {
+  UPGRADE_POOL,
+  buildLevelUpChoices,
+  findUpgradeDefinitionById,
+  getEligibleSignatureUpgrades,
+  type UpgradeDefinition,
+  type UpgradeId,
+} from '../data/upgrades';
 import { WEAPON_DEFINITIONS, type WeaponDefinition, type WeaponId } from '../data/weapons';
 import { Enemy, type EnemyAttackSignal } from '../entities/Enemy';
 import { Player } from '../entities/Player';
@@ -106,12 +113,14 @@ export class RunScene extends Phaser.Scene {
   private isTransitioningToMenu = false;
   private isResolvingLevelUpChoice = false;
   private levelUpStartQueued = false;
+  private guaranteedSignatureChoices = 0;
   private rewardToastToken = 0;
   private alertToken = 0;
   private activeAlertPriority = 0;
   private activeAlertKind = 'objective';
   private activeAlertUntil = 0;
   private queuedRewardToast: { text: string; color: string } | null = null;
+  private takenSignatureUpgradeIds = new Set<UpgradeId>();
 
   // These modifiers stack from heroes, permanent upgrades, and level-up picks.
   private globalWeaponDamageBonus = 0;
@@ -151,6 +160,7 @@ export class RunScene extends Phaser.Scene {
     this.isTransitioningToMenu = freshSession.isTransitioningToMenu;
     this.isResolvingLevelUpChoice = freshSession.isResolvingLevelUpChoice;
     this.levelUpStartQueued = false;
+    this.guaranteedSignatureChoices = 0;
     this.rewardToastToken = 0;
     this.alertToken = 0;
     this.activeAlertPriority = 0;
@@ -167,6 +177,7 @@ export class RunScene extends Phaser.Scene {
     this.shockwaveAttacks = [];
     this.enemyBolts = [];
     this.ownedWeaponIds.clear();
+    this.takenSignatureUpgradeIds.clear();
     this.combatResponseImpactCounts = {};
     this.combatResponseEnemyImpactCounts = {};
 
@@ -918,6 +929,10 @@ export class RunScene extends Phaser.Scene {
       this.pendingLevelUps += rewardLevelUps;
       this.showFloatingText(x, y - 58, rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade', '#bfdbfe', 18);
       rewardMessages.push(rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade');
+
+      if (enemy.isMiniboss()) {
+        this.guaranteedSignatureChoices += 1;
+      }
     }
 
     if (rewardLevelUps > 0 && !this.isLevelingUp) {
@@ -1231,7 +1246,19 @@ export class RunScene extends Phaser.Scene {
   }
 
   private presentLevelUpChoices(): void {
-    const choices = Phaser.Utils.Array.Shuffle(this.getAvailableUpgradePool()).slice(0, 3);
+    const forceSignature = this.guaranteedSignatureChoices > 0;
+    const choices = buildLevelUpChoices({
+      upgrades: this.getAvailableUpgradePool(),
+      ownedWeaponIds: Array.from(this.ownedWeaponIds) as WeaponId[],
+      takenSignatureIds: this.takenSignatureUpgradeIds,
+      forceSignature,
+      shuffle: <T>(items: T[]): T[] => Phaser.Utils.Array.Shuffle(items),
+    });
+
+    if (forceSignature) {
+      this.guaranteedSignatureChoices = Math.max(0, this.guaranteedSignatureChoices - 1);
+    }
+
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = beginLevelUpCountdown();
     this.registry.set('run.levelUpActive', true);
@@ -1280,7 +1307,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private getAvailableUpgradePool(): UpgradeDefinition[] {
-    return UPGRADE_POOL.filter((upgrade) => {
+    const unlockFilteredPool = UPGRADE_POOL.filter((upgrade) => {
       switch (upgrade.id) {
         case 'unlock-twin-fangs':
           return !this.ownedWeaponIds.has('twin-fangs');
@@ -1298,9 +1325,25 @@ export class RunScene extends Phaser.Scene {
           return true;
       }
     });
+
+    const eligibleSignatureIds = new Set(
+      getEligibleSignatureUpgrades(
+        unlockFilteredPool,
+        Array.from(this.ownedWeaponIds) as WeaponId[],
+        this.takenSignatureUpgradeIds,
+      ).map((upgrade) => upgrade.id),
+    );
+
+    return unlockFilteredPool.filter((upgrade) => upgrade.kind !== 'signature' || eligibleSignatureIds.has(upgrade.id));
   }
 
   private applyUpgrade(upgradeId: UpgradeId): void {
+    const upgrade = findUpgradeDefinitionById(upgradeId);
+    if (upgrade?.kind === 'signature') {
+      this.applySignatureUpgrade(upgrade);
+      return;
+    }
+
     switch (upgradeId) {
       case 'vitality':
         this.player.addMaxHealth(25);
@@ -1344,6 +1387,20 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
+  private applySignatureUpgrade(upgrade: UpgradeDefinition): void {
+    if (!upgrade.requiresWeaponId || !upgrade.weaponStatPatch) {
+      return;
+    }
+
+    const weapon = this.weapons.find((entry) => entry.getId() === upgrade.requiresWeaponId);
+    if (!weapon) {
+      return;
+    }
+
+    weapon.applyStatPatch(upgrade.weaponStatPatch);
+    this.takenSignatureUpgradeIds.add(upgrade.id);
+  }
+
   private showUpgradeSelectionFeedback(upgrade: UpgradeDefinition): void {
     const presentation: Record<
       UpgradeId,
@@ -1362,6 +1419,11 @@ export class RunScene extends Phaser.Scene {
       'unlock-phase-disc': { text: 'Phase Disc online', color: '#f3e8ff', burstColor: 0xc084fc, radius: 0 },
       'unlock-sunwheel': { text: 'Sunwheel online', color: '#fef3c7', burstColor: 0xfbbf24, radius: 0 },
       'unlock-shatterbell': { text: 'Shatterbell online', color: '#cffafe', burstColor: 0x67e8f9, radius: 0 },
+      'signature-arc-bolt-volt-volley': { text: 'Volt Volley primed', color: '#fef08a', burstColor: 0xfacc15, radius: 64 },
+      'signature-twin-fangs-ripper-line': { text: 'Ripper Line primed', color: '#dbeafe', burstColor: 0x7dd3fc, radius: 62 },
+      'signature-ember-lance-sundering-tip': { text: 'Sundering Tip primed', color: '#ffe4e6', burstColor: 0xfb7185, radius: 66 },
+      'signature-bloom-cannon-bramble-fan': { text: 'Bramble Fan primed', color: '#dcfce7', burstColor: 0x86efac, radius: 64 },
+      'signature-shatterbell-aftershock': { text: 'Aftershock primed', color: '#cffafe', burstColor: 0x67e8f9, radius: 68 },
     };
 
     const feedback = presentation[upgrade.id];
