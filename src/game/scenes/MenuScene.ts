@@ -16,6 +16,10 @@ export class MenuScene extends Phaser.Scene {
   private heroPanels: Phaser.GameObjects.Rectangle[] = [];
   private startButton!: Phaser.GameObjects.Text;
   private metaButton!: Phaser.GameObjects.Text;
+  private codexButton!: Phaser.GameObjects.Text;
+  private codexCloseButton!: Phaser.GameObjects.Text;
+  private codexOverlay!: Phaser.GameObjects.Container;
+  private codexOverlayVisible = false;
   private focusedHeroId: HeroDefinition['id'] = 'runner';
   private codexHeroName!: Phaser.GameObjects.Text;
   private codexHeroBody!: Phaser.GameObjects.Text;
@@ -37,11 +41,12 @@ export class MenuScene extends Phaser.Scene {
 
     const centerX = GAME_WIDTH / 2;
     const contentTop = 136;
+    const rosterWidth = 1056;
+    const rosterLeft = centerX - rosterWidth / 2 + 42;
 
     this.cameras.main.setBackgroundColor('#0b1020');
     this.add.rectangle(centerX, 62, 1160, 92, 0x0f172a, 0.94).setStrokeStyle(2, 0x223247, 0.88);
-    this.add.rectangle(400, 428, 724, 512, 0x101827, 0.97).setStrokeStyle(2, 0x2a3b55, 0.92);
-    this.add.rectangle(996, 428, 332, 512, 0x111827, 0.97).setStrokeStyle(2, 0x2a3b55, 0.92);
+    this.add.rectangle(centerX, 428, rosterWidth, 512, 0x101827, 0.97).setStrokeStyle(2, 0x2a3b55, 0.92);
 
     this.add
       .text(102, 44, 'JANGAN LARI', {
@@ -60,7 +65,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.goldText = this.add
-      .text(GAME_WIDTH - 106, 48, `Gold ${this.saveData.totalGold}`, {
+      .text(GAME_WIDTH - 72, 48, `Gold ${this.saveData.totalGold}`, {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fde68a',
@@ -71,9 +76,12 @@ export class MenuScene extends Phaser.Scene {
 
     this.startButton = this.createMenuButton(560, 82, 'Start Run', () => this.startRun());
     this.metaButton = this.createMenuButton(726, 82, 'Meta', () => this.openMeta());
+    this.codexButton = this.createMenuButton(892, 82, 'Codex', () => this.openCodex());
+    this.codexButton.setFontSize('24px');
+    this.codexButton.setPadding(20, 10, 20, 10);
 
     this.add
-      .text(86, 162, 'Roster', {
+      .text(rosterLeft, 162, 'Roster', {
         fontFamily: 'Georgia, serif',
         fontSize: '28px',
         color: '#f8fafc',
@@ -81,23 +89,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.add
-      .text(86, 194, 'Hero cards stay short. Full notes live in the codex panel.', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
-        color: '#8ea6c1',
-      })
-      .setOrigin(0, 0.5);
-
-    this.add
-      .text(848, 162, 'Field Codex', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '28px',
-        color: '#f8fafc',
-      })
-      .setOrigin(0, 0.5);
-
-    this.add
-      .text(848, 194, 'Focused notes for the selected runner, weapon, and threats.', {
+      .text(rosterLeft, 194, 'Hero cards stay short. Open Codex for deeper notes.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#8ea6c1',
@@ -107,7 +99,7 @@ export class MenuScene extends Phaser.Scene {
     const panelWidth = 332;
     const panelHeight = 172;
     const panelSpacing = 20;
-    const firstPanelX = 86 + panelWidth / 2;
+    const firstPanelX = centerX - panelWidth / 2 - panelSpacing / 2;
     const panelYStart = contentTop + 124;
 
     for (let index = 0; index < HERO_LIST.length; index += 1) {
@@ -152,8 +144,37 @@ export class MenuScene extends Phaser.Scene {
       this.heroActionButtons.push(actionButton);
     }
 
+    const codexBackdrop = this.add
+      .rectangle(centerX, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.74)
+      .setInteractive({ useHandCursor: true });
+    codexBackdrop.on('pointerdown', () => this.closeCodex());
+
+    const codexPanel = this.add
+      .rectangle(centerX, GAME_HEIGHT / 2, 844, 538, 0x111827, 0.98)
+      .setStrokeStyle(2, 0x334155, 0.95);
+
+    const codexTitle = this.add
+      .text(260, 128, 'Field Codex', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '34px',
+        color: '#f8fafc',
+      })
+      .setOrigin(0, 0.5);
+
+    const codexSubtitle = this.add
+      .text(260, 162, 'Focused notes for the selected runner, weapon, and current threats.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '16px',
+        color: '#94a3b8',
+      })
+      .setOrigin(0, 0.5);
+
+    this.codexCloseButton = this.createMenuButton(960, 130, 'Close', () => this.closeCodex());
+    this.codexCloseButton.setFontSize('22px');
+    this.codexCloseButton.setPadding(18, 10, 18, 10);
+
     this.codexHeroName = this.add
-      .text(870, 262, '', {
+      .text(292, 222, '', {
         fontFamily: 'Georgia, serif',
         fontSize: '30px',
         color: '#f8fafc',
@@ -161,18 +182,20 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.codexHeroBody = this.add
-      .text(870, 300, '', {
+      .text(292, 260, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#cbd5e1',
-        wordWrap: { width: 252 },
+        wordWrap: { width: 316 },
         lineSpacing: 5,
       })
       .setOrigin(0, 0);
 
-    this.add.rectangle(996, 420, 266, 108, 0x172033, 0.96).setStrokeStyle(1, 0x334155, 0.9);
+    const codexWeaponPanel = this.add
+      .rectangle(746, 304, 340, 152, 0x172033, 0.96)
+      .setStrokeStyle(1, 0x334155, 0.9);
     this.codexWeaponBadge = this.add
-      .text(882, 388, '--', {
+      .text(614, 258, '--', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#eff6ff',
@@ -181,43 +204,66 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
     this.codexWeaponName = this.add
-      .text(926, 382, '', {
+      .text(658, 252, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '22px',
         color: '#f8fafc',
       })
       .setOrigin(0, 0.5);
     this.codexWeaponBody = this.add
-      .text(882, 416, '', {
+      .text(614, 286, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#cbd5e1',
-        wordWrap: { width: 232 },
+        wordWrap: { width: 264 },
         lineSpacing: 4,
       })
       .setOrigin(0, 0);
 
-    this.add
-      .text(870, 500, 'Threats', {
+    const codexThreatTitle = this.add
+      .text(614, 414, 'Threats', {
         fontFamily: 'Georgia, serif',
         fontSize: '24px',
         color: '#f8fafc',
       })
       .setOrigin(0, 0.5);
 
+    const codexThreatFrames: Phaser.GameObjects.Rectangle[] = [];
     for (let index = 0; index < 3; index += 1) {
-      this.add.rectangle(996, 560 + index * 74, 266, 60, 0x172033, 0.96).setStrokeStyle(1, 0x334155, 0.88);
+      const threatFrame = this.add
+        .rectangle(746, 474 + index * 82, 340, 66, 0x172033, 0.96)
+        .setStrokeStyle(1, 0x334155, 0.88);
       const threatText = this.add
-        .text(872, 544 + index * 74, '', {
+        .text(614, 452 + index * 82, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '14px',
           color: '#cbd5e1',
-          wordWrap: { width: 240 },
+          wordWrap: { width: 260 },
           lineSpacing: 3,
         })
         .setOrigin(0, 0);
       this.codexThreatTexts.push(threatText);
+      codexThreatFrames.push(threatFrame);
     }
+
+    this.codexOverlay = this.add.container(0, 0, [
+      codexBackdrop,
+      codexPanel,
+      codexTitle,
+      codexSubtitle,
+      this.codexCloseButton,
+      this.codexHeroName,
+      this.codexHeroBody,
+      codexWeaponPanel,
+      this.codexWeaponBadge,
+      this.codexWeaponName,
+      this.codexWeaponBody,
+      codexThreatTitle,
+      ...codexThreatFrames,
+      ...this.codexThreatTexts,
+    ]);
+    this.codexOverlay.setDepth(30);
+    this.codexOverlay.setVisible(false);
 
     this.add.rectangle(centerX, GAME_HEIGHT - 46, 896, 44, 0x101b2f, 0.92).setStrokeStyle(1, 0x334155, 0.9);
     this.statusText = this.add
@@ -230,7 +276,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(centerX, GAME_HEIGHT - 18, 'Enter or Space starts. M opens meta.', {
+      .text(centerX, GAME_HEIGHT - 18, 'Enter or Space starts. M opens meta. Codex opens from the menu.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#94a3b8',
@@ -240,6 +286,7 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ENTER', this.handleStartShortcut, this);
     this.input.keyboard?.on('keydown-SPACE', this.handleStartShortcut, this);
     this.input.keyboard?.on('keydown-M', this.handleMetaShortcut, this);
+    this.input.keyboard?.on('keydown-ESC', this.handleEscapeShortcut, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
     this.focusedHeroId = this.saveData.selectedHero;
@@ -265,12 +312,39 @@ export class MenuScene extends Phaser.Scene {
     this.scene.start('MetaScene');
   }
 
+  private openCodex(): void {
+    this.codexOverlayVisible = true;
+    this.refreshCodexView();
+    this.codexOverlay.setVisible(true);
+  }
+
+  private closeCodex(): void {
+    this.codexOverlayVisible = false;
+    this.codexOverlay.setVisible(false);
+  }
+
   private handleStartShortcut(): void {
+    if (this.codexOverlayVisible) {
+      return;
+    }
+
     this.startButton.emit('pointerdown');
   }
 
   private handleMetaShortcut(): void {
+    if (this.codexOverlayVisible) {
+      return;
+    }
+
     this.metaButton.emit('pointerdown');
+  }
+
+  private handleEscapeShortcut(): void {
+    if (!this.codexOverlayVisible) {
+      return;
+    }
+
+    this.closeCodex();
   }
 
   private handleHeroAction(hero: HeroDefinition): void {
@@ -463,5 +537,6 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-ENTER', this.handleStartShortcut, this);
     this.input.keyboard?.off('keydown-SPACE', this.handleStartShortcut, this);
     this.input.keyboard?.off('keydown-M', this.handleMetaShortcut, this);
+    this.input.keyboard?.off('keydown-ESC', this.handleEscapeShortcut, this);
   }
 }

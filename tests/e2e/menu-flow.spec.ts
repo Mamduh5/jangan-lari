@@ -8,6 +8,7 @@ type GameState = {
   endActive: boolean;
   elapsedMs: number;
   goldEarned: number;
+  codexOpen: boolean;
 };
 
 async function getGameState(page: import('@playwright/test').Page): Promise<GameState> {
@@ -21,15 +22,16 @@ async function getGameState(page: import('@playwright/test').Page): Promise<Game
       endActive: Boolean(game?.registry.get('run.endActive')),
       elapsedMs: Number(game?.registry.get('run.elapsedMs') ?? -1),
       goldEarned: Number(game?.registry.get('run.goldEarned') ?? -1),
+      codexOpen: Boolean((game?.scene.getScene('MenuScene') as { codexOverlayVisible?: boolean } | undefined)?.codexOverlayVisible),
     };
   });
 }
 
 async function clickMenuButton(
   page: import('@playwright/test').Page,
-  buttonKey: 'startButton' | 'metaButton',
+  buttonKey: 'startButton' | 'metaButton' | 'codexButton',
 ): Promise<void> {
-  if (buttonKey === 'startButton' || buttonKey === 'metaButton') {
+  if (buttonKey === 'startButton' || buttonKey === 'metaButton' || buttonKey === 'codexButton') {
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
 
@@ -47,6 +49,10 @@ async function clickMenuButton(
       },
       metaButton: {
         x: 726,
+        y: 82,
+      },
+      codexButton: {
+        x: 892,
         y: 82,
       },
     } as const;
@@ -76,6 +82,14 @@ async function clickMetaBackButton(page: import('@playwright/test').Page): Promi
     };
     const backButton = metaScene.children.list.find((child) => child.text === 'Back to Menu');
     backButton?.emit?.('pointerdown');
+  });
+}
+
+async function clickCodexCloseButton(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const game = window.__JANGAN_LARI_GAME__!;
+    const menuScene = game.scene.getScene('MenuScene') as Record<string, { emit: (eventName: string) => void }>;
+    menuScene.codexCloseButton.emit('pointerdown');
   });
 }
 
@@ -112,6 +126,43 @@ function expectNoBrokenSceneApiErrors(runtimeErrors: string[]): void {
 }
 
 test.describe('menu and run scene flow', () => {
+  test('codex opens as a separate menu surface and closes back to the normal menu view', async ({ page }) => {
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    let state = await getGameState(page);
+    expect(state.menuActive).toBe(true);
+    expect(state.codexOpen).toBe(false);
+
+    await clickMenuButton(page, 'codexButton');
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      const menuScene = game?.scene.getScene('MenuScene') as { codexOverlayVisible?: boolean } | undefined;
+      return Boolean(menuScene?.codexOverlayVisible);
+    });
+
+    state = await getGameState(page);
+    expect(state.menuActive).toBe(true);
+    expect(state.codexOpen).toBe(true);
+    expect(state.metaActive).toBe(false);
+    expect(state.runActive).toBe(false);
+
+    await clickCodexCloseButton(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      const menuScene = game?.scene.getScene('MenuScene') as { codexOverlayVisible?: boolean } | undefined;
+      return !menuScene?.codexOverlayVisible;
+    });
+
+    state = await getGameState(page);
+    expect(state.menuActive).toBe(true);
+    expect(state.codexOpen).toBe(false);
+    expectNoBrokenSceneApiErrors(runtimeErrors);
+    expect(runtimeErrors).toEqual([]);
+  });
+
   test('menu buttons can open meta, start a run, return to menu, and start another run', async ({ page }) => {
     test.slow();
     const runtimeErrors = trackRuntimeErrors(page);
