@@ -30,6 +30,10 @@ export const PLAYER_HIT_SHAKE_INTENSITY = 0.0032;
 export const ELITE_SPAWN_INDICATOR_MS = 650;
 export const ENDING_FLASH_MS = 240;
 
+export const AUDIO_MASTER_GAIN = 1;
+export const AUDIO_NOTE_ATTACK_S = 0.04;
+export const AUDIO_NOTE_FLOOR_GAIN = 0.001;
+
 export const GOLD_REWARD_BASE = 14;
 export const GOLD_REWARD_PER_LEVEL = 5;
 export const GOLD_REWARD_PER_KILL_STEP = 5;

@@ -1,3 +1,4 @@
+import { AUDIO_MASTER_GAIN, AUDIO_NOTE_ATTACK_S, AUDIO_NOTE_FLOOR_GAIN } from '../config/constants';
 import type { HeroDefinition } from '../data/heroes';
 import type { WeaponDefinition } from '../data/weapons';
 
@@ -35,7 +36,7 @@ function getAudioContext(): AudioContext | null {
     try {
       audioState.context = new AudioContextCtor();
       audioState.masterGain = audioState.context.createGain();
-      audioState.masterGain.gain.value = 0.11;
+      audioState.masterGain.gain.value = AUDIO_MASTER_GAIN;
       audioState.masterGain.connect(audioState.context.destination);
     } catch {
       return null;
@@ -61,8 +62,8 @@ export function primeAudioContext(): void {
 
   oscillator.type = 'triangle';
   oscillator.frequency.setValueAtTime(220, now);
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
+  gain.gain.setValueAtTime(AUDIO_NOTE_FLOOR_GAIN, now);
+  gain.gain.exponentialRampToValueAtTime(AUDIO_NOTE_FLOOR_GAIN, now + 0.02);
 
   oscillator.connect(gain);
   gain.connect(audioState.masterGain);
@@ -264,9 +265,12 @@ function playToneSequence(
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(Math.max(420, note.frequency * 4.2), baseTime + note.startOffset);
 
-    gainNode.gain.setValueAtTime(0.0001, baseTime + note.startOffset);
-    gainNode.gain.exponentialRampToValueAtTime(note.gain, baseTime + note.startOffset + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, baseTime + note.startOffset + note.duration);
+    gainNode.gain.setValueAtTime(AUDIO_NOTE_FLOOR_GAIN, baseTime + note.startOffset);
+    gainNode.gain.exponentialRampToValueAtTime(
+      note.gain,
+      baseTime + note.startOffset + Math.min(AUDIO_NOTE_ATTACK_S, note.duration * 0.35),
+    );
+    gainNode.gain.exponentialRampToValueAtTime(AUDIO_NOTE_FLOOR_GAIN, baseTime + note.startOffset + note.duration);
 
     oscillator.connect(filter);
     filter.connect(gainNode);
