@@ -81,3 +81,67 @@ one more weapon or upgrade family
 one more map/event variation
 
 Content added too early just multiplies balancing and bug surface
+
+# inspiration
+
+I would steer your next phase into 4 pillars
+1. Stronger build identity
+
+Each run should become a type of run, not just “same run but stronger.”
+
+Examples:
+
+burn/explosion build
+orbit/zone-control build
+crit/burst build
+chain/lightning build
+summon/companion build
+dash/aggressive close-range build
+
+Right now, if all upgrades mostly feel like stat improvement, the run stays flat.
+You need upgrades that change behavior, not just numbers.
+
+2. Mid-run event beats
+
+You need more memorable things happening during a run besides “elite/miniboss/boss.”
+
+Examples:
+
+choose one cursed altar: gain huge upside + real downside
+timed arena event
+treasure goblin style target
+map shrine that changes build direction
+temporary challenge wave
+risk/reward pickup you must move toward
+
+This is a huge part of why some survivor games feel alive.
+
+3. More dramatic power spikes
+
+The player needs moments where they feel:
+“my run just transformed.”
+
+That usually comes from:
+
+weapon evolution
+synergy unlocks
+landmark passives
+hero-specific spikes
+rare upgrade tiers
+combo completion bonuses
+
+Without this, a long run becomes flat scaling.
+
+4. Better enemy role contrast
+
+Not just “more enemies.”
+You need clearer battlefield roles:
+
+chasers
+flankers
+ranged punishers
+tanks/space blockers
+summoners/supporters
+hazard creators
+
+That creates actual combat texture.
