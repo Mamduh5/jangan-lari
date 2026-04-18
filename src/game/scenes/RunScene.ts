@@ -83,6 +83,17 @@ export class RunScene extends Phaser.Scene {
     damage: number;
     hasHitPlayer: boolean;
   }> = [];
+  private enemyBolts: Array<{
+    orb: Phaser.GameObjects.Arc;
+    halo: Phaser.GameObjects.Arc;
+    vx: number;
+    vy: number;
+    radius: number;
+    damage: number;
+    elapsedMs: number;
+    lifetimeMs: number;
+    hasHitPlayer: boolean;
+  }> = [];
   private runElapsedMs = 0;
   private pendingLevelUps = 0;
   private levelUpRemainingMs = 0;
@@ -154,6 +165,7 @@ export class RunScene extends Phaser.Scene {
     this.colliders = [];
     this.lineStrikeAttacks = [];
     this.shockwaveAttacks = [];
+    this.enemyBolts = [];
     this.ownedWeaponIds.clear();
     this.combatResponseImpactCounts = {};
     this.combatResponseEnemyImpactCounts = {};
@@ -285,6 +297,7 @@ export class RunScene extends Phaser.Scene {
     this.updateEnemies();
     this.updateLineStrikeAttacks(delta);
     this.updateShockwaveAttacks(delta);
+    this.updateEnemyBolts(delta);
     this.updateGems();
 
     for (const weapon of this.weapons) {
@@ -677,6 +690,63 @@ export class RunScene extends Phaser.Scene {
     this.lineStrikeAttacks = nextAttacks;
   }
 
+  private updateEnemyBolts(deltaMs: number): void {
+    if (this.enemyBolts.length === 0) {
+      return;
+    }
+
+    const nextBolts: typeof this.enemyBolts = [];
+    const playerRadius = Math.max(14, this.player.width * 0.34);
+
+    for (const bolt of this.enemyBolts) {
+      bolt.elapsedMs += deltaMs;
+      bolt.orb.x += bolt.vx * (deltaMs / 1000);
+      bolt.orb.y += bolt.vy * (deltaMs / 1000);
+      bolt.halo.x = bolt.orb.x;
+      bolt.halo.y = bolt.orb.y;
+
+      const expired =
+        bolt.elapsedMs >= bolt.lifetimeMs ||
+        bolt.orb.x < -60 ||
+        bolt.orb.x > WORLD_WIDTH + 60 ||
+        bolt.orb.y < -60 ||
+        bolt.orb.y > WORLD_HEIGHT + 60;
+
+      if (!bolt.hasHitPlayer) {
+        const distanceToPlayer = Phaser.Math.Distance.Between(bolt.orb.x, bolt.orb.y, this.player.x, this.player.y);
+        if (distanceToPlayer <= playerRadius + bolt.radius) {
+          bolt.hasHitPlayer = true;
+          const tookDamage = this.player.takeDamage(bolt.damage, this.time.now);
+          this.createBurstCircle(bolt.orb.x, bolt.orb.y, 0xe0f2fe, 8, 30, 170, 0.8);
+          bolt.orb.destroy();
+          bolt.halo.destroy();
+
+          if (tookDamage) {
+            this.cameras.main.shake(85, PLAYER_HIT_SHAKE_INTENSITY * 0.85);
+            this.showFloatingText(this.player.x, this.player.y - 26, `${bolt.damage}`, '#bfdbfe', 17);
+            if (!this.player.isAlive()) {
+              this.enemyBolts = [];
+              this.endRun(false, 'Defeat', 'You were picked apart at range.');
+              return;
+            }
+          }
+
+          continue;
+        }
+      }
+
+      if (expired) {
+        bolt.orb.destroy();
+        bolt.halo.destroy();
+        continue;
+      }
+
+      nextBolts.push(bolt);
+    }
+
+    this.enemyBolts = nextBolts;
+  }
+
   private updateGems(): void {
     if (!this.xpGems?.active) {
       return;
@@ -909,6 +979,9 @@ export class RunScene extends Phaser.Scene {
         this.spawnBossShockwave(signal.x, signal.y, signal.radius, signal.damage, signal.durationMs ?? 980);
         playCue('boss-release');
         break;
+      case 'ranged-shot':
+        this.spawnEnemyBolt(signal.x, signal.y, signal.direction, signal.speed, signal.damage, signal.color, signal.radius);
+        break;
     }
   }
 
@@ -932,6 +1005,34 @@ export class RunScene extends Phaser.Scene {
       damage: Math.max(18, enemy.contactDamage - 4),
       durationMs,
       elapsedMs: 0,
+      hasHitPlayer: false,
+    });
+  }
+
+  private spawnEnemyBolt(
+    x: number,
+    y: number,
+    direction: { x: number; y: number },
+    speed: number,
+    damage: number,
+    color: number,
+    radius: number,
+  ): void {
+    const orb = this.add.circle(x, y, radius, color, 0.95).setDepth(8.5);
+    orb.setStrokeStyle(2, 0xecfeff, 0.95);
+    const halo = this.add.circle(x, y, radius * 1.9, color, 0.16).setDepth(8.4);
+    halo.setStrokeStyle(2, color, 0.4);
+    this.createBurstCircle(x, y, color, Math.max(5, radius * 0.9), Math.max(14, radius * 2.6), 120, 0.34);
+
+    this.enemyBolts.push({
+      orb,
+      halo,
+      vx: direction.x * speed,
+      vy: direction.y * speed,
+      radius,
+      damage,
+      elapsedMs: 0,
+      lifetimeMs: 2600,
       hasHitPlayer: false,
     });
   }
@@ -1429,6 +1530,11 @@ export class RunScene extends Phaser.Scene {
       attack.halo.destroy();
     }
     this.shockwaveAttacks = [];
+    for (const bolt of this.enemyBolts) {
+      bolt.orb.destroy();
+      bolt.halo.destroy();
+    }
+    this.enemyBolts = [];
 
     this.cameras.main.shake(180, victory ? 0.0026 : 0.0034);
     if (victory) {
@@ -1678,8 +1784,13 @@ export class RunScene extends Phaser.Scene {
       attack.ring.destroy();
       attack.halo.destroy();
     }
+    for (const bolt of this.enemyBolts) {
+      bolt.orb.destroy();
+      bolt.halo.destroy();
+    }
     this.lineStrikeAttacks = [];
     this.shockwaveAttacks = [];
+    this.enemyBolts = [];
 
     this.destroyPhysicsGroup(this.enemies);
     this.destroyPhysicsGroup(this.xpGems);

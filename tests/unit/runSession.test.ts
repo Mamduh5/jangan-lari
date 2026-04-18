@@ -9,6 +9,7 @@
   tickLevelUpCountdown,
   writeFreshRunRegistryState,
 } from '../../src/game/utils/runSession';
+import { RUN_TARGET_DURATION_MS } from '../../src/game/config/constants';
 
 function createRegistryRecorder(): { writes: Record<string, unknown>; set: (key: string, value: unknown) => void } {
   const writes: Record<string, unknown> = {};
@@ -44,7 +45,7 @@ describe('runSession helpers', () => {
   test('accumulateRunElapsedMs only advances active run time and clamps large deltas', () => {
     expect(accumulateRunElapsedMs(2500, 8000, false)).toBe(2500);
     expect(accumulateRunElapsedMs(2500, 8000, true)).toBe(2600);
-    expect(accumulateRunElapsedMs(119950, 1000, true)).toBe(120000);
+    expect(accumulateRunElapsedMs(RUN_TARGET_DURATION_MS - 50, 1000, true)).toBe(RUN_TARGET_DURATION_MS);
   });
 
   test('tickLevelUpCountdown counts down and expires cleanly', () => {

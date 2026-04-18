@@ -5,12 +5,13 @@ export type EnemyArchetypeId =
   | 'mauler'
   | 'crusher'
   | 'bulwark'
+  | 'hexcaster'
   | 'overlord'
   | 'riftblade'
   | 'dreadnought'
   | 'behemoth';
 
-export type EnemyBehavior = 'chase' | 'strafe' | 'dash';
+export type EnemyBehavior = 'chase' | 'strafe' | 'dash' | 'ranged';
 
 export type EnemyArchetype = {
   id: EnemyArchetypeId;
@@ -28,6 +29,9 @@ export type EnemyArchetype = {
   dashCooldownMs?: number;
   dashDurationMs?: number;
   dashSpeedMultiplier?: number;
+  shotCooldownMs?: number;
+  shotSpeed?: number;
+  shotDamage?: number;
   rewardGold?: number;
   rewardLevelUps?: number;
   isElite?: boolean;
@@ -115,6 +119,23 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     xpValue: 13,
     behavior: 'chase',
   },
+  hexcaster: {
+    id: 'hexcaster',
+    name: 'Hexcaster',
+    size: 28,
+    color: 0x22d3ee,
+    strokeColor: 0xecfeff,
+    maxHealth: 34,
+    speed: 92,
+    contactDamage: 9,
+    xpValue: 9,
+    behavior: 'ranged',
+    preferredDistance: 340,
+    strafeStrength: 1.08,
+    shotCooldownMs: 1850,
+    shotSpeed: 320,
+    shotDamage: 13,
+  },
   overlord: {
     id: 'overlord',
     name: 'Overlord',
@@ -174,14 +195,14 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     size: 72,
     color: 0xdc2626,
     strokeColor: 0xfee2e2,
-    maxHealth: 820,
-    speed: 68,
-    contactDamage: 34,
+    maxHealth: 1900,
+    speed: 78,
+    contactDamage: 42,
     xpValue: 90,
     behavior: 'dash',
-    dashCooldownMs: 1250,
-    dashDurationMs: 460,
-    dashSpeedMultiplier: 2.2,
+    dashCooldownMs: 1025,
+    dashDurationMs: 520,
+    dashSpeedMultiplier: 2.35,
     rewardGold: 40,
     isBoss: true,
   },

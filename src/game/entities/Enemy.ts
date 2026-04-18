@@ -18,6 +18,16 @@ export type EnemyAttackSignal =
       radius: number;
       damage: number;
       durationMs?: number;
+    }
+  | {
+      type: 'ranged-shot';
+      x: number;
+      y: number;
+      direction: { x: number; y: number };
+      speed: number;
+      damage: number;
+      color: number;
+      radius: number;
     };
 
 export class Enemy extends Phaser.GameObjects.Rectangle {
@@ -40,6 +50,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private shockwaveRadius = 0;
   private shockwaveDamage = 0;
   private shockwaveQueued = false;
+  private nextRangedShotAt = 0;
   private hitReactionUntil = 0;
   private readonly responseProfile: EnemyCombatResponseProfile | null;
   private readonly responseScale = { x: 1, y: 1 };
@@ -57,7 +68,10 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.strafeDirection = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
     this.nextDashAt = scene.time.now + Phaser.Math.Between(500, 1200);
     if (archetype.isBoss) {
-      this.nextShockwaveAt = scene.time.now + Phaser.Math.Between(3200, 4200);
+      this.nextShockwaveAt = scene.time.now + Phaser.Math.Between(2600, 3400);
+    }
+    if (archetype.behavior === 'ranged') {
+      this.nextRangedShotAt = scene.time.now + Phaser.Math.Between(1100, 1900);
     }
 
     const strokeWidth = archetype.isBoss ? 4 : archetype.isMiniboss ? 4 : archetype.isElite ? 3 : 2;
@@ -121,6 +135,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
 
     switch (this.archetype.behavior) {
+      case 'ranged':
+        this.applyRangedMovement(towardTarget, currentTime);
+        break;
       case 'strafe':
         this.applyStrafeMovement(towardTarget);
         break;
@@ -151,6 +168,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const hitReactionActive = currentTime < this.hitReactionUntil;
     const minibossChargePrimed = this.isMiniboss() && Boolean(this.primedMinibossCharge) && currentTime < this.nextDashAt;
     const shockwaveCharging = this.isBoss() && this.shockwaveQueued && currentTime < this.shockwaveWindupUntil;
+    const rangedCharging =
+      this.archetype.behavior === 'ranged' && currentTime >= this.nextRangedShotAt - 260 && currentTime < this.nextRangedShotAt;
 
     if (shockwaveCharging) {
       const windupProgress = Phaser.Math.Clamp(1 - (this.shockwaveWindupUntil - currentTime) / 780, 0, 1);
@@ -167,6 +186,15 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setResponseScale((1.02 + chargeProgress * 0.13) * (hitReactionActive ? 0.96 : 1));
       this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffe4e6, 0.98);
       this.setAlpha(hitReactionActive ? 0.84 : 0.92);
+      return;
+    }
+
+    if (rangedCharging) {
+      const chargeWindowMs = 260;
+      const chargeProgress = Phaser.Math.Clamp(1 - (this.nextRangedShotAt - currentTime) / chargeWindowMs, 0, 1);
+      this.setResponseScale((1.01 + chargeProgress * 0.1) * (hitReactionActive ? 0.95 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 1, 0xe0f2fe, 0.96);
+      this.setAlpha(hitReactionActive ? 0.82 : 0.94);
       return;
     }
 
@@ -257,6 +285,38 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.body.setVelocity(velocity.x, velocity.y);
   }
 
+  private applyRangedMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
+    const distance = Math.max(1, towardTarget.length());
+    const forward = towardTarget.clone().normalize();
+    const orbit = new Phaser.Math.Vector2(-forward.y * this.strafeDirection, forward.x * this.strafeDirection);
+    const preferredDistance = this.archetype.preferredDistance ?? 320;
+    const distanceError = Phaser.Math.Clamp((distance - preferredDistance) / preferredDistance, -1, 1);
+    const strafeStrength = this.archetype.strafeStrength ?? 0.95;
+    const forwardScale = distance < preferredDistance * 0.85 ? 1.2 : 0.72;
+
+    const velocity = forward
+      .scale(this.speed * distanceError * forwardScale)
+      .add(orbit.scale(this.speed * strafeStrength));
+    this.body.setVelocity(velocity.x, velocity.y);
+
+    if (currentTime < this.nextRangedShotAt || towardTarget.lengthSq() === 0) {
+      return;
+    }
+
+    const shotDirection = towardTarget.clone().normalize();
+    this.pendingAttackSignal = {
+      type: 'ranged-shot',
+      x: this.x,
+      y: this.y,
+      direction: { x: shotDirection.x, y: shotDirection.y },
+      speed: this.archetype.shotSpeed ?? 300,
+      damage: this.archetype.shotDamage ?? Math.max(8, this.contactDamage - 1),
+      color: this.archetype.color,
+      radius: Math.max(4, Math.round(this.archetype.size * 0.22)),
+    };
+    this.nextRangedShotAt = currentTime + (this.archetype.shotCooldownMs ?? 1800);
+  }
+
   private applyDashMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
     if (currentTime < this.dashUntil) {
       this.body.setVelocity(this.dashVector.x, this.dashVector.y);
@@ -320,8 +380,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     if (!this.shockwaveQueued && currentTime >= this.nextShockwaveAt) {
       this.shockwaveQueued = true;
       this.shockwaveWindupUntil = currentTime + 780;
-      this.shockwaveRadius = 250;
-      this.shockwaveDamage = Math.max(18, this.contactDamage - 8);
+      this.shockwaveRadius = 300;
+      this.shockwaveDamage = Math.max(24, this.contactDamage - 6);
       this.pendingAttackSignal = {
         type: 'boss-shockwave-telegraph',
         x: this.x,
@@ -342,7 +402,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
         damage: this.shockwaveDamage,
         durationMs: 980,
       };
-      this.nextShockwaveAt = currentTime + Phaser.Math.Between(5200, 6500);
+      this.nextShockwaveAt = currentTime + Phaser.Math.Between(3800, 5000);
     }
   }
 

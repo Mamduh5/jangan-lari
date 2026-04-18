@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   BOSS_SPAWN_TIME_MS,
   ELITE_SPAWN_INTERVAL_MS,
+  MINIBOSS_SPAWN_INTERVAL_MS,
   MINIBOSS_SPAWN_TIME_MS,
   RUN_TARGET_DURATION_MS,
 } from '../config/constants';
@@ -16,41 +17,71 @@ type StageRule = {
 
 const STAGE_RULES: StageRule[] = [
   {
-    untilMs: 28000,
-    minCount: 1,
-    maxCount: 2,
+    untilMs: 90000,
+    minCount: 2,
+    maxCount: 3,
     pool: [
-      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 38 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 34 },
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 18 },
-      { archetype: ENEMY_ARCHETYPES.harrier, weight: 18 },
-      { archetype: ENEMY_ARCHETYPES.mauler, weight: 16 },
-      { archetype: ENEMY_ARCHETYPES.crusher, weight: 10 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 14 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 22 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 12 },
     ],
   },
   {
-    untilMs: 65000,
+    untilMs: 240000,
     minCount: 3,
-    maxCount: 4,
+    maxCount: 5,
     pool: [
-      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 16 },
-      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 18 },
-      { archetype: ENEMY_ARCHETYPES.harrier, weight: 20 },
-      { archetype: ENEMY_ARCHETYPES.mauler, weight: 22 },
-      { archetype: ENEMY_ARCHETYPES.crusher, weight: 12 },
-      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 12 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 14 },
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 16 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 16 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 20 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 14 },
+      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 10 },
+      { archetype: ENEMY_ARCHETYPES.hexcaster, weight: 10 },
+    ],
+  },
+  {
+    untilMs: 420000,
+    minCount: 5,
+    maxCount: 7,
+    pool: [
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 8 },
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 12 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 14 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 14 },
+      { archetype: ENEMY_ARCHETYPES.hexcaster, weight: 16 },
+    ],
+  },
+  {
+    untilMs: 600000,
+    minCount: 6,
+    maxCount: 8,
+    pool: [
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 10 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 12 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 16 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.hexcaster, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 8 },
     ],
   },
   {
     untilMs: RUN_TARGET_DURATION_MS,
-    minCount: 4,
-    maxCount: 6,
+    minCount: 7,
+    maxCount: 10,
     pool: [
-      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 14 },
-      { archetype: ENEMY_ARCHETYPES.harrier, weight: 20 },
-      { archetype: ENEMY_ARCHETYPES.mauler, weight: 20 },
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 8 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 10 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 16 },
       { archetype: ENEMY_ARCHETYPES.crusher, weight: 18 },
       { archetype: ENEMY_ARCHETYPES.bulwark, weight: 18 },
-      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 10 },
+      { archetype: ENEMY_ARCHETYPES.hexcaster, weight: 22 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 8 },
     ],
   },
 ];
@@ -58,9 +89,9 @@ const STAGE_RULES: StageRule[] = [
 const ELITE_ROTATION: EnemyArchetype[] = [ENEMY_ARCHETYPES.overlord, ENEMY_ARCHETYPES.riftblade];
 
 export class SpawnDirector {
-  private nextEliteSpawnAtMs = 30000;
+  private nextEliteSpawnAtMs = 60000;
   private nextEliteIndex = 0;
-  private minibossSpawned = false;
+  private nextMinibossSpawnAtMs = MINIBOSS_SPAWN_TIME_MS;
   private bossSpawned = false;
 
   nextWave(elapsedMs: number): EnemyArchetype[] {
@@ -82,9 +113,9 @@ export class SpawnDirector {
       this.nextEliteSpawnAtMs += ELITE_SPAWN_INTERVAL_MS;
     }
 
-    if (!this.minibossSpawned && elapsedMs >= MINIBOSS_SPAWN_TIME_MS) {
+    if (elapsedMs >= this.nextMinibossSpawnAtMs && elapsedMs < BOSS_SPAWN_TIME_MS) {
       wave.push(ENEMY_ARCHETYPES.dreadnought);
-      this.minibossSpawned = true;
+      this.nextMinibossSpawnAtMs += MINIBOSS_SPAWN_INTERVAL_MS;
     }
 
     if (!this.bossSpawned && elapsedMs >= BOSS_SPAWN_TIME_MS) {
