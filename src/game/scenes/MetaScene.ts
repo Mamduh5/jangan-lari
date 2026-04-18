@@ -25,6 +25,9 @@ export class MetaScene extends Phaser.Scene {
   private upgradeDetails: Phaser.GameObjects.Text[] = [];
   private questFrames: Phaser.GameObjects.Rectangle[] = [];
   private questTexts: Phaser.GameObjects.Text[] = [];
+  private readonly handleExitToMenu = (): void => {
+    this.scene.start('MenuScene');
+  };
 
   constructor() {
     super('MetaScene');
@@ -174,7 +177,7 @@ export class MetaScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
 
-    backButton.on('pointerdown', () => this.scene.start('MenuScene'));
+    backButton.on('pointerdown', this.handleExitToMenu);
     backButton.on('pointerover', () => {
       backButton.setStyle({ color: '#ffffff', backgroundColor: '#374151' });
     });
@@ -182,7 +185,8 @@ export class MetaScene extends Phaser.Scene {
       backButton.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
     });
 
-    this.input.keyboard?.once('keydown-ESC', () => this.scene.start('MenuScene'));
+    this.input.keyboard?.on('keydown-ESC', this.handleExitToMenu, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.refreshView();
   }
 
@@ -243,6 +247,10 @@ export class MetaScene extends Phaser.Scene {
       );
       this.questTexts[index].setColor(completed ? '#86efac' : '#cbd5e1');
     }
+  }
+
+  private handleShutdown(): void {
+    this.input.keyboard?.off('keydown-ESC', this.handleExitToMenu, this);
   }
 
   private getQuestProgress(metric: string, target: number): string {

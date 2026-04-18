@@ -140,6 +140,12 @@ export class RunScene extends Phaser.Scene {
     this.isTransitioningToMenu = freshSession.isTransitioningToMenu;
     this.isResolvingLevelUpChoice = freshSession.isResolvingLevelUpChoice;
     this.levelUpStartQueued = false;
+    this.rewardToastToken = 0;
+    this.alertToken = 0;
+    this.activeAlertPriority = 0;
+    this.activeAlertKind = 'objective';
+    this.activeAlertUntil = 0;
+    this.queuedRewardToast = null;
     this.globalWeaponDamageBonus = freshSession.globalWeaponDamageBonus;
     this.globalWeaponCooldownReduction = freshSession.globalWeaponCooldownReduction;
     this.globalProjectileSpeedBonus = freshSession.globalProjectileSpeedBonus;
@@ -1642,6 +1648,13 @@ export class RunScene extends Phaser.Scene {
     if (this.player?.active) {
       this.player.destroy();
     }
+
+    this.rewardToastToken = 0;
+    this.alertToken = 0;
+    this.activeAlertPriority = 0;
+    this.activeAlertKind = 'objective';
+    this.activeAlertUntil = 0;
+    this.queuedRewardToast = null;
   }
 
   private destroyPhysicsGroup(group?: Phaser.Physics.Arcade.Group): void {
