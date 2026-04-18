@@ -12,6 +12,8 @@ export type WeaponFirePattern = 'targeted' | 'radial';
 export type WeaponDefinition = {
   id: WeaponId;
   name: string;
+  shortLabel: string;
+  codexSummary: string;
   damage: number;
   fireCooldownMs: number;
   projectileSpeed: number;
@@ -35,6 +37,8 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
   'arc-bolt': {
     id: 'arc-bolt',
     name: 'Arc Bolt',
+    shortLabel: 'AB',
+    codexSummary: 'Steady single-shot sidearm with reliable reach.',
     damage: 16,
     fireCooldownMs: 420,
     projectileSpeed: 600,
@@ -47,6 +51,8 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
   'twin-fangs': {
     id: 'twin-fangs',
     name: 'Twin Fangs',
+    shortLabel: 'TF',
+    codexSummary: 'Fast dual burst for close kiting and clean picks.',
     damage: 9,
     fireCooldownMs: 580,
     projectileSpeed: 720,
@@ -61,6 +67,8 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
   'ember-lance': {
     id: 'ember-lance',
     name: 'Ember Lance',
+    shortLabel: 'EL',
+    codexSummary: 'Heavy spear shot built to crack priority targets.',
     damage: 34,
     fireCooldownMs: 980,
     projectileSpeed: 460,
@@ -73,6 +81,8 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
   'bloom-cannon': {
     id: 'bloom-cannon',
     name: 'Bloom Cannon',
+    shortLabel: 'BC',
+    codexSummary: 'Tri-shot bloom that covers short-range lanes.',
     damage: 12,
     fireCooldownMs: 760,
     projectileSpeed: 540,
@@ -87,6 +97,8 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
   'phase-disc': {
     id: 'phase-disc',
     name: 'Phase Disc',
+    shortLabel: 'PD',
+    codexSummary: 'Wide piercing disc that keeps pressure through packs.',
     damage: 15,
     fireCooldownMs: 860,
     projectileSpeed: 520,
@@ -100,6 +112,8 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
   sunwheel: {
     id: 'sunwheel',
     name: 'Sunwheel',
+    shortLabel: 'SW',
+    codexSummary: 'Radial nova that protects the space around you.',
     damage: 10,
     fireCooldownMs: 1220,
     projectileSpeed: 420,
@@ -114,6 +128,8 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
   shatterbell: {
     id: 'shatterbell',
     name: 'Shatterbell',
+    shortLabel: 'SB',
+    codexSummary: 'Slow crystal shell that bursts on contact.',
     damage: 22,
     fireCooldownMs: 1300,
     projectileSpeed: 410,
@@ -129,6 +145,8 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
 
 export const STARTER_WEAPON: WeaponDefinition = WEAPON_DEFINITIONS['arc-bolt'];
 
+export const WEAPON_LIST: WeaponDefinition[] = Object.values(WEAPON_DEFINITIONS);
+
 export const UNLOCKABLE_WEAPONS: WeaponDefinition[] = [
   WEAPON_DEFINITIONS['twin-fangs'],
   WEAPON_DEFINITIONS['ember-lance'],
@@ -137,3 +155,7 @@ export const UNLOCKABLE_WEAPONS: WeaponDefinition[] = [
   WEAPON_DEFINITIONS['sunwheel'],
   WEAPON_DEFINITIONS['shatterbell'],
 ];
+
+export function findWeaponDefinitionByName(name: string): WeaponDefinition | undefined {
+  return WEAPON_LIST.find((weapon) => weapon.name === name);
+}

@@ -640,8 +640,8 @@ async function clickStartRun(page: import('@playwright/test').Page): Promise<voi
 
   const gameWidth = 1280;
   const gameHeight = 720;
-  const startButtonX = gameWidth / 2 - 162;
-  const startButtonY = gameHeight / 2 - 138;
+  const startButtonX = 560;
+  const startButtonY = 82;
 
   await canvas.click({
     position: {
@@ -662,8 +662,8 @@ async function clickLevelUpChoice(page: import('@playwright/test').Page, choiceI
 
   const gameWidth = 1280;
   const gameHeight = 720;
-  const buttonX = 270 + choiceIndex * 370;
-  const buttonY = 340;
+  const buttonX = 258 + choiceIndex * 382;
+  const buttonY = 372;
 
   await canvas.click({
     position: {

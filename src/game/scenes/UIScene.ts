@@ -1,20 +1,20 @@
 import Phaser from 'phaser';
-import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import type { UpgradeDefinition } from '../data/upgrades';
+import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { RunScene } from './RunScene';
 
 export class UIScene extends Phaser.Scene {
   private heroText!: Phaser.GameObjects.Text;
-  private passiveText!: Phaser.GameObjects.Text;
-  private hpText!: Phaser.GameObjects.Text;
-  private levelText!: Phaser.GameObjects.Text;
+  private hpValueText!: Phaser.GameObjects.Text;
+  private hpBarFill!: Phaser.GameObjects.Rectangle;
   private timerText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
-  private loadoutLabel!: Phaser.GameObjects.Text;
-  private loadoutChipTexts: Phaser.GameObjects.Text[] = [];
+  private killsText!: Phaser.GameObjects.Text;
   private alertText!: Phaser.GameObjects.Text;
   private rewardText!: Phaser.GameObjects.Text;
-  private hintText!: Phaser.GameObjects.Text;
+  private weaponIconFrames: Phaser.GameObjects.Rectangle[] = [];
+  private weaponIconTexts: Phaser.GameObjects.Text[] = [];
   private xpBarFill!: Phaser.GameObjects.Rectangle;
   private xpBarLabel!: Phaser.GameObjects.Text;
   private endContainer!: Phaser.GameObjects.Container;
@@ -24,8 +24,10 @@ export class UIScene extends Phaser.Scene {
   private endButton!: Phaser.GameObjects.Text;
   private levelUpContainer!: Phaser.GameObjects.Container;
   private levelUpTimerText!: Phaser.GameObjects.Text;
+  private levelUpCards: Phaser.GameObjects.Rectangle[] = [];
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
   private levelUpDescriptions: Phaser.GameObjects.Text[] = [];
+  private levelUpBadges: Phaser.GameObjects.Text[] = [];
 
   private readonly handleSelectUpgradeOne = (): void => {
     this.selectUpgrade(0);
@@ -44,152 +46,129 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
-    const panel = this.add.rectangle(18, 16, 560, 240, 0x030712, 0.9).setOrigin(0);
-    panel.setStrokeStyle(2, 0x334155, 0.98);
-    panel.setScrollFactor(0);
+    const topLeftPanel = this.add.rectangle(24, 18, 274, 86, 0x030712, 0.88).setOrigin(0);
+    topLeftPanel.setStrokeStyle(1, 0x334155, 0.96);
+    topLeftPanel.setScrollFactor(0);
 
-    this.add
-      .text(34, 24, 'JANGAN LARI', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '26px',
+    this.heroText = this.add
+      .text(38, 30, '--', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '24px',
         color: '#f8fafc',
       })
       .setScrollFactor(0);
 
-    this.heroText = this.add
-      .text(34, 56, '--', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
-        color: '#fdf4ff',
-        backgroundColor: '#581c87',
-        padding: { left: 10, right: 10, top: 6, bottom: 6 },
-      })
-      .setScrollFactor(0);
+    const hpBarFrame = this.add.rectangle(38, 68, 220, 18, 0x172033, 0.98).setOrigin(0, 0.5);
+    hpBarFrame.setStrokeStyle(1, 0x475569, 0.95);
+    hpBarFrame.setScrollFactor(0);
 
-    this.passiveText = this.add
-      .text(146, 58, 'PASSIVE --', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#c4b5fd',
-        backgroundColor: '#221133',
-        padding: { left: 8, right: 8, top: 5, bottom: 5 },
-        wordWrap: { width: 410 },
-      })
-      .setScrollFactor(0);
+    this.hpBarFill = this.add.rectangle(38, 68, 0, 12, 0xf87171, 1).setOrigin(0, 0.5);
+    this.hpBarFill.setScrollFactor(0);
 
-    this.hpText = this.add
-      .text(34, 88, 'HP: --/--', {
+    this.hpValueText = this.add
+      .text(38, 82, 'HP --/--', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
-        color: '#fca5a5',
-      })
-      .setScrollFactor(0);
-
-    this.levelText = this.add
-      .text(190, 88, 'Level: 1', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
-        color: '#fde68a',
+        fontSize: '13px',
+        color: '#fecaca',
       })
       .setScrollFactor(0);
 
     this.timerText = this.add
-      .text(34, 118, 'Time: 00:00 / 00:00', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
-        color: '#93c5fd',
+      .text(GAME_WIDTH / 2, 34, '00:00', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '36px',
+        color: '#e0f2fe',
       })
+      .setOrigin(0.5, 0)
       .setScrollFactor(0);
+
+    this.alertText = this.add
+      .text(GAME_WIDTH / 2, 76, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#dbeafe',
+        backgroundColor: '#1e3a8a',
+        padding: { left: 12, right: 12, top: 6, bottom: 6 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.rewardText = this.add
+      .text(GAME_WIDTH / 2, 112, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#fef3c7',
+        backgroundColor: '#111827',
+        padding: { left: 12, right: 12, top: 6, bottom: 6 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
 
     this.goldText = this.add
-      .text(298, 118, 'Gold Bank: 0', {
+      .text(GAME_WIDTH - 34, 24, 'Gold 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
-        color: '#facc15',
+        fontSize: '18px',
+        color: '#fde68a',
+        backgroundColor: '#172036',
+        padding: { left: 12, right: 12, top: 8, bottom: 8 },
       })
+      .setOrigin(1, 0)
       .setScrollFactor(0);
 
-    this.loadoutLabel = this.add
-      .text(34, 148, 'KIT', {
+    this.killsText = this.add
+      .text(GAME_WIDTH - 34, 64, 'Kills 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#d8b4fe',
-        backgroundColor: '#312e81',
-        padding: { left: 8, right: 8, top: 5, bottom: 5 },
+        fontSize: '18px',
+        color: '#cbd5e1',
+        backgroundColor: '#172036',
+        padding: { left: 12, right: 12, top: 8, bottom: 8 },
       })
+      .setOrigin(1, 0)
       .setScrollFactor(0);
 
     for (let index = 0; index < 4; index += 1) {
-      const chip = this.add
-        .text(88 + index * 108, 148, '--', {
+      const frame = this.add.rectangle(38 + index * 52, GAME_HEIGHT - 88, 40, 40, 0x172033, 0.98).setOrigin(0);
+      frame.setStrokeStyle(1, 0x334155, 0.92);
+      frame.setScrollFactor(0);
+
+      const icon = this.add
+        .text(58 + index * 52, GAME_HEIGHT - 68, '--', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '13px',
-          color: '#e2e8f0',
-          backgroundColor: '#1f2937',
-          padding: { left: 8, right: 8, top: 5, bottom: 5 },
+          color: '#eff6ff',
         })
+        .setOrigin(0.5)
         .setScrollFactor(0)
         .setVisible(false);
 
-      this.loadoutChipTexts.push(chip);
+      this.weaponIconFrames.push(frame);
+      this.weaponIconTexts.push(icon);
     }
 
+    const xpBarFrame = this.add.rectangle(38, GAME_HEIGHT - 38, 272, 18, 0x172554, 0.98).setOrigin(0, 0.5);
+    xpBarFrame.setStrokeStyle(1, 0x60a5fa, 0.9);
+    xpBarFrame.setScrollFactor(0);
+
+    this.xpBarFill = this.add.rectangle(38, GAME_HEIGHT - 38, 0, 12, 0x38bdf8, 1).setOrigin(0, 0.5);
+    this.xpBarFill.setScrollFactor(0);
+
     this.xpBarLabel = this.add
-      .text(34, 180, 'XP 0/0   Kills 0', {
+      .text(38, GAME_HEIGHT - 18, 'LV 1  XP 0/0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
+        fontSize: '13px',
         color: '#bfdbfe',
       })
       .setScrollFactor(0);
 
     this.add
-      .text(GAME_WIDTH - 30, 24, 'ESC: Return to Menu', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
-        color: '#cbd5e1',
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0);
-
-    this.alertText = this.add
-      .text(GAME_WIDTH - 30, 52, '', {
+      .text(GAME_WIDTH - 30, GAME_HEIGHT - 28, 'ESC: Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
-        color: '#e2e8f0',
-        backgroundColor: '#1e293b',
-        padding: { left: 12, right: 12, top: 8, bottom: 8 },
+        color: '#cbd5e1',
       })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setVisible(false);
-
-    this.rewardText = this.add
-      .text(GAME_WIDTH / 2, 26, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '17px',
-        color: '#fef3c7',
-        backgroundColor: '#111827',
-        padding: { left: 14, right: 14, top: 8, bottom: 8 },
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(20)
-      .setVisible(false);
-
-    const xpBarFrame = this.add.rectangle(34, 206, 420, 20, 0x172554, 0.98).setOrigin(0, 0.5);
-    xpBarFrame.setStrokeStyle(2, 0x60a5fa, 0.85);
-    xpBarFrame.setScrollFactor(0);
-
-    this.xpBarFill = this.add.rectangle(34, 206, 0, 14, 0x38bdf8, 1).setOrigin(0, 0.5);
-    this.xpBarFill.setScrollFactor(0);
-
-    this.hintText = this.add
-      .text(34, 226, 'Survive the timer or kill the final boss', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#93c5fd',
-        wordWrap: { width: 516 },
-      })
+      .setOrigin(1, 1)
       .setScrollFactor(0);
 
     this.endContainer = this.createEndOverlay();
@@ -214,37 +193,33 @@ export class UIScene extends Phaser.Scene {
     const targetMs = Number(this.registry.get('run.targetMs') ?? 0);
     const totalGold = Number(this.registry.get('run.totalGold') ?? this.registry.get('save.totalGold') ?? 0);
     const heroName = String(this.registry.get('run.heroName') ?? '--');
-    const heroPassive = String(this.registry.get('run.heroPassive') ?? '');
     const weaponNames = (this.registry.get('run.weaponNames') ?? []) as string[];
     const levelUpRemainingMs = Number(this.registry.get('run.levelUpRemainingMs') ?? 0);
     const endActive = Boolean(this.registry.get('run.endActive'));
     const levelUpActive = Boolean(this.registry.get('run.levelUpActive'));
-    const instructions = String(this.registry.get('run.instructions') ?? 'Move with WASD or Arrow Keys');
     const alertKind = String(this.registry.get('run.alertKind') ?? 'objective');
     const alertMessage = String(this.registry.get('run.alertText') ?? '');
     const rewardMessage = String(this.registry.get('run.rewardText') ?? '');
     const rewardColor = String(this.registry.get('run.rewardColor') ?? '#fcd34d');
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
 
-    this.setTextIfChanged(this.heroText, this.formatHeroChip(heroName));
-    this.setTextIfChanged(this.passiveText, heroPassive ? `PASSIVE ${heroPassive}` : 'PASSIVE --');
-    this.setTextIfChanged(this.hpText, `HP: ${currentHp}/${maxHp}`);
-    this.setTextIfChanged(this.levelText, `Level: ${level}`);
-    this.setTextIfChanged(this.timerText, `Time: ${this.formatTime(elapsedMs)} / ${this.formatTime(targetMs)}`);
-    this.setTextIfChanged(this.goldText, `Gold Bank: ${totalGold}`);
-    this.refreshLoadoutChips(weaponNames);
-    this.setTextIfChanged(this.xpBarLabel, `XP ${xp}/${xpNext}   Kills ${kills}`);
-    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 420, 0, 420);
-    this.setTextIfChanged(this.hintText, instructions);
+    this.setTextIfChanged(this.heroText, heroName || '--');
+    this.setTextIfChanged(this.hpValueText, `HP ${currentHp}/${maxHp}`);
+    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 220, 0, 220);
+    this.setTextIfChanged(this.timerText, this.formatTime(Math.max(0, targetMs - elapsedMs)));
+    this.setTextIfChanged(this.goldText, `Gold ${totalGold}`);
+    this.setTextIfChanged(this.killsText, `Kills ${kills}`);
+    this.setTextIfChanged(this.xpBarLabel, `LV ${level}  XP ${xp}/${xpNext}`);
+    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 272, 0, 272);
+    this.refreshWeaponIcons(weaponNames);
     this.refreshAlert(alertKind, alertMessage);
     this.refreshRewardToast(rewardMessage, rewardColor);
-    this.refreshHintPriority(alertKind, alertMessage, rewardMessage);
 
     this.endContainer.setVisible(endActive);
     this.levelUpContainer.setVisible(levelUpActive && !endActive);
 
     if (endActive) {
-      this.refreshEndOverlay(level, kills, elapsedMs);
+      this.refreshEndOverlay(kills, elapsedMs);
     }
 
     if (levelUpActive && !endActive) {
@@ -253,48 +228,49 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createEndOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.78).setOrigin(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 760, 462, 0x0f172a, 0.995);
-    panel.setStrokeStyle(3, 0x475569, 1);
+    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.78).setOrigin(0).setScrollFactor(0);
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 520, 314, 0x0f172a, 0.995).setScrollFactor(0);
+    panel.setStrokeStyle(2, 0x475569, 1);
 
     this.endTitleText = this.add
-      .text(GAME_WIDTH / 2, 194, 'Victory', {
+      .text(GAME_WIDTH / 2, 246, 'Victory', {
         fontFamily: 'Georgia, serif',
-        fontSize: '48px',
+        fontSize: '46px',
         color: '#f8fafc',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setScrollFactor(0);
 
     this.endSubtitleText = this.add
-      .text(GAME_WIDTH / 2, 252, 'Subtitle', {
+      .text(GAME_WIDTH / 2, 294, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
+        fontSize: '18px',
         color: '#cbd5e1',
-        align: 'center',
-        wordWrap: { width: 600 },
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setScrollFactor(0);
 
     this.endStatsText = this.add
-      .text(GAME_WIDTH / 2, 398, 'Kills: 0\nLevel Reached: 1', {
+      .text(GAME_WIDTH / 2, 366, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#bfdbfe',
         align: 'center',
-        wordWrap: { width: 600 },
-        lineSpacing: 4,
+        lineSpacing: 6,
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setScrollFactor(0);
 
     this.endButton = this.add
-      .text(GAME_WIDTH / 2, 578, 'Return to Menu', {
+      .text(GAME_WIDTH / 2, 466, 'Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '26px',
+        fontSize: '24px',
         color: '#fef3c7',
         backgroundColor: '#1f2937',
         padding: { left: 24, right: 24, top: 12, bottom: 12 },
       })
       .setOrigin(0.5)
+      .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
 
     this.endButton.on('pointerdown', () => this.returnToMenuIfEnded());
@@ -306,12 +282,13 @@ export class UIScene extends Phaser.Scene {
     });
 
     const helpText = this.add
-      .text(GAME_WIDTH / 2, 632, 'Press Enter or Space to continue', {
+      .text(GAME_WIDTH / 2, 514, 'Enter or Space continues', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         color: '#93c5fd',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setScrollFactor(0);
 
     const container = this.add.container(0, 0, [
       backdrop,
@@ -330,87 +307,65 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createLevelUpOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.8).setOrigin(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1000, 468, 0x0f172a, 0.995);
-    panel.setStrokeStyle(3, 0x60a5fa, 1);
-
-    const title = this.add
-      .text(GAME_WIDTH / 2, 168, 'Power Selection', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '40px',
-        color: '#f8fafc',
-      })
-      .setOrigin(0.5);
-
-    const subtitle = this.add
-      .text(GAME_WIDTH / 2, 214, 'Choose 1 upgrade or let the game auto-pick for you.', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
-        color: '#bfdbfe',
-      })
-      .setOrigin(0.5);
-
+    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.8).setOrigin(0).setScrollFactor(0);
     this.levelUpTimerText = this.add
-      .text(GAME_WIDTH / 2, 252, 'Auto-pick in 15.0s', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
+      .text(GAME_WIDTH / 2, 184, '15.0', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '42px',
         color: '#fef08a',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setScrollFactor(0);
 
-    const children: Phaser.GameObjects.GameObject[] = [backdrop, panel, title, subtitle, this.levelUpTimerText];
+    const children: Phaser.GameObjects.GameObject[] = [backdrop, this.levelUpTimerText];
 
     for (let index = 0; index < 3; index += 1) {
-      const x = 270 + index * 370;
-      const card = this.add.rectangle(x, 392, 284, 202, 0x111827, 0.985);
+      const x = 258 + index * 382;
+      const card = this.add.rectangle(x, 372, 286, 166, 0x111827, 0.99).setOrigin(0.5).setScrollFactor(0);
       card.setStrokeStyle(2, 0x334155, 1);
+      card.setInteractive({ useHandCursor: true });
+      card.on('pointerdown', () => this.selectUpgrade(index));
+      card.on('pointerover', () => this.applyLevelUpCardHover(index, true));
+      card.on('pointerout', () => this.applyLevelUpCardHover(index, false));
+
+      const badge = this.add
+        .text(x - 106, 320, '--', {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '14px',
+          color: '#eff6ff',
+          backgroundColor: '#334155',
+          padding: { left: 8, right: 8, top: 5, bottom: 5 },
+        })
+        .setOrigin(0, 0.5)
+        .setScrollFactor(0);
 
       const button = this.add
-        .text(x, 340, `${index + 1}. Upgrade`, {
+        .text(x - 106, 348, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '26px',
+          fontSize: '24px',
           color: '#f8fafc',
-          align: 'center',
-          wordWrap: { width: 234 },
+          wordWrap: { width: 214 },
         })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-
-      button.on('pointerdown', () => this.selectUpgrade(index));
-      button.on('pointerover', () => {
-        card.setStrokeStyle(2, 0x93c5fd, 1);
-        card.setFillStyle(0x172033, 1);
-      });
-      button.on('pointerout', () => {
-        card.setStrokeStyle(2, 0x334155, 1);
-        card.setFillStyle(0x111827, 0.98);
-      });
+        .setOrigin(0, 0.5)
+        .setScrollFactor(0);
 
       const description = this.add
-        .text(x, 424, 'Description', {
+        .text(x - 106, 384, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '16px',
+          fontSize: '14px',
           color: '#cbd5e1',
-          align: 'center',
-          wordWrap: { width: 234 },
+          wordWrap: { width: 214 },
           lineSpacing: 4,
         })
-        .setOrigin(0.5);
+        .setOrigin(0, 0)
+        .setScrollFactor(0);
 
+      this.levelUpCards.push(card);
+      this.levelUpBadges.push(badge);
       this.levelUpButtons.push(button);
       this.levelUpDescriptions.push(description);
-      children.push(card, button, description);
+      children.push(card, badge, button, description);
     }
-
-    const helpText = this.add
-      .text(GAME_WIDTH / 2, 548, 'Use mouse or press 1, 2, or 3', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
-        color: '#93c5fd',
-      })
-      .setOrigin(0.5);
-
-    children.push(helpText);
 
     const container = this.add.container(0, 0, children);
     container.setDepth(90);
@@ -420,43 +375,50 @@ export class UIScene extends Phaser.Scene {
     return container;
   }
 
-  private refreshEndOverlay(level: number, kills: number, elapsedMs: number): void {
+  private refreshEndOverlay(kills: number, elapsedMs: number): void {
     const victory = Boolean(this.registry.get('run.victory'));
     const title = String(this.registry.get('run.endTitle') ?? (victory ? 'Victory' : 'Defeat'));
     const subtitle = String(this.registry.get('run.endSubtitle') ?? '');
     const goldEarned = Number(this.registry.get('run.goldEarned') ?? 0);
-    const totalGold = Number(this.registry.get('run.totalGold') ?? 0);
-    const heroName = String(this.registry.get('run.heroName') ?? '--');
-    const weaponNames = (this.registry.get('run.weaponNames') ?? []) as string[];
-    const weaponCount = Number(this.registry.get('run.weaponCount') ?? 1);
-    const questRewards = (this.registry.get('run.questRewards') ?? []) as string[];
-    const questSummary = questRewards.length > 0 ? `\n\nQuest Rewards\n${questRewards.join('\n')}` : '';
 
     this.setTextIfChanged(this.endTitleText, title);
     this.endTitleText.setColor(victory ? '#fef08a' : '#fca5a5');
     this.setTextIfChanged(this.endSubtitleText, subtitle);
     this.setTextIfChanged(
       this.endStatsText,
-      `Hero: ${heroName}\nTime Survived: ${this.formatTime(elapsedMs)}\nEnemies Killed: ${kills}\nLevel Reached: ${level}\nWeapons Online: ${weaponCount}\nLoadout: ${this.formatWeaponSummary(weaponNames)}\nGold Earned: ${goldEarned}\nTotal Gold: ${totalGold}${questSummary}`,
+      `Time ${this.formatTime(elapsedMs)}\nGold +${goldEarned}\nKills ${kills}`,
     );
   }
 
   private refreshLevelUpChoices(choices: UpgradeDefinition[], remainingMs: number): void {
-    this.setTextIfChanged(this.levelUpTimerText, `Auto-pick in ${(remainingMs / 1000).toFixed(1)}s`);
+    this.setTextIfChanged(this.levelUpTimerText, `${(remainingMs / 1000).toFixed(1)}`);
 
     for (let index = 0; index < this.levelUpButtons.length; index += 1) {
       const choice = choices[index];
+      const card = this.levelUpCards[index];
+      const badge = this.levelUpBadges[index];
       const button = this.levelUpButtons[index];
       const description = this.levelUpDescriptions[index];
 
       if (!choice) {
-        this.setTextIfChanged(button, `${index + 1}. --`);
-        this.setTextIfChanged(description, '');
+        card.setVisible(false);
+        badge.setVisible(false);
+        button.setVisible(false);
+        description.setVisible(false);
         continue;
       }
 
-      this.setTextIfChanged(button, `${index + 1}. ${choice.title}`);
-      this.setTextIfChanged(description, choice.description);
+      const presentation = this.getUpgradePresentation(choice);
+      card.setVisible(true);
+      badge.setVisible(true);
+      button.setVisible(true);
+      description.setVisible(true);
+      card.setData('baseColor', presentation.cardColor);
+      badge.setBackgroundColor(presentation.badgeColor);
+      this.setTextIfChanged(badge, presentation.badgeText);
+      this.setTextIfChanged(button, presentation.title);
+      this.setTextIfChanged(description, presentation.summary);
+      this.applyLevelUpCardHover(index, false);
     }
   }
 
@@ -498,41 +460,24 @@ export class UIScene extends Phaser.Scene {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  private formatWeaponSummary(weaponNames: string[]): string {
-    if (weaponNames.length === 0) {
-      return '--';
-    }
-
-    if (weaponNames.length <= 3) {
-      return weaponNames.join(' • ');
-    }
-
-    return `${weaponNames.slice(0, 3).join(' • ')} +${weaponNames.length - 3} more`;
-  }
-
-  private formatHeroChip(heroName: string): string {
-    return heroName ? `[${heroName.toUpperCase()}]` : '[--]';
-  }
-
-  private refreshLoadoutChips(weaponNames: string[]): void {
-    for (let index = 0; index < this.loadoutChipTexts.length; index += 1) {
-      const chip = this.loadoutChipTexts[index];
+  private refreshWeaponIcons(weaponNames: string[]): void {
+    for (let index = 0; index < this.weaponIconTexts.length; index += 1) {
+      const frame = this.weaponIconFrames[index];
+      const label = this.weaponIconTexts[index];
       const weaponName = weaponNames[index];
+      const definition = weaponName ? findWeaponDefinitionByName(weaponName) : undefined;
 
-      if (!weaponName) {
-        chip.setVisible(false);
+      if (!definition) {
+        frame.setFillStyle(0x172033, 0.98);
+        frame.setStrokeStyle(1, 0x334155, 0.92);
+        label.setVisible(false);
         continue;
       }
 
-      const style = this.getWeaponChipStyle(weaponName);
-      this.setTextIfChanged(chip, this.getWeaponChipLabel(weaponName));
-      if (chip.style.color !== style.textColor) {
-        chip.setColor(style.textColor);
-      }
-      if (chip.style.backgroundColor !== style.backgroundColor) {
-        chip.setBackgroundColor(style.backgroundColor);
-      }
-      chip.setVisible(true);
+      frame.setFillStyle(definition.projectileColor, 0.28);
+      frame.setStrokeStyle(1, definition.projectileStrokeColor, 0.98);
+      this.setTextIfChanged(label, definition.shortLabel);
+      label.setVisible(true);
     }
   }
 
@@ -543,7 +488,7 @@ export class UIScene extends Phaser.Scene {
     }
 
     const palette = this.getAlertPalette(kind);
-    this.setTextIfChanged(this.alertText, this.formatAlertChip(kind, message));
+    this.setTextIfChanged(this.alertText, message.toUpperCase());
     if (this.alertText.style.color !== palette.textColor) {
       this.alertText.setColor(palette.textColor);
     }
@@ -563,34 +508,7 @@ export class UIScene extends Phaser.Scene {
     if (this.rewardText.style.color !== color) {
       this.rewardText.setColor(color);
     }
-    if (this.rewardText.style.backgroundColor !== '#111827') {
-      this.rewardText.setBackgroundColor('#111827');
-    }
     this.rewardText.setVisible(true);
-  }
-
-  private refreshHintPriority(alertKind: string, alertMessage: string, rewardMessage: string): void {
-    const dangerAlertActive = Boolean(alertMessage) && (alertKind === 'boss' || alertKind === 'miniboss' || alertKind === 'victory' || alertKind === 'defeat');
-    const secondaryAlertActive = Boolean(alertMessage) && alertKind === 'elite';
-    const rewardVisible = Boolean(rewardMessage);
-
-    if (dangerAlertActive) {
-      this.hintText.setAlpha(0.28);
-      this.rewardText.setY(58);
-      this.rewardText.setAlpha(0.78);
-      return;
-    }
-
-    if (secondaryAlertActive) {
-      this.hintText.setAlpha(0.45);
-      this.rewardText.setY(42);
-      this.rewardText.setAlpha(0.9);
-      return;
-    }
-
-    this.hintText.setAlpha(rewardVisible ? 0.72 : 1);
-    this.rewardText.setY(26);
-    this.rewardText.setAlpha(1);
   }
 
   private getAlertPalette(kind: string): { textColor: string; backgroundColor: string } {
@@ -612,69 +530,78 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
-  private formatAlertChip(kind: string, message: string): string {
-    const prefix = (() => {
-      switch (kind) {
-        case 'hero':
-          return 'HERO';
-        case 'elite':
-          return 'ELITE';
-        case 'miniboss':
-          return 'MINI';
-        case 'boss':
-          return 'BOSS';
-        case 'victory':
-          return 'WIN';
-        case 'defeat':
-          return 'DOWN';
-        default:
-          return 'RUN';
-      }
-    })();
+  private getUpgradePresentation(choice: UpgradeDefinition): {
+    badgeText: string;
+    badgeColor: string;
+    cardColor: number;
+    title: string;
+    summary: string;
+  } {
+    const weapon = this.getWeaponUpgrade(choice.id);
+    if (weapon) {
+      return {
+        badgeText: weapon.shortLabel,
+        badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
+        cardColor: 0x132033,
+        title: weapon.name,
+        summary: weapon.codexSummary,
+      };
+    }
 
-    return `${prefix} | ${message.toUpperCase()}`;
-  }
-
-  private getWeaponChipLabel(weaponName: string): string {
-    switch (weaponName) {
-      case 'Arc Bolt':
-        return 'ARC';
-      case 'Twin Fangs':
-        return 'FANG';
-      case 'Ember Lance':
-        return 'LANCE';
-      case 'Bloom Cannon':
-        return 'BLOOM';
-      case 'Phase Disc':
-        return 'DISC';
-      case 'Sunwheel':
-        return 'SUN';
-      case 'Shatterbell':
-        return 'BELL';
+    switch (choice.id) {
+      case 'vitality':
+        return { badgeText: 'HP', badgeColor: '#991b1b', cardColor: 0x1a1623, title: 'Vitality', summary: '+25 max HP' };
+      case 'swiftness':
+        return { badgeText: 'SPD', badgeColor: '#1d4ed8', cardColor: 0x132033, title: 'Swiftness', summary: '+22 move speed' };
+      case 'power':
+        return { badgeText: 'DMG', badgeColor: '#92400e', cardColor: 0x211915, title: 'Power', summary: '+5 damage to all weapons' };
+      case 'rapid-fire':
+        return { badgeText: 'RPM', badgeColor: '#0f766e', cardColor: 0x122225, title: 'Rapid Fire', summary: '-40 ms cooldown' };
+      case 'velocity':
+        return { badgeText: 'VEL', badgeColor: '#7c3aed', cardColor: 0x171a2e, title: 'Velocity', summary: '+90 projectile speed' };
+      case 'magnet':
+        return { badgeText: 'MAG', badgeColor: '#15803d', cardColor: 0x13251c, title: 'Magnet', summary: '+35 pickup range' };
+      case 'reach':
+        return { badgeText: 'RNG', badgeColor: '#1d4ed8', cardColor: 0x132033, title: 'Reach', summary: '+55 weapon range' };
       default:
-        return weaponName.toUpperCase();
+        return {
+          badgeText: 'UP',
+          badgeColor: '#334155',
+          cardColor: 0x111827,
+          title: choice.title,
+          summary: choice.description,
+        };
     }
   }
 
-  private getWeaponChipStyle(weaponName: string): { textColor: string; backgroundColor: string } {
-    switch (weaponName) {
-      case 'Arc Bolt':
-        return { textColor: '#fff7ed', backgroundColor: '#a16207' };
-      case 'Twin Fangs':
-        return { textColor: '#ecfeff', backgroundColor: '#0f766e' };
-      case 'Ember Lance':
-        return { textColor: '#fff1f2', backgroundColor: '#be123c' };
-      case 'Bloom Cannon':
-        return { textColor: '#f0fdf4', backgroundColor: '#15803d' };
-      case 'Phase Disc':
-        return { textColor: '#faf5ff', backgroundColor: '#7e22ce' };
-      case 'Sunwheel':
-        return { textColor: '#fffbeb', backgroundColor: '#ca8a04' };
-      case 'Shatterbell':
-        return { textColor: '#ecfeff', backgroundColor: '#0f766e' };
+  private getWeaponUpgrade(upgradeId: UpgradeDefinition['id']): WeaponDefinition | null {
+    switch (upgradeId) {
+      case 'unlock-twin-fangs':
+        return WEAPON_DEFINITIONS['twin-fangs'];
+      case 'unlock-ember-lance':
+        return WEAPON_DEFINITIONS['ember-lance'];
+      case 'unlock-bloom-cannon':
+        return WEAPON_DEFINITIONS['bloom-cannon'];
+      case 'unlock-phase-disc':
+        return WEAPON_DEFINITIONS['phase-disc'];
+      case 'unlock-sunwheel':
+        return WEAPON_DEFINITIONS.sunwheel;
+      case 'unlock-shatterbell':
+        return WEAPON_DEFINITIONS.shatterbell;
       default:
-        return { textColor: '#e2e8f0', backgroundColor: '#1f2937' };
+        return null;
     }
+  }
+
+  private applyLevelUpCardHover(index: number, hovered: boolean): void {
+    const card = this.levelUpCards[index];
+    if (!card.visible) {
+      return;
+    }
+
+    const baseColor = Number(card.getData('baseColor') ?? 0x111827);
+    card.setFillStyle(baseColor, hovered ? 1 : 0.99);
+    card.setStrokeStyle(2, hovered ? 0x93c5fd : 0x334155, 1);
   }
 
   private setTextIfChanged(target: Phaser.GameObjects.Text, nextText: string): void {

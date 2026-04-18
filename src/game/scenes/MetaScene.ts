@@ -20,8 +20,10 @@ export class MetaScene extends Phaser.Scene {
   private goldText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private headerText!: Phaser.GameObjects.Text;
+  private upgradeFrames: Phaser.GameObjects.Rectangle[] = [];
   private upgradeButtons: Phaser.GameObjects.Text[] = [];
   private upgradeDetails: Phaser.GameObjects.Text[] = [];
+  private questFrames: Phaser.GameObjects.Rectangle[] = [];
   private questTexts: Phaser.GameObjects.Text[] = [];
 
   constructor() {
@@ -33,46 +35,46 @@ export class MetaScene extends Phaser.Scene {
     const centerX = GAME_WIDTH / 2;
 
     this.cameras.main.setBackgroundColor('#0b1020');
+    this.add.rectangle(centerX, 70, 1120, 104, 0x0f172a, 0.95).setStrokeStyle(2, 0x334155, 0.9);
+    this.add.rectangle(350, 412, 548, 486, 0x111827, 0.96).setStrokeStyle(2, 0x334155, 1);
+    this.add.rectangle(940, 412, 520, 486, 0x111827, 0.96).setStrokeStyle(2, 0x334155, 1);
 
     this.add
-      .text(centerX, 52, 'Meta Progression', {
+      .text(98, 52, 'Meta Progression', {
         fontFamily: 'Georgia, serif',
         fontSize: '40px',
         color: '#f8fafc',
       })
-      .setOrigin(0.5);
+      .setOrigin(0, 0.5);
 
     this.goldText = this.add
-      .text(centerX, 94, `Total Gold: ${this.saveData.totalGold}`, {
+      .text(GAME_WIDTH - 104, 52, `Gold ${this.saveData.totalGold}`, {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fde68a',
+        backgroundColor: '#172036',
+        padding: { left: 14, right: 14, top: 8, bottom: 8 },
       })
-      .setOrigin(0.5);
+      .setOrigin(1, 0.5);
 
     this.headerText = this.add
-      .text(centerX, 126, '', {
+      .text(100, 90, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#93c5fd',
       })
-      .setOrigin(0.5);
+      .setOrigin(0, 0.5);
 
     this.statusText = this.add
-      .text(centerX, 154, 'Buy permanent boosts and clear quests for long-term power.', {
+      .text(100, 116, 'Long-term upgrades on the left. Quest rewards on the right.', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '17px',
-        color: '#cbd5e1',
+        fontSize: '16px',
+        color: '#94a3b8',
       })
-      .setOrigin(0.5);
-
-    const leftPanel = this.add.rectangle(360, 394, 560, 492, 0x111827, 0.94).setOrigin(0.5);
-    leftPanel.setStrokeStyle(2, 0x334155, 1);
-    const rightPanel = this.add.rectangle(930, 394, 500, 492, 0x111827, 0.94).setOrigin(0.5);
-    rightPanel.setStrokeStyle(2, 0x334155, 1);
+      .setOrigin(0, 0.5);
 
     this.add
-      .text(130, 194, 'Permanent Upgrades', {
+      .text(94, 186, 'Permanent Upgrades', {
         fontFamily: 'Georgia, serif',
         fontSize: '30px',
         color: '#f8fafc',
@@ -80,24 +82,42 @@ export class MetaScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.add
-      .text(710, 194, 'Quest Board', {
+      .text(710, 186, 'Quest Board', {
         fontFamily: 'Georgia, serif',
         fontSize: '30px',
         color: '#f8fafc',
       })
       .setOrigin(0, 0.5);
 
-    let upgradeY = 256;
+    this.add
+      .text(96, 216, 'Spend gold here. Quest unlocks gate later rows.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#8ea6c1',
+      })
+      .setOrigin(0, 0.5);
+
+    this.add
+      .text(710, 216, 'Quest progress and rewards stay separate from upgrade spend.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#8ea6c1',
+      })
+      .setOrigin(0, 0.5);
+
+    let upgradeY = 278;
     for (const upgrade of PERMANENT_UPGRADES) {
+      const frame = this.add.rectangle(350, upgradeY, 492, 82, 0x172033, 0.98).setOrigin(0.5);
+      frame.setStrokeStyle(1, 0x334155, 0.9);
       const button = this.add
-        .text(110, upgradeY, upgrade.title, {
+        .text(506, upgradeY, upgrade.title, {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '22px',
+          fontSize: '17px',
           color: '#fef3c7',
           backgroundColor: '#1f2937',
-          padding: { left: 16, right: 16, top: 8, bottom: 8 },
+          padding: { left: 14, right: 14, top: 8, bottom: 8 },
         })
-        .setOrigin(0, 0.5)
+        .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
 
       button.on('pointerover', () => {
@@ -106,30 +126,36 @@ export class MetaScene extends Phaser.Scene {
       button.on('pointerout', () => this.refreshView());
       button.on('pointerdown', () => this.handlePurchase(upgrade));
 
-      const detail = this.add.text(290, upgradeY, '', {
+      const detail = this.add.text(132, upgradeY - 18, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         color: '#cbd5e1',
-        wordWrap: { width: 320 },
+        wordWrap: { width: 292 },
+        lineSpacing: 3,
       });
-      detail.setOrigin(0, 0.5);
+      detail.setOrigin(0, 0);
 
+      this.upgradeFrames.push(frame);
       this.upgradeButtons.push(button);
       this.upgradeDetails.push(detail);
-      upgradeY += 100;
+      upgradeY += 92;
     }
 
-    let questY = 232;
+    let questY = 270;
     for (const quest of QUESTS) {
-      const questText = this.add.text(700, questY, '', {
+      const frame = this.add.rectangle(940, questY, 444, 78, 0x172033, 0.98).setOrigin(0.5);
+      frame.setStrokeStyle(1, 0x334155, 0.9);
+      const questText = this.add.text(732, questY - 24, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
+        fontSize: '15px',
         color: '#cbd5e1',
-        wordWrap: { width: 430 },
+        wordWrap: { width: 410 },
+        lineSpacing: 3,
       });
       questText.setOrigin(0, 0);
+      this.questFrames.push(frame);
       this.questTexts.push(questText);
-      questY += 88;
+      questY += 86;
     }
 
     const backButton = this.add
@@ -175,7 +201,7 @@ export class MetaScene extends Phaser.Scene {
 
   private refreshView(): void {
     this.saveData = loadGameSave();
-    this.goldText.setText(`Total Gold: ${this.saveData.totalGold}`);
+    this.goldText.setText(`Gold ${this.saveData.totalGold}`);
     this.headerText.setText(`Selected Hero: ${HEROES[this.saveData.selectedHero].name}`);
 
     for (let index = 0; index < PERMANENT_UPGRADES.length; index += 1) {
@@ -187,13 +213,15 @@ export class MetaScene extends Phaser.Scene {
       const maxed = level >= upgrade.maxLevel;
       const state = !unlocked ? 'Quest Locked' : maxed ? 'Maxed' : canBuy ? 'Available' : 'Need More Gold';
 
-      this.upgradeButtons[index].setText(`${upgrade.title} ${level}/${upgrade.maxLevel}`);
+      this.upgradeFrames[index].setFillStyle(!unlocked ? 0x172234 : maxed ? 0x1c3b2c : 0x172033, 0.98);
+      this.upgradeFrames[index].setStrokeStyle(1, !unlocked ? 0x334155 : maxed ? 0x4ade80 : 0x334155, 0.95);
+      this.upgradeButtons[index].setText(!unlocked ? 'Quest' : maxed ? 'Max' : `Buy ${cost}g`);
       this.upgradeButtons[index].setStyle({
         color: !unlocked ? '#94a3b8' : maxed ? '#111827' : canBuy ? '#fef3c7' : '#cbd5e1',
         backgroundColor: !unlocked ? '#233044' : maxed ? '#86efac' : canBuy ? '#1f2937' : '#374151',
       });
       this.upgradeDetails[index].setText(
-        `${upgrade.description}\nState: ${state}\nCost: ${maxed ? 'MAX' : cost}`,
+        `${upgrade.title} ${level}/${upgrade.maxLevel}\n${upgrade.description}\n${state}`,
       );
     }
 
@@ -203,8 +231,10 @@ export class MetaScene extends Phaser.Scene {
       const progress = this.getQuestProgress(quest.metric, quest.target);
       const rewardLabel = this.getQuestRewardLabel(quest);
 
+      this.questFrames[index].setFillStyle(completed ? 0x173126 : 0x172033, 0.98);
+      this.questFrames[index].setStrokeStyle(1, completed ? 0x4ade80 : 0x334155, completed ? 0.95 : 0.9);
       this.questTexts[index].setText(
-        `${completed ? '[Complete]' : '[Active]'} ${quest.title}\n${quest.description}\nProgress: ${progress}\nReward: ${rewardLabel}`,
+        `${completed ? 'Complete' : 'Active'}  ${quest.title}\n${quest.description}\n${progress}  |  ${rewardLabel}`,
       );
       this.questTexts[index].setColor(completed ? '#86efac' : '#cbd5e1');
     }

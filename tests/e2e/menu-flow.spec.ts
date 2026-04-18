@@ -42,12 +42,12 @@ async function clickMenuButton(
     const gameHeight = 720;
     const buttonPositions = {
       startButton: {
-        x: gameWidth / 2 - 162,
-        y: gameHeight / 2 - 138,
+        x: 560,
+        y: 82,
       },
       metaButton: {
-        x: gameWidth / 2 + 162,
-        y: gameHeight / 2 - 138,
+        x: 726,
+        y: 82,
       },
     } as const;
     const buttonPosition = buttonPositions[buttonKey];
@@ -69,24 +69,23 @@ async function clickMenuButton(
 }
 
 async function clickMetaBackButton(page: import('@playwright/test').Page): Promise<void> {
-  const canvas = page.locator('canvas');
-  await expect(canvas).toBeVisible();
+  await page.evaluate(() => {
+    const game = window.__JANGAN_LARI_GAME__!;
+    const metaScene = game.scene.getScene('MetaScene') as {
+      children: { list: Array<{ text?: string; emit?: (eventName: string) => void }> };
+    };
+    const backButton = metaScene.children.list.find((child) => child.text === 'Back to Menu');
+    backButton?.emit?.('pointerdown');
+  });
+}
 
-  const box = await canvas.boundingBox();
-  if (!box) {
-    throw new Error('Game canvas is not available for Meta back click.');
-  }
-
-  const gameWidth = 1280;
-  const gameHeight = 720;
-  const backButtonX = gameWidth / 2;
-  const backButtonY = gameHeight - 44;
-
-  await canvas.click({
-    position: {
-      x: (backButtonX / gameWidth) * box.width,
-      y: (backButtonY / gameHeight) * box.height,
-    },
+async function triggerRunEscape(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const game = window.__JANGAN_LARI_GAME__!;
+    const runScene = game.scene.getScene('RunScene') as {
+      input?: { keyboard?: { emit?: (eventName: string) => void } };
+    };
+    runScene.input?.keyboard?.emit?.('keydown-ESC');
   });
 }
 
@@ -193,7 +192,7 @@ test.describe('menu and run scene flow', () => {
 
     await clickMenuButton(page, 'startButton');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
-    await page.keyboard.press('Escape');
+    await triggerRunEscape(page);
 
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;

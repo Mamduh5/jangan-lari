@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { primeAudioContext } from '../audio/audioCuePlayer';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import { ENEMY_ARCHETYPES } from '../data/enemies';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
 import { WEAPON_DEFINITIONS } from '../data/weapons';
 import { loadGameSave, type GameSaveData } from '../save/saveData';
@@ -15,6 +16,13 @@ export class MenuScene extends Phaser.Scene {
   private heroPanels: Phaser.GameObjects.Rectangle[] = [];
   private startButton!: Phaser.GameObjects.Text;
   private metaButton!: Phaser.GameObjects.Text;
+  private focusedHeroId: HeroDefinition['id'] = 'runner';
+  private codexHeroName!: Phaser.GameObjects.Text;
+  private codexHeroBody!: Phaser.GameObjects.Text;
+  private codexWeaponBadge!: Phaser.GameObjects.Text;
+  private codexWeaponName!: Phaser.GameObjects.Text;
+  private codexWeaponBody!: Phaser.GameObjects.Text;
+  private codexThreatTexts: Phaser.GameObjects.Text[] = [];
 
   constructor() {
     super('MenuScene');
@@ -25,115 +33,207 @@ export class MenuScene extends Phaser.Scene {
     this.heroActionButtons = [];
     this.heroInfoTexts = [];
     this.heroPanels = [];
+    this.codexThreatTexts = [];
 
     const centerX = GAME_WIDTH / 2;
-    const centerY = GAME_HEIGHT / 2;
+    const contentTop = 136;
 
     this.cameras.main.setBackgroundColor('#0b1020');
-    this.add.rectangle(centerX, centerY, 1164, 688, 0x0f172a, 0.9).setStrokeStyle(2, 0x223247, 0.88);
+    this.add.rectangle(centerX, 62, 1160, 92, 0x0f172a, 0.94).setStrokeStyle(2, 0x223247, 0.88);
+    this.add.rectangle(400, 428, 724, 512, 0x101827, 0.97).setStrokeStyle(2, 0x2a3b55, 0.92);
+    this.add.rectangle(996, 428, 332, 512, 0x111827, 0.97).setStrokeStyle(2, 0x2a3b55, 0.92);
 
     this.add
-      .text(centerX, centerY - 302, 'JANGAN LARI', {
+      .text(102, 44, 'JANGAN LARI', {
         fontFamily: 'Georgia, serif',
-        fontSize: '54px',
+        fontSize: '42px',
         color: '#f8fafc',
       })
-      .setOrigin(0.5);
+      .setOrigin(0, 0.5);
 
     this.add
-      .text(centerX, centerY - 248, 'Choose a hero, enter the arena, and survive the swarm.', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '21px',
-        color: '#93c5fd',
-      })
-      .setOrigin(0.5);
-
-    this.goldText = this.add
-      .text(centerX, centerY - 204, `Gold Bank: ${this.saveData.totalGold}`, {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '25px',
-        color: '#fde68a',
-      })
-      .setOrigin(0.5);
-
-    this.startButton = this.createMenuButton(centerX - 162, centerY - 138, 'Start Run', () => this.startRun());
-    this.metaButton = this.createMenuButton(centerX + 162, centerY - 138, 'Meta Progress', () => this.openMeta());
-
-    this.add.rectangle(centerX, centerY - 92, 920, 2, 0x223247, 0.9);
-
-    this.add
-      .text(centerX, centerY - 48, 'Hero Selection', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '33px',
-        color: '#f8fafc',
-      })
-      .setOrigin(0.5);
-
-    this.add
-      .text(centerX, centerY - 12, 'Each hero begins with a different weapon, passive, and combat silhouette.', {
+      .text(104, 82, 'Pick a runner, then enter the arena.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '17px',
-        color: '#cbd5e1',
+        color: '#9fb8d3',
       })
-      .setOrigin(0.5);
+      .setOrigin(0, 0.5);
 
-    const panelWidth = 250;
-    const panelHeight = 300;
-    const panelSpacing = 18;
-    const firstPanelX = centerX - ((panelWidth * HERO_LIST.length + panelSpacing * (HERO_LIST.length - 1)) / 2) + panelWidth / 2;
-    const panelY = centerY + 100;
+    this.goldText = this.add
+      .text(GAME_WIDTH - 106, 48, `Gold ${this.saveData.totalGold}`, {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '24px',
+        color: '#fde68a',
+        backgroundColor: '#172036',
+        padding: { left: 14, right: 14, top: 8, bottom: 8 },
+      })
+      .setOrigin(1, 0.5);
+
+    this.startButton = this.createMenuButton(560, 82, 'Start Run', () => this.startRun());
+    this.metaButton = this.createMenuButton(726, 82, 'Meta', () => this.openMeta());
+
+    this.add
+      .text(86, 162, 'Roster', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '28px',
+        color: '#f8fafc',
+      })
+      .setOrigin(0, 0.5);
+
+    this.add
+      .text(86, 194, 'Hero cards stay short. Full notes live in the codex panel.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#8ea6c1',
+      })
+      .setOrigin(0, 0.5);
+
+    this.add
+      .text(848, 162, 'Field Codex', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '28px',
+        color: '#f8fafc',
+      })
+      .setOrigin(0, 0.5);
+
+    this.add
+      .text(848, 194, 'Focused notes for the selected runner, weapon, and threats.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#8ea6c1',
+      })
+      .setOrigin(0, 0.5);
+
+    const panelWidth = 332;
+    const panelHeight = 172;
+    const panelSpacing = 20;
+    const firstPanelX = 86 + panelWidth / 2;
+    const panelYStart = contentTop + 124;
 
     for (let index = 0; index < HERO_LIST.length; index += 1) {
       const hero = HERO_LIST[index];
-      const x = firstPanelX + index * (panelWidth + panelSpacing);
-      const panel = this.add.rectangle(x, panelY, panelWidth, panelHeight, 0x111827, 0.965).setOrigin(0.5);
+      const column = index % 2;
+      const row = Math.floor(index / 2);
+      const x = firstPanelX + column * (panelWidth + panelSpacing);
+      const y = panelYStart + row * (panelHeight + 22);
+      const panel = this.add.rectangle(x, y, panelWidth, panelHeight, 0x182233, 0.98).setOrigin(0.5);
       panel.setStrokeStyle(2, 0x334155, 1);
+      panel.setInteractive({ useHandCursor: true });
+      panel.on('pointerover', () => this.setFocusedHero(hero.id));
+      panel.on('pointerdown', () => this.setFocusedHero(hero.id));
 
-      this.createHeroPreview(hero, x, centerY + 6);
+      this.createHeroPreview(hero, x - 116, y - 8);
 
       this.add
-        .text(x, centerY + 48, hero.name, {
+        .text(x - 44, y - 54, hero.name, {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '24px',
+          fontSize: '26px',
           color: '#f8fafc',
         })
-        .setOrigin(0.5);
+        .setOrigin(0, 0.5);
 
       const infoText = this.add
-        .text(x, centerY + 132, '', {
+        .text(x - 44, y - 8, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '14px',
           color: '#cbd5e1',
-          align: 'center',
-          wordWrap: { width: 214 },
-          lineSpacing: 3,
+          wordWrap: { width: 184 },
+          lineSpacing: 4,
         })
-        .setOrigin(0.5);
+        .setOrigin(0, 0.5);
 
-      const actionButton = this.createMenuButton(x, centerY + 226, '', () => this.handleHeroAction(hero));
-      actionButton.setFontSize('20px');
+      const actionButton = this.createMenuButton(x + 72, y + 52, '', () => this.handleHeroAction(hero));
+      actionButton.setFontSize('18px');
       actionButton.setPadding(14, 8, 14, 8);
+      actionButton.on('pointerover', () => this.setFocusedHero(hero.id));
 
       this.heroPanels.push(panel);
       this.heroInfoTexts.push(infoText);
       this.heroActionButtons.push(actionButton);
     }
 
-    this.add.rectangle(centerX, centerY + 276, 900, 46, 0x101b2f, 0.92).setStrokeStyle(1, 0x334155, 0.9);
-    this.statusText = this.add
-      .text(centerX, centerY + 276, 'Select a hero, then enter the run.', {
+    this.codexHeroName = this.add
+      .text(870, 262, '', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '30px',
+        color: '#f8fafc',
+      })
+      .setOrigin(0, 0.5);
+
+    this.codexHeroBody = this.add
+      .text(870, 300, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
+        fontSize: '15px',
+        color: '#cbd5e1',
+        wordWrap: { width: 252 },
+        lineSpacing: 5,
+      })
+      .setOrigin(0, 0);
+
+    this.add.rectangle(996, 420, 266, 108, 0x172033, 0.96).setStrokeStyle(1, 0x334155, 0.9);
+    this.codexWeaponBadge = this.add
+      .text(882, 388, '--', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '16px',
+        color: '#eff6ff',
+        backgroundColor: '#475569',
+        padding: { left: 10, right: 10, top: 8, bottom: 8 },
+      })
+      .setOrigin(0.5);
+    this.codexWeaponName = this.add
+      .text(926, 382, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '22px',
+        color: '#f8fafc',
+      })
+      .setOrigin(0, 0.5);
+    this.codexWeaponBody = this.add
+      .text(882, 416, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#cbd5e1',
+        wordWrap: { width: 232 },
+        lineSpacing: 4,
+      })
+      .setOrigin(0, 0);
+
+    this.add
+      .text(870, 500, 'Threats', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '24px',
+        color: '#f8fafc',
+      })
+      .setOrigin(0, 0.5);
+
+    for (let index = 0; index < 3; index += 1) {
+      this.add.rectangle(996, 560 + index * 74, 266, 60, 0x172033, 0.96).setStrokeStyle(1, 0x334155, 0.88);
+      const threatText = this.add
+        .text(872, 544 + index * 74, '', {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '14px',
+          color: '#cbd5e1',
+          wordWrap: { width: 240 },
+          lineSpacing: 3,
+        })
+        .setOrigin(0, 0);
+      this.codexThreatTexts.push(threatText);
+    }
+
+    this.add.rectangle(centerX, GAME_HEIGHT - 46, 896, 44, 0x101b2f, 0.92).setStrokeStyle(1, 0x334155, 0.9);
+    this.statusText = this.add
+      .text(centerX, GAME_HEIGHT - 46, 'Select a hero, then start the run.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '17px',
         color: '#93c5fd',
         align: 'center',
       })
       .setOrigin(0.5);
 
     this.add
-      .text(centerX, centerY + 314, 'Enter or Space starts a run. M opens meta progression.', {
+      .text(centerX, GAME_HEIGHT - 18, 'Enter or Space starts. M opens meta.', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '17px',
-        color: '#cbd5e1',
+        fontSize: '15px',
+        color: '#94a3b8',
       })
       .setOrigin(0.5);
 
@@ -142,6 +242,7 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-M', this.handleMetaShortcut, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
+    this.focusedHeroId = this.saveData.selectedHero;
     this.refreshHeroView();
   }
 
@@ -197,7 +298,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private refreshHeroView(): void {
-    this.goldText.setText(`Gold Bank: ${this.saveData.totalGold}`);
+    this.goldText.setText(`Gold ${this.saveData.totalGold}`);
 
     for (let index = 0; index < HERO_LIST.length; index += 1) {
       const hero = HERO_LIST[index];
@@ -208,8 +309,13 @@ export class MenuScene extends Phaser.Scene {
       const panel = this.heroPanels[index];
 
       infoText.setText(this.buildHeroSummary(hero, unlocked, selected));
-      panel.setStrokeStyle(selected ? 3 : 2, selected ? 0xfde68a : hero.appearance.strokeColor, selected ? 1 : 0.8);
-      panel.setFillStyle(selected ? 0x172033 : 0x111827, 0.965);
+      const focused = hero.id === this.focusedHeroId;
+      panel.setStrokeStyle(
+        selected ? 3 : focused ? 2 : 2,
+        selected ? 0xfde68a : focused ? 0x93c5fd : hero.appearance.strokeColor,
+        selected ? 1 : focused ? 0.95 : 0.8,
+      );
+      panel.setFillStyle(selected ? 0x1b2a3e : focused ? 0x18253a : 0x182233, 0.98);
 
       if (selected) {
         button.setText('Selected');
@@ -226,43 +332,35 @@ export class MenuScene extends Phaser.Scene {
       button.setText(`Unlock ${hero.unlockCost ?? 0}g`);
       button.setStyle({ color: '#bfdbfe', backgroundColor: '#1e3a5f' });
     }
+
+    this.refreshCodexView();
   }
 
   private buildHeroSummary(hero: HeroDefinition, unlocked: boolean, selected: boolean): string {
     const startingWeapon = WEAPON_DEFINITIONS[hero.startingWeaponId];
-    const lines = [hero.description, '', `Starts with: ${startingWeapon.name}`, hero.passiveLabel];
+    const traits: string[] = [`${startingWeapon.shortLabel} ${startingWeapon.name}`];
 
-    if (hero.maxHealthBonus !== 0) {
-      lines.push(`+${hero.maxHealthBonus} max HP`);
+    if (hero.maxHealthBonus > 0) {
+      traits.push(`+${hero.maxHealthBonus} HP`);
+    } else if (hero.moveSpeedBonus > 0) {
+      traits.push(`+${hero.moveSpeedBonus} speed`);
+    } else if (hero.pickupRangeBonus > 0) {
+      traits.push(`+${hero.pickupRangeBonus} pickup`);
+    } else if (hero.startingDamageBonus > 0) {
+      traits.push(`+${hero.startingDamageBonus} damage`);
+    } else if (hero.fireCooldownReductionMs > 0) {
+      traits.push(`-${hero.fireCooldownReductionMs} ms cooldown`);
     }
-
-    if (hero.moveSpeedBonus !== 0) {
-      lines.push(`+${hero.moveSpeedBonus} move speed`);
-    }
-
-    if (hero.pickupRangeBonus !== 0) {
-      lines.push(`+${hero.pickupRangeBonus} pickup range`);
-    }
-
-    if (hero.startingDamageBonus !== 0) {
-      lines.push(`+${hero.startingDamageBonus} starting damage`);
-    }
-
-    if (hero.fireCooldownReductionMs !== 0) {
-      lines.push(`-${hero.fireCooldownReductionMs} ms fire cooldown`);
-    }
-
-    lines.push('');
 
     if (selected) {
-      lines.push('Status: Selected for next run');
-    } else if (unlocked) {
-      lines.push('Status: Unlocked');
+      traits.push('Ready');
+    } else if (!unlocked) {
+      traits.push(`Locked ${hero.unlockCost ?? 0}g`);
     } else {
-      lines.push(`Status: Locked (${hero.unlockCost ?? 0} gold)`);
+      traits.push('Available');
     }
 
-    return lines.join('\n');
+    return traits.join('\n');
   }
 
   private createHeroPreview(hero: HeroDefinition, x: number, y: number): void {
@@ -318,6 +416,47 @@ export class MenuScene extends Phaser.Scene {
 
     button.on('pointerdown', () => onClick());
     return button;
+  }
+
+  private setFocusedHero(heroId: HeroDefinition['id']): void {
+    if (this.focusedHeroId === heroId) {
+      return;
+    }
+
+    this.focusedHeroId = heroId;
+    this.refreshHeroView();
+  }
+
+  private refreshCodexView(): void {
+    const hero = HERO_LIST.find((entry) => entry.id === this.focusedHeroId) ?? HERO_LIST[0];
+    const weapon = WEAPON_DEFINITIONS[hero.startingWeaponId];
+    const threatEntries = [
+      {
+        enemy: ENEMY_ARCHETYPES.skimmer,
+        note: 'Strafes wide. Keep a clean lane before closing in.',
+      },
+      {
+        enemy: ENEMY_ARCHETYPES.dreadnought,
+        note: 'Telegraphs a line charge. Sidestep before release.',
+      },
+      {
+        enemy: ENEMY_ARCHETYPES.behemoth,
+        note: 'Controls space with a shockwave ring near the end of the run.',
+      },
+    ];
+
+    this.codexHeroName.setText(hero.name);
+    this.codexHeroBody.setText(`${hero.description}\n\n${hero.passiveLabel}`);
+    this.codexWeaponBadge.setText(weapon.shortLabel);
+    this.codexWeaponBadge.setBackgroundColor(`#${weapon.projectileColor.toString(16).padStart(6, '0')}`);
+    this.codexWeaponName.setText(weapon.name);
+    this.codexWeaponBody.setText(weapon.codexSummary);
+
+    for (let index = 0; index < this.codexThreatTexts.length; index += 1) {
+      const entry = threatEntries[index];
+      this.codexThreatTexts[index].setText(`${entry.enemy.name}\n${entry.note}`);
+      this.codexThreatTexts[index].setColor(index === 0 ? '#bae6fd' : index === 1 ? '#fbcfe8' : '#fecaca');
+    }
   }
 
   private handleShutdown(): void {
