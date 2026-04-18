@@ -163,25 +163,51 @@ export class AutoFireWeapon {
   }
 
   private createMuzzleFlash(): void {
-    const flashRadius = Math.max(8, this.stats.projectileRadius * (this.stats.firePattern === 'radial' ? 2.6 : 1.8));
-    const flash = this.scene.add.circle(this.owner.x, this.owner.y, flashRadius, this.stats.projectileColor, 0.3);
+    const isRadial = this.stats.firePattern === 'radial';
+    const isExplosive = Boolean(this.stats.explosionRadius);
+    const isPiercing = Boolean(this.stats.pierceCount);
+    const isHeavy = this.stats.fireCooldownMs >= 900 || this.stats.damage >= 28;
+    const isBurst = (this.stats.burstCount ?? 1) > 1 && !isRadial;
+    const flashRadius = Math.max(
+      8,
+      this.stats.projectileRadius *
+        (isRadial ? 2.8 : isExplosive ? 2.45 : isHeavy ? 2.15 : isPiercing ? 2.05 : isBurst ? 1.95 : 1.8),
+    );
+    const flash = this.scene.add.circle(
+      this.owner.x,
+      this.owner.y,
+      flashRadius,
+      this.stats.projectileColor,
+      isExplosive ? 0.38 : isHeavy ? 0.34 : isBurst ? 0.28 : 0.3,
+    );
     flash.setBlendMode(Phaser.BlendModes.ADD);
     flash.setDepth(8);
 
-    const outerRing = this.scene.add.circle(this.owner.x, this.owner.y, flashRadius * 0.7, this.stats.projectileColor, 0.1);
-    outerRing.setStrokeStyle(2, this.stats.projectileStrokeColor, 0.95);
+    const outerRing = this.scene.add.circle(
+      this.owner.x,
+      this.owner.y,
+      flashRadius * (isExplosive ? 0.84 : isRadial ? 0.76 : 0.7),
+      this.stats.projectileColor,
+      isExplosive ? 0.14 : 0.1,
+    );
+    outerRing.setStrokeStyle(isExplosive ? 4 : isPiercing ? 3 : isHeavy ? 3 : 2, this.stats.projectileStrokeColor, 0.95);
     outerRing.setBlendMode(Phaser.BlendModes.ADD);
     outerRing.setDepth(8);
 
+    const spark = this.scene.add.circle(this.owner.x, this.owner.y, Math.max(3, flashRadius * 0.42), 0xffffff, isHeavy || isExplosive ? 0.2 : 0.12);
+    spark.setBlendMode(Phaser.BlendModes.ADD);
+    spark.setDepth(8);
+
     this.scene.tweens.add({
-      targets: [flash, outerRing],
-      scale: this.stats.firePattern === 'radial' ? 2.4 : this.stats.burstCount && this.stats.burstCount > 1 ? 2 : 1.8,
+      targets: [flash, outerRing, spark],
+      scale: isRadial ? 2.5 : isExplosive ? 2.35 : isPiercing ? 2.15 : isHeavy ? 2.1 : isBurst ? 2 : 1.8,
       alpha: 0,
-      duration: this.stats.firePattern === 'radial' ? 170 : 120,
+      duration: isRadial ? 170 : isExplosive ? 180 : isHeavy ? 150 : isPiercing ? 140 : isBurst ? 115 : 120,
       ease: 'Quad.Out',
       onComplete: () => {
         flash.destroy();
         outerRing.destroy();
+        spark.destroy();
       },
     });
   }

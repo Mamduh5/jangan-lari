@@ -396,6 +396,7 @@ export class RunScene extends Phaser.Scene {
     this.levelUpRemainingMs = 0;
     this.registry.set('run.levelUpRemainingMs', 0);
     this.applyUpgrade(selectedUpgrade.id);
+    this.showUpgradeSelectionFeedback(selectedUpgrade);
     this.pendingLevelUps = Math.max(0, this.pendingLevelUps - 1);
 
     if (this.pendingLevelUps > 0) {
@@ -528,6 +529,7 @@ export class RunScene extends Phaser.Scene {
         this.setAlert('boss', 'Final boss active', 2600);
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
         this.showEncounterBanner('FINAL BOSS', `${archetype.name} has arrived. Watch the charge and break it for victory.`, 0xf87171, 2600);
+        this.cameras.main.shake(160, 0.0023);
         this.cameras.main.flash(180, 255, 120, 120, false);
         playCue('boss-arrival');
       } else if (archetype.isMiniboss) {
@@ -535,6 +537,7 @@ export class RunScene extends Phaser.Scene {
         this.setAlert('miniboss', 'Miniboss active', 2200);
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'MINIBOSS', 0xfda4af);
         this.showEncounterBanner('MINIBOSS', `${archetype.name} enters the arena. Beat it for bonus gold and a free upgrade.`, 0xfda4af, 2200);
+        this.cameras.main.shake(120, 0.0018);
         this.cameras.main.flash(120, 255, 180, 180, false);
         playCue('miniboss-arrival');
       } else if (archetype.isElite) {
@@ -542,7 +545,9 @@ export class RunScene extends Phaser.Scene {
         this.setAlert('elite', 'Elite target active', 1600);
         this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
         this.showEncounterBanner('ELITE TARGET', `${archetype.name} is carrying a reward cache.`, 0xe9d5ff, 1500);
+        this.cameras.main.shake(90, 0.0012);
         this.cameras.main.flash(90, 190, 150, 255, false);
+        playCue('elite-arrival');
       }
     }
   }
@@ -1236,6 +1241,40 @@ export class RunScene extends Phaser.Scene {
         this.registerWeapon(WEAPON_DEFINITIONS.shatterbell, true);
         break;
     }
+  }
+
+  private showUpgradeSelectionFeedback(upgrade: UpgradeDefinition): void {
+    const presentation: Record<
+      UpgradeId,
+      { text: string; color: string; burstColor: number; radius: number }
+    > = {
+      vitality: { text: 'Vitality +25 HP', color: '#fecaca', burstColor: 0xf87171, radius: 54 },
+      swiftness: { text: 'Swiftness +SPD', color: '#bfdbfe', burstColor: 0x60a5fa, radius: 56 },
+      power: { text: 'Power +DMG', color: '#fde68a', burstColor: 0xf59e0b, radius: 60 },
+      'rapid-fire': { text: 'Rapid Fire online', color: '#99f6e4', burstColor: 0x14b8a6, radius: 58 },
+      velocity: { text: 'Velocity +VEL', color: '#ddd6fe', burstColor: 0xa78bfa, radius: 58 },
+      magnet: { text: 'Magnet +MAG', color: '#bbf7d0', burstColor: 0x22c55e, radius: 56 },
+      reach: { text: 'Reach +RNG', color: '#bfdbfe', burstColor: 0x38bdf8, radius: 58 },
+      'unlock-twin-fangs': { text: 'Twin Fangs online', color: '#dbeafe', burstColor: 0x7dd3fc, radius: 0 },
+      'unlock-ember-lance': { text: 'Ember Lance online', color: '#ffe4e6', burstColor: 0xfb7185, radius: 0 },
+      'unlock-bloom-cannon': { text: 'Bloom Cannon online', color: '#dcfce7', burstColor: 0x86efac, radius: 0 },
+      'unlock-phase-disc': { text: 'Phase Disc online', color: '#f3e8ff', burstColor: 0xc084fc, radius: 0 },
+      'unlock-sunwheel': { text: 'Sunwheel online', color: '#fef3c7', burstColor: 0xfbbf24, radius: 0 },
+      'unlock-shatterbell': { text: 'Shatterbell online', color: '#cffafe', burstColor: 0x67e8f9, radius: 0 },
+    };
+
+    const feedback = presentation[upgrade.id];
+    if (!feedback) {
+      return;
+    }
+
+    if (feedback.radius > 0) {
+      this.showFloatingText(this.player.x, this.player.y - 82, feedback.text, feedback.color, 18);
+      this.createBurstCircle(this.player.x, this.player.y, feedback.burstColor, 16, feedback.radius, 240, 0.78);
+      this.cameras.main.shake(70, 0.0012);
+    }
+
+    playCue('upgrade-confirm');
   }
 
   private applyWeaponDamageBonus(amount: number): void {

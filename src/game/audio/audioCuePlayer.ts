@@ -4,6 +4,7 @@ import type { WeaponDefinition } from '../data/weapons';
 
 type CueKind =
   | 'dash-warning'
+  | 'elite-arrival'
   | 'miniboss-arrival'
   | 'boss-arrival'
   | 'miniboss-release'
@@ -11,6 +12,7 @@ type CueKind =
   | 'elite-reward'
   | 'miniboss-reward'
   | 'boss-reward'
+  | 'upgrade-confirm'
   | 'victory'
   | 'defeat';
 
@@ -155,6 +157,12 @@ export function playCue(kind: CueKind): void {
         { frequency: 320, startOffset: 0.08, duration: 0.09, type: 'sawtooth', gain: 0.16 },
       ]);
       break;
+    case 'elite-arrival':
+      playToneSequence([
+        { frequency: 277.18, startOffset: 0, duration: 0.12, type: 'triangle', gain: 0.18 },
+        { frequency: 369.99, startOffset: 0.09, duration: 0.12, type: 'sawtooth', gain: 0.14 },
+      ]);
+      break;
     case 'miniboss-arrival':
       playToneSequence([
         { frequency: 196, startOffset: 0, duration: 0.18, type: 'triangle', gain: 0.24 },
@@ -199,6 +207,13 @@ export function playCue(kind: CueKind): void {
         { frequency: 392, startOffset: 0, duration: 0.09, type: 'triangle', gain: 0.2 },
         { frequency: 523.25, startOffset: 0.08, duration: 0.1, type: 'triangle', gain: 0.18 },
         { frequency: 783.99, startOffset: 0.18, duration: 0.18, type: 'sine', gain: 0.16 },
+      ]);
+      break;
+    case 'upgrade-confirm':
+      playToneSequence([
+        { frequency: 659.25, startOffset: 0, duration: 0.05, type: 'triangle', gain: 0.15 },
+        { frequency: 783.99, startOffset: 0.04, duration: 0.06, type: 'triangle', gain: 0.14 },
+        { frequency: 987.77, startOffset: 0.09, duration: 0.09, type: 'sine', gain: 0.12 },
       ]);
       break;
     case 'defeat':
