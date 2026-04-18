@@ -46,6 +46,13 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.weaponIconFrames = [];
+    this.weaponIconTexts = [];
+    this.levelUpCards = [];
+    this.levelUpButtons = [];
+    this.levelUpDescriptions = [];
+    this.levelUpBadges = [];
+
     const topLeftPanel = this.add.rectangle(24, 18, 274, 86, 0x030712, 0.88).setOrigin(0);
     topLeftPanel.setStrokeStyle(1, 0x334155, 0.96);
     topLeftPanel.setScrollFactor(0);
@@ -616,5 +623,11 @@ export class UIScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-ONE', this.handleSelectUpgradeOne, this);
     this.input.keyboard?.off('keydown-TWO', this.handleSelectUpgradeTwo, this);
     this.input.keyboard?.off('keydown-THREE', this.handleSelectUpgradeThree, this);
+    this.weaponIconFrames = [];
+    this.weaponIconTexts = [];
+    this.levelUpCards = [];
+    this.levelUpButtons = [];
+    this.levelUpDescriptions = [];
+    this.levelUpBadges = [];
   }
 }
