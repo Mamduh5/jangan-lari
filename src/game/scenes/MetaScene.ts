@@ -32,6 +32,11 @@ export class MetaScene extends Phaser.Scene {
 
   create(): void {
     this.saveData = loadGameSave();
+    this.upgradeFrames = [];
+    this.upgradeButtons = [];
+    this.upgradeDetails = [];
+    this.questFrames = [];
+    this.questTexts = [];
     const centerX = GAME_WIDTH / 2;
 
     this.cameras.main.setBackgroundColor('#0b1020');

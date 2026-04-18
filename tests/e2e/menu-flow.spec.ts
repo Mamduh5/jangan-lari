@@ -185,6 +185,21 @@ test.describe('menu and run scene flow', () => {
     expect(state.menuActive).toBe(true);
     expect(state.metaActive).toBe(false);
 
+    await clickMenuButton(page, 'metaButton');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MetaScene')));
+
+    state = await getGameState(page);
+    expect(state.menuActive).toBe(false);
+    expect(state.metaActive).toBe(true);
+    expectNoBrokenSceneApiErrors(runtimeErrors);
+
+    await clickMetaBackButton(page);
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    state = await getGameState(page);
+    expect(state.menuActive).toBe(true);
+    expect(state.metaActive).toBe(false);
+
     await clickMenuButton(page, 'startButton');
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;
