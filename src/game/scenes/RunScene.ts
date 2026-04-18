@@ -58,6 +58,17 @@ export class RunScene extends Phaser.Scene {
   private combatResponse!: CombatResponseController;
   private combatResponseImpactCounts: Partial<Record<WeaponId, number>> = {};
   private combatResponseEnemyImpactCounts: Partial<Record<EnemyArchetypeId, number>> = {};
+  private lineStrikeAttacks: Array<{
+    x: number;
+    y: number;
+    direction: { x: number; y: number };
+    length: number;
+    halfWidth: number;
+    damage: number;
+    durationMs: number;
+    elapsedMs: number;
+    hasHitPlayer: boolean;
+  }> = [];
   private shockwaveAttacks: Array<{
     ring: Phaser.GameObjects.Arc;
     halo: Phaser.GameObjects.Arc;
@@ -132,6 +143,7 @@ export class RunScene extends Phaser.Scene {
     this.globalWeaponRangeBonus = freshSession.globalWeaponRangeBonus;
     this.weapons = [];
     this.colliders = [];
+    this.lineStrikeAttacks = [];
     this.shockwaveAttacks = [];
     this.ownedWeaponIds.clear();
     this.combatResponseImpactCounts = {};
@@ -245,6 +257,7 @@ export class RunScene extends Phaser.Scene {
 
     this.player.move(new Phaser.Math.Vector2(horizontal, vertical));
     this.updateEnemies();
+    this.updateLineStrikeAttacks(delta);
     this.updateShockwaveAttacks(delta);
     this.updateGems();
 
@@ -559,6 +572,7 @@ export class RunScene extends Phaser.Scene {
     const nextAttacks: typeof this.shockwaveAttacks = [];
 
     for (const attack of this.shockwaveAttacks) {
+      const previousRadius = attack.currentRadius;
       attack.elapsedMs += deltaMs;
       const progress = Phaser.Math.Clamp(attack.elapsedMs / attack.durationMs, 0, 1);
       attack.currentRadius = Phaser.Math.Linear(52, attack.maxRadius, progress);
@@ -569,8 +583,7 @@ export class RunScene extends Phaser.Scene {
       attack.halo.setAlpha(0.16 - progress * 0.12);
 
       if (!attack.hasHitPlayer) {
-        const playerDistance = Phaser.Math.Distance.Between(this.player.x, this.player.y, attack.x, attack.y);
-        if (Math.abs(playerDistance - attack.currentRadius) <= attack.thickness + 18) {
+        if (this.doesShockwaveHitPlayer(attack, previousRadius)) {
           attack.hasHitPlayer = true;
           const tookDamage = this.player.takeDamage(attack.damage, this.time.now);
           if (tookDamage) {
@@ -598,6 +611,38 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.shockwaveAttacks = nextAttacks;
+  }
+
+  private updateLineStrikeAttacks(deltaMs: number): void {
+    if (this.lineStrikeAttacks.length === 0) {
+      return;
+    }
+
+    const nextAttacks: typeof this.lineStrikeAttacks = [];
+
+    for (const attack of this.lineStrikeAttacks) {
+      attack.elapsedMs += deltaMs;
+
+      if (!attack.hasHitPlayer && this.isPlayerInsideLineAttack(attack.x, attack.y, attack.direction, attack.length, attack.halfWidth)) {
+        attack.hasHitPlayer = true;
+        const tookDamage = this.player.takeDamage(attack.damage, this.time.now);
+        if (tookDamage) {
+          this.createBurstCircle(this.player.x, this.player.y, 0xfb7185, 16, 54, 220, 0.85);
+          this.showFloatingText(this.player.x, this.player.y - 28, `${attack.damage}`, '#fecdd3', 18);
+          if (!this.player.isAlive()) {
+            this.lineStrikeAttacks = [];
+            this.endRun(false, 'Defeat', 'The Dreadnought broke through your position.');
+            return;
+          }
+        }
+      }
+
+      if (attack.elapsedMs < attack.durationMs && !attack.hasHitPlayer) {
+        nextAttacks.push(attack);
+      }
+    }
+
+    this.lineStrikeAttacks = nextAttacks;
   }
 
   private updateGems(): void {
@@ -842,21 +887,21 @@ export class RunScene extends Phaser.Scene {
     direction: { x: number; y: number },
     length: number,
   ): void {
-    this.showLineAttackTelegraph(x, y, direction, length, 62, 0xfb7185, 180, 'active');
+    const durationMs = 180;
+    this.showLineAttackTelegraph(x, y, direction, length, 62, 0xfb7185, durationMs, 'active');
     this.createBurstCircle(x, y, 0xfb7185, 22, 70, 260, 0.75);
     this.cameras.main.shake(100, 0.0022);
-
-    if (this.isPlayerInsideLineAttack(x, y, direction, length, 38)) {
-      const lineDamage = Math.max(18, enemy.contactDamage - 4);
-      const tookDamage = this.player.takeDamage(lineDamage, this.time.now);
-      if (tookDamage) {
-        this.createBurstCircle(this.player.x, this.player.y, 0xfb7185, 16, 54, 220, 0.85);
-        this.showFloatingText(this.player.x, this.player.y - 28, `${lineDamage}`, '#fecdd3', 18);
-        if (!this.player.isAlive()) {
-          this.endRun(false, 'Defeat', 'The Dreadnought broke through your position.');
-        }
-      }
-    }
+    this.lineStrikeAttacks.push({
+      x,
+      y,
+      direction,
+      length,
+      halfWidth: 38,
+      damage: Math.max(18, enemy.contactDamage - 4),
+      durationMs,
+      elapsedMs: 0,
+      hasHitPlayer: false,
+    });
   }
 
   private showLineAttackTelegraph(
@@ -986,8 +1031,26 @@ export class RunScene extends Phaser.Scene {
     const relativeY = this.player.y - originY;
     const along = relativeX * direction.x + relativeY * direction.y;
     const perpendicular = Math.abs(relativeX * -direction.y + relativeY * direction.x);
+    const playerHitRadius = this.getPlayerHitRadius();
 
-    return along >= 0 && along <= length && perpendicular <= halfWidth + 18;
+    return along >= -playerHitRadius && along <= length + playerHitRadius && perpendicular <= halfWidth + playerHitRadius;
+  }
+
+  private doesShockwaveHitPlayer(
+    attack: (typeof this.shockwaveAttacks)[number],
+    previousRadius: number,
+  ): boolean {
+    const playerDistance = Phaser.Math.Distance.Between(this.player.x, this.player.y, attack.x, attack.y);
+    const playerHitRadius = this.getPlayerHitRadius();
+    const minimumAttackRadius = Math.min(previousRadius, attack.currentRadius) - attack.thickness;
+    const maximumAttackRadius = Math.max(previousRadius, attack.currentRadius) + attack.thickness;
+
+    return playerDistance + playerHitRadius >= minimumAttackRadius && playerDistance - playerHitRadius <= maximumAttackRadius;
+  }
+
+  private getPlayerHitRadius(): number {
+    const playerBody = this.player.body;
+    return Math.max(playerBody.halfWidth ?? playerBody.width / 2, playerBody.halfHeight ?? playerBody.height / 2);
   }
 
   private collectXPGem(gem: XPGem): void {
@@ -1285,6 +1348,7 @@ export class RunScene extends Phaser.Scene {
     this.player.move(new Phaser.Math.Vector2(0, 0));
     this.player.updateVisualState(this.time.now);
     this.physics.pause();
+    this.lineStrikeAttacks = [];
     for (const attack of this.shockwaveAttacks) {
       attack.ring.destroy();
       attack.halo.destroy();
@@ -1539,6 +1603,7 @@ export class RunScene extends Phaser.Scene {
       attack.ring.destroy();
       attack.halo.destroy();
     }
+    this.lineStrikeAttacks = [];
     this.shockwaveAttacks = [];
 
     this.destroyPhysicsGroup(this.enemies);
