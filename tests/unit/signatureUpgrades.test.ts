@@ -45,6 +45,31 @@ describe('signature upgrade helpers', () => {
     expect(choices.every((choice) => choice.kind === 'core')).toBe(true);
   });
 
+  test('one-weapon preference injects one weapon-direction option without forcing a specific weapon', () => {
+    const choices = buildLevelUpChoices({
+      upgrades: UPGRADE_POOL,
+      ownedWeaponIds: ['arc-bolt'],
+      takenSignatureIds: [],
+      forceSignature: false,
+      preferWeaponDirection: true,
+      shuffle: <T>(items: T[]): T[] => [...items],
+    });
+
+    expect(choices).toHaveLength(3);
+    expect(
+      choices.some((choice) =>
+        [
+          'unlock-twin-fangs',
+          'unlock-ember-lance',
+          'unlock-bloom-cannon',
+          'unlock-phase-disc',
+          'unlock-sunwheel',
+          'unlock-shatterbell',
+        ].includes(choice.id),
+      ),
+    ).toBe(true);
+  });
+
   test('breakthrough mode injects one signature and fills from the high-impact core pool first', () => {
     const choices = buildLevelUpChoices({
       upgrades: UPGRADE_POOL,

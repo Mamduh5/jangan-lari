@@ -212,6 +212,18 @@ export function getEligibleSignatureUpgrades(
 
 const BREAKTHROUGH_PRIORITY_CORE_UPGRADE_IDS = new Set<UpgradeId>(['power', 'rapid-fire', 'velocity', 'reach']);
 const BREAKTHROUGH_EXCLUDED_FALLBACK_UPGRADE_IDS = new Set<UpgradeId>(['vitality', 'swiftness', 'magnet']);
+const WEAPON_DIRECTION_UPGRADE_IDS = new Set<UpgradeId>([
+  'unlock-twin-fangs',
+  'unlock-ember-lance',
+  'unlock-bloom-cannon',
+  'unlock-phase-disc',
+  'unlock-sunwheel',
+  'unlock-shatterbell',
+]);
+
+function isWeaponDirectionUpgrade(upgrade: UpgradeDefinition): boolean {
+  return WEAPON_DIRECTION_UPGRADE_IDS.has(upgrade.id);
+}
 
 export function shouldQueueBreakthroughChoice(options: {
   upgrades: UpgradeDefinition[];
@@ -230,6 +242,7 @@ export function buildLevelUpChoices(options: {
   ownedWeaponIds: Iterable<WeaponId>;
   takenSignatureIds: Iterable<UpgradeId>;
   forceSignature: boolean;
+  preferWeaponDirection?: boolean;
   mode?: UpgradeChoiceMode;
   shuffle?: <T>(items: T[]) => T[];
   maxChoices?: number;
@@ -237,6 +250,7 @@ export function buildLevelUpChoices(options: {
   const shuffle = options.shuffle ?? ((items) => [...items]);
   const maxChoices = options.maxChoices ?? 3;
   const mode = options.mode ?? 'normal';
+  const preferWeaponDirection = options.preferWeaponDirection ?? false;
   const eligibleSignatures = getEligibleSignatureUpgrades(
     options.upgrades,
     options.ownedWeaponIds,
@@ -276,6 +290,19 @@ export function buildLevelUpChoices(options: {
     }
 
     return picks.slice(0, maxChoices);
+  }
+
+  if (preferWeaponDirection && picks.length < maxChoices && !picks.some((upgrade) => isWeaponDirectionUpgrade(upgrade))) {
+    const weaponDirectionChoices = shuffle(nonSignatureUpgrades.filter((upgrade) => isWeaponDirectionUpgrade(upgrade)));
+
+    for (const upgrade of weaponDirectionChoices) {
+      if (picks.some((existing) => existing.id === upgrade.id)) {
+        continue;
+      }
+
+      picks.push(upgrade);
+      break;
+    }
   }
 
   const fillerPool = options.forceSignature && picks.length > 0 ? shuffle([...nonSignatureUpgrades]) : regularPool;

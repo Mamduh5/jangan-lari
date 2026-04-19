@@ -55,6 +55,8 @@ import {
 } from '../utils/runSession';
 
 export class RunScene extends Phaser.Scene {
+  private static readonly FIRST_ELITE_XP_BONUS = 12;
+
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
   private xpGems!: Phaser.Physics.Arcade.Group;
@@ -932,6 +934,7 @@ export class RunScene extends Phaser.Scene {
     const rewardLevelUps = enemy.getRewardLevelUps();
     const rewardMessages: string[] = [];
     let signatureChoicePrimed = false;
+    let bonusLevelsGained = 0;
 
     if (rewardGold > 0) {
       this.goldEarned += rewardGold;
@@ -949,9 +952,16 @@ export class RunScene extends Phaser.Scene {
         this.guaranteedSignatureChoices += 1;
         this.firstEliteSignatureRewardClaimed = true;
         signatureChoicePrimed = true;
+        bonusLevelsGained = this.player.gainExperience(RunScene.FIRST_ELITE_XP_BONUS);
         this.showFloatingText(x, y - 80, 'Signature pick primed', '#f5d0fe', 18);
+        this.showFloatingText(x, y - 102, `+${RunScene.FIRST_ELITE_XP_BONUS} XP`, '#bfdbfe', 16);
         this.createBurstCircle(x, y, 0xc084fc, 16, 54, 240, 0.42);
+        this.createBurstCircle(x, y, 0x60a5fa, 10, 42, 180, 0.32);
+        if (bonusLevelsGained > 0) {
+          this.pendingLevelUps += bonusLevelsGained;
+        }
         rewardMessages.push('signature pick primed');
+        rewardMessages.push(`+${RunScene.FIRST_ELITE_XP_BONUS} XP`);
       }
 
       if (enemy.isMiniboss()) {
@@ -971,7 +981,7 @@ export class RunScene extends Phaser.Scene {
       }
     }
 
-    if (rewardLevelUps > 0 && !this.isLevelingUp) {
+    if ((rewardLevelUps > 0 || bonusLevelsGained > 0) && !this.isLevelingUp) {
       this.queueLevelUpStart();
     }
 
@@ -1296,6 +1306,7 @@ export class RunScene extends Phaser.Scene {
       ownedWeaponIds: Array.from(this.ownedWeaponIds) as WeaponId[],
       takenSignatureIds: this.takenSignatureUpgradeIds,
       forceSignature,
+      preferWeaponDirection: this.ownedWeaponIds.size === 1,
       mode: levelUpMode,
       shuffle: <T>(items: T[]): T[] => Phaser.Utils.Array.Shuffle(items),
     });

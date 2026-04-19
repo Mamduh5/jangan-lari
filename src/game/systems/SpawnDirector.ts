@@ -17,7 +17,7 @@ type StageRule = {
 
 const OPENING_STAGE_END_MS = 45000;
 const EARLY_RAMP_STAGE_END_MS = 120000;
-const FIRST_ELITE_SPAWN_AT_MS = 45000;
+const FIRST_ELITE_SPAWN_AT_MS = 35000;
 
 const STAGE_RULES: StageRule[] = [
   {
