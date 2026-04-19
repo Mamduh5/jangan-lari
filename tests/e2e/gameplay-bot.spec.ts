@@ -8,6 +8,7 @@ type GameplayBotEnemySummary = {
   contactDamage: number;
   isElite: boolean;
   isBoss: boolean;
+  isEventTarget: boolean;
 };
 
 type GameplayBotGemSummary = {
@@ -44,6 +45,17 @@ type GameplayBotRunSnapshot = {
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
+  event: {
+    active: boolean;
+    type: 'challenge-wave' | 'reward-target' | '';
+    title: string;
+    objective: string;
+    remainingMs: number;
+    challengeWaveSuccesses: number;
+    challengeWaveFailures: number;
+    rewardTargetSuccesses: number;
+    rewardTargetFailures: number;
+  };
   combatResponse: {
     hitStopStarts: number;
     hitStopRefreshes: number;
@@ -409,9 +421,74 @@ test.describe('gameplay bot smoke', () => {
     ).toBeLessThanOrEqual(3);
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
+
+  test('bot can resolve forced mid-run events without event-flow regression', async ({ page }) => {
+    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
+
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickStartRun(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+    });
+
+    await forceUpgrade(page, 'unlock-phase-disc');
+    await forceUpgrade(page, 'unlock-sunwheel');
+    await page.waitForFunction(() => {
+      const weaponNames = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames ?? [];
+      return weaponNames.includes('Phase Disc') && weaponNames.includes('Sunwheel');
+    });
+
+    await forceRunEvent(page, 'reward-target');
+    await page.waitForFunction(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.event.type === 'reward-target');
+    const rewardTargetResult = await runGameplayBotUntil(
+      page,
+      30_000,
+      (run) => run.event.rewardTargetSuccesses >= 1 || run.endActive,
+    );
+    expect(
+      rewardTargetResult.finalSnapshot.run?.event.rewardTargetSuccesses ?? 0,
+      'expected forced reward-target event to resolve successfully',
+    ).toBeGreaterThanOrEqual(1);
+    await runGameplayBotUntil(page, 15_000, (run) => !run.levelUpActive && !run.event.active);
+
+    await forceRunEvent(page, 'challenge-wave');
+    await page.waitForFunction(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.event.type === 'challenge-wave');
+    const challengeWaveResult = await runGameplayBotUntil(
+      page,
+      30_000,
+      (run) => run.event.challengeWaveSuccesses >= 1 || run.endActive,
+    );
+    expect(
+      challengeWaveResult.finalSnapshot.run?.event.challengeWaveSuccesses ?? 0,
+      'expected forced challenge-wave event to resolve successfully',
+    ).toBeGreaterThanOrEqual(1);
+
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
+  });
 });
 
 async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: number): Promise<BotResult> {
+  return driveGameplayBot(page, timeoutMs, (run) => run.endActive);
+}
+
+async function runGameplayBotUntil(
+  page: import('@playwright/test').Page,
+  timeoutMs: number,
+  predicate: (run: GameplayBotRunSnapshot) => boolean,
+): Promise<BotResult> {
+  return driveGameplayBot(page, timeoutMs, predicate);
+}
+
+async function driveGameplayBot(
+  page: import('@playwright/test').Page,
+  timeoutMs: number,
+  predicate: (run: GameplayBotRunSnapshot) => boolean,
+): Promise<BotResult> {
   const pressedKeys = new Set<string>();
   let maxElapsedMs = 0;
   let maxLevel = 0;
@@ -456,7 +533,7 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
         maxDistanceFromStart = Math.max(maxDistanceFromStart, distanceBetween(initialPosition, currentPosition));
       }
 
-      if (run.endActive) {
+      if (predicate(run)) {
         await releaseMovementKeys(page, pressedKeys);
         return {
           finalSnapshot: snapshot,
@@ -492,7 +569,7 @@ async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: 
     await releaseMovementKeys(page, pressedKeys);
   }
 
-  throw new Error(`Gameplay bot timed out after ${timeoutMs} ms without a natural end state.`);
+  throw new Error(`Gameplay bot timed out after ${timeoutMs} ms without reaching the expected state.`);
 }
 
 function distanceBetween(left: { x: number; y: number }, right: { x: number; y: number }): number {
@@ -537,8 +614,13 @@ function determineMovementKeys(run: GameplayBotRunSnapshot): string[] {
   const { player } = run;
   let moveX = 0;
   let moveY = 0;
+  const rewardTarget = run.enemies.find((enemy) => enemy.isEventTarget);
 
   for (const enemy of run.enemies) {
+    if (run.event.active && run.event.type === 'reward-target' && enemy.isEventTarget) {
+      continue;
+    }
+
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.max(24, enemy.distance);
@@ -555,6 +637,15 @@ function determineMovementKeys(run: GameplayBotRunSnapshot): string[] {
     // Keep a tangent bias so movement remains smooth instead of backing into packs.
     moveX += (-dy / distance) * 0.55;
     moveY += (dx / distance) * 0.55;
+  }
+
+  if (run.event.active && run.event.type === 'reward-target' && rewardTarget) {
+    const dx = rewardTarget.x - player.x;
+    const dy = rewardTarget.y - player.y;
+    const distance = Math.max(24, rewardTarget.distance);
+
+    moveX += (dx / distance) * 1.6;
+    moveY += (dy / distance) * 1.6;
   }
 
   const nearestEnemy = run.enemies[0];
@@ -715,6 +806,30 @@ async function forceEncounterWave(page: import('@playwright/test').Page, elapsed
     runScene.spawnEnemyWave?.();
     runScene.publishHudState?.();
   }, elapsedMs);
+}
+
+async function forceRunEvent(
+  page: import('@playwright/test').Page,
+  eventType: 'challenge-wave' | 'reward-target',
+): Promise<void> {
+  await page.evaluate((nextEventType) => {
+    const game = window.__JANGAN_LARI_GAME__;
+    if (!game?.scene.isActive('RunScene')) {
+      throw new Error('RunScene is not active for forced event validation.');
+    }
+
+    const runScene = game.scene.getScene('RunScene') as {
+      debugForceRunEvent?: (type: 'challenge-wave' | 'reward-target') => boolean;
+      publishHudState?: () => void;
+    };
+
+    const started = runScene.debugForceRunEvent?.(nextEventType);
+    runScene.publishHudState?.();
+
+    if (!started) {
+      throw new Error(`Failed to force run event: ${nextEventType}`);
+    }
+  }, eventType);
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {

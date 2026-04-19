@@ -6,6 +6,10 @@ import {
   resolveCombatImpactResponse,
 } from '../combat/combatResponse';
 import {
+  BOSS_SPAWN_TIME_MS,
+  CHALLENGE_WAVE_EVENT_DURATION_MS,
+  CHALLENGE_WAVE_EVENT_WINDOW_END_MS,
+  CHALLENGE_WAVE_EVENT_WINDOW_START_MS,
   ELITE_SPAWN_INDICATOR_MS,
   ENDING_FLASH_MS,
   ENEMY_SPAWN_INTERVAL_MS,
@@ -13,6 +17,10 @@ import {
   LEVEL_UP_FLASH_MS,
   PLAYER_HIT_SHAKE_DURATION_MS,
   PLAYER_HIT_SHAKE_INTENSITY,
+  REWARD_TARGET_EVENT_DURATION_MS,
+  REWARD_TARGET_EVENT_WINDOW_END_MS,
+  REWARD_TARGET_EVENT_WINDOW_START_MS,
+  RUN_EVENT_ENCOUNTER_BUFFER_MS,
   RUN_TARGET_DURATION_MS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
@@ -41,6 +49,7 @@ import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 import { SpawnDirector } from '../systems/SpawnDirector';
 import type { EnemyArchetypeId } from '../data/enemies';
+import { ENEMY_ARCHETYPES, type EnemyArchetype } from '../data/enemies';
 import {
   accumulateRunElapsedMs,
   beginLevelUpCountdown,
@@ -52,6 +61,30 @@ import {
   tickLevelUpCountdown,
   writeFreshRunRegistryState,
 } from '../utils/runSession';
+
+type RunEventType = 'challenge-wave' | 'reward-target';
+
+type ActiveRunEvent =
+  | {
+      type: 'challenge-wave';
+      title: string;
+      objective: string;
+      startedAtMs: number;
+      endsAtMs: number;
+      challengeEnemies: Enemy[];
+      rewardGold: number;
+      rewardLevelUps: number;
+    }
+  | {
+      type: 'reward-target';
+      title: string;
+      objective: string;
+      startedAtMs: number;
+      endsAtMs: number;
+      targetEnemy: Enemy;
+      rewardGold: number;
+      rewardXp: number;
+    };
 
 export class RunScene extends Phaser.Scene {
   private static readonly FIRST_ELITE_XP_BONUS = 12;
@@ -127,6 +160,15 @@ export class RunScene extends Phaser.Scene {
   private activeAlertUntil = 0;
   private queuedRewardToast: { text: string; color: string } | null = null;
   private takenUniqueUpgradeIds = new Set<UpgradeId>();
+  private activeRunEvent: ActiveRunEvent | null = null;
+  private challengeWaveEventConsumed = false;
+  private rewardTargetEventConsumed = false;
+  private challengeWaveSuccessCount = 0;
+  private challengeWaveFailureCount = 0;
+  private rewardTargetSuccessCount = 0;
+  private rewardTargetFailureCount = 0;
+  private rewardTargetMarker?: Phaser.GameObjects.Arc;
+  private rewardTargetLabel?: Phaser.GameObjects.Text;
 
   // These modifiers stack from heroes, permanent upgrades, and level-up picks.
   private globalWeaponDamageBonus = 0;
@@ -176,6 +218,17 @@ export class RunScene extends Phaser.Scene {
     this.activeAlertKind = 'objective';
     this.activeAlertUntil = 0;
     this.queuedRewardToast = null;
+    this.activeRunEvent = null;
+    this.challengeWaveEventConsumed = false;
+    this.rewardTargetEventConsumed = false;
+    this.challengeWaveSuccessCount = 0;
+    this.challengeWaveFailureCount = 0;
+    this.rewardTargetSuccessCount = 0;
+    this.rewardTargetFailureCount = 0;
+    this.rewardTargetMarker?.destroy();
+    this.rewardTargetMarker = undefined;
+    this.rewardTargetLabel?.destroy();
+    this.rewardTargetLabel = undefined;
     this.globalWeaponDamageBonus = freshSession.globalWeaponDamageBonus;
     this.globalWeaponCooldownReduction = freshSession.globalWeaponCooldownReduction;
     this.globalProjectileSpeedBonus = freshSession.globalProjectileSpeedBonus;
@@ -324,6 +377,7 @@ export class RunScene extends Phaser.Scene {
       weapon.update(this.time.now, delta);
     }
 
+    this.updateRunEventState();
     this.publishHudState();
   }
 
@@ -334,6 +388,7 @@ export class RunScene extends Phaser.Scene {
 
     this.isTransitioningToMenu = true;
     this.levelUpStartQueued = false;
+    this.clearActiveRunEvent();
     this.pauseGameplaySystems();
     clearRunRegistryState(this.registry, this.saveData?.totalGold ?? Number(this.registry.get('save.totalGold') ?? 0));
 
@@ -362,6 +417,7 @@ export class RunScene extends Phaser.Scene {
         contactDamage: enemy.contactDamage,
         isElite: enemy.isElite() || enemy.isMiniboss(),
         isBoss: enemy.isBoss(),
+        isEventTarget: enemy.isEventMarked(),
       }))
       .sort((left, right) => left.distance - right.distance)
       .slice(0, 14);
@@ -403,6 +459,17 @@ export class RunScene extends Phaser.Scene {
         id: choice.id,
         title: choice.title,
       })),
+      event: {
+        active: this.activeRunEvent !== null,
+        type: this.activeRunEvent?.type ?? '',
+        title: this.activeRunEvent?.title ?? '',
+        objective: this.activeRunEvent?.objective ?? '',
+        remainingMs: this.activeRunEvent ? Math.max(0, this.activeRunEvent.endsAtMs - this.runElapsedMs) : 0,
+        challengeWaveSuccesses: this.challengeWaveSuccessCount,
+        challengeWaveFailures: this.challengeWaveFailureCount,
+        rewardTargetSuccesses: this.rewardTargetSuccessCount,
+        rewardTargetFailures: this.rewardTargetFailureCount,
+      },
       combatResponse: {
         hitStopStarts: combatResponseMetrics.hitStopStarts,
         hitStopRefreshes: combatResponseMetrics.hitStopRefreshes,
@@ -440,6 +507,14 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.finishLevelUpSelection();
+  }
+
+  public debugForceRunEvent(type: RunEventType): boolean {
+    if (this.isEnded || this.isTransitioningToMenu || this.isLevelingUp || this.activeRunEvent) {
+      return false;
+    }
+
+    return type === 'challenge-wave' ? this.startChallengeWaveEvent(true) : this.startRewardTargetEvent(true);
   }
 
   private registerWeapon(definition: WeaponDefinition, announce = false): void {
@@ -554,36 +629,332 @@ export class RunScene extends Phaser.Scene {
 
     for (const archetype of wave) {
       const spawnPoint = this.getSpawnPoint(archetype.isBoss ? 700 : 520);
-      const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, archetype);
-      this.enemies.add(enemy);
+      this.spawnEnemyFromArchetype(archetype, spawnPoint);
+      this.presentEncounterSpawn(archetype, spawnPoint);
+    }
 
-      if (archetype.isBoss) {
-        this.registry.set('run.instructions', 'Boss sighted. Defeat it or survive to extraction.');
-        this.setAlert('boss', 'Final boss active', 2600);
-        this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
-        this.showEncounterBanner('FINAL BOSS', `${archetype.name} has arrived. Watch the charge and break it for victory.`, 0xf87171, 2600);
-        this.cameras.main.shake(160, 0.0023);
-        this.cameras.main.flash(180, 255, 120, 120, false);
-        playCue('boss-arrival');
-      } else if (archetype.isMiniboss) {
-        this.registry.set('run.instructions', 'Miniboss approaching. Break the charge and claim the reward.');
-        this.setAlert('miniboss', 'Miniboss active', 2200);
-        this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'MINIBOSS', 0xfda4af);
-        this.showEncounterBanner('MINIBOSS', `${archetype.name} enters the arena. Beat it for bonus gold and a free upgrade.`, 0xfda4af, 2200);
-        this.cameras.main.shake(120, 0.0018);
-        this.cameras.main.flash(120, 255, 180, 180, false);
-        playCue('miniboss-arrival');
-      } else if (archetype.isElite) {
-        this.registry.set('run.instructions', 'Elite enemy incoming. Keep moving.');
-        this.setAlert('elite', 'Elite target active', 1600);
-        this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
-        this.showEncounterBanner('ELITE TARGET', `${archetype.name} is carrying a reward cache.`, 0xe9d5ff, 1500);
-        this.cameras.main.shake(90, 0.0012);
-        this.cameras.main.flash(90, 190, 150, 255, false);
-        playCue('elite-arrival');
+  }
+
+  private spawnEnemyFromArchetype(archetype: EnemyArchetype, spawnPoint: Phaser.Math.Vector2): Enemy {
+    const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, archetype);
+    this.enemies.add(enemy);
+    return enemy;
+  }
+
+  private presentEncounterSpawn(archetype: EnemyArchetype, spawnPoint: Phaser.Math.Vector2): void {
+    if (archetype.isBoss) {
+      this.registry.set('run.instructions', 'Boss sighted. Defeat it or survive to extraction.');
+      this.setAlert('boss', 'Final boss active', 2600);
+      this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
+      this.showEncounterBanner('FINAL BOSS', `${archetype.name} has arrived. Watch the charge and break it for victory.`, 0xf87171, 2600);
+      this.cameras.main.shake(160, 0.0023);
+      this.cameras.main.flash(180, 255, 120, 120, false);
+      playCue('boss-arrival');
+    } else if (archetype.isMiniboss) {
+      this.registry.set('run.instructions', 'Miniboss approaching. Break the charge and claim the reward.');
+      this.setAlert('miniboss', 'Miniboss active', 2200);
+      this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'MINIBOSS', 0xfda4af);
+      this.showEncounterBanner('MINIBOSS', `${archetype.name} enters the arena. Beat it for bonus gold and a free upgrade.`, 0xfda4af, 2200);
+      this.cameras.main.shake(120, 0.0018);
+      this.cameras.main.flash(120, 255, 180, 180, false);
+      playCue('miniboss-arrival');
+    } else if (archetype.isElite) {
+      this.registry.set('run.instructions', 'Elite enemy incoming. Keep moving.');
+      this.setAlert('elite', 'Elite target active', 1600);
+      this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
+      this.showEncounterBanner('ELITE TARGET', `${archetype.name} is carrying a reward cache.`, 0xe9d5ff, 1500);
+      this.cameras.main.shake(90, 0.0012);
+      this.cameras.main.flash(90, 190, 150, 255, false);
+      playCue('elite-arrival');
+    }
+  }
+
+  private updateRunEventState(): void {
+    if (this.activeRunEvent) {
+      this.updateActiveRunEvent();
+    } else {
+      this.tryStartScheduledRunEvent();
+    }
+
+    this.updateRewardTargetMarker();
+  }
+
+  private updateActiveRunEvent(): void {
+    const activeEvent = this.activeRunEvent;
+    if (!activeEvent) {
+      return;
+    }
+
+    if (activeEvent.type === 'challenge-wave') {
+      const remainingChallengeEnemies = activeEvent.challengeEnemies.filter((enemy) => enemy.active && enemy.isAlive());
+      activeEvent.challengeEnemies = remainingChallengeEnemies;
+
+      if (remainingChallengeEnemies.length === 0 || this.runElapsedMs >= activeEvent.endsAtMs) {
+        this.resolveRunEventSuccess(activeEvent, remainingChallengeEnemies.length === 0 ? 'Challenge wave cleared.' : 'Challenge wave survived.');
+      }
+      return;
+    }
+
+    if (!activeEvent.targetEnemy.active || !activeEvent.targetEnemy.isAlive()) {
+      return;
+    }
+
+    if (this.runElapsedMs >= activeEvent.endsAtMs) {
+      activeEvent.targetEnemy.despawnSilently();
+      this.resolveRunEventFailure(activeEvent, 'Reward target escaped.');
+    }
+  }
+
+  private tryStartScheduledRunEvent(): void {
+    if (
+      !this.rewardTargetEventConsumed &&
+      this.runElapsedMs >= REWARD_TARGET_EVENT_WINDOW_START_MS &&
+      this.runElapsedMs <= REWARD_TARGET_EVENT_WINDOW_END_MS &&
+      this.canStartRunEvent(REWARD_TARGET_EVENT_DURATION_MS)
+    ) {
+      this.startRewardTargetEvent();
+      return;
+    }
+
+    if (
+      !this.challengeWaveEventConsumed &&
+      this.runElapsedMs >= CHALLENGE_WAVE_EVENT_WINDOW_START_MS &&
+      this.runElapsedMs <= CHALLENGE_WAVE_EVENT_WINDOW_END_MS &&
+      this.canStartRunEvent(CHALLENGE_WAVE_EVENT_DURATION_MS)
+    ) {
+      this.startChallengeWaveEvent();
+    }
+  }
+
+  private canStartRunEvent(durationMs: number): boolean {
+    if (this.isEnded || this.isTransitioningToMenu || this.isLevelingUp || this.isSystemPaused || this.activeRunEvent) {
+      return false;
+    }
+
+    if (this.hasActiveMajorEncounterEnemy()) {
+      return false;
+    }
+
+    const nextEliteSpawnAtMs = this.spawnDirector.getNextEliteSpawnAtMs();
+    const nextMinibossSpawnAtMs = this.spawnDirector.getNextMinibossSpawnAtMs();
+    const nextBossSpawnAtMs = this.spawnDirector.hasBossSpawned() ? Number.POSITIVE_INFINITY : BOSS_SPAWN_TIME_MS;
+    const safeWindowRequiredMs = durationMs + RUN_EVENT_ENCOUNTER_BUFFER_MS;
+
+    return (
+      nextEliteSpawnAtMs - this.runElapsedMs > safeWindowRequiredMs &&
+      nextMinibossSpawnAtMs - this.runElapsedMs > safeWindowRequiredMs &&
+      nextBossSpawnAtMs - this.runElapsedMs > safeWindowRequiredMs
+    );
+  }
+
+  private hasActiveMajorEncounterEnemy(): boolean {
+    const activeEnemies = this.enemies?.active ? (this.enemies.getChildren() as Enemy[]) : [];
+    return activeEnemies.some((enemy) => enemy.active && enemy.isAlive() && (enemy.isElite() || enemy.isMiniboss() || enemy.isBoss()));
+  }
+
+  private startChallengeWaveEvent(force = false): boolean {
+    if (!force && !this.canStartRunEvent(CHALLENGE_WAVE_EVENT_DURATION_MS)) {
+      return false;
+    }
+
+    const challengeEnemies = [
+      ENEMY_ARCHETYPES.crusher,
+      ENEMY_ARCHETYPES.mauler,
+      ENEMY_ARCHETYPES.mauler,
+      ENEMY_ARCHETYPES.hexcaster,
+      ENEMY_ARCHETYPES.harrier,
+    ].map((archetype, index) => this.spawnEnemyFromArchetype(archetype, this.getSpawnPoint(index === 0 ? 460 : 420)));
+
+    this.activeRunEvent = {
+      type: 'challenge-wave',
+      title: 'Challenge Wave',
+      objective: 'Outlast the surge or wipe it out for a bonus upgrade.',
+      startedAtMs: this.runElapsedMs,
+      endsAtMs: this.runElapsedMs + CHALLENGE_WAVE_EVENT_DURATION_MS,
+      challengeEnemies,
+      rewardGold: 8,
+      rewardLevelUps: 1,
+    };
+    this.challengeWaveEventConsumed = true;
+    this.registry.set('run.instructions', 'Challenge wave active. Survive the surge or clear it for a reward.');
+    this.setAlert('objective', 'Challenge wave active', 1800);
+    this.showEncounterBanner(
+      'CHALLENGE WAVE',
+      'A short surge is closing in. Outlast it or clear it for a bonus upgrade.',
+      0xfbbf24,
+      2200,
+    );
+    this.cameras.main.shake(100, 0.0015);
+    this.cameras.main.flash(100, 255, 210, 120, false);
+    playCue('elite-arrival');
+    return true;
+  }
+
+  private startRewardTargetEvent(force = false): boolean {
+    if (!force && !this.canStartRunEvent(REWARD_TARGET_EVENT_DURATION_MS)) {
+      return false;
+    }
+
+    const rewardTargetArchetype: EnemyArchetype = {
+      ...ENEMY_ARCHETYPES.harrier,
+      name: 'Cache Runner',
+      maxHealth: 36,
+      speed: 154,
+      contactDamage: 10,
+      xpValue: 12,
+      preferredDistance: 150,
+      strafeStrength: 0.55,
+    };
+    const targetEnemy = this.spawnEnemyFromArchetype(rewardTargetArchetype, this.getSpawnPoint(300));
+    targetEnemy.setEventMarker(0xfbbf24);
+
+    this.activeRunEvent = {
+      type: 'reward-target',
+      title: 'Reward Target',
+      objective: 'Hunt down the Cache Runner before it slips away.',
+      startedAtMs: this.runElapsedMs,
+      endsAtMs: this.runElapsedMs + REWARD_TARGET_EVENT_DURATION_MS,
+      targetEnemy,
+      rewardGold: 18,
+      rewardXp: 24,
+    };
+    this.rewardTargetEventConsumed = true;
+    this.registry.set('run.instructions', 'Reward target active. Chase it down before it escapes.');
+    this.setAlert('objective', 'Reward target active', 1800);
+    this.showSpawnIndicator(targetEnemy.x, targetEnemy.y, 'TARGET', 0xfbbf24);
+    this.showEncounterBanner(
+      'REWARD TARGET',
+      'A Cache Runner has entered the arena. Chase it down before the timer expires.',
+      0xfbbf24,
+      2200,
+    );
+    this.cameras.main.flash(100, 255, 225, 140, false);
+    playCue('elite-arrival');
+    return true;
+  }
+
+  private resolveRunEventSuccess(activeEvent: ActiveRunEvent, detail: string): void {
+    if (this.activeRunEvent !== activeEvent) {
+      return;
+    }
+
+    if (activeEvent.type === 'challenge-wave') {
+      this.challengeWaveSuccessCount += 1;
+      this.grantRunEventReward('Challenge reward', activeEvent.rewardGold, 0, activeEvent.rewardLevelUps);
+    } else {
+      this.rewardTargetSuccessCount += 1;
+      this.grantRunEventReward('Reward target secured', activeEvent.rewardGold, activeEvent.rewardXp, 0);
+    }
+
+    this.showRewardToast(
+      activeEvent.type === 'challenge-wave'
+        ? 'Challenge reward: +1 upgrade | +8 gold'
+        : 'Reward target secured: +18 gold | +24 XP',
+      '#fde68a',
+    );
+    this.registry.set('run.instructions', detail);
+    this.setAlert('objective', activeEvent.type === 'challenge-wave' ? 'Challenge cleared' : 'Reward target secured', 1600);
+    this.clearActiveRunEvent();
+    playCue(activeEvent.type === 'challenge-wave' ? 'miniboss-reward' : 'elite-reward');
+  }
+
+  private resolveRunEventFailure(activeEvent: ActiveRunEvent, detail: string): void {
+    if (this.activeRunEvent !== activeEvent) {
+      return;
+    }
+
+    if (activeEvent.type === 'challenge-wave') {
+      this.challengeWaveFailureCount += 1;
+    } else {
+      this.rewardTargetFailureCount += 1;
+    }
+
+    this.showRewardToast(
+      activeEvent.type === 'challenge-wave' ? 'Challenge wave ended with no bonus reward.' : 'Reward target escaped.',
+      '#fca5a5',
+    );
+    this.registry.set('run.instructions', detail);
+    this.setAlert('objective', activeEvent.type === 'challenge-wave' ? 'Challenge ended' : 'Target escaped', 1400);
+    this.clearActiveRunEvent();
+  }
+
+  private grantRunEventReward(title: string, rewardGold: number, rewardXp: number, rewardLevelUps: number): void {
+    const rewardMessages: string[] = [];
+
+    if (rewardGold > 0) {
+      this.goldEarned += rewardGold;
+      this.showFloatingText(this.player.x, this.player.y - 70, `+${rewardGold} gold`, '#fcd34d', 16);
+      this.createBurstCircle(this.player.x, this.player.y, 0xfbbf24, 12, 44, 220, 0.3);
+      rewardMessages.push(`+${rewardGold} gold`);
+    }
+
+    if (rewardXp > 0) {
+      const levelsGained = this.player.gainExperience(rewardXp);
+      this.showFloatingText(this.player.x, this.player.y - 92, `+${rewardXp} XP`, '#bfdbfe', 16);
+      rewardMessages.push(`+${rewardXp} XP`);
+      if (levelsGained > 0) {
+        this.pendingLevelUps += levelsGained;
       }
     }
 
+    if (rewardLevelUps > 0) {
+      this.pendingLevelUps += rewardLevelUps;
+      this.showFloatingText(this.player.x, this.player.y - 114, rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade', '#fef08a', 18);
+      rewardMessages.push(rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade');
+    }
+
+    if ((rewardXp > 0 || rewardLevelUps > 0) && !this.isLevelingUp) {
+      this.queueLevelUpStart();
+    }
+
+    this.showEncounterBanner(title.toUpperCase(), rewardMessages.join(' | '), 0xfbbf24, 1800);
+  }
+
+  private clearActiveRunEvent(): void {
+    if (this.activeRunEvent?.type === 'reward-target') {
+      this.activeRunEvent.targetEnemy.setEventMarker(null);
+    }
+
+    this.activeRunEvent = null;
+    this.destroyRewardTargetMarker();
+  }
+
+  private updateRewardTargetMarker(): void {
+    const activeEvent = this.activeRunEvent;
+    if (!activeEvent || activeEvent.type !== 'reward-target' || !activeEvent.targetEnemy.active || !activeEvent.targetEnemy.isAlive()) {
+      this.destroyRewardTargetMarker();
+      return;
+    }
+
+    if (!this.rewardTargetMarker) {
+      this.rewardTargetMarker = this.add.circle(activeEvent.targetEnemy.x, activeEvent.targetEnemy.y, 26, 0xfbbf24, 0.08).setDepth(8.1);
+      this.rewardTargetMarker.setStrokeStyle(3, 0xfbbf24, 0.95);
+    }
+
+    if (!this.rewardTargetLabel) {
+      this.rewardTargetLabel = this.add
+        .text(activeEvent.targetEnemy.x, activeEvent.targetEnemy.y - 34, 'TARGET', {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '14px',
+          color: '#fef3c7',
+          stroke: '#111827',
+          strokeThickness: 3,
+        })
+        .setOrigin(0.5)
+        .setDepth(8.2);
+    }
+
+    const pulseRadius = 24 + Math.sin(this.time.now * 0.012) * 4;
+    this.rewardTargetMarker.setPosition(activeEvent.targetEnemy.x, activeEvent.targetEnemy.y);
+    this.rewardTargetMarker.setRadius(pulseRadius);
+    this.rewardTargetLabel.setPosition(activeEvent.targetEnemy.x, activeEvent.targetEnemy.y - 34);
+  }
+
+  private destroyRewardTargetMarker(): void {
+    this.rewardTargetMarker?.destroy();
+    this.rewardTargetMarker = undefined;
+    this.rewardTargetLabel?.destroy();
+    this.rewardTargetLabel = undefined;
   }
 
   private getSpawnPoint(distance: number): Phaser.Math.Vector2 {
@@ -861,6 +1232,7 @@ export class RunScene extends Phaser.Scene {
     this.xpGems.add(gem);
 
     const rewardOutcome = this.grantEncounterRewards(enemy, x, y);
+    this.handleRunEventEnemyDefeated(enemy);
 
     if (wasBoss) {
       this.endRun(true, 'Victory', 'The Behemoth has fallen.');
@@ -880,6 +1252,25 @@ export class RunScene extends Phaser.Scene {
       } else {
         this.registry.set('run.instructions', 'Elite defeated. Spend the reward before the next wave arrives.');
         this.setAlert('objective', 'Elite reward claimed', 1400);
+      }
+    }
+  }
+
+  private handleRunEventEnemyDefeated(enemy: Enemy): void {
+    const activeEvent = this.activeRunEvent;
+    if (!activeEvent) {
+      return;
+    }
+
+    if (activeEvent.type === 'reward-target' && activeEvent.targetEnemy === enemy) {
+      this.resolveRunEventSuccess(activeEvent, 'Reward target broken. Claim the payout and keep moving.');
+      return;
+    }
+
+    if (activeEvent.type === 'challenge-wave') {
+      activeEvent.challengeEnemies = activeEvent.challengeEnemies.filter((trackedEnemy) => trackedEnemy !== enemy && trackedEnemy.active && trackedEnemy.isAlive());
+      if (activeEvent.challengeEnemies.length === 0) {
+        this.resolveRunEventSuccess(activeEvent, 'Challenge wave cleared before the timer expired.');
       }
     }
   }
@@ -1618,6 +2009,11 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.totalGold', this.saveData.totalGold);
     this.registry.set('run.elapsedMs', this.runElapsedMs);
     this.registry.set('run.weaponNames', this.weapons.map((weapon) => weapon.getStats().name));
+    this.registry.set('run.eventActive', Boolean(this.activeRunEvent));
+    this.registry.set('run.eventType', this.activeRunEvent?.type ?? '');
+    this.registry.set('run.eventTitle', this.activeRunEvent?.title ?? '');
+    this.registry.set('run.eventText', this.activeRunEvent?.objective ?? '');
+    this.registry.set('run.eventRemainingMs', this.activeRunEvent ? Math.max(0, this.activeRunEvent.endsAtMs - this.runElapsedMs) : 0);
   }
 
   private endRun(victory: boolean, title: string, subtitle: string): void {
@@ -1630,6 +2026,7 @@ export class RunScene extends Phaser.Scene {
     this.isLevelingUp = false;
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = 0;
+    this.clearActiveRunEvent();
     this.combatResponse.clear({ suppressCallbacks: true });
     this.goldEarned += calculateRunGoldReward(this.player.getLevel(), this.killCount, victory);
     this.saveData = awardRunGold(this.saveData, this.goldEarned);
@@ -1680,6 +2077,11 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.levelUpChoices', []);
     this.registry.set('run.levelUpRemainingMs', 0);
     this.registry.set('run.instructions', 'Press Enter, Space, or click the button to return to menu.');
+    this.registry.set('run.eventActive', false);
+    this.registry.set('run.eventType', '');
+    this.registry.set('run.eventTitle', '');
+    this.registry.set('run.eventText', '');
+    this.registry.set('run.eventRemainingMs', 0);
     this.setAlert(victory ? 'victory' : 'defeat', title);
     this.showRewardToast(victory ? `Victory payout: +${this.goldEarned} gold` : `Run payout: +${this.goldEarned} gold`, victory ? '#fde68a' : '#fca5a5');
     this.publishHudState();
@@ -1928,6 +2330,8 @@ export class RunScene extends Phaser.Scene {
     this.activeAlertKind = 'objective';
     this.activeAlertUntil = 0;
     this.queuedRewardToast = null;
+    this.destroyRewardTargetMarker();
+    this.activeRunEvent = null;
   }
 
   private destroyPhysicsGroup(group?: Phaser.Physics.Arcade.Group): void {

@@ -12,6 +12,7 @@ export type GameplayBotEnemySummary = {
   contactDamage: number;
   isElite: boolean;
   isBoss: boolean;
+  isEventTarget: boolean;
 };
 
 export type GameplayBotGemSummary = {
@@ -24,6 +25,18 @@ export type GameplayBotGemSummary = {
 export type GameplayBotUpgradeChoice = {
   id: UpgradeId;
   title: string;
+};
+
+export type GameplayBotEventSnapshot = {
+  active: boolean;
+  type: 'challenge-wave' | 'reward-target' | '';
+  title: string;
+  objective: string;
+  remainingMs: number;
+  challengeWaveSuccesses: number;
+  challengeWaveFailures: number;
+  rewardTargetSuccesses: number;
+  rewardTargetFailures: number;
 };
 
 export type GameplayBotRunSnapshot = {
@@ -48,6 +61,7 @@ export type GameplayBotRunSnapshot = {
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
+  event: GameplayBotEventSnapshot;
   combatResponse: {
     hitStopStarts: number;
     hitStopRefreshes: number;

@@ -14,6 +14,10 @@ export class UIScene extends Phaser.Scene {
   private alertText!: Phaser.GameObjects.Text;
   private rewardText!: Phaser.GameObjects.Text;
   private instructionText!: Phaser.GameObjects.Text;
+  private eventPanel!: Phaser.GameObjects.Rectangle;
+  private eventTitleText!: Phaser.GameObjects.Text;
+  private eventBodyText!: Phaser.GameObjects.Text;
+  private eventTimerText!: Phaser.GameObjects.Text;
   private weaponIconFrames: Phaser.GameObjects.Rectangle[] = [];
   private weaponIconTexts: Phaser.GameObjects.Text[] = [];
   private xpBarFill!: Phaser.GameObjects.Rectangle;
@@ -131,6 +135,40 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setVisible(false);
 
+    this.eventPanel = this.add.rectangle(GAME_WIDTH / 2, 206, 520, 68, 0x111827, 0.9).setScrollFactor(0).setVisible(false);
+    this.eventPanel.setStrokeStyle(1, 0xfbbf24, 0.9);
+
+    this.eventTitleText = this.add
+      .text(GAME_WIDTH / 2 - 240, 182, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#fde68a',
+      })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.eventBodyText = this.add
+      .text(GAME_WIDTH / 2 - 240, 202, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '13px',
+        color: '#f8fafc',
+        wordWrap: { width: 400 },
+      })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.eventTimerText = this.add
+      .text(GAME_WIDTH / 2 + 224, 182, '', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '24px',
+        color: '#fde68a',
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
+
     this.goldText = this.add
       .text(GAME_WIDTH - 34, 24, 'Gold 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
@@ -227,6 +265,10 @@ export class UIScene extends Phaser.Scene {
     const rewardMessage = String(this.registry.get('run.rewardText') ?? '');
     const rewardColor = String(this.registry.get('run.rewardColor') ?? '#fcd34d');
     const instructionMessage = String(this.registry.get('run.instructions') ?? '');
+    const eventActive = Boolean(this.registry.get('run.eventActive'));
+    const eventTitle = String(this.registry.get('run.eventTitle') ?? '');
+    const eventText = String(this.registry.get('run.eventText') ?? '');
+    const eventRemainingMs = Number(this.registry.get('run.eventRemainingMs') ?? 0);
     const levelUpMode = String(this.registry.get('run.levelUpMode') ?? 'normal');
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
 
@@ -242,6 +284,7 @@ export class UIScene extends Phaser.Scene {
     this.refreshAlert(alertKind, alertMessage);
     this.refreshRewardToast(rewardMessage, rewardColor);
     this.refreshInstruction(instructionMessage, levelUpActive, endActive);
+    this.refreshEventHud(eventActive, eventTitle, eventText, eventRemainingMs, levelUpActive, endActive);
 
     this.endContainer.setVisible(endActive);
     this.levelUpContainer.setVisible(levelUpActive && !endActive);
@@ -563,6 +606,29 @@ export class UIScene extends Phaser.Scene {
 
     this.setTextIfChanged(this.instructionText, message);
     this.instructionText.setVisible(true);
+  }
+
+  private refreshEventHud(
+    active: boolean,
+    title: string,
+    objective: string,
+    remainingMs: number,
+    levelUpActive: boolean,
+    endActive: boolean,
+  ): void {
+    const visible = active && !levelUpActive && !endActive;
+    this.eventPanel.setVisible(visible);
+    this.eventTitleText.setVisible(visible);
+    this.eventBodyText.setVisible(visible);
+    this.eventTimerText.setVisible(visible);
+
+    if (!visible) {
+      return;
+    }
+
+    this.setTextIfChanged(this.eventTitleText, title.toUpperCase());
+    this.setTextIfChanged(this.eventBodyText, objective);
+    this.setTextIfChanged(this.eventTimerText, `${Math.max(0, remainingMs / 1000).toFixed(1)}s`);
   }
 
   private getAlertPalette(kind: string): { textColor: string; backgroundColor: string } {

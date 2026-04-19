@@ -111,6 +111,18 @@ export class SpawnDirector {
   private nextMinibossSpawnAtMs = MINIBOSS_SPAWN_TIME_MS;
   private bossSpawned = false;
 
+  getNextEliteSpawnAtMs(): number {
+    return this.nextEliteSpawnAtMs;
+  }
+
+  getNextMinibossSpawnAtMs(): number {
+    return this.nextMinibossSpawnAtMs;
+  }
+
+  hasBossSpawned(): boolean {
+    return this.bossSpawned;
+  }
+
   nextWave(elapsedMs: number): EnemyArchetype[] {
     if (elapsedMs >= RUN_TARGET_DURATION_MS) {
       return [];

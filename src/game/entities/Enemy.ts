@@ -55,6 +55,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private readonly responseProfile: EnemyCombatResponseProfile | null;
   private readonly responseScale = { x: 1, y: 1 };
   private deathPresentationActive = false;
+  private eventMarkerColor: number | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -113,6 +114,27 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   getRewardLevelUps(): number {
     return this.archetype.rewardLevelUps ?? 0;
+  }
+
+  isEventMarked(): boolean {
+    return this.eventMarkerColor !== null;
+  }
+
+  setEventMarker(color: number | null): void {
+    this.eventMarkerColor = color;
+  }
+
+  despawnSilently(): void {
+    if (!this.active) {
+      return;
+    }
+
+    this.pendingAttackSignal = null;
+    this.scene.tweens.killTweensOf(this);
+    this.scene.tweens.killTweensOf(this.responseScale);
+    this.body.stop();
+    this.body.enable = false;
+    this.destroy();
   }
 
   chase(target: Phaser.GameObjects.Components.Transform, currentTime: number): EnemyAttackSignal | null {
@@ -225,6 +247,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setResponseScale((1 + Math.sin((currentTime + this.y) * 0.012) * 0.03) * (hitReactionActive ? 0.9 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.92);
       this.setAlpha(hitReactionActive ? 0.78 : 1);
+      return;
+    }
+
+    if (this.eventMarkerColor !== null) {
+      this.setResponseScale((1 + Math.sin((currentTime + this.x) * 0.014) * 0.06) * (hitReactionActive ? 0.9 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 1, this.eventMarkerColor, 1);
+      this.setAlpha(hitReactionActive ? 0.8 : 1);
       return;
     }
 
