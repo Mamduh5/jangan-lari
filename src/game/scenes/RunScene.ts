@@ -88,6 +88,7 @@ type ActiveRunEvent =
 
 export class RunScene extends Phaser.Scene {
   private static readonly FIRST_ELITE_XP_BONUS = 12;
+  private static readonly WAVE_TEMPLATE_ALERT_COOLDOWN_MS = 7000;
 
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
@@ -169,6 +170,7 @@ export class RunScene extends Phaser.Scene {
   private rewardTargetFailureCount = 0;
   private rewardTargetMarker?: Phaser.GameObjects.Arc;
   private rewardTargetLabel?: Phaser.GameObjects.Text;
+  private lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
 
   // These modifiers stack from heroes, permanent upgrades, and level-up picks.
   private globalWeaponDamageBonus = 0;
@@ -229,6 +231,7 @@ export class RunScene extends Phaser.Scene {
     this.rewardTargetMarker = undefined;
     this.rewardTargetLabel?.destroy();
     this.rewardTargetLabel = undefined;
+    this.lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
     this.globalWeaponDamageBonus = freshSession.globalWeaponDamageBonus;
     this.globalWeaponCooldownReduction = freshSession.globalWeaponCooldownReduction;
     this.globalProjectileSpeedBonus = freshSession.globalProjectileSpeedBonus;
@@ -459,6 +462,11 @@ export class RunScene extends Phaser.Scene {
         id: choice.id,
         title: choice.title,
       })),
+      waveTemplate: {
+        id: this.spawnDirector?.getLastWaveTemplateId() ?? '',
+        label: this.spawnDirector?.getLastWaveTemplateLabel() ?? '',
+        highlight: this.spawnDirector?.getLastWaveTemplateHighlight() ?? false,
+      },
       event: {
         active: this.activeRunEvent !== null,
         type: this.activeRunEvent?.type ?? '',
@@ -625,14 +633,20 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    const wave = this.spawnDirector.nextWave(this.runElapsedMs);
+    const waveResult = this.spawnDirector.nextWave(this.runElapsedMs);
+    const hasMajorEncounter = waveResult.wave.some(
+      (archetype) => archetype.isElite || archetype.isMiniboss || archetype.isBoss,
+    );
 
-    for (const archetype of wave) {
+    for (const archetype of waveResult.wave) {
       const spawnPoint = this.getSpawnPoint(archetype.isBoss ? 700 : 520);
       this.spawnEnemyFromArchetype(archetype, spawnPoint);
       this.presentEncounterSpawn(archetype, spawnPoint);
     }
 
+    if (!hasMajorEncounter) {
+      this.presentWaveTemplateHighlight(waveResult.templateLabel, waveResult.templateHighlight);
+    }
   }
 
   private spawnEnemyFromArchetype(archetype: EnemyArchetype, spawnPoint: Phaser.Math.Vector2): Enemy {
@@ -667,6 +681,20 @@ export class RunScene extends Phaser.Scene {
       this.cameras.main.flash(90, 190, 150, 255, false);
       playCue('elite-arrival');
     }
+  }
+
+  private presentWaveTemplateHighlight(templateLabel: string, highlight: boolean): void {
+    if (!highlight || !templateLabel || this.activeRunEvent) {
+      return;
+    }
+
+    const now = this.time.now;
+    if (now - this.lastWaveTemplateAlertAtMs < RunScene.WAVE_TEMPLATE_ALERT_COOLDOWN_MS) {
+      return;
+    }
+
+    this.lastWaveTemplateAlertAtMs = now;
+    this.setAlert('objective', `${templateLabel} wave`, 1100);
   }
 
   private updateRunEventState(): void {
@@ -2329,6 +2357,7 @@ export class RunScene extends Phaser.Scene {
     this.activeAlertPriority = 0;
     this.activeAlertKind = 'objective';
     this.activeAlertUntil = 0;
+    this.lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
     this.queuedRewardToast = null;
     this.destroyRewardTargetMarker();
     this.activeRunEvent = null;

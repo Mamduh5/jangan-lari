@@ -45,6 +45,11 @@ type GameplayBotRunSnapshot = {
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
+  waveTemplate: {
+    id: string;
+    label: string;
+    highlight: boolean;
+  };
   event: {
     active: boolean;
     type: 'challenge-wave' | 'reward-target' | '';
@@ -419,6 +424,46 @@ test.describe('gameplay bot smoke', () => {
       result.hitStopRefreshes,
       `expected hit-stop refreshes to stay low during the encounter run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
     ).toBeLessThanOrEqual(3);
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
+  });
+
+  test('bot can observe multiple authored normal-wave templates without composition-flow regression', async ({ page }) => {
+    test.setTimeout(45_000);
+
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickStartRun(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+    });
+
+    const forcedStageTimes = [20_000, 80_000, 180_000, 360_000];
+    const seenTemplates = new Map<string, string>();
+
+    for (const elapsedMs of forcedStageTimes) {
+      await forceEncounterWave(page, elapsedMs);
+      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.waveTemplate.id));
+
+      const snapshot = await getGameplaySnapshot(page);
+      const run = snapshot.run;
+      if (!run) {
+        throw new Error('Gameplay snapshot did not include an active run after forcing a template wave.');
+      }
+
+      expect(run.waveTemplate.id, `expected a wave template id after forcing elapsed=${elapsedMs}`).not.toBe('');
+      seenTemplates.set(run.waveTemplate.id, run.waveTemplate.label);
+    }
+
+    expect(
+      seenTemplates.size,
+      `expected at least 3 distinct authored normal-wave templates, got ${[...seenTemplates.entries()]
+        .map(([id, label]) => `${id}:${label}`)
+        .join(', ')}`,
+    ).toBeGreaterThanOrEqual(3);
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 

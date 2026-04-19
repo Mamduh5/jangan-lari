@@ -61,6 +61,11 @@ export type GameplayBotRunSnapshot = {
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
+  waveTemplate: {
+    id: string;
+    label: string;
+    highlight: boolean;
+  };
   event: GameplayBotEventSnapshot;
   combatResponse: {
     hitStopStarts: number;
