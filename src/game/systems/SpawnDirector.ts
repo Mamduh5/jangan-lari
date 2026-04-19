@@ -15,30 +15,47 @@ type StageRule = {
   pool: Array<{ archetype: EnemyArchetype; weight: number }>;
 };
 
+const OPENING_STAGE_END_MS = 45000;
+const EARLY_RAMP_STAGE_END_MS = 120000;
+const FIRST_ELITE_SPAWN_AT_MS = 45000;
+
 const STAGE_RULES: StageRule[] = [
   {
-    untilMs: 90000,
-    minCount: 2,
-    maxCount: 3,
+    untilMs: OPENING_STAGE_END_MS,
+    minCount: 3,
+    maxCount: 4,
     pool: [
-      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 34 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 22 },
+      { archetype: ENEMY_ARCHETYPES.skimmer, weight: 20 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 24 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 16 },
+    ],
+  },
+  {
+    untilMs: EARLY_RAMP_STAGE_END_MS,
+    minCount: 4,
+    maxCount: 5,
+    pool: [
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 12 },
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 18 },
-      { archetype: ENEMY_ARCHETYPES.harrier, weight: 14 },
-      { archetype: ENEMY_ARCHETYPES.mauler, weight: 22 },
-      { archetype: ENEMY_ARCHETYPES.crusher, weight: 12 },
+      { archetype: ENEMY_ARCHETYPES.harrier, weight: 18 },
+      { archetype: ENEMY_ARCHETYPES.mauler, weight: 24 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 16 },
+      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 12 },
     ],
   },
   {
     untilMs: 240000,
-    minCount: 3,
-    maxCount: 5,
+    minCount: 4,
+    maxCount: 6,
     pool: [
-      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 14 },
+      { archetype: ENEMY_ARCHETYPES.scuttler, weight: 10 },
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 16 },
       { archetype: ENEMY_ARCHETYPES.harrier, weight: 16 },
       { archetype: ENEMY_ARCHETYPES.mauler, weight: 20 },
-      { archetype: ENEMY_ARCHETYPES.crusher, weight: 14 },
-      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 10 },
+      { archetype: ENEMY_ARCHETYPES.crusher, weight: 16 },
+      { archetype: ENEMY_ARCHETYPES.bulwark, weight: 12 },
       { archetype: ENEMY_ARCHETYPES.hexcaster, weight: 10 },
     ],
   },
@@ -89,7 +106,7 @@ const STAGE_RULES: StageRule[] = [
 const ELITE_ROTATION: EnemyArchetype[] = [ENEMY_ARCHETYPES.overlord, ENEMY_ARCHETYPES.riftblade];
 
 export class SpawnDirector {
-  private nextEliteSpawnAtMs = 60000;
+  private nextEliteSpawnAtMs = FIRST_ELITE_SPAWN_AT_MS;
   private nextEliteIndex = 0;
   private nextMinibossSpawnAtMs = MINIBOSS_SPAWN_TIME_MS;
   private bossSpawned = false;

@@ -13,6 +13,7 @@ export class UIScene extends Phaser.Scene {
   private killsText!: Phaser.GameObjects.Text;
   private alertText!: Phaser.GameObjects.Text;
   private rewardText!: Phaser.GameObjects.Text;
+  private instructionText!: Phaser.GameObjects.Text;
   private weaponIconFrames: Phaser.GameObjects.Rectangle[] = [];
   private weaponIconTexts: Phaser.GameObjects.Text[] = [];
   private xpBarFill!: Phaser.GameObjects.Rectangle;
@@ -109,6 +110,22 @@ export class UIScene extends Phaser.Scene {
         color: '#fef3c7',
         backgroundColor: '#111827',
         padding: { left: 12, right: 12, top: 6, bottom: 6 },
+        wordWrap: { width: 640 },
+        align: 'center',
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.instructionText = this.add
+      .text(GAME_WIDTH / 2, 148, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '13px',
+        color: '#cbd5e1',
+        backgroundColor: '#0f172a',
+        padding: { left: 14, right: 14, top: 6, bottom: 6 },
+        wordWrap: { width: 760 },
+        align: 'center',
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
@@ -209,6 +226,7 @@ export class UIScene extends Phaser.Scene {
     const alertMessage = String(this.registry.get('run.alertText') ?? '');
     const rewardMessage = String(this.registry.get('run.rewardText') ?? '');
     const rewardColor = String(this.registry.get('run.rewardColor') ?? '#fcd34d');
+    const instructionMessage = String(this.registry.get('run.instructions') ?? '');
     const levelUpMode = String(this.registry.get('run.levelUpMode') ?? 'normal');
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
 
@@ -223,6 +241,7 @@ export class UIScene extends Phaser.Scene {
     this.refreshWeaponIcons(weaponNames);
     this.refreshAlert(alertKind, alertMessage);
     this.refreshRewardToast(rewardMessage, rewardColor);
+    this.refreshInstruction(instructionMessage, levelUpActive, endActive);
 
     this.endContainer.setVisible(endActive);
     this.levelUpContainer.setVisible(levelUpActive && !endActive);
@@ -534,6 +553,16 @@ export class UIScene extends Phaser.Scene {
       this.rewardText.setColor(color);
     }
     this.rewardText.setVisible(true);
+  }
+
+  private refreshInstruction(message: string, levelUpActive: boolean, endActive: boolean): void {
+    if (!message || levelUpActive || endActive) {
+      this.instructionText.setVisible(false);
+      return;
+    }
+
+    this.setTextIfChanged(this.instructionText, message);
+    this.instructionText.setVisible(true);
   }
 
   private getAlertPalette(kind: string): { textColor: string; backgroundColor: string } {

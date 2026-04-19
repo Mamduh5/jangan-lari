@@ -118,6 +118,7 @@ export class RunScene extends Phaser.Scene {
   private guaranteedSignatureChoices = 0;
   private guaranteedBreakthroughChoices = 0;
   private breakthroughMilestoneConsumed = false;
+  private firstEliteSignatureRewardClaimed = false;
   private rewardToastToken = 0;
   private alertToken = 0;
   private activeAlertPriority = 0;
@@ -167,6 +168,7 @@ export class RunScene extends Phaser.Scene {
     this.guaranteedSignatureChoices = 0;
     this.guaranteedBreakthroughChoices = 0;
     this.breakthroughMilestoneConsumed = false;
+    this.firstEliteSignatureRewardClaimed = false;
     this.rewardToastToken = 0;
     this.alertToken = 0;
     this.activeAlertPriority = 0;
@@ -580,6 +582,7 @@ export class RunScene extends Phaser.Scene {
         playCue('elite-arrival');
       }
     }
+
   }
 
   private getSpawnPoint(distance: number): Phaser.Math.Vector2 {
@@ -856,7 +859,7 @@ export class RunScene extends Phaser.Scene {
     const gem = new XPGem(this, x, y, xpValue);
     this.xpGems.add(gem);
 
-    this.grantEncounterRewards(enemy, x, y);
+    const rewardOutcome = this.grantEncounterRewards(enemy, x, y);
 
     if (wasBoss) {
       this.endRun(true, 'Victory', 'The Behemoth has fallen.');
@@ -870,8 +873,13 @@ export class RunScene extends Phaser.Scene {
     }
 
     if (wasElite) {
-      this.registry.set('run.instructions', 'Elite defeated. Spend the reward before the next wave arrives.');
-      this.setAlert('objective', 'Elite reward claimed', 1400);
+      if (rewardOutcome.signatureChoicePrimed) {
+        this.registry.set('run.instructions', 'Elite defeated. Next level-up includes a signature pick.');
+        this.setAlert('objective', 'Signature reward primed', 1600);
+      } else {
+        this.registry.set('run.instructions', 'Elite defeated. Spend the reward before the next wave arrives.');
+        this.setAlert('objective', 'Elite reward claimed', 1400);
+      }
     }
   }
 
@@ -919,10 +927,11 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  private grantEncounterRewards(enemy: Enemy, x: number, y: number): void {
+  private grantEncounterRewards(enemy: Enemy, x: number, y: number): { signatureChoicePrimed: boolean } {
     const rewardGold = enemy.getRewardGold();
     const rewardLevelUps = enemy.getRewardLevelUps();
     const rewardMessages: string[] = [];
+    let signatureChoicePrimed = false;
 
     if (rewardGold > 0) {
       this.goldEarned += rewardGold;
@@ -935,6 +944,15 @@ export class RunScene extends Phaser.Scene {
       this.pendingLevelUps += rewardLevelUps;
       this.showFloatingText(x, y - 58, rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade', '#bfdbfe', 18);
       rewardMessages.push(rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade');
+
+      if (enemy.isElite() && !enemy.isMiniboss() && !this.firstEliteSignatureRewardClaimed) {
+        this.guaranteedSignatureChoices += 1;
+        this.firstEliteSignatureRewardClaimed = true;
+        signatureChoicePrimed = true;
+        this.showFloatingText(x, y - 80, 'Signature pick primed', '#f5d0fe', 18);
+        this.createBurstCircle(x, y, 0xc084fc, 16, 54, 240, 0.42);
+        rewardMessages.push('signature pick primed');
+      }
 
       if (enemy.isMiniboss()) {
         this.guaranteedSignatureChoices += 1;
@@ -957,16 +975,23 @@ export class RunScene extends Phaser.Scene {
       this.queueLevelUpStart();
     }
 
+    const rewardSummary = rewardMessages.join(' | ');
+
     if (enemy.isBoss()) {
-      this.showRewardToast(`Boss reward secured: ${rewardMessages.join(' • ') || 'Victory payout'}`, '#fde68a');
+      this.showRewardToast(`Boss reward secured: ${rewardSummary || 'Victory payout'}`, '#fde68a');
       playCue('boss-reward');
+      return { signatureChoicePrimed };
     } else if (enemy.isMiniboss()) {
-      this.showRewardToast(`Miniboss reward: ${rewardMessages.join(' • ')}`, '#f9a8d4');
+      this.showRewardToast(`Miniboss reward: ${rewardSummary}`, '#f9a8d4');
       playCue('miniboss-reward');
+      return { signatureChoicePrimed };
     } else if (enemy.isElite()) {
-      this.showRewardToast(`Elite reward: ${rewardMessages.join(' • ')}`, '#ddd6fe');
+      this.showRewardToast(`Elite reward: ${rewardSummary}`, signatureChoicePrimed ? '#f5d0fe' : '#ddd6fe');
       playCue('elite-reward');
+      return { signatureChoicePrimed };
     }
+
+    return { signatureChoicePrimed };
   }
 
   private presentHeroIntro(hero: (typeof HEROES)[keyof typeof HEROES]): void {
