@@ -1,6 +1,7 @@
 import {
   UPGRADE_POOL,
   buildLevelUpChoices,
+  getEligibleBranchUpgrades,
   getEligibleSignatureUpgrades,
   shouldQueueBreakthroughChoice,
 } from '../../src/game/data/upgrades';
@@ -12,6 +13,12 @@ describe('signature upgrade helpers', () => {
     expect(eligible.map((upgrade) => upgrade.id)).not.toContain('signature-shatterbell-aftershock');
   });
 
+  test('missing phase-disc and sunwheel signatures are available through the normal signature path', () => {
+    const eligible = getEligibleSignatureUpgrades(UPGRADE_POOL, ['phase-disc', 'sunwheel'], []);
+    expect(eligible.map((upgrade) => upgrade.id)).toContain('signature-phase-disc-rift-array');
+    expect(eligible.map((upgrade) => upgrade.id)).toContain('signature-sunwheel-corona-lattice');
+  });
+
   test('taken signatures are excluded from future eligibility', () => {
     const eligible = getEligibleSignatureUpgrades(UPGRADE_POOL, ['arc-bolt'], ['signature-arc-bolt-volt-volley']);
     expect(eligible.map((upgrade) => upgrade.id)).not.toContain('signature-arc-bolt-volt-volley');
@@ -21,7 +28,7 @@ describe('signature upgrade helpers', () => {
     const choices = buildLevelUpChoices({
       upgrades: UPGRADE_POOL,
       ownedWeaponIds: ['arc-bolt', 'twin-fangs'],
-      takenSignatureIds: [],
+      takenUpgradeIds: [],
       forceSignature: true,
       shuffle: <T>(items: T[]): T[] => [...items],
     });
@@ -36,7 +43,7 @@ describe('signature upgrade helpers', () => {
     const choices = buildLevelUpChoices({
       upgrades: UPGRADE_POOL,
       ownedWeaponIds: [],
-      takenSignatureIds: [],
+      takenUpgradeIds: [],
       forceSignature: true,
       shuffle: <T>(items: T[]): T[] => [...items],
     });
@@ -49,7 +56,7 @@ describe('signature upgrade helpers', () => {
     const choices = buildLevelUpChoices({
       upgrades: UPGRADE_POOL,
       ownedWeaponIds: ['arc-bolt'],
-      takenSignatureIds: [],
+      takenUpgradeIds: [],
       forceSignature: false,
       preferWeaponDirection: true,
       shuffle: <T>(items: T[]): T[] => [...items],
@@ -70,11 +77,37 @@ describe('signature upgrade helpers', () => {
     ).toBe(true);
   });
 
+  test('branch upgrades stay hidden until the matching build direction exists', () => {
+    expect(getEligibleBranchUpgrades(UPGRADE_POOL, ['arc-bolt'], []).map((upgrade) => upgrade.id)).not.toContain(
+      'branch-arc-bolt-lanebreaker',
+    );
+
+    expect(
+      getEligibleBranchUpgrades(UPGRADE_POOL, ['arc-bolt'], ['signature-arc-bolt-volt-volley']).map(
+        (upgrade) => upgrade.id,
+      ),
+    ).toContain('branch-arc-bolt-lanebreaker');
+  });
+
+  test('established build direction reserves one relevant branch slot without removing generic support', () => {
+    const choices = buildLevelUpChoices({
+      upgrades: UPGRADE_POOL,
+      ownedWeaponIds: ['arc-bolt'],
+      takenUpgradeIds: ['signature-arc-bolt-volt-volley'],
+      forceSignature: false,
+      shuffle: <T>(items: T[]): T[] => [...items],
+    });
+
+    expect(choices).toHaveLength(3);
+    expect(choices.map((choice) => choice.id)).toContain('branch-arc-bolt-lanebreaker');
+    expect(choices.some((choice) => choice.kind === 'core')).toBe(true);
+  });
+
   test('breakthrough mode injects one signature and fills from the high-impact core pool first', () => {
     const choices = buildLevelUpChoices({
       upgrades: UPGRADE_POOL,
       ownedWeaponIds: ['arc-bolt'],
-      takenSignatureIds: [],
+      takenUpgradeIds: [],
       forceSignature: false,
       mode: 'breakthrough',
       shuffle: <T>(items: T[]): T[] => [...items],
@@ -94,7 +127,7 @@ describe('signature upgrade helpers', () => {
         UPGRADE_POOL.find((upgrade) => upgrade.id === 'signature-arc-bolt-volt-volley')!,
       ],
       ownedWeaponIds: ['arc-bolt'],
-      takenSignatureIds: [],
+      takenUpgradeIds: [],
       forceSignature: false,
       mode: 'breakthrough',
       shuffle: <T>(items: T[]): T[] => [...items],
@@ -112,7 +145,7 @@ describe('signature upgrade helpers', () => {
       shouldQueueBreakthroughChoice({
         upgrades: UPGRADE_POOL,
         ownedWeaponIds: ['arc-bolt'],
-        takenSignatureIds: [],
+        takenUpgradeIds: [],
         milestoneConsumed: false,
       }),
     ).toBe(true);
@@ -121,7 +154,7 @@ describe('signature upgrade helpers', () => {
       shouldQueueBreakthroughChoice({
         upgrades: UPGRADE_POOL,
         ownedWeaponIds: ['arc-bolt'],
-        takenSignatureIds: [],
+        takenUpgradeIds: [],
         milestoneConsumed: true,
       }),
     ).toBe(false);

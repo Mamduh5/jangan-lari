@@ -594,18 +594,29 @@ export class UIScene extends Phaser.Scene {
     if (choice.kind === 'signature' && choice.requiresWeaponId) {
       const weapon = WEAPON_DEFINITIONS[choice.requiresWeaponId];
       return {
-        badgeText: `${weapon.shortLabel}+`,
+        badgeText: 'SIGNATURE',
         badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
         cardColor: 0x1a2235,
         title: choice.title,
-        summary: choice.description,
+        summary: `${weapon.name}: ${choice.description}`,
+      };
+    }
+
+    if (choice.kind === 'branch' && choice.requiresWeaponId) {
+      const weapon = WEAPON_DEFINITIONS[choice.requiresWeaponId];
+      return {
+        badgeText: 'BRANCH',
+        badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
+        cardColor: 0x162033,
+        title: choice.title,
+        summary: `${weapon.name}: ${choice.description}`,
       };
     }
 
     const weapon = this.getWeaponUpgrade(choice.id);
     if (weapon) {
       return {
-        badgeText: weapon.shortLabel,
+        badgeText: 'WEAPON',
         badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
         cardColor: 0x132033,
         title: weapon.name,
@@ -615,22 +626,64 @@ export class UIScene extends Phaser.Scene {
 
     switch (choice.id) {
       case 'vitality':
-        return { badgeText: 'HP', badgeColor: '#991b1b', cardColor: 0x1a1623, title: 'Vitality', summary: '+25 max HP' };
+        return {
+          badgeText: 'SUPPORT',
+          badgeColor: '#991b1b',
+          cardColor: 0x1a1623,
+          title: 'Vitality',
+          summary: '+25 max HP',
+        };
       case 'swiftness':
-        return { badgeText: 'SPD', badgeColor: '#1d4ed8', cardColor: 0x132033, title: 'Swiftness', summary: '+22 move speed' };
+        return {
+          badgeText: 'SUPPORT',
+          badgeColor: '#1d4ed8',
+          cardColor: 0x132033,
+          title: 'Swiftness',
+          summary: '+22 move speed',
+        };
       case 'power':
-        return { badgeText: 'DMG', badgeColor: '#92400e', cardColor: 0x211915, title: 'Power', summary: '+5 damage to all weapons' };
+        return {
+          badgeText: 'SUPPORT',
+          badgeColor: '#92400e',
+          cardColor: 0x211915,
+          title: 'Power',
+          summary: '+5 damage to all weapons',
+        };
       case 'rapid-fire':
-        return { badgeText: 'RPM', badgeColor: '#0f766e', cardColor: 0x122225, title: 'Rapid Fire', summary: '-40 ms cooldown' };
+        return {
+          badgeText: 'SUPPORT',
+          badgeColor: '#0f766e',
+          cardColor: 0x122225,
+          title: 'Rapid Fire',
+          summary: '-40 ms cooldown',
+        };
       case 'velocity':
-        return { badgeText: 'VEL', badgeColor: '#7c3aed', cardColor: 0x171a2e, title: 'Velocity', summary: '+90 projectile speed' };
+        return {
+          badgeText: 'SUPPORT',
+          badgeColor: '#7c3aed',
+          cardColor: 0x171a2e,
+          title: 'Velocity',
+          summary: '+90 projectile speed',
+        };
       case 'magnet':
-        return { badgeText: 'MAG', badgeColor: '#15803d', cardColor: 0x13251c, title: 'Magnet', summary: '+35 pickup range' };
+        return {
+          badgeText: 'SUPPORT',
+          badgeColor: '#15803d',
+          cardColor: 0x13251c,
+          title: 'Magnet',
+          summary: '+35 pickup range',
+        };
       case 'reach':
-        return { badgeText: 'RNG', badgeColor: '#1d4ed8', cardColor: 0x132033, title: 'Reach', summary: '+55 weapon range' };
+        return {
+          badgeText: 'SUPPORT',
+          badgeColor: '#1d4ed8',
+          cardColor: 0x132033,
+          title: 'Reach',
+          summary: '+55 weapon range',
+        };
       default:
         return {
-          badgeText: 'UP',
+          badgeText: 'SUPPORT',
           badgeColor: '#334155',
           cardColor: 0x111827,
           title: choice.title,

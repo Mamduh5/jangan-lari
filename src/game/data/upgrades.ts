@@ -18,9 +18,15 @@ export type UpgradeId =
   | 'signature-twin-fangs-ripper-line'
   | 'signature-ember-lance-sundering-tip'
   | 'signature-bloom-cannon-bramble-fan'
-  | 'signature-shatterbell-aftershock';
+  | 'signature-phase-disc-rift-array'
+  | 'signature-sunwheel-corona-lattice'
+  | 'signature-shatterbell-aftershock'
+  | 'branch-arc-bolt-lanebreaker'
+  | 'branch-twin-fangs-serrated-stream'
+  | 'branch-phase-disc-deep-cut'
+  | 'branch-sunwheel-outer-ring';
 
-export type UpgradeKind = 'core' | 'signature';
+export type UpgradeKind = 'core' | 'signature' | 'branch';
 export type UpgradeChoiceMode = 'normal' | 'breakthrough';
 
 export type UpgradeDefinition = {
@@ -29,6 +35,7 @@ export type UpgradeDefinition = {
   description: string;
   kind: UpgradeKind;
   requiresWeaponId?: WeaponId;
+  requiresUpgradeIds?: UpgradeId[];
   exclusiveSignatureForWeapon?: WeaponId;
   weaponStatPatch?: WeaponStatPatch;
 };
@@ -176,6 +183,82 @@ export const UPGRADE_POOL: UpgradeDefinition[] = [
       fireCooldownMs: 120,
     },
   },
+  {
+    id: 'signature-phase-disc-rift-array',
+    title: 'Rift Array',
+    description: 'Phase Disc splits into a twin-disc fan with broader pack coverage and deeper pass-through.',
+    kind: 'signature',
+    requiresWeaponId: 'phase-disc',
+    exclusiveSignatureForWeapon: 'phase-disc',
+    weaponStatPatch: {
+      burstCount: 2,
+      spreadDegrees: 20,
+      pierceCount: 3,
+    },
+  },
+  {
+    id: 'signature-sunwheel-corona-lattice',
+    title: 'Corona Lattice',
+    description: 'Sunwheel throws a denser outer ring farther from the player and resets faster between novas.',
+    kind: 'signature',
+    requiresWeaponId: 'sunwheel',
+    exclusiveSignatureForWeapon: 'sunwheel',
+    weaponStatPatch: {
+      radialCount: 8,
+      range: 30,
+      fireCooldownMs: -140,
+    },
+  },
+  {
+    id: 'branch-arc-bolt-lanebreaker',
+    title: 'Lanebreaker',
+    description: 'Volt Volley starts drilling through the front line with sharper velocity and light pierce.',
+    kind: 'branch',
+    requiresWeaponId: 'arc-bolt',
+    requiresUpgradeIds: ['signature-arc-bolt-volt-volley'],
+    weaponStatPatch: {
+      pierceCount: 1,
+      projectileSpeed: 120,
+    },
+  },
+  {
+    id: 'branch-twin-fangs-serrated-stream',
+    title: 'Serrated Stream',
+    description: 'Ripper Line tightens into a faster dart stream for close-range lane shredding.',
+    kind: 'branch',
+    requiresWeaponId: 'twin-fangs',
+    requiresUpgradeIds: ['signature-twin-fangs-ripper-line'],
+    weaponStatPatch: {
+      spreadDegrees: 6,
+      projectileSpeed: 80,
+      fireCooldownMs: -70,
+    },
+  },
+  {
+    id: 'branch-phase-disc-deep-cut',
+    title: 'Deep Cut',
+    description: 'Rift Array keeps carving past the front pack with heavier pass-through and longer travel.',
+    kind: 'branch',
+    requiresWeaponId: 'phase-disc',
+    requiresUpgradeIds: ['signature-phase-disc-rift-array'],
+    weaponStatPatch: {
+      pierceCount: 5,
+      range: 70,
+    },
+  },
+  {
+    id: 'branch-sunwheel-outer-ring',
+    title: 'Outer Ring',
+    description: 'Corona Lattice widens into a larger control halo with more orbiting blades per pulse.',
+    kind: 'branch',
+    requiresWeaponId: 'sunwheel',
+    requiresUpgradeIds: ['signature-sunwheel-corona-lattice'],
+    weaponStatPatch: {
+      radialCount: 10,
+      range: 35,
+      projectileRadius: 1,
+    },
+  },
 ];
 
 export function findUpgradeDefinitionById(upgradeId: UpgradeId): UpgradeDefinition | undefined {
@@ -185,16 +268,16 @@ export function findUpgradeDefinitionById(upgradeId: UpgradeId): UpgradeDefiniti
 export function getEligibleSignatureUpgrades(
   upgrades: UpgradeDefinition[],
   ownedWeaponIds: Iterable<WeaponId>,
-  takenSignatureIds: Iterable<UpgradeId>,
+  takenUpgradeIds: Iterable<UpgradeId>,
 ): UpgradeDefinition[] {
   const ownedWeaponSet = new Set(ownedWeaponIds);
-  const takenSignatureIdSet = new Set(takenSignatureIds);
+  const takenUpgradeIdSet = new Set(takenUpgradeIds);
   const takenSignatureWeaponSet = new Set(
     upgrades
       .filter(
         (upgrade) =>
           upgrade.kind === 'signature' &&
-          takenSignatureIdSet.has(upgrade.id) &&
+          takenUpgradeIdSet.has(upgrade.id) &&
           Boolean(upgrade.exclusiveSignatureForWeapon),
       )
       .map((upgrade) => upgrade.exclusiveSignatureForWeapon as WeaponId),
@@ -205,8 +288,26 @@ export function getEligibleSignatureUpgrades(
       upgrade.kind === 'signature' &&
       Boolean(upgrade.requiresWeaponId) &&
       ownedWeaponSet.has(upgrade.requiresWeaponId as WeaponId) &&
-      !takenSignatureIdSet.has(upgrade.id) &&
+      !takenUpgradeIdSet.has(upgrade.id) &&
       (!upgrade.exclusiveSignatureForWeapon || !takenSignatureWeaponSet.has(upgrade.exclusiveSignatureForWeapon)),
+  );
+}
+
+export function getEligibleBranchUpgrades(
+  upgrades: UpgradeDefinition[],
+  ownedWeaponIds: Iterable<WeaponId>,
+  takenUpgradeIds: Iterable<UpgradeId>,
+): UpgradeDefinition[] {
+  const ownedWeaponSet = new Set(ownedWeaponIds);
+  const takenUpgradeIdSet = new Set(takenUpgradeIds);
+
+  return upgrades.filter(
+    (upgrade) =>
+      upgrade.kind === 'branch' &&
+      Boolean(upgrade.requiresWeaponId) &&
+      ownedWeaponSet.has(upgrade.requiresWeaponId as WeaponId) &&
+      !takenUpgradeIdSet.has(upgrade.id) &&
+      (upgrade.requiresUpgradeIds ?? []).every((requiredUpgradeId) => takenUpgradeIdSet.has(requiredUpgradeId)),
   );
 }
 
@@ -225,22 +326,26 @@ function isWeaponDirectionUpgrade(upgrade: UpgradeDefinition): boolean {
   return WEAPON_DIRECTION_UPGRADE_IDS.has(upgrade.id);
 }
 
+function isBranchUpgrade(upgrade: UpgradeDefinition): boolean {
+  return upgrade.kind === 'branch';
+}
+
 export function shouldQueueBreakthroughChoice(options: {
   upgrades: UpgradeDefinition[];
   ownedWeaponIds: Iterable<WeaponId>;
-  takenSignatureIds: Iterable<UpgradeId>;
+  takenUpgradeIds: Iterable<UpgradeId>;
   milestoneConsumed: boolean;
 }): boolean {
   return (
     !options.milestoneConsumed &&
-    getEligibleSignatureUpgrades(options.upgrades, options.ownedWeaponIds, options.takenSignatureIds).length > 0
+    getEligibleSignatureUpgrades(options.upgrades, options.ownedWeaponIds, options.takenUpgradeIds).length > 0
   );
 }
 
 export function buildLevelUpChoices(options: {
   upgrades: UpgradeDefinition[];
   ownedWeaponIds: Iterable<WeaponId>;
-  takenSignatureIds: Iterable<UpgradeId>;
+  takenUpgradeIds: Iterable<UpgradeId>;
   forceSignature: boolean;
   preferWeaponDirection?: boolean;
   mode?: UpgradeChoiceMode;
@@ -254,10 +359,11 @@ export function buildLevelUpChoices(options: {
   const eligibleSignatures = getEligibleSignatureUpgrades(
     options.upgrades,
     options.ownedWeaponIds,
-    options.takenSignatureIds,
+    options.takenUpgradeIds,
   );
-  const nonSignatureUpgrades = options.upgrades.filter((upgrade) => upgrade.kind !== 'signature');
-  const regularPool = shuffle([...nonSignatureUpgrades, ...eligibleSignatures]);
+  const eligibleBranches = getEligibleBranchUpgrades(options.upgrades, options.ownedWeaponIds, options.takenUpgradeIds);
+  const coreUpgrades = options.upgrades.filter((upgrade) => upgrade.kind === 'core');
+  const regularPool = shuffle([...coreUpgrades, ...eligibleBranches, ...eligibleSignatures]);
   const picks: UpgradeDefinition[] = [];
   const shouldInjectSignature = options.forceSignature || mode === 'breakthrough';
 
@@ -267,10 +373,10 @@ export function buildLevelUpChoices(options: {
 
   if (mode === 'breakthrough') {
     const breakthroughPriorityPool = shuffle(
-      nonSignatureUpgrades.filter((upgrade) => BREAKTHROUGH_PRIORITY_CORE_UPGRADE_IDS.has(upgrade.id)),
+      coreUpgrades.filter((upgrade) => BREAKTHROUGH_PRIORITY_CORE_UPGRADE_IDS.has(upgrade.id)),
     );
     const breakthroughFallbackPool = shuffle(
-      nonSignatureUpgrades.filter(
+      coreUpgrades.filter(
         (upgrade) =>
           !BREAKTHROUGH_PRIORITY_CORE_UPGRADE_IDS.has(upgrade.id) &&
           !BREAKTHROUGH_EXCLUDED_FALLBACK_UPGRADE_IDS.has(upgrade.id),
@@ -292,8 +398,21 @@ export function buildLevelUpChoices(options: {
     return picks.slice(0, maxChoices);
   }
 
+  if (picks.length < maxChoices && !picks.some((upgrade) => isBranchUpgrade(upgrade))) {
+    const branchChoices = shuffle([...eligibleBranches]);
+
+    for (const upgrade of branchChoices) {
+      if (picks.some((existing) => existing.id === upgrade.id)) {
+        continue;
+      }
+
+      picks.push(upgrade);
+      break;
+    }
+  }
+
   if (preferWeaponDirection && picks.length < maxChoices && !picks.some((upgrade) => isWeaponDirectionUpgrade(upgrade))) {
-    const weaponDirectionChoices = shuffle(nonSignatureUpgrades.filter((upgrade) => isWeaponDirectionUpgrade(upgrade)));
+    const weaponDirectionChoices = shuffle(coreUpgrades.filter((upgrade) => isWeaponDirectionUpgrade(upgrade)));
 
     for (const upgrade of weaponDirectionChoices) {
       if (picks.some((existing) => existing.id === upgrade.id)) {
@@ -305,7 +424,7 @@ export function buildLevelUpChoices(options: {
     }
   }
 
-  const fillerPool = options.forceSignature && picks.length > 0 ? shuffle([...nonSignatureUpgrades]) : regularPool;
+  const fillerPool = options.forceSignature && picks.length > 0 ? shuffle([...coreUpgrades, ...eligibleBranches]) : regularPool;
 
   for (const upgrade of fillerPool) {
     if (picks.length >= maxChoices) {

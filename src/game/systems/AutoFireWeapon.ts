@@ -58,6 +58,10 @@ export class AutoFireWeapon {
       this.stats.spreadDegrees = Math.max(0, patch.spreadDegrees);
     }
 
+    if (patch.radialCount !== undefined) {
+      this.stats.radialCount = Math.max(3, patch.radialCount);
+    }
+
     if (patch.pierceCount !== undefined) {
       this.stats.pierceCount = Math.max(0, patch.pierceCount);
     }

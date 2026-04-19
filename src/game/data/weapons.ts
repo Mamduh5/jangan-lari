@@ -36,6 +36,7 @@ export type WeaponStatPatch = Partial<
     WeaponDefinition,
     | 'burstCount'
     | 'spreadDegrees'
+    | 'radialCount'
     | 'pierceCount'
     | 'projectileSpeed'
     | 'projectileRadius'
