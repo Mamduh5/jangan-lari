@@ -87,6 +87,53 @@ describe('milestone 1 runtime helpers', () => {
     expect(afterSupport.some((choice) => choice.category === 'support')).toBe(false);
   });
 
+  test('preferred support stays favored in the default offer order before the slot is filled', () => {
+    const director = new LevelUpDirector();
+    const traits = new TraitRuntime();
+
+    const runnerChoices = director.buildChoices('runner', traits, {
+      shuffle: <T>(items: T[]) => [...items],
+      hasSupportAbility: false,
+    });
+    const shadeChoices = director.buildChoices('shade', traits, {
+      shuffle: <T>(items: T[]) => [...items],
+      hasSupportAbility: false,
+    });
+
+    const runnerSupportChoices = runnerChoices.filter((choice) => choice.category === 'support').map((choice) => choice.id);
+    const shadeSupportChoices = shadeChoices.filter((choice) => choice.category === 'support').map((choice) => choice.id);
+
+    expect(runnerSupportChoices[0]).toBe('shock-lattice');
+    expect(shadeSupportChoices[0]).toBe('spotter-drone');
+  });
+
+  test('off-bias support remains eligible when the support pool shuffle brings it forward', () => {
+    const director = new LevelUpDirector();
+    const traits = new TraitRuntime();
+
+    const runnerChoices = director.buildChoices('runner', traits, {
+      hasSupportAbility: false,
+      shuffle: <T extends { id?: string }>(items: T[]) =>
+        [...items].sort((left, right) => {
+          if (left.id === 'spotter-drone') return -1;
+          if (right.id === 'spotter-drone') return 1;
+          return 0;
+        }),
+    });
+    const shadeChoices = director.buildChoices('shade', traits, {
+      hasSupportAbility: false,
+      shuffle: <T extends { id?: string }>(items: T[]) =>
+        [...items].sort((left, right) => {
+          if (left.id === 'shock-lattice') return -1;
+          if (right.id === 'shock-lattice') return 1;
+          return 0;
+        }),
+    });
+
+    expect(runnerChoices.find((choice) => choice.category === 'support')?.id).toBe('spotter-drone');
+    expect(shadeChoices.find((choice) => choice.category === 'support')?.id).toBe('shock-lattice');
+  });
+
   test('trait runtime extends disrupted setup and signature payoff when the new traits are owned', () => {
     const traits = new TraitRuntime();
 

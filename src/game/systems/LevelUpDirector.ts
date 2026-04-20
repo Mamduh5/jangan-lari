@@ -40,13 +40,23 @@ export class LevelUpDirector {
     const supportRewards = hasSupportAbility
       ? []
       : applyShuffle(
-          Object.values(REWARD_DEFINITIONS).filter(
-            (reward) =>
-              reward.category === 'support' &&
-              reward.abilityId &&
-              (reward.heroBias === heroId || reward.heroBias === 'shared'),
-          ),
+          [
+            ...Object.values(REWARD_DEFINITIONS).filter(
+              (reward) =>
+                reward.category === 'support' &&
+                reward.abilityId &&
+                (reward.heroBias === heroId || reward.heroBias === 'shared'),
+            ),
+            ...Object.values(REWARD_DEFINITIONS).filter(
+              (reward) =>
+                reward.category === 'support' &&
+                reward.abilityId,
+            ),
+          ],
         );
+    const supportChoice = supportRewards.find(
+      (reward, index, rewards) => rewards.findIndex((candidate) => candidate.id === reward.id) === index,
+    );
 
     const stabilizers = applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter((reward) => reward.category === 'stabilizer'),
@@ -66,7 +76,7 @@ export class LevelUpDirector {
     addIfUnique(alignedTraits[0]);
 
     if (!hasSupportAbility) {
-      addIfUnique(supportRewards[0] ?? bridgeTraits[0]);
+      addIfUnique(supportChoice ?? bridgeTraits[0]);
     } else if (heroId === 'shade') {
       addIfUnique(bridgeTraits.find((reward) => reward.id === 'scavenger-shield'));
     } else {
@@ -75,7 +85,7 @@ export class LevelUpDirector {
 
     addIfUnique(stabilizers[0]);
 
-    for (const reward of [...alignedTraits, ...bridgeTraits, ...supportRewards, ...stabilizers]) {
+    for (const reward of [...alignedTraits, ...bridgeTraits, ...stabilizers]) {
       if (picks.length >= 3) {
         break;
       }
