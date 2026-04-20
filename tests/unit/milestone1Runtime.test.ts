@@ -29,6 +29,19 @@ describe('milestone 1 runtime helpers', () => {
     expect(choices.some((choice) => choice.id === 'spotter-drone')).toBe(true);
   });
 
+  test('level up director gives Ash Weaver an ailment path plus the Contagion Node support branch', () => {
+    const director = new LevelUpDirector();
+    const traits = new TraitRuntime();
+    const choices = director.buildChoices('weaver', traits, {
+      shuffle: <T>(items: T[]) => [...items],
+    });
+
+    expect(choices).toHaveLength(3);
+    expect(choices.some((choice) => choice.id === 'infectious-volley' || choice.id === 'lingering-fever')).toBe(true);
+    expect(choices.some((choice) => choice.id === 'contagion-node')).toBe(true);
+    expect(choices.some((choice) => choice.lane === 'stabilize')).toBe(true);
+  });
+
   test('trait runtime only turns on stronger Guard patterns when the matching trait is owned', () => {
     const traits = new TraitRuntime();
     const ability = getAbilityDefinition('brace-shot');
@@ -145,5 +158,24 @@ describe('milestone 1 runtime helpers', () => {
 
     expect(traits.getDisruptedDurationMs(2400)).toBe(3300);
     expect(traits.getSignatureDisruptedDamageMultiplier()).toBeCloseTo(1.45);
+  });
+
+  test('trait runtime extends ailment setup and detonation payoff when the new ailment traits are owned', () => {
+    const traits = new TraitRuntime();
+    const ability = getAbilityDefinition('cinder-needles');
+
+    expect(traits.getPrimaryBurstCount({ heroId: 'weaver', ability, guardActive: false })).toBe(3);
+    expect(traits.getAilmentDurationMs(2100)).toBe(2100);
+    expect(traits.getHexConsumeBonusDamage()).toBe(12);
+    expect(traits.getHexSecondaryBurstDamage()).toBe(0);
+
+    traits.addTrait('infectious-volley');
+    traits.addTrait('lingering-fever');
+    traits.addTrait('volatile-bloom');
+
+    expect(traits.getPrimaryBurstCount({ heroId: 'weaver', ability, guardActive: false })).toBe(4);
+    expect(traits.getAilmentDurationMs(2100)).toBe(3350);
+    expect(traits.getHexConsumeBonusDamage()).toBe(18);
+    expect(traits.getHexSecondaryBurstDamage()).toBe(12);
   });
 });

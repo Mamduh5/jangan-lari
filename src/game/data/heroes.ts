@@ -1,7 +1,8 @@
 import type { AbilityId } from './abilities';
 import type { WeaponId } from './weapons';
 
-export type HeroId = 'runner' | 'shade';
+export type HeroId = 'runner' | 'shade' | 'weaver';
+export type HeroStateAffinity = 'guard' | 'mark' | 'ailment';
 
 export type HeroAppearance = {
   bodyColor: number;
@@ -17,7 +18,7 @@ export type HeroDefinition = {
   id: HeroId;
   name: string;
   description: string;
-  stateAffinity: 'guard' | 'mark';
+  stateAffinity: HeroStateAffinity;
   passiveLabel: string;
   chassisRule: string;
   primaryAbilityId: AbilityId;
@@ -86,8 +87,34 @@ export const HEROES: Record<HeroId, HeroDefinition> = {
       angle: 20,
     },
   },
+  weaver: {
+    id: 'weaver',
+    name: 'Ash Weaver',
+    description: 'Mid-range pressure caster that seeds Ailment across packs, then cashes it out in a timed detonation.',
+    stateAffinity: 'ailment',
+    passiveLabel: 'Pyre Loop: primary fire builds Ailment and the signature consumes it for burst and cooldown tempo.',
+    chassisRule: 'Primary applies Ailment. Signature detonates afflicted packs and consuming Ailment slightly refunds signature cooldown.',
+    primaryAbilityId: 'cinder-needles',
+    signatureAbilityId: 'hex-detonation',
+    startingWeaponId: 'ember-lance',
+    maxHealthBonus: -8,
+    moveSpeedBonus: 12,
+    pickupRangeBonus: 0,
+    startingDamageBonus: 0,
+    fireCooldownReductionMs: 0,
+    baseGuardMax: 10,
+    appearance: {
+      bodyColor: 0xf97316,
+      strokeColor: 0xffedd5,
+      auraColor: 0xfb7185,
+      markerColor: 0x7f1d1d,
+      markerShape: 'dot',
+      size: 34,
+      angle: -18,
+    },
+  },
 };
 
-export const HERO_IDS: HeroId[] = ['runner', 'shade'];
+export const HERO_IDS: HeroId[] = ['runner', 'shade', 'weaver'];
 
 export const HERO_LIST: HeroDefinition[] = HERO_IDS.map((heroId) => HEROES[heroId]);

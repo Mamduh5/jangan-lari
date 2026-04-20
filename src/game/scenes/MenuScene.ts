@@ -38,7 +38,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.add
-      .text(100, 84, 'Milestone 1: Guard vs Mark.', {
+      .text(100, 84, 'Milestone 3: Guard, Mark, and Ailment.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '17px',
         color: '#9fb8d3',
@@ -49,7 +49,7 @@ export class MenuScene extends Phaser.Scene {
     this.metaButton = this.createMenuButton(726, 82, 'Meta', () => this.scene.start('MetaScene'));
 
     this.add
-      .text(centerX, 168, 'Pick a chassis. Iron Warden should feel durable and close. Raptor Frame should feel surgical and target-driven.', {
+      .text(centerX, 168, 'Pick a chassis. Iron Warden should feel durable and close. Raptor Frame should feel surgical and target-driven. Ash Weaver should build pressure, then detonate it.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#cbd5e1',
@@ -59,39 +59,41 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5);
 
     const cardY = 382;
-    const cardOffsets = [-220, 220];
+    const cardSpacing = 332;
+    const cardWidth = 300;
+    const cardOffsets = HERO_LIST.map((_, index) => (index - (HERO_LIST.length - 1) / 2) * cardSpacing);
 
     HERO_LIST.forEach((hero, index) => {
       const x = centerX + cardOffsets[index];
-      const frame = this.add.rectangle(x, cardY, 360, 260, 0x182233, 0.98).setStrokeStyle(2, 0x334155, 0.92);
+      const frame = this.add.rectangle(x, cardY, cardWidth, 260, 0x182233, 0.98).setStrokeStyle(2, 0x334155, 0.92);
       frame.setInteractive({ useHandCursor: true });
       frame.on('pointerdown', () => this.chooseHero(hero.id));
 
-      this.createHeroPreview(hero, x - 108, cardY - 46);
+      this.createHeroPreview(hero, x - 92, cardY - 46);
 
       this.add
-        .text(x - 28, cardY - 86, hero.name, {
+        .text(x - 8, cardY - 86, hero.name, {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '28px',
+          fontSize: '24px',
           color: '#f8fafc',
         })
         .setOrigin(0, 0.5);
 
       this.add
-        .text(x - 28, cardY - 54, hero.stateAffinity === 'guard' ? 'Guard Chassis' : 'Mark Chassis', {
+        .text(x - 8, cardY - 54, this.getAffinityLabel(hero), {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '14px',
-          color: hero.stateAffinity === 'guard' ? '#fdba74' : '#93c5fd',
+          color: this.getAffinityColor(hero),
         })
         .setOrigin(0, 0.5);
 
       const body = this.add
-        .text(x - 28, cardY - 26, '', {
+        .text(x - 8, cardY - 26, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '14px',
+          fontSize: '13px',
           color: '#cbd5e1',
-          wordWrap: { width: 216 },
-          lineSpacing: 5,
+          wordWrap: { width: 188 },
+          lineSpacing: 4,
         })
         .setOrigin(0, 0);
 
@@ -129,14 +131,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private chooseHero(heroId: HeroDefinition['id']): void {
-    console.log('clicked heroId =', heroId);
-  console.log('current selectedHero =', this.saveData.selectedHero);
-  console.log('current unlockedHeroes =', this.saveData.unlockedHeroes);
     const nextSave = selectHero(this.saveData, heroId);
-
-    console.log('selectHero returned =', nextSave);
     if (!nextSave) {
-      console.warn('hero selection rejected for heroId =', heroId);
       return;
     }
 
@@ -172,6 +168,30 @@ export class MenuScene extends Phaser.Scene {
       this.add.circle(x, y - appearance.size * 0.24, Math.max(4, appearance.size * 0.14), appearance.markerColor, 0.95);
     } else {
       this.add.rectangle(x, y - appearance.size * 0.24, appearance.size * 0.5, 7, appearance.markerColor, 0.95);
+    }
+  }
+
+  private getAffinityLabel(hero: HeroDefinition): string {
+    switch (hero.stateAffinity) {
+      case 'guard':
+        return 'Guard Chassis';
+      case 'mark':
+        return 'Mark Chassis';
+      case 'ailment':
+      default:
+        return 'Ailment Chassis';
+    }
+  }
+
+  private getAffinityColor(hero: HeroDefinition): string {
+    switch (hero.stateAffinity) {
+      case 'guard':
+        return '#fdba74';
+      case 'mark':
+        return '#93c5fd';
+      case 'ailment':
+      default:
+        return '#fda4af';
     }
   }
 

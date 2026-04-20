@@ -16,6 +16,7 @@ export type GameplayBotEnemySummary = {
   isEventTarget: boolean;
   isMarked?: boolean;
   isDisrupted?: boolean;
+  isAilmented?: boolean;
 };
 
 export type GameplayBotGemSummary = {
@@ -78,10 +79,13 @@ export type GameplayBotRunSnapshot = {
   };
   markedEnemies: number;
   disruptedEnemies: number;
+  ailmentedEnemies: number;
   markApplyCount: number;
   markConsumeCount: number;
   disruptedApplyCount: number;
   disruptedSignatureHitCount: number;
+  ailmentApplyCount: number;
+  ailmentConsumeCount: number;
   supportAbilityId: AbilityId | null;
   supportUseCount: number;
   xpGemSpawnCount: number;

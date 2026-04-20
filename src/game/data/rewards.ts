@@ -8,6 +8,7 @@ export type RewardId =
   | TraitId
   | 'shock-lattice'
   | 'spotter-drone'
+  | 'contagion-node'
   | 'field-repairs'
   | 'reflex-boots';
 
@@ -106,6 +107,42 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     description: 'Equip a support drone shot that disrupts priority targets from range.',
     abilityId: 'spotter-drone',
     heroBias: 'shade',
+  },
+  'contagion-node': {
+    id: 'contagion-node',
+    category: 'support',
+    lane: 'bridge',
+    title: 'Contagion Node',
+    description: 'Equip a support orb that seeds light Ailment into clustered enemies.',
+    abilityId: 'contagion-node',
+    heroBias: 'weaver',
+  },
+  'infectious-volley': {
+    id: 'infectious-volley',
+    category: 'trait',
+    lane: 'deepen',
+    title: 'Infectious Volley',
+    description: 'Cinder Needles throws an extra needle and keeps Ailment setup steadier.',
+    traitId: 'infectious-volley',
+    heroBias: 'weaver',
+  },
+  'lingering-fever': {
+    id: 'lingering-fever',
+    category: 'trait',
+    lane: 'deepen',
+    title: 'Lingering Fever',
+    description: 'Ailment lasts 0.9s longer.',
+    traitId: 'lingering-fever',
+    heroBias: 'weaver',
+  },
+  'volatile-bloom': {
+    id: 'volatile-bloom',
+    category: 'trait',
+    lane: 'bridge',
+    title: 'Volatile Bloom',
+    description: 'Hex Detonation leaves a stronger follow-up burst when it consumes Ailment.',
+    traitId: 'volatile-bloom',
+    heroBias: 'weaver',
   },
   'field-repairs': {
     id: 'field-repairs',

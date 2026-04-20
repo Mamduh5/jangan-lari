@@ -64,6 +64,11 @@ const STAGES: StageRule[] = [
         label: 'Strafe Screen',
         wave: [ENEMY_ARCHETYPES.skimmer, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.swarmer],
       },
+      {
+        id: 'harrier-screen',
+        label: 'Harrier Screen',
+        wave: [ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.swarmer],
+      },
     ],
   },
   {
@@ -93,6 +98,11 @@ const STAGES: StageRule[] = [
         id: 'dash-pocket',
         label: 'Dash Pocket',
         wave: [ENEMY_ARCHETYPES.crusher, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.swarmer],
+      },
+      {
+        id: 'bulwark-pocket',
+        label: 'Bulwark Pocket',
+        wave: [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.shooter],
       },
     ],
   },
@@ -137,6 +147,16 @@ const STAGES: StageRule[] = [
           ENEMY_ARCHETYPES.skimmer,
           ENEMY_ARCHETYPES.shooter,
           ENEMY_ARCHETYPES.anchor,
+        ],
+      },
+      {
+        id: 'rot-front',
+        label: 'Rot Front',
+        wave: [
+          ENEMY_ARCHETYPES.bulwark,
+          ENEMY_ARCHETYPES.harrier,
+          ENEMY_ARCHETYPES.shooter,
+          ENEMY_ARCHETYPES.swarmer,
         ],
       },
     ],

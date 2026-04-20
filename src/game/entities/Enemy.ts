@@ -59,10 +59,15 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private readonly disruptedRing: Phaser.GameObjects.Arc;
   private readonly disruptedPipLeft: Phaser.GameObjects.Arc;
   private readonly disruptedPipRight: Phaser.GameObjects.Arc;
+  private readonly ailmentRing: Phaser.GameObjects.Arc;
+  private readonly ailmentPipLeft: Phaser.GameObjects.Arc;
+  private readonly ailmentPipRight: Phaser.GameObjects.Arc;
   private deathPresentationActive = false;
   private eventMarkerColor: number | null = null;
   private markedUntil = 0;
   private disruptedUntil = 0;
+  private ailmentUntil = 0;
+  private nextAilmentTickAt = 0;
   private deathRewardPending = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
@@ -116,6 +121,22 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.disruptedPipRight.setDepth(this.depth + 0.15);
     this.disruptedPipRight.setStrokeStyle(1, 0xecfeff, 0.95);
     this.disruptedPipRight.setVisible(false);
+
+    this.ailmentRing = scene.add.circle(x, y, Math.round(archetype.size * 0.7), 0xfb7185, 0.08);
+    this.ailmentRing.setDepth(this.depth - 0.1);
+    this.ailmentRing.setStrokeStyle(2, 0xfb923c, 0.92);
+    this.ailmentRing.setVisible(false);
+
+    const ailmentPipRadius = Math.max(3, Math.round(archetype.size * 0.13));
+    this.ailmentPipLeft = scene.add.circle(x, y, ailmentPipRadius, 0xfb923c, 0.95);
+    this.ailmentPipLeft.setDepth(this.depth + 0.18);
+    this.ailmentPipLeft.setStrokeStyle(1, 0xffedd5, 0.95);
+    this.ailmentPipLeft.setVisible(false);
+
+    this.ailmentPipRight = scene.add.circle(x, y, ailmentPipRadius, 0xfb923c, 0.95);
+    this.ailmentPipRight.setDepth(this.depth + 0.18);
+    this.ailmentPipRight.setStrokeStyle(1, 0xffedd5, 0.95);
+    this.ailmentPipRight.setVisible(false);
 
     const bodySize = Math.max(16, archetype.size - 6);
     this.body.setSize(bodySize, bodySize);
@@ -185,6 +206,28 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     return currentTime < this.disruptedUntil;
   }
 
+  applyAilment(currentTimeOrUntilMs: number, durationMs?: number): void {
+    const nextUntil = durationMs === undefined ? currentTimeOrUntilMs : currentTimeOrUntilMs + Math.max(0, durationMs);
+    this.ailmentUntil = Math.max(this.ailmentUntil, nextUntil);
+    if (this.nextAilmentTickAt === 0 || this.nextAilmentTickAt < currentTimeOrUntilMs + 420) {
+      this.nextAilmentTickAt = currentTimeOrUntilMs + 420;
+    }
+  }
+
+  isAilmented(currentTime: number): boolean {
+    return currentTime < this.ailmentUntil;
+  }
+
+  consumeAilment(currentTime: number): boolean {
+    if (!this.isAilmented(currentTime)) {
+      return false;
+    }
+
+    this.ailmentUntil = 0;
+    this.nextAilmentTickAt = 0;
+    return true;
+  }
+
   consumeDeathRewardPending(): boolean {
     if (!this.deathRewardPending) {
       return false;
@@ -212,6 +255,12 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   }
 
   chase(target: Phaser.GameObjects.Components.Transform, currentTime: number): EnemyAttackSignal | null {
+    if (!this.isAlive()) {
+      this.body.setVelocity(0, 0);
+      return this.consumePendingAttackSignal();
+    }
+
+    this.tickAilmentPressure(currentTime);
     if (!this.isAlive()) {
       this.body.setVelocity(0, 0);
       return this.consumePendingAttackSignal();
@@ -251,6 +300,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   updatePresentation(currentTime: number): void {
     this.syncMarkPresentation(currentTime);
     this.syncDisruptedPresentation(currentTime);
+    this.syncAilmentPresentation(currentTime);
 
     const velocity = this.body.velocity;
     if (velocity.lengthSq() > 0) {
@@ -261,6 +311,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setScale(this.responseScale.x, this.responseScale.y);
       if (this.markedUntil > currentTime) {
         this.setStrokeStyle(this.baseStrokeWidth + 2, 0xfef08a, 1);
+      } else if (this.isAilmented(currentTime)) {
+        this.setStrokeStyle(this.baseStrokeWidth + 1, 0xfb923c, 1);
       } else if (this.isDisrupted(currentTime)) {
         this.setStrokeStyle(this.baseStrokeWidth + 1, 0x67e8f9, 1);
       }
@@ -269,6 +321,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     const marked = this.isMarked(currentTime);
     const disrupted = this.isDisrupted(currentTime);
+    const ailmented = this.isAilmented(currentTime);
     const chargingDash = this.isChargingDash(currentTime);
     const pulse = 1 + Math.sin((currentTime + this.y) * 0.012) * 0.03;
     const hitReactionActive = currentTime < this.hitReactionUntil;
@@ -341,9 +394,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return;
     }
 
-    if (marked || disrupted) {
+    if (marked || disrupted || ailmented) {
       this.setResponseScale((1 + Math.sin((currentTime + this.x) * 0.018) * 0.05) * (hitReactionActive ? 0.9 : 1));
-      this.setStrokeStyle(marked ? this.baseStrokeWidth + 2 : this.baseStrokeWidth + 1, marked ? 0xfef08a : 0x67e8f9, 1);
+      this.setStrokeStyle(
+        marked ? this.baseStrokeWidth + 2 : this.baseStrokeWidth + 1,
+        marked ? 0xfef08a : ailmented ? 0xfb923c : 0x67e8f9,
+        1,
+      );
       this.setAlpha(hitReactionActive ? 0.76 : 1);
       return;
     }
@@ -553,6 +610,15 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     return this.isDisrupted(currentTime) ? this.speed * 0.8 : this.speed;
   }
 
+  private tickAilmentPressure(currentTime: number): void {
+    if (!this.isAilmented(currentTime) || currentTime < this.nextAilmentTickAt) {
+      return;
+    }
+
+    this.nextAilmentTickAt = currentTime + 700;
+    this.takeDamage(2);
+  }
+
   private consumePendingAttackSignal(): EnemyAttackSignal | null {
     const signal = this.pendingAttackSignal;
     this.pendingAttackSignal = null;
@@ -666,6 +732,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.scene.tweens.killTweensOf(this.disruptedRing);
     this.scene.tweens.killTweensOf(this.disruptedPipLeft);
     this.scene.tweens.killTweensOf(this.disruptedPipRight);
+    this.scene.tweens.killTweensOf(this.ailmentRing);
+    this.scene.tweens.killTweensOf(this.ailmentPipLeft);
+    this.scene.tweens.killTweensOf(this.ailmentPipRight);
     this.responseScale.x = 1;
     this.responseScale.y = 1;
     this.deathPresentationActive = false;
@@ -675,6 +744,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.disruptedRing.destroy();
     this.disruptedPipLeft.destroy();
     this.disruptedPipRight.destroy();
+    this.ailmentRing.destroy();
+    this.ailmentPipLeft.destroy();
+    this.ailmentPipRight.destroy();
     super.destroy(fromScene);
   }
 
@@ -717,5 +789,28 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.disruptedPipRight.setPosition(this.x + lateralOffset, this.y - Math.sin(currentTime * 0.018) * verticalOffset);
     this.disruptedPipLeft.setAlpha(this.deathPresentationActive ? 0.34 : 0.92);
     this.disruptedPipRight.setAlpha(this.deathPresentationActive ? 0.34 : 0.92);
+  }
+
+  private syncAilmentPresentation(currentTime: number): void {
+    const ailmented = this.isAilmented(currentTime) && this.active;
+    this.ailmentRing.setVisible(ailmented);
+    this.ailmentPipLeft.setVisible(ailmented);
+    this.ailmentPipRight.setVisible(ailmented);
+
+    if (!ailmented) {
+      return;
+    }
+
+    const pulse = 1 + Math.sin((currentTime + this.x + this.y) * 0.024) * 0.08;
+    const lateralOffset = this.archetype.size * 0.28;
+    const verticalOffset = this.archetype.size * 0.64;
+    this.ailmentRing.setPosition(this.x, this.y);
+    this.ailmentRing.setRadius(Math.round(this.archetype.size * 0.72 * pulse));
+    this.ailmentRing.setAlpha(this.deathPresentationActive ? 0.18 : 0.4);
+
+    this.ailmentPipLeft.setPosition(this.x - lateralOffset, this.y + verticalOffset + Math.sin(currentTime * 0.021) * 4);
+    this.ailmentPipRight.setPosition(this.x + lateralOffset, this.y + verticalOffset - Math.sin(currentTime * 0.021) * 4);
+    this.ailmentPipLeft.setAlpha(this.deathPresentationActive ? 0.3 : 0.92);
+    this.ailmentPipRight.setAlpha(this.deathPresentationActive ? 0.3 : 0.92);
   }
 }

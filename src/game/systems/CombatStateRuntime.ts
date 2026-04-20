@@ -68,4 +68,16 @@ export class CombatStateRuntime {
   isDisrupted(enemy: Enemy, currentTime: number): boolean {
     return enemy.isDisrupted(currentTime);
   }
+
+  applyAilment(enemy: Enemy, currentTime: number, durationMs: number): void {
+    enemy.applyAilment(currentTime, durationMs);
+  }
+
+  isAilmented(enemy: Enemy, currentTime: number): boolean {
+    return enemy.isAilmented(currentTime);
+  }
+
+  consumeAilment(enemy: Enemy, currentTime: number): boolean {
+    return enemy.consumeAilment(currentTime);
+  }
 }

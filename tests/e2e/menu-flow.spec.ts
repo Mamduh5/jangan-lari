@@ -17,6 +17,18 @@ async function clickCanvasPosition(page: import('@playwright/test').Page, x: num
   });
 }
 
+function getHeroCardX(hero: 'runner' | 'shade' | 'weaver'): number {
+  switch (hero) {
+    case 'runner':
+      return 308;
+    case 'shade':
+      return 640;
+    case 'weaver':
+    default:
+      return 972;
+  }
+}
+
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
   const runtimeErrors: string[] = [];
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
@@ -35,7 +47,7 @@ test.describe('milestone 1 menu flow', () => {
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
 
-    await clickCanvasPosition(page, 860, 382);
+    await clickCanvasPosition(page, getHeroCardX('shade'), 382);
     await page.waitForTimeout(150);
 
     let selectedHero = await page.evaluate(() => window.localStorage.getItem('jangan-lari-save-v1') ?? '');
@@ -63,6 +75,29 @@ test.describe('milestone 1 menu flow', () => {
 
     const snapshot = await page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot());
     expect(snapshot?.run?.weaponNames).toEqual(['Seeker Burst', 'Hunter Sweep']);
+    expect(runtimeErrors).toEqual([]);
+  });
+
+  test('menu can start Ash Weaver from the normal hero roster', async ({ page }) => {
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickCanvasPosition(page, getHeroCardX('weaver'), 382);
+    await page.waitForTimeout(150);
+
+    const selectedHero = await page.evaluate(() => window.localStorage.getItem('jangan-lari-save-v1') ?? '');
+    expect(selectedHero).toContain('weaver');
+
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene'));
+    });
+
+    const snapshot = await page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot());
+    expect(snapshot?.run?.weaponNames).toEqual(['Cinder Needles', 'Hex Detonation']);
     expect(runtimeErrors).toEqual([]);
   });
 

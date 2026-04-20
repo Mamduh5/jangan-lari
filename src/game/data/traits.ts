@@ -9,7 +9,10 @@ export type TraitId =
   | 'focused-breach'
   | 'scavenger-shield'
   | 'lingering-static'
-  | 'breach-capacitor';
+  | 'breach-capacitor'
+  | 'infectious-volley'
+  | 'lingering-fever'
+  | 'volatile-bloom';
 
 export type TraitDefinition = {
   id: TraitId;
@@ -68,6 +71,27 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     title: 'Breach Capacitor',
     description: 'Signature abilities hit Disrupted enemies harder.',
     heroBias: 'shared',
+  },
+  'infectious-volley': {
+    id: 'infectious-volley',
+    category: 'enabler',
+    title: 'Infectious Volley',
+    description: 'Cinder Needles fires one extra needle and keeps Ailment windows more reliable.',
+    heroBias: 'weaver',
+  },
+  'lingering-fever': {
+    id: 'lingering-fever',
+    category: 'amplifier',
+    title: 'Lingering Fever',
+    description: 'Ailment lasts longer, making setup windows less fragile.',
+    heroBias: 'weaver',
+  },
+  'volatile-bloom': {
+    id: 'volatile-bloom',
+    category: 'converter',
+    title: 'Volatile Bloom',
+    description: 'Hex Detonation creates a stronger follow-up burst when it consumes Ailment.',
+    heroBias: 'weaver',
   },
 };
 

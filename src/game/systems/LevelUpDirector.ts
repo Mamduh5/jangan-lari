@@ -25,26 +25,49 @@ export class LevelUpDirector {
         return copy;
       });
 
-    const alignedTraits = applyShuffle(
+    const heroAlignedTraits = applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter(
         (reward) =>
           reward.category === 'trait' &&
           reward.lane === 'deepen' &&
-          (reward.heroBias === heroId || reward.heroBias === 'shared') &&
+          reward.heroBias === heroId &&
           reward.traitId &&
           !selectedTraits.has(reward.traitId),
       ),
     );
+    const sharedAlignedTraits = applyShuffle(
+      Object.values(REWARD_DEFINITIONS).filter(
+        (reward) =>
+          reward.category === 'trait' &&
+          reward.lane === 'deepen' &&
+          reward.heroBias === 'shared' &&
+          reward.traitId &&
+          !selectedTraits.has(reward.traitId),
+      ),
+    );
+    const alignedTraits = [...heroAlignedTraits, ...sharedAlignedTraits];
 
-    const bridgeTraits = applyShuffle(
+    const heroBridgeTraits = applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter(
         (reward) =>
           reward.category === 'trait' &&
           reward.lane === 'bridge' &&
+          reward.heroBias === heroId &&
           reward.traitId &&
           !selectedTraits.has(reward.traitId),
       ),
     );
+    const sharedBridgeTraits = applyShuffle(
+      Object.values(REWARD_DEFINITIONS).filter(
+        (reward) =>
+          reward.category === 'trait' &&
+          reward.lane === 'bridge' &&
+          reward.heroBias !== heroId &&
+          reward.traitId &&
+          !selectedTraits.has(reward.traitId),
+      ),
+    );
+    const bridgeTraits = [...heroBridgeTraits, ...sharedBridgeTraits];
 
     const preferredSupportRewards = Object.values(REWARD_DEFINITIONS).filter(
       (reward) =>

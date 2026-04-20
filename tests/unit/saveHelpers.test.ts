@@ -39,7 +39,7 @@ describe('save helpers', () => {
     const save = loadGameSave();
     expect(save.totalGold).toBe(0);
     expect(save.selectedHero).toBe('shade');
-    expect(save.unlockedHeroes).toEqual(['shade']);
+    expect(save.unlockedHeroes).toEqual(['shade', 'weaver']);
     expect(save.purchasedPermanentUpgrades['max-hp']).toBe(0);
     expect(save.progressStats.totalKills).toBe(0);
   });
@@ -48,6 +48,7 @@ describe('save helpers', () => {
     const save = createDefaultSaveData();
     expect(unlockHero(save, HEROES.runner)).toBeNull();
     expect(unlockHero(save, HEROES.shade)).toBeNull();
+    expect(unlockHero(save, HEROES.weaver)).toBeNull();
   });
 
   test('selectHero only works for unlocked heroes', () => {

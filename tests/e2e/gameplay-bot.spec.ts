@@ -22,15 +22,18 @@ type Snapshot = {
     cooldowns: { primaryRemainingMs: number; signatureRemainingMs: number; supportRemainingMs: number };
     markedEnemies: number;
     disruptedEnemies: number;
+    ailmentedEnemies: number;
     markApplyCount: number;
     markConsumeCount: number;
     disruptedApplyCount: number;
     disruptedSignatureHitCount: number;
-    supportAbilityId: 'shock-lattice' | 'spotter-drone' | null;
+    ailmentApplyCount: number;
+    ailmentConsumeCount: number;
+    supportAbilityId: 'shock-lattice' | 'spotter-drone' | 'contagion-node' | null;
     supportUseCount: number;
     xpGemSpawnCount: number;
     xpGemCollectCount: number;
-    enemies: Array<{ distance: number; x: number; y: number; isMarked?: boolean; isDisrupted?: boolean }>;
+    enemies: Array<{ id?: string; distance: number; x: number; y: number; isMarked?: boolean; isDisrupted?: boolean; isAilmented?: boolean }>;
     xpGems: Array<{ distance: number; x: number; y: number }>;
     rewardChoices: Array<{ id: string; title: string; lane: 'deepen' | 'bridge' | 'stabilize' }>;
     hud?: {
@@ -69,6 +72,18 @@ async function clickCanvasPosition(page: import('@playwright/test').Page, x: num
   });
 }
 
+function getHeroCardX(hero: 'runner' | 'shade' | 'weaver'): number {
+  switch (hero) {
+    case 'runner':
+      return 308;
+    case 'shade':
+      return 640;
+    case 'weaver':
+    default:
+      return 972;
+  }
+}
+
 async function getSnapshot(page: import('@playwright/test').Page): Promise<Snapshot> {
   try {
     return page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot() ?? null) as Promise<Snapshot>;
@@ -104,7 +119,7 @@ function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
 
 function determineMovementKeys(
   run: NonNullable<Snapshot['run']>,
-  hero: 'runner' | 'shade',
+  hero: 'runner' | 'shade' | 'weaver',
 ): string[] {
   const move = { x: 0, y: 0 };
   const nearestEnemy = run.enemies[0];
@@ -113,10 +128,10 @@ function determineMovementKeys(
     const dx = nearestEnemy.x - run.player.x;
     const dy = nearestEnemy.y - run.player.y;
     const distance = Math.max(24, nearestEnemy.distance);
-    const approachBias = hero === 'runner' ? 1.2 : 0.45;
-    const retreatBias = hero === 'runner' ? 0.2 : 1.1;
+    const approachBias = hero === 'runner' ? 1.2 : hero === 'weaver' ? 0.74 : 0.45;
+    const retreatBias = hero === 'runner' ? 0.2 : hero === 'weaver' ? 0.82 : 1.1;
 
-    if (distance > (hero === 'runner' ? 110 : 180)) {
+    if (distance > (hero === 'runner' ? 110 : hero === 'weaver' ? 150 : 180)) {
       move.x += (dx / distance) * approachBias;
       move.y += (dy / distance) * approachBias;
     } else {
@@ -124,7 +139,7 @@ function determineMovementKeys(
       move.y -= (dy / distance) * retreatBias;
     }
 
-    const tangent = hero === 'runner' ? 0.22 : 0.55;
+    const tangent = hero === 'runner' ? 0.22 : hero === 'weaver' ? 0.42 : 0.55;
     move.x += (-dy / distance) * tangent;
     move.y += (dx / distance) * tangent;
   }
@@ -139,7 +154,7 @@ function determineMovementKeys(
   }
 
   if (Math.abs(move.x) < 0.15 && Math.abs(move.y) < 0.15) {
-    move.x = hero === 'runner' ? 0.7 : 0.35;
+    move.x = hero === 'runner' ? 0.7 : hero === 'weaver' ? 0.5 : 0.35;
     move.y = 0.45;
   }
 
@@ -178,14 +193,14 @@ async function releaseKeys(page: import('@playwright/test').Page, pressed: Set<s
   }
 }
 
-async function runNaturalValidation(page: import('@playwright/test').Page, hero: 'runner' | 'shade'): Promise<void> {
+async function runNaturalValidation(page: import('@playwright/test').Page, hero: 'runner' | 'shade' | 'weaver'): Promise<void> {
   const pressed = new Set<string>();
   const runtimeErrors = trackRuntimeErrors(page);
 
   try {
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-    await clickCanvasPosition(page, hero === 'runner' ? 420 : 860, 382);
+    await clickCanvasPosition(page, getHeroCardX(hero), 382);
     await clickCanvasPosition(page, 560, 82);
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;
@@ -202,6 +217,8 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
     let sawSupportReward = false;
     let sawSupportUse = false;
     let sawDisrupted = false;
+    let sawAilment = false;
+    let sawAilmentConsume = false;
     let previousGuard = 0;
     let initialHpBarWidth = 0;
     let minHpBarWidth = Number.POSITIVE_INFINITY;
@@ -260,6 +277,17 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
       ) {
         sawDisrupted = true;
       }
+      if (
+        run.ailmentedEnemies > 0 ||
+        run.ailmentApplyCount > 0 ||
+        run.ailmentConsumeCount > 0 ||
+        run.enemies.some((enemy) => enemy.isAilmented)
+      ) {
+        sawAilment = true;
+      }
+      if (run.ailmentConsumeCount > 0) {
+        sawAilmentConsume = true;
+      }
 
       if (run.levelUpActive) {
         break;
@@ -285,7 +313,9 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
       expect(minHpBarWidth, 'expected HP bar width to shrink after taking damage').toBeLessThan(initialHpBarWidth - 0.75);
     }
     expect(run!.levelUpActive, 'expected the real run to still be sitting on the natural level-up prompt').toBe(true);
-    const supportChoiceIndex = run!.rewardChoices.findIndex((choice) => choice.id === 'shock-lattice' || choice.id === 'spotter-drone');
+    const supportChoiceIndex = run!.rewardChoices.findIndex(
+      (choice) => choice.id === 'shock-lattice' || choice.id === 'spotter-drone' || choice.id === 'contagion-node',
+    );
     expect(supportChoiceIndex, 'expected the first natural reward set to include a support reward while the slot is empty').toBeGreaterThanOrEqual(0);
     sawSupportReward = supportChoiceIndex >= 0;
     await selectRewardByIndex(page, supportChoiceIndex);
@@ -339,7 +369,25 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
       ) {
         sawDisrupted = true;
       }
-      if (sawSupportUse && sawDisrupted && (hero === 'runner' ? sawSignatureUse : sawMark)) {
+      if (
+        supportRun.ailmentedEnemies > 0 ||
+        supportRun.ailmentApplyCount > 0 ||
+        supportRun.ailmentConsumeCount > 0 ||
+        supportRun.enemies.some((enemy) => enemy.isAilmented)
+      ) {
+        sawAilment = true;
+      }
+      if (supportRun.ailmentConsumeCount > 0) {
+        sawAilmentConsume = true;
+      }
+      if (
+        sawSupportUse &&
+        (hero === 'runner'
+          ? sawDisrupted && sawSignatureUse
+          : hero === 'shade'
+            ? sawDisrupted && sawMark
+            : sawAilment && sawAilmentConsume)
+      ) {
         break;
       }
 
@@ -353,12 +401,17 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
     expect(finalSnapshot.run?.supportAbilityId, 'expected the support slot to remain equipped').toBeTruthy();
     expect(sawSupportReward, 'expected to see a support reward in the real level-up flow').toBe(true);
     expect(sawSupportUse, 'expected the equipped support to auto-fire in the real run').toBe(true);
-    expect(sawDisrupted, 'expected the real run to visibly apply Disrupted').toBe(true);
+    if (finalSnapshot.run?.supportAbilityId === 'shock-lattice' || finalSnapshot.run?.supportAbilityId === 'spotter-drone') {
+      expect(sawDisrupted, 'expected a disrupted support branch to visibly apply Disrupted').toBe(true);
+    }
     if (hero === 'runner') {
       expect(sawGuardGain, 'expected Iron Warden to build some Guard during the run').toBe(true);
       expect(sawSignatureUse, 'expected Iron Warden to naturally fire Bulwark Slam during the run').toBe(true);
-    } else {
+    } else if (hero === 'shade') {
       expect(sawMark, 'expected Raptor Frame to visibly mark enemies').toBe(true);
+    } else {
+      expect(sawAilment, 'expected Ash Weaver to visibly apply Ailment during the run').toBe(true);
+      expect(sawAilmentConsume, 'expected Ash Weaver to naturally consume Ailment with Hex Detonation').toBe(true);
     }
 
     await page.keyboard.press('Escape');
@@ -380,5 +433,42 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
   test('Raptor Frame reaches a natural support branch and cashes in Disrupted during a real run', async ({ page }) => {
     test.setTimeout(90_000);
     await runNaturalValidation(page, 'shade');
+  });
+
+  test('Ash Weaver reaches a natural reward branch and proves the Ailment apply-consume loop in a real run', async ({ page }) => {
+    test.setTimeout(90_000);
+    await runNaturalValidation(page, 'weaver');
+  });
+
+  test('late mixed-wave templates surface the added Ailment-pressure roles on the real run scene', async ({ page }) => {
+    test.setTimeout(30_000);
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+    await clickCanvasPosition(page, getHeroCardX('weaver'), 382);
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+    const seen = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        runElapsedMs: number;
+        spawnEnemyWave: () => void;
+        enemies: { getChildren: () => Array<{ archetype: { id: string } }> };
+      };
+
+      runScene.runElapsedMs = 330_000;
+      const ids = new Set<string>();
+      for (let index = 0; index < 8; index += 1) {
+        runScene.spawnEnemyWave();
+        for (const enemy of runScene.enemies.getChildren()) {
+          ids.add(enemy.archetype.id);
+        }
+      }
+
+      return Array.from(ids);
+    });
+
+    expect(seen).toContain('harrier');
+    expect(seen).toContain('bulwark');
   });
 });

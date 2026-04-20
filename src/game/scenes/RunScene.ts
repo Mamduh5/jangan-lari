@@ -68,10 +68,13 @@ export class RunScene extends Phaser.Scene {
   private currentRewardChoices: RewardDefinition[] = [];
   private markedEnemyCount = 0;
   private disruptedEnemyCount = 0;
+  private ailmentedEnemyCount = 0;
   private markApplyCount = 0;
   private markConsumeCount = 0;
   private disruptedApplyCount = 0;
   private disruptedSignatureHitCount = 0;
+  private ailmentApplyCount = 0;
+  private ailmentConsumeCount = 0;
   private supportUseCount = 0;
   private goldEarned = 0;
   private xpGemSpawnCount = 0;
@@ -102,10 +105,13 @@ export class RunScene extends Phaser.Scene {
     this.enemyBolts = [];
     this.markedEnemyCount = 0;
     this.disruptedEnemyCount = 0;
+    this.ailmentedEnemyCount = 0;
     this.markApplyCount = 0;
     this.markConsumeCount = 0;
     this.disruptedApplyCount = 0;
     this.disruptedSignatureHitCount = 0;
+    this.ailmentApplyCount = 0;
+    this.ailmentConsumeCount = 0;
     this.supportUseCount = 0;
     this.goldEarned = 0;
     this.xpGemSpawnCount = 0;
@@ -317,12 +323,8 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.traits', this.traitRuntime.getSelectedTraitIds().map((id) => getTraitDefinition(id)?.title ?? id));
     this.registry.set('run.markedEnemies', this.markedEnemyCount);
     this.registry.set('run.disruptedEnemies', this.disruptedEnemyCount);
-    this.registry.set(
-      'run.stateLabel',
-      this.selectedHero.stateAffinity === 'guard'
-        ? `Guard ${this.combatStates.getGuard()}/${this.combatStates.getMaxGuard()}`
-        : `Marked ${this.markedEnemyCount}  |  Disrupted ${this.disruptedEnemyCount}`,
-    );
+    this.registry.set('run.ailmentedEnemies', this.ailmentedEnemyCount);
+    this.registry.set('run.stateLabel', this.buildStateLabel());
     this.registry.set('run.weaponNames', [primary.name, signature.name]);
     this.registry.set('run.abilityLabels', [
       `Primary: ${primary.shortLabel} ${primary.name} (${Math.ceil(this.abilityLoadout.getRemainingCooldownMs('primary', this.time.now) / 100) / 10}s)`,
@@ -347,6 +349,7 @@ export class RunScene extends Phaser.Scene {
         isEventTarget: false,
         isMarked: enemy.isMarked(this.time.now),
         isDisrupted: enemy.isDisrupted(this.time.now),
+        isAilmented: enemy.isAilmented(this.time.now),
       }))
       .sort((left, right) => left.distance - right.distance);
 
@@ -396,10 +399,13 @@ export class RunScene extends Phaser.Scene {
       },
       markedEnemies: this.markedEnemyCount,
       disruptedEnemies: this.disruptedEnemyCount,
+      ailmentedEnemies: this.ailmentedEnemyCount,
       markApplyCount: this.markApplyCount,
       markConsumeCount: this.markConsumeCount,
       disruptedApplyCount: this.disruptedApplyCount,
       disruptedSignatureHitCount: this.disruptedSignatureHitCount,
+      ailmentApplyCount: this.ailmentApplyCount,
+      ailmentConsumeCount: this.ailmentConsumeCount,
       supportAbilityId: this.abilityLoadout.getAbilityId('support'),
       supportUseCount: this.supportUseCount,
       xpGemSpawnCount: this.xpGemSpawnCount,
@@ -503,6 +509,9 @@ export class RunScene extends Phaser.Scene {
         if ((result.disruptedApplications ?? 0) > 0) {
           this.disruptedApplyCount += result.disruptedApplications ?? 0;
         }
+        if ((result.ailmentApplications ?? 0) > 0) {
+          this.ailmentApplyCount += result.ailmentApplications ?? 0;
+        }
       }
     }
 
@@ -517,6 +526,16 @@ export class RunScene extends Phaser.Scene {
         this.abilityLoadout.commitUse('signature', currentTime);
         if ((result.disruptedTargetsHit ?? 0) > 0) {
           this.disruptedSignatureHitCount += result.disruptedTargetsHit ?? 0;
+        }
+        if ((result.ailmentConsumes ?? 0) > 0) {
+          this.ailmentConsumeCount += result.ailmentConsumes ?? 0;
+          if (this.selectedHero.id === 'weaver') {
+            this.abilityLoadout.reduceCooldown(
+              'signature',
+              Math.min(360, (result.ailmentConsumes ?? 0) * 120),
+              currentTime,
+            );
+          }
         }
         if (result.signatureHit?.consumedMark) {
           this.markConsumeCount += 1;
@@ -651,6 +670,14 @@ export class RunScene extends Phaser.Scene {
       this.disruptedApplyCount += 1;
     }
 
+    if (sourceAbilityId === 'cinder-needles' || sourceAbilityId === 'contagion-node') {
+      const ailmentDuration = this.traitRuntime.getAilmentDurationMs(
+        getAbilityDefinition(sourceAbilityId).ailmentDurationMs ?? 2100,
+      );
+      this.combatStates.applyAilment(enemy, currentTime, ailmentDuration);
+      this.ailmentApplyCount += 1;
+    }
+
     projectile.deactivate();
   }
 
@@ -729,6 +756,9 @@ export class RunScene extends Phaser.Scene {
     ).length;
     this.disruptedEnemyCount = (this.enemies.getChildren() as Enemy[]).filter(
       (enemy) => enemy.active && enemy.isAlive() && enemy.isDisrupted(currentTime),
+    ).length;
+    this.ailmentedEnemyCount = (this.enemies.getChildren() as Enemy[]).filter(
+      (enemy) => enemy.active && enemy.isAlive() && enemy.isAilmented(currentTime),
     ).length;
   }
 
@@ -863,5 +893,17 @@ export class RunScene extends Phaser.Scene {
       bolt.halo.destroy();
     });
     this.enemyBolts = [];
+  }
+
+  private buildStateLabel(): string {
+    switch (this.selectedHero.stateAffinity) {
+      case 'guard':
+        return `Guard ${this.combatStates.getGuard()}/${this.combatStates.getMaxGuard()}  |  Disrupted ${this.disruptedEnemyCount}`;
+      case 'mark':
+        return `Marked ${this.markedEnemyCount}  |  Disrupted ${this.disruptedEnemyCount}`;
+      case 'ailment':
+      default:
+        return `Ailment ${this.ailmentedEnemyCount}  |  Disrupted ${this.disruptedEnemyCount}`;
+    }
   }
 }

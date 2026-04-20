@@ -43,6 +43,10 @@ export class TraitRuntime {
       return (options.ability.burstCount ?? 1) + 1;
     }
 
+    if (options.heroId === 'weaver' && options.ability.id === 'cinder-needles' && this.hasTrait('infectious-volley')) {
+      return (options.ability.burstCount ?? 1) + 1;
+    }
+
     return options.ability.burstCount ?? 1;
   }
 
@@ -86,6 +90,29 @@ export class TraitRuntime {
 
   getSignatureDisruptedDamageMultiplier(): number {
     return this.hasTrait('breach-capacitor') ? 1.45 : 1.25;
+  }
+
+  getAilmentDurationMs(baseDurationMs: number): number {
+    let durationMs = baseDurationMs;
+    if (this.hasTrait('infectious-volley')) {
+      durationMs += 350;
+    }
+    if (this.hasTrait('lingering-fever')) {
+      durationMs += 900;
+    }
+    return durationMs;
+  }
+
+  getHexConsumeBonusDamage(): number {
+    return this.hasTrait('volatile-bloom') ? 18 : 12;
+  }
+
+  getHexSecondaryBurstRadius(baseRadius: number): number {
+    return this.hasTrait('volatile-bloom') ? baseRadius + 24 : baseRadius;
+  }
+
+  getHexSecondaryBurstDamage(): number {
+    return this.hasTrait('volatile-bloom') ? 12 : 0;
   }
 
   getGuardGainOnPrimaryHit(options: PrimaryHitContext): number {

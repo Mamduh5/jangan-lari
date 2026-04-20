@@ -2,7 +2,7 @@ import { HERO_IDS, type HeroId } from '../data/heroes';
 import type { PermanentUpgradeId } from '../data/permanentUpgrades';
 import type { QuestId } from '../data/quests';
 
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 const SAVE_STORAGE_KEY = 'jangan-lari-save-v1';
 
 export type ProgressStats = {
@@ -29,7 +29,7 @@ export function createDefaultSaveData(): GameSaveData {
     version: SAVE_VERSION,
     totalGold: 0,
     selectedHero: 'runner',
-    unlockedHeroes: ['runner', 'shade'],
+    unlockedHeroes: ['runner', 'shade', 'weaver'],
     unlockedPermanentUpgrades: ['max-hp', 'move-speed', 'pickup-range'],
     purchasedPermanentUpgrades: {
       'max-hp': 0,
@@ -62,6 +62,7 @@ export function loadGameSave(): GameSaveData {
     const unlockedHeroes = Array.isArray(parsed.unlockedHeroes)
       ? parsed.unlockedHeroes.filter((hero): hero is HeroId => HERO_IDS.includes(hero as HeroId))
       : fallback.unlockedHeroes;
+    const normalizedUnlockedHeroes = Array.from(new Set<HeroId>([...unlockedHeroes, 'weaver']));
 
     const selectedHero = HERO_IDS.includes(parsed.selectedHero as HeroId)
       ? (parsed.selectedHero as HeroId)
@@ -92,10 +93,10 @@ export function loadGameSave(): GameSaveData {
       version: SAVE_VERSION,
       totalGold: Math.max(0, Number(parsed.totalGold ?? fallback.totalGold)),
       selectedHero:
-        unlockedHeroes.includes(selectedHero)
+        normalizedUnlockedHeroes.includes(selectedHero)
           ? selectedHero
-          : unlockedHeroes[0] ?? fallback.selectedHero,
-      unlockedHeroes: unlockedHeroes.length > 0 ? unlockedHeroes : fallback.unlockedHeroes,
+          : normalizedUnlockedHeroes[0] ?? fallback.selectedHero,
+      unlockedHeroes: normalizedUnlockedHeroes.length > 0 ? normalizedUnlockedHeroes : fallback.unlockedHeroes,
       unlockedPermanentUpgrades:
         unlockedPermanentUpgrades.length > 0 ? unlockedPermanentUpgrades : fallback.unlockedPermanentUpgrades,
       purchasedPermanentUpgrades: {

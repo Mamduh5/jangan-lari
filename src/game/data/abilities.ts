@@ -6,7 +6,10 @@ export type AbilityId =
   | 'seeker-burst'
   | 'hunter-sweep'
   | 'shock-lattice'
-  | 'spotter-drone';
+  | 'spotter-drone'
+  | 'cinder-needles'
+  | 'hex-detonation'
+  | 'contagion-node';
 
 export type AbilityBehaviorId =
   | 'brace-shot'
@@ -14,7 +17,10 @@ export type AbilityBehaviorId =
   | 'seeker-burst'
   | 'hunter-sweep'
   | 'shock-lattice'
-  | 'spotter-drone';
+  | 'spotter-drone'
+  | 'cinder-needles'
+  | 'hex-detonation'
+  | 'contagion-node';
 
 export type AbilityDefinition = {
   id: AbilityId;
@@ -36,6 +42,7 @@ export type AbilityDefinition = {
   baseGuardGain?: number;
   markDurationMs?: number;
   disruptedDurationMs?: number;
+  ailmentDurationMs?: number;
 };
 
 export const ABILITY_DEFINITIONS: Record<AbilityId, AbilityDefinition> = {
@@ -132,6 +139,54 @@ export const ABILITY_DEFINITIONS: Record<AbilityId, AbilityDefinition> = {
     projectileSpeed: 660,
     projectileRadius: 4,
     disruptedDurationMs: 1500,
+  },
+  'cinder-needles': {
+    id: 'cinder-needles',
+    name: 'Cinder Needles',
+    shortLabel: 'CN',
+    slot: 'primary',
+    description: 'Fast ember needles that pressure packs by seeding Ailment across the closest threats.',
+    behaviorId: 'cinder-needles',
+    cooldownMs: 430,
+    damage: 8,
+    range: 420,
+    color: 0xfb7185,
+    strokeColor: 0xffedd5,
+    projectileSpeed: 680,
+    projectileRadius: 4,
+    burstCount: 3,
+    spreadDegrees: 18,
+    ailmentDurationMs: 2100,
+  },
+  'hex-detonation': {
+    id: 'hex-detonation',
+    name: 'Hex Detonation',
+    shortLabel: 'HD',
+    slot: 'signature',
+    description: 'Triggers a focused blast on an Ailmented cluster and explicitly consumes Ailment for burst payoff.',
+    behaviorId: 'hex-detonation',
+    cooldownMs: 2600,
+    damage: 24,
+    range: 460,
+    radius: 120,
+    color: 0xf97316,
+    strokeColor: 0xffedd5,
+  },
+  'contagion-node': {
+    id: 'contagion-node',
+    name: 'Contagion Node',
+    shortLabel: 'CND',
+    slot: 'support',
+    description: 'A drifting support orb that seeks clustered enemies and adds light Ailment setup without replacing the hero loop.',
+    behaviorId: 'contagion-node',
+    cooldownMs: 3200,
+    damage: 6,
+    range: 520,
+    color: 0xfb7185,
+    strokeColor: 0xfffbeb,
+    projectileSpeed: 380,
+    projectileRadius: 7,
+    ailmentDurationMs: 1800,
   },
 };
 
