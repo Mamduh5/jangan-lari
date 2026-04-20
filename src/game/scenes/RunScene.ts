@@ -477,7 +477,7 @@ export class RunScene extends Phaser.Scene {
 
     const signature = this.abilityLoadout.getAbility('signature');
     if (signature && this.abilityLoadout.canUse('signature', currentTime)) {
-      if (this.selectedHero.id === 'runner' && this.combatStates.getGuard() < 6) {
+      if (this.selectedHero.id === 'runner' && this.combatStates.getGuard() < 3) {
         return;
       }
 
