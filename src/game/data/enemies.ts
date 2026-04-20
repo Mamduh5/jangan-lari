@@ -1,4 +1,7 @@
 export type EnemyArchetypeId =
+  | 'swarmer'
+  | 'shooter'
+  | 'anchor'
   | 'scuttler'
   | 'skimmer'
   | 'harrier'
@@ -39,7 +42,50 @@ export type EnemyArchetype = {
   isBoss?: boolean;
 };
 
+// Milestone 1 actively uses the trio below. Legacy entries remain available so
+// existing non-run content and response tuning can compile without a wider rewrite.
 export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
+  swarmer: {
+    id: 'swarmer',
+    name: 'Swarmer',
+    size: 20,
+    color: 0xfb7185,
+    strokeColor: 0xffe4e6,
+    maxHealth: 16,
+    speed: 148,
+    contactDamage: 7,
+    xpValue: 5,
+    behavior: 'chase',
+  },
+  shooter: {
+    id: 'shooter',
+    name: 'Shooter',
+    size: 26,
+    color: 0x38bdf8,
+    strokeColor: 0xe0f2fe,
+    maxHealth: 28,
+    speed: 92,
+    contactDamage: 6,
+    xpValue: 7,
+    behavior: 'ranged',
+    preferredDistance: 310,
+    strafeStrength: 0.96,
+    shotCooldownMs: 1700,
+    shotSpeed: 320,
+    shotDamage: 12,
+  },
+  anchor: {
+    id: 'anchor',
+    name: 'Anchor',
+    size: 38,
+    color: 0x84cc16,
+    strokeColor: 0xecfccb,
+    maxHealth: 80,
+    speed: 56,
+    contactDamage: 15,
+    xpValue: 11,
+    behavior: 'chase',
+  },
   scuttler: {
     id: 'scuttler',
     name: 'Scuttler',

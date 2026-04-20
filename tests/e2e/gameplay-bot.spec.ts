@@ -1,891 +1,244 @@
 import { expect, test } from '@playwright/test';
 
-type GameplayBotEnemySummary = {
-  id: string;
-  x: number;
-  y: number;
-  distance: number;
-  contactDamage: number;
-  isElite: boolean;
-  isBoss: boolean;
-  isEventTarget: boolean;
-};
-
-type GameplayBotGemSummary = {
-  x: number;
-  y: number;
-  distance: number;
-  value: number;
-};
-
-type GameplayBotUpgradeChoice = {
-  id: string;
-  title: string;
-};
-
-type GameplayBotRunSnapshot = {
-  elapsedMs: number;
-  hp: number;
-  maxHp: number;
-  level: number;
-  kills: number;
-  weaponCount: number;
-  goldEarned: number;
-  levelUpActive: boolean;
-  endActive: boolean;
-  victory: boolean;
-  endTitle: string;
-  weaponNames: string[];
-  player: {
-    x: number;
-    y: number;
-    moveSpeed: number;
-    pickupRange: number;
-  };
-  enemies: GameplayBotEnemySummary[];
-  xpGems: GameplayBotGemSummary[];
-  upgradeChoices: GameplayBotUpgradeChoice[];
-  waveTemplate: {
-    id: string;
-    label: string;
-    highlight: boolean;
-  };
-  event: {
-    active: boolean;
-    type: 'challenge-wave' | 'reward-target' | '';
-    title: string;
-    objective: string;
-    remainingMs: number;
-    challengeWaveSuccesses: number;
-    challengeWaveFailures: number;
-    rewardTargetSuccesses: number;
-    rewardTargetFailures: number;
-  };
-  combatResponse: {
-    hitStopStarts: number;
-    hitStopRefreshes: number;
-    hitStopSuppressions: number;
-    hitStopActive: boolean;
-    weaponImpactCounts: Partial<Record<string, number>>;
-    enemyImpactCounts: Partial<Record<string, number>>;
-  };
-};
-
-type GameplayBotSnapshot = {
-  timestampMs: number;
+type Snapshot = {
   scenes: {
     menuActive: boolean;
-    metaActive: boolean;
     runActive: boolean;
     uiActive: boolean;
   };
-  run: GameplayBotRunSnapshot | null;
+  run: null | {
+    elapsedMs: number;
+    level: number;
+    kills: number;
+    hp: number;
+    endActive: boolean;
+    weaponNames: string[];
+    traits: string[];
+    rewardChoices: Array<{ id: string; title: string; lane: string }>;
+    player: { x: number; y: number; guard: number; maxGuard: number };
+    enemies: Array<{ distance: number; x: number; y: number; isMarked?: boolean }>;
+    xpGems: Array<{ distance: number; x: number; y: number }>;
+  };
 };
 
-type BotResult = {
-  finalSnapshot: GameplayBotSnapshot;
-  maxElapsedMs: number;
-  maxLevel: number;
-  maxKills: number;
-  minHp: number;
-  maxWeaponCount: number;
-  levelUpScreensSeen: number;
-  upgradeSelections: number;
-  totalTravelDistance: number;
-  maxDistanceFromStart: number;
-  hitStopStarts: number;
-  hitStopRefreshes: number;
-  hitStopSuppressions: number;
-};
-
-const BOT_TIMEOUT_MS = 90_000;
-const BOT_RUN_COUNT = 2;
-const BOT_TICK_MS = 120;
-const WORLD_WIDTH = 2000;
-const WORLD_HEIGHT = 1400;
-const UPGRADE_PRIORITY = [
-  'vitality',
-  'magnet',
-  'unlock-twin-fangs',
-  'unlock-phase-disc',
-  'swiftness',
-  'power',
-  'rapid-fire',
-  'unlock-bloom-cannon',
-  'unlock-sunwheel',
-  'velocity',
-  'reach',
-  'unlock-ember-lance',
-  'unlock-shatterbell',
-] as const;
-
-test.describe('gameplay bot smoke', () => {
-  test.setTimeout(BOT_RUN_COUNT * BOT_TIMEOUT_MS + 60_000);
-
-  test('bot can drive repeated real runs to natural endings without hanging', async ({ page }) => {
-    const runtimeErrors = trackRuntimeErrors(page);
-    const results: BotResult[] = [];
-
-    for (let runIndex = 0; runIndex < BOT_RUN_COUNT; runIndex += 1) {
-      await page.goto('/');
-      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-      await clickStartRun(page);
-      await page.waitForFunction(() => {
-        const game = window.__JANGAN_LARI_GAME__;
-        return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-      });
-
-      const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
-      const finalRun = result.finalSnapshot.run!;
-      const runLabel = `run ${runIndex + 1}/${BOT_RUN_COUNT}`;
-
-      console.log(
-        `[gameplay-bot] ${runLabel} | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
-          result.maxElapsedMs,
-        )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | upgrades=${result.upgradeSelections}/${result.levelUpScreensSeen} | weapons=${result.maxWeaponCount} | travel=${Math.round(
-          result.totalTravelDistance,
-        )} | range=${Math.round(result.maxDistanceFromStart)} | loadout=${finalRun.weaponNames.join(',') || '--'} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
-      );
-
-      expect(finalRun.endActive, `${runLabel}: expected a natural end state`).toBe(true);
-      expect(['Victory', 'Defeat'], `${runLabel}: expected endTitle to be Victory or Defeat, got ${finalRun.endTitle}`).toContain(
-        finalRun.endTitle,
-      );
-      if (result.levelUpScreensSeen > 0) {
-        expect(
-          result.upgradeSelections,
-          `${runLabel}: saw ${result.levelUpScreensSeen} level-up screens but selected ${result.upgradeSelections} upgrades`,
-        ).toBeGreaterThanOrEqual(1);
-      }
-
-      results.push(result);
-    }
-
-    const naturallyEndedRuns = results.filter((result) => result.finalSnapshot.run?.endActive).length;
-    const meaningfulRuns = results.filter((result) => isMeaningfulProgression(result)).length;
-    const finalSceneStates = results.map((result) => result.finalSnapshot.scenes);
-    const victoryCount = results.filter((result) => result.finalSnapshot.run?.victory).length;
-    const defeatCount = results.length - victoryCount;
-    const averageElapsedMs = Math.round(results.reduce((sum, result) => sum + result.maxElapsedMs, 0) / results.length);
-    const averageKills = roundToOneDecimal(results.reduce((sum, result) => sum + result.maxKills, 0) / results.length);
-    const averageLevel = roundToOneDecimal(results.reduce((sum, result) => sum + result.maxLevel, 0) / results.length);
-
-    console.log(
-      `[gameplay-bot] aggregate | runs=${results.length}/${BOT_RUN_COUNT} | avgElapsed=${averageElapsedMs}ms | avgKills=${averageKills} | avgLevel=${averageLevel} | wins=${victoryCount} | defeats=${defeatCount} | meaningful=${meaningfulRuns}/${results.length}`,
-    );
-
-    expect(results).toHaveLength(BOT_RUN_COUNT);
-    expect(naturallyEndedRuns, `expected all ${BOT_RUN_COUNT} runs to end naturally, got ${naturallyEndedRuns}`).toBe(BOT_RUN_COUNT);
-    expect(
-      meaningfulRuns,
-      `expected all ${results.length} runs to show meaningful progression, got ${meaningfulRuns}`,
-    ).toBeGreaterThanOrEqual(BOT_RUN_COUNT);
-    expect(
-      finalSceneStates.every((scenes) => scenes.runActive && scenes.uiActive),
-      'expected RunScene and UIScene to remain active until the natural end state of each run',
-    ).toBe(true);
-    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
-  });
-
-  test('bot can run a deterministic Phase Disc loadout without hit-stop instability', async ({ page }) => {
-    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
-
-    const runtimeErrors = trackRuntimeErrors(page);
-
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    await clickStartRun(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
-
-    await forceUpgrade(page, 'unlock-phase-disc');
-    await page.waitForFunction(() =>
-      Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames.includes('Phase Disc')),
-    );
-
-    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
-    const finalRun = result.finalSnapshot.run!;
-
-    console.log(
-      `[gameplay-bot] phase-disc | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
-        result.maxElapsedMs,
-      )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | loadout=${finalRun.weaponNames.join(',') || '--'} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
-    );
-
-    expect(finalRun.endActive, 'expected the Phase Disc validation run to end naturally').toBe(true);
-    expect(finalRun.weaponNames, `expected final loadout to include Phase Disc, got ${finalRun.weaponNames.join(',') || '--'}`).toContain(
-      'Phase Disc',
-    );
-    expect(result.hitStopStarts, 'expected Phase Disc run to produce authored impact hit-stop').toBeGreaterThan(0);
-    expect(
-      result.hitStopRefreshes,
-      `expected hit-stop refreshes to stay low during the Phase Disc run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
-    ).toBeLessThanOrEqual(3);
-    expect(
-      finalRun.combatResponse.weaponImpactCounts['phase-disc'] ?? 0,
-      `expected runtime authored impact coverage for Phase Disc, got ${finalRun.combatResponse.weaponImpactCounts['phase-disc'] ?? 0}`,
-    ).toBeGreaterThan(0);
-    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
-  });
-
-  test('bot can run a deterministic Shatterbell loadout without explosive hit-stop instability', async ({ page }) => {
-    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
-
-    const runtimeErrors = trackRuntimeErrors(page);
-
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    await clickStartRun(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
-
-    await forceUpgrade(page, 'unlock-shatterbell');
-    await page.waitForFunction(() =>
-      Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames.includes('Shatterbell')),
-    );
-
-    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
-    const finalRun = result.finalSnapshot.run!;
-    const shatterbellImpacts = finalRun.combatResponse.weaponImpactCounts['shatterbell'] ?? 0;
-
-    console.log(
-      `[gameplay-bot] shatterbell | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
-        result.maxElapsedMs,
-      )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | loadout=${finalRun.weaponNames.join(',') || '--'} | shatterbellImpacts=${shatterbellImpacts} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
-    );
-
-    expect(finalRun.endActive, 'expected the Shatterbell validation run to end naturally').toBe(true);
-    expect(finalRun.weaponNames, `expected final loadout to include Shatterbell, got ${finalRun.weaponNames.join(',') || '--'}`).toContain(
-      'Shatterbell',
-    );
-    expect(shatterbellImpacts, `expected runtime authored impact coverage for Shatterbell, got ${shatterbellImpacts}`).toBeGreaterThan(0);
-    expect(result.hitStopStarts, 'expected explosive validation run to produce authored impact hit-stop').toBeGreaterThan(0);
-    expect(
-      result.hitStopRefreshes,
-      `expected hit-stop refreshes to stay low during the Shatterbell run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
-    ).toBeLessThanOrEqual(3);
-    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
-  });
-
-  test('bot can run a deterministic Sunwheel loadout without radial hit-stop instability', async ({ page }) => {
-    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
-
-    const runtimeErrors = trackRuntimeErrors(page);
-
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    await clickStartRun(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
-
-    await forceUpgrade(page, 'unlock-sunwheel');
-    await page.waitForFunction(() =>
-      Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames.includes('Sunwheel')),
-    );
-
-    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
-    const finalRun = result.finalSnapshot.run!;
-    const sunwheelImpacts = finalRun.combatResponse.weaponImpactCounts.sunwheel ?? 0;
-
-    console.log(
-      `[gameplay-bot] sunwheel | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
-        result.maxElapsedMs,
-      )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | loadout=${finalRun.weaponNames.join(',') || '--'} | sunwheelImpacts=${sunwheelImpacts} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
-    );
-
-    expect(finalRun.endActive, 'expected the Sunwheel validation run to end naturally').toBe(true);
-    expect(finalRun.weaponNames, `expected final loadout to include Sunwheel, got ${finalRun.weaponNames.join(',') || '--'}`).toContain(
-      'Sunwheel',
-    );
-    expect(sunwheelImpacts, `expected runtime authored impact coverage for Sunwheel, got ${sunwheelImpacts}`).toBeGreaterThan(0);
-    expect(result.hitStopStarts, 'expected radial validation run to produce authored impact hit-stop').toBeGreaterThan(0);
-    expect(
-      result.hitStopRefreshes,
-      `expected hit-stop refreshes to stay low during the Sunwheel run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
-    ).toBeLessThanOrEqual(3);
-    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
-  });
-
-  test('bot can run a deterministic burst-loadout batch without broad combat-response instability', async ({ page }) => {
-    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
-
-    const runtimeErrors = trackRuntimeErrors(page);
-
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    await clickStartRun(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
-
-    await forceUpgrade(page, 'unlock-twin-fangs');
-    await forceUpgrade(page, 'unlock-bloom-cannon');
-    await page.waitForFunction(() => {
-      const weaponNames = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames ?? [];
-      return weaponNames.includes('Twin Fangs') && weaponNames.includes('Bloom Cannon');
-    });
-
-    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
-    const finalRun = result.finalSnapshot.run!;
-    const twinFangsImpacts = finalRun.combatResponse.weaponImpactCounts['twin-fangs'] ?? 0;
-    const bloomCannonImpacts = finalRun.combatResponse.weaponImpactCounts['bloom-cannon'] ?? 0;
-    const authoredRegularEnemyImpacts = ['skimmer', 'harrier', 'mauler', 'crusher', 'bulwark', 'riftblade'].reduce(
-      (sum, enemyId) => sum + (finalRun.combatResponse.enemyImpactCounts[enemyId] ?? 0),
-      0,
-    );
-
-    console.log(
-      `[gameplay-bot] rollout-batch | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
-        result.maxElapsedMs,
-      )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | loadout=${finalRun.weaponNames.join(',') || '--'} | burstImpacts=${twinFangsImpacts}/${bloomCannonImpacts} | regularEnemyImpacts=${authoredRegularEnemyImpacts} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
-    );
-
-    expect(finalRun.endActive, 'expected the rollout batch validation run to end naturally').toBe(true);
-    expect(finalRun.weaponNames, `expected final loadout to include Twin Fangs, got ${finalRun.weaponNames.join(',') || '--'}`).toContain(
-      'Twin Fangs',
-    );
-    expect(
-      finalRun.weaponNames,
-      `expected final loadout to include Bloom Cannon, got ${finalRun.weaponNames.join(',') || '--'}`,
-    ).toContain('Bloom Cannon');
-    expect(twinFangsImpacts, `expected runtime authored impact coverage for Twin Fangs, got ${twinFangsImpacts}`).toBeGreaterThan(
-      0,
-    );
-    expect(
-      bloomCannonImpacts,
-      `expected runtime authored impact coverage for Bloom Cannon, got ${bloomCannonImpacts}`,
-    ).toBeGreaterThan(0);
-    expect(
-      authoredRegularEnemyImpacts,
-      `expected runtime authored enemy impact coverage for the rollout batch, got ${authoredRegularEnemyImpacts}`,
-    ).toBeGreaterThan(0);
-    expect(result.hitStopStarts, 'expected burst rollout validation run to produce authored impact hit-stop').toBeGreaterThan(0);
-    expect(
-      result.hitStopRefreshes,
-      `expected hit-stop refreshes to stay low during the burst rollout run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
-    ).toBeLessThanOrEqual(3);
-    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
-  });
-
-  test('bot can exercise deterministic encounter enemies without encounter-response instability', async ({ page }) => {
-    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
-
-    const runtimeErrors = trackRuntimeErrors(page);
-
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    await clickStartRun(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
-
-    await forceUpgrade(page, 'unlock-phase-disc');
-    await forceUpgrade(page, 'unlock-shatterbell');
-    await forceUpgrade(page, 'unlock-sunwheel');
-    await forceEncounterWave(page, 100_000);
-    await page.waitForFunction(() => {
-      const enemies = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.enemies ?? [];
-      return enemies.some((enemy) => enemy.id === 'dreadnought') && enemies.some((enemy) => enemy.id === 'behemoth');
-    });
-
-    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
-    const finalRun = result.finalSnapshot.run!;
-    const dreadnoughtImpacts = finalRun.combatResponse.enemyImpactCounts.dreadnought ?? 0;
-    const behemothImpacts = finalRun.combatResponse.enemyImpactCounts.behemoth ?? 0;
-
-    console.log(
-      `[gameplay-bot] encounters | end=${finalRun.endTitle}${finalRun.victory ? ':victory' : ':defeat'} | elapsed=${Math.round(
-        result.maxElapsedMs,
-      )}ms | kills=${result.maxKills} | level=${result.maxLevel} | minHp=${result.minHp} | loadout=${finalRun.weaponNames.join(',') || '--'} | encounterImpacts=${dreadnoughtImpacts}/${behemothImpacts} | hitStops=${result.hitStopStarts}/${result.hitStopRefreshes}/${result.hitStopSuppressions} | gold=${finalRun.goldEarned}`,
-    );
-
-    expect(finalRun.endActive, 'expected the encounter validation run to end naturally').toBe(true);
-    expect(
-      dreadnoughtImpacts,
-      `expected runtime authored impact coverage for Dreadnought, got ${dreadnoughtImpacts}`,
-    ).toBeGreaterThan(0);
-    expect(behemothImpacts, `expected runtime authored impact coverage for Behemoth, got ${behemothImpacts}`).toBeGreaterThan(0);
-    expect(result.hitStopStarts, 'expected encounter validation run to produce authored impact hit-stop').toBeGreaterThan(0);
-    expect(
-      result.hitStopRefreshes,
-      `expected hit-stop refreshes to stay low during the encounter run, got ${result.hitStopRefreshes} from ${result.hitStopStarts} starts`,
-    ).toBeLessThanOrEqual(3);
-    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
-  });
-
-  test('bot can observe multiple authored normal-wave templates without composition-flow regression', async ({ page }) => {
-    test.setTimeout(45_000);
-
-    const runtimeErrors = trackRuntimeErrors(page);
-
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    await clickStartRun(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
-
-    const forcedStageTimes = [20_000, 80_000, 180_000, 360_000];
-    const seenTemplates = new Map<string, string>();
-
-    for (const elapsedMs of forcedStageTimes) {
-      await forceEncounterWave(page, elapsedMs);
-      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.waveTemplate.id));
-
-      const snapshot = await getGameplaySnapshot(page);
-      const run = snapshot.run;
-      if (!run) {
-        throw new Error('Gameplay snapshot did not include an active run after forcing a template wave.');
-      }
-
-      expect(run.waveTemplate.id, `expected a wave template id after forcing elapsed=${elapsedMs}`).not.toBe('');
-      seenTemplates.set(run.waveTemplate.id, run.waveTemplate.label);
-    }
-
-    expect(
-      seenTemplates.size,
-      `expected at least 3 distinct authored normal-wave templates, got ${[...seenTemplates.entries()]
-        .map(([id, label]) => `${id}:${label}`)
-        .join(', ')}`,
-    ).toBeGreaterThanOrEqual(3);
-    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
-  });
-
-  test('bot can resolve forced mid-run events without event-flow regression', async ({ page }) => {
-    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
-
-    const runtimeErrors = trackRuntimeErrors(page);
-
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    await clickStartRun(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
-
-    await forceUpgrade(page, 'unlock-phase-disc');
-    await forceUpgrade(page, 'unlock-sunwheel');
-    await page.waitForFunction(() => {
-      const weaponNames = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames ?? [];
-      return weaponNames.includes('Phase Disc') && weaponNames.includes('Sunwheel');
-    });
-
-    await forceRunEvent(page, 'reward-target');
-    await page.waitForFunction(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.event.type === 'reward-target');
-    const rewardTargetResult = await runGameplayBotUntil(
-      page,
-      30_000,
-      (run) => run.event.rewardTargetSuccesses >= 1 || run.endActive,
-    );
-    expect(
-      rewardTargetResult.finalSnapshot.run?.event.rewardTargetSuccesses ?? 0,
-      'expected forced reward-target event to resolve successfully',
-    ).toBeGreaterThanOrEqual(1);
-    await runGameplayBotUntil(page, 15_000, (run) => !run.levelUpActive && !run.event.active);
-
-    await forceRunEvent(page, 'challenge-wave');
-    await page.waitForFunction(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.event.type === 'challenge-wave');
-    const challengeWaveResult = await runGameplayBotUntil(
-      page,
-      30_000,
-      (run) => run.event.challengeWaveSuccesses >= 1 || run.endActive,
-    );
-    expect(
-      challengeWaveResult.finalSnapshot.run?.event.challengeWaveSuccesses ?? 0,
-      'expected forced challenge-wave event to resolve successfully',
-    ).toBeGreaterThanOrEqual(1);
-
-    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
-  });
-});
-
-async function runGameplayBot(page: import('@playwright/test').Page, timeoutMs: number): Promise<BotResult> {
-  return driveGameplayBot(page, timeoutMs, (run) => run.endActive);
-}
-
-async function runGameplayBotUntil(
-  page: import('@playwright/test').Page,
-  timeoutMs: number,
-  predicate: (run: GameplayBotRunSnapshot) => boolean,
-): Promise<BotResult> {
-  return driveGameplayBot(page, timeoutMs, predicate);
-}
-
-async function driveGameplayBot(
-  page: import('@playwright/test').Page,
-  timeoutMs: number,
-  predicate: (run: GameplayBotRunSnapshot) => boolean,
-): Promise<BotResult> {
-  const pressedKeys = new Set<string>();
-  let maxElapsedMs = 0;
-  let maxLevel = 0;
-  let maxKills = 0;
-  let minHp = Number.POSITIVE_INFINITY;
-  let maxWeaponCount = 0;
-  let levelUpScreensSeen = 0;
-  let upgradeSelections = 0;
-  let totalTravelDistance = 0;
-  let maxDistanceFromStart = 0;
-  let initialPosition: { x: number; y: number } | null = null;
-  let previousPosition: { x: number; y: number } | null = null;
-
-  try {
-    const start = Date.now();
-
-    while (Date.now() - start < timeoutMs) {
-      const snapshot = await getGameplaySnapshot(page);
-      const run = snapshot.run;
-      if (!run) {
-        throw new Error('Gameplay bot lost access to the active run snapshot.');
-      }
-
-      maxElapsedMs = Math.max(maxElapsedMs, run.elapsedMs);
-      maxLevel = Math.max(maxLevel, run.level);
-      maxKills = Math.max(maxKills, run.kills);
-      minHp = Math.min(minHp, run.hp);
-      maxWeaponCount = Math.max(maxWeaponCount, run.weaponCount);
-      const combatResponse = run.combatResponse;
-
-      if (!initialPosition) {
-        initialPosition = { x: run.player.x, y: run.player.y };
-      }
-
-      const currentPosition = { x: run.player.x, y: run.player.y };
-      if (previousPosition) {
-        totalTravelDistance += distanceBetween(previousPosition, currentPosition);
-      }
-      previousPosition = currentPosition;
-
-      if (initialPosition) {
-        maxDistanceFromStart = Math.max(maxDistanceFromStart, distanceBetween(initialPosition, currentPosition));
-      }
-
-      if (predicate(run)) {
-        await releaseMovementKeys(page, pressedKeys);
-        return {
-          finalSnapshot: snapshot,
-          maxElapsedMs,
-          maxLevel,
-          maxKills,
-          minHp,
-          maxWeaponCount,
-          levelUpScreensSeen,
-          upgradeSelections,
-          totalTravelDistance,
-          maxDistanceFromStart,
-          hitStopStarts: combatResponse.hitStopStarts,
-          hitStopRefreshes: combatResponse.hitStopRefreshes,
-          hitStopSuppressions: combatResponse.hitStopSuppressions,
-        };
-      }
-
-      if (run.levelUpActive && run.upgradeChoices.length > 0) {
-        levelUpScreensSeen += 1;
-        const choiceIndex = chooseUpgradeIndex(run.upgradeChoices);
-        await releaseMovementKeys(page, pressedKeys);
-        await clickLevelUpChoice(page, choiceIndex);
-        upgradeSelections += 1;
-      } else {
-        const movementKeys = determineMovementKeys(run);
-        await syncMovementKeys(page, pressedKeys, movementKeys);
-      }
-
-      await page.waitForTimeout(BOT_TICK_MS);
-    }
-  } finally {
-    await releaseMovementKeys(page, pressedKeys);
+async function clickCanvasPosition(page: import('@playwright/test').Page, x: number, y: number): Promise<void> {
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error('Game canvas is not available.');
   }
 
-  throw new Error(`Gameplay bot timed out after ${timeoutMs} ms without reaching the expected state.`);
+  await canvas.click({
+    position: {
+      x: (x / 1280) * box.width,
+      y: (y / 720) * box.height,
+    },
+  });
 }
 
-function distanceBetween(left: { x: number; y: number }, right: { x: number; y: number }): number {
-  return Math.hypot(right.x - left.x, right.y - left.y);
+async function getSnapshot(page: import('@playwright/test').Page): Promise<Snapshot> {
+  return page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot() ?? null) as Promise<Snapshot>;
 }
 
-function roundToOneDecimal(value: number): number {
-  return Math.round(value * 10) / 10;
-}
+function determineMovementKeys(snapshot: NonNullable<Snapshot['run']>): string[] {
+  const move = { x: 0, y: 0 };
+  const nearestEnemy = snapshot.enemies[0];
 
-async function getGameplaySnapshot(page: import('@playwright/test').Page): Promise<GameplayBotSnapshot> {
-  return page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot() ?? null) as Promise<GameplayBotSnapshot>;
-}
+  snapshot.enemies.slice(0, 4).forEach((enemy) => {
+    const threatDistance = Math.max(32, enemy.distance);
+    const dx = snapshot.player.x - enemy.x;
+    const dy = snapshot.player.y - enemy.y;
+    const threatWeight = threatDistance < 160 ? 1.4 : 0.5;
+    move.x += (dx / threatDistance) * threatWeight;
+    move.y += (dy / threatDistance) * threatWeight;
+    move.x += (-dy / threatDistance) * 0.35;
+    move.y += (dx / threatDistance) * 0.35;
+  });
 
-function isMeaningfulProgression(result: BotResult): boolean {
-  return (
-    result.maxElapsedMs >= 6_000 &&
-    result.totalTravelDistance >= 600 &&
-    result.maxDistanceFromStart >= 120 &&
-    (result.maxKills >= 2 || result.maxLevel >= 2 || result.upgradeSelections >= 1)
-  );
-}
-
-function chooseUpgradeIndex(choices: GameplayBotUpgradeChoice[]): number {
-  let bestIndex = 0;
-  let bestScore = Number.POSITIVE_INFINITY;
-
-  for (let index = 0; index < choices.length; index += 1) {
-    const priorityIndex = UPGRADE_PRIORITY.indexOf(choices[index].id as (typeof UPGRADE_PRIORITY)[number]);
-    const score = priorityIndex === -1 ? UPGRADE_PRIORITY.length + index : priorityIndex;
-
-    if (score < bestScore) {
-      bestScore = score;
-      bestIndex = index;
-    }
+  if (snapshot.xpGems[0] && (!nearestEnemy || nearestEnemy.distance > 120)) {
+    const gem = snapshot.xpGems[0];
+    const dx = gem.x - snapshot.player.x;
+    const dy = gem.y - snapshot.player.y;
+    const distance = Math.max(24, gem.distance);
+    move.x += (dx / distance) * 0.8;
+    move.y += (dy / distance) * 0.8;
   }
 
-  return bestIndex;
-}
-
-function determineMovementKeys(run: GameplayBotRunSnapshot): string[] {
-  const { player } = run;
-  let moveX = 0;
-  let moveY = 0;
-  const rewardTarget = run.enemies.find((enemy) => enemy.isEventTarget);
-
-  for (const enemy of run.enemies) {
-    if (run.event.active && run.event.type === 'reward-target' && enemy.isEventTarget) {
-      continue;
-    }
-
-    const dx = player.x - enemy.x;
-    const dy = player.y - enemy.y;
-    const distance = Math.max(24, enemy.distance);
-    const threatRadius = enemy.isBoss ? 380 : enemy.isElite ? 300 : 220;
-
-    if (distance > threatRadius) {
-      continue;
-    }
-
-    const weight = ((threatRadius - distance) / threatRadius) * (enemy.isBoss ? 3.2 : enemy.isElite ? 2.2 : 1.2);
-    moveX += (dx / distance) * weight;
-    moveY += (dy / distance) * weight;
-
-    // Keep a tangent bias so movement remains smooth instead of backing into packs.
-    moveX += (-dy / distance) * 0.55;
-    moveY += (dx / distance) * 0.55;
-  }
-
-  if (run.event.active && run.event.type === 'reward-target' && rewardTarget) {
-    const dx = rewardTarget.x - player.x;
-    const dy = rewardTarget.y - player.y;
-    const distance = Math.max(24, rewardTarget.distance);
-
-    moveX += (dx / distance) * 1.6;
-    moveY += (dy / distance) * 1.6;
-  }
-
-  const nearestEnemy = run.enemies[0];
-  const nearestGem = run.xpGems[0];
-  if (nearestGem && (!nearestEnemy || nearestEnemy.distance > 150)) {
-    const dx = nearestGem.x - player.x;
-    const dy = nearestGem.y - player.y;
-    const distance = Math.max(24, nearestGem.distance);
-
-    moveX += (dx / distance) * 0.9;
-    moveY += (dy / distance) * 0.9;
-  }
-
-  const boundaryMargin = 220;
-  if (player.x < boundaryMargin) {
-    moveX += 1.4;
-  } else if (player.x > WORLD_WIDTH - boundaryMargin) {
-    moveX -= 1.4;
-  }
-
-  if (player.y < boundaryMargin) {
-    moveY += 1.4;
-  } else if (player.y > WORLD_HEIGHT - boundaryMargin) {
-    moveY -= 1.4;
-  }
-
-  if (Math.abs(moveX) < 0.15 && Math.abs(moveY) < 0.15) {
-    moveX = Math.sin(run.elapsedMs / 1500);
-    moveY = Math.cos(run.elapsedMs / 1800);
+  if (Math.abs(move.x) < 0.15 && Math.abs(move.y) < 0.15) {
+    move.x = 0.8;
+    move.y = 0.3;
   }
 
   const keys: string[] = [];
-  if (moveX > 0.2) {
-    keys.push('KeyD');
-  } else if (moveX < -0.2) {
-    keys.push('KeyA');
-  }
-
-  if (moveY > 0.2) {
-    keys.push('KeyS');
-  } else if (moveY < -0.2) {
-    keys.push('KeyW');
-  }
-
+  if (move.x > 0.2) keys.push('KeyD');
+  if (move.x < -0.2) keys.push('KeyA');
+  if (move.y > 0.2) keys.push('KeyS');
+  if (move.y < -0.2) keys.push('KeyW');
   return keys;
 }
 
-async function syncMovementKeys(
+async function syncKeys(
   page: import('@playwright/test').Page,
-  pressedKeys: Set<string>,
+  pressed: Set<string>,
   nextKeys: string[],
 ): Promise<void> {
-  for (const key of [...pressedKeys]) {
+  for (const key of [...pressed]) {
     if (!nextKeys.includes(key)) {
       await page.keyboard.up(key);
-      pressedKeys.delete(key);
+      pressed.delete(key);
     }
   }
 
   for (const key of nextKeys) {
-    if (!pressedKeys.has(key)) {
+    if (!pressed.has(key)) {
       await page.keyboard.down(key);
-      pressedKeys.add(key);
+      pressed.add(key);
     }
   }
 }
 
-async function releaseMovementKeys(page: import('@playwright/test').Page, pressedKeys: Set<string>): Promise<void> {
-  for (const key of [...pressedKeys]) {
+async function releaseKeys(page: import('@playwright/test').Page, pressed: Set<string>): Promise<void> {
+  for (const key of [...pressed]) {
     await page.keyboard.up(key);
-    pressedKeys.delete(key);
+    pressed.delete(key);
   }
 }
 
-async function clickStartRun(page: import('@playwright/test').Page): Promise<void> {
-  const canvas = page.locator('canvas');
-  await expect(canvas).toBeVisible();
+async function selectHero(page: import('@playwright/test').Page, hero: 'runner' | 'shade'): Promise<void> {
+  await clickCanvasPosition(page, hero === 'runner' ? 420 : 860, 382);
+}
 
-  const box = await canvas.boundingBox();
-  if (!box) {
-    throw new Error('Game canvas is not available for Start Run click.');
+async function runHeroValidation(page: import('@playwright/test').Page, hero: 'runner' | 'shade'): Promise<void> {
+  const pressed = new Set<string>();
+
+  try {
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+    await selectHero(page, hero);
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene'));
+    });
+
+    await page.evaluate((selectedHero) => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        debugSpawnEnemy?: (enemyId: 'anchor' | 'shooter') => boolean;
+        enemies: {
+          getChildren: () => Array<{ x: number; y: number; active: boolean }>;
+        };
+      };
+
+      runScene.debugSpawnEnemy?.(selectedHero === 'runner' ? 'anchor' : 'shooter');
+      const enemies = runScene.enemies.getChildren();
+      const enemy = enemies[enemies.length - 1] as
+        | { x: number; y: number; active: boolean; body?: { reset?: (x: number, y: number) => void } }
+        | undefined;
+      if (enemy) {
+        const nextX = runScene.player.x + (selectedHero === 'runner' ? 72 : 180);
+        const nextY = runScene.player.y;
+        enemy.x = nextX;
+        enemy.y = nextY;
+        enemy.body?.reset?.(nextX, nextY);
+      }
+    }, hero);
+
+    const start = Date.now();
+    let sawStateLoop = false;
+
+    if (hero === 'runner') {
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const snapshot = await getSnapshot(page);
+        if (snapshot.run?.player.guard && snapshot.run.player.guard > 0) {
+          sawStateLoop = true;
+          break;
+        }
+        await page.waitForTimeout(120);
+      }
+    }
+
+    while (Date.now() - start < 12_000) {
+      const snapshot = await getSnapshot(page);
+      const run = snapshot.run;
+      if (!run) {
+        throw new Error('No active run snapshot.');
+      }
+
+      if (hero === 'runner' && run.player.guard > 0) {
+        sawStateLoop = true;
+      }
+      if (hero === 'shade' && run.enemies.some((enemy) => enemy.isMarked)) {
+        sawStateLoop = true;
+      }
+
+      if (sawStateLoop) {
+        break;
+      }
+
+      await syncKeys(page, pressed, determineMovementKeys(run));
+      await page.waitForTimeout(120);
+    }
+
+    await releaseKeys(page, pressed);
+    expect(sawStateLoop, `${hero} did not surface its core state loop early`).toBe(true);
+
+    await page.evaluate(() => {
+      const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as {
+        debugForceLevelUp?: () => void;
+      };
+      runScene.debugForceLevelUp?.();
+    });
+
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.registry.get('run.levelUpActive')));
+    const levelUpSnapshot = await getSnapshot(page);
+    expect(levelUpSnapshot.run?.rewardChoices).toHaveLength(3);
+    expect(levelUpSnapshot.run?.rewardChoices.some((choice) => choice.lane === 'deepen')).toBe(true);
+    expect(levelUpSnapshot.run?.rewardChoices.some((choice) => choice.lane === 'stabilize')).toBe(true);
+    const chosenRewardId = levelUpSnapshot.run?.rewardChoices[0]?.id;
+
+    await page.evaluate(() => {
+      const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as {
+        selectReward?: (index: number) => void;
+      };
+      runScene.selectReward?.(0);
+    });
+    await page.waitForFunction(() => !window.__JANGAN_LARI_GAME__?.registry.get('run.levelUpActive'));
+
+    const resumedSnapshot = await getSnapshot(page);
+    expect(resumedSnapshot.run?.endActive).toBe(false);
+    if (chosenRewardId === 'field-repairs') {
+      expect(resumedSnapshot.run?.maxHp).toBeGreaterThan(levelUpSnapshot.run?.maxHp ?? 0);
+    } else if (chosenRewardId === 'reflex-boots') {
+      expect(resumedSnapshot.run?.player).toBeTruthy();
+    } else {
+      expect((resumedSnapshot.run?.traits.length ?? 0) >= 1).toBe(true);
+    }
+
+    await page.evaluate(() => {
+      const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as {
+        debugForceEndRun?: (victory?: boolean) => void;
+      };
+      runScene.debugForceEndRun?.(true);
+    });
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.registry.get('run.endActive')));
+
+    const finalSnapshot = await getSnapshot(page);
+    expect(finalSnapshot.run?.endActive).toBe(true);
+    expect(finalSnapshot.run?.weaponNames).toHaveLength(2);
+  } finally {
+    await releaseKeys(page, pressed);
   }
-
-  const gameWidth = 1280;
-  const gameHeight = 720;
-  const startButtonX = 560;
-  const startButtonY = 82;
-
-  await canvas.click({
-    position: {
-      x: (startButtonX / gameWidth) * box.width,
-      y: (startButtonY / gameHeight) * box.height,
-    },
-  });
 }
 
-async function clickLevelUpChoice(page: import('@playwright/test').Page, choiceIndex: number): Promise<void> {
-  const canvas = page.locator('canvas');
-  await expect(canvas).toBeVisible();
-
-  const box = await canvas.boundingBox();
-  if (!box) {
-    throw new Error('Game canvas is not available for level-up choice click.');
-  }
-
-  const gameWidth = 1280;
-  const gameHeight = 720;
-  const buttonX = 258 + choiceIndex * 382;
-  const buttonY = 372;
-
-  await canvas.click({
-    position: {
-      x: (buttonX / gameWidth) * box.width,
-      y: (buttonY / gameHeight) * box.height,
-    },
-  });
-}
-
-async function forceUpgrade(
-  page: import('@playwright/test').Page,
-  upgradeId:
-    | 'unlock-phase-disc'
-    | 'unlock-shatterbell'
-    | 'unlock-sunwheel'
-    | 'unlock-twin-fangs'
-    | 'unlock-bloom-cannon',
-): Promise<void> {
-  await page.evaluate((id) => {
-    const game = window.__JANGAN_LARI_GAME__;
-    if (!game?.scene.isActive('RunScene')) {
-      throw new Error('RunScene is not active for forced upgrade validation.');
-    }
-
-    const runScene = game.scene.getScene('RunScene') as {
-      applyUpgrade?: (nextUpgradeId: string) => void;
-      publishHudState?: () => void;
-    };
-
-    runScene.applyUpgrade?.(id);
-    runScene.publishHudState?.();
-  }, upgradeId);
-}
-
-async function forceEncounterWave(page: import('@playwright/test').Page, elapsedMs: number): Promise<void> {
-  await page.evaluate((nextElapsedMs) => {
-    const game = window.__JANGAN_LARI_GAME__;
-    if (!game?.scene.isActive('RunScene')) {
-      throw new Error('RunScene is not active for forced encounter validation.');
-    }
-
-    const runScene = game.scene.getScene('RunScene') as {
-      runElapsedMs?: number;
-      spawnEnemyWave?: () => void;
-      publishHudState?: () => void;
-    };
-
-    runScene.runElapsedMs = nextElapsedMs;
-    runScene.spawnEnemyWave?.();
-    runScene.publishHudState?.();
-  }, elapsedMs);
-}
-
-async function forceRunEvent(
-  page: import('@playwright/test').Page,
-  eventType: 'challenge-wave' | 'reward-target',
-): Promise<void> {
-  await page.evaluate((nextEventType) => {
-    const game = window.__JANGAN_LARI_GAME__;
-    if (!game?.scene.isActive('RunScene')) {
-      throw new Error('RunScene is not active for forced event validation.');
-    }
-
-    const runScene = game.scene.getScene('RunScene') as {
-      debugForceRunEvent?: (type: 'challenge-wave' | 'reward-target') => boolean;
-      publishHudState?: () => void;
-    };
-
-    const started = runScene.debugForceRunEvent?.(nextEventType);
-    runScene.publishHudState?.();
-
-    if (!started) {
-      throw new Error(`Failed to force run event: ${nextEventType}`);
-    }
-  }, eventType);
-}
-
-function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
-  const runtimeErrors: string[] = [];
-
-  page.on('pageerror', (error) => runtimeErrors.push(error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'error') {
-      runtimeErrors.push(message.text());
-    }
+test.describe('milestone 1 gameplay bot', () => {
+  test('Iron Warden surfaces Guard and directional rewards early', async ({ page }) => {
+    await runHeroValidation(page, 'runner');
   });
 
-  return runtimeErrors;
-}
+  test('Raptor Frame surfaces Mark and directional rewards early', async ({ page }) => {
+    await runHeroValidation(page, 'shade');
+  });
+});

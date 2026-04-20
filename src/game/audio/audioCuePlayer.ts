@@ -74,7 +74,7 @@ export function primeAudioContext(): void {
 }
 
 export function playHeroIntroCue(hero: HeroDefinition, weapon: WeaponDefinition): void {
-  const baseNote = hero.id === 'shade' ? 392 : hero.id === 'verdant' ? 330 : hero.id === 'vanguard' ? 247 : 294;
+  const baseNote = hero.id === 'shade' ? 392 : 247;
   const accent = weapon.firePattern === 'radial' ? 1.5 : weapon.explosionRadius ? 1.2 : weapon.pierceCount ? 1.35 : 1.8;
   playToneSequence([
     { frequency: baseNote, startOffset: 0, duration: 0.08, type: 'triangle', gain: 0.28 },

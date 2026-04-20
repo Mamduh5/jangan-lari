@@ -55,6 +55,16 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.body.setMaxVelocity(this.speed, this.speed);
     this.body.setSize(bodySize, bodySize, true);
 
+    if (hero.maxHealthBonus !== 0) {
+      this.addMaxHealth(hero.maxHealthBonus);
+    }
+    if (hero.moveSpeedBonus !== 0) {
+      this.addMoveSpeed(hero.moveSpeedBonus);
+    }
+    if (hero.pickupRangeBonus !== 0) {
+      this.addPickupRange(hero.pickupRangeBonus);
+    }
+
     this.syncVisualDecorations(scene.time.now);
   }
 
@@ -109,8 +119,12 @@ export class Player extends Phaser.GameObjects.Rectangle {
   }
 
   addMaxHealth(amount: number): void {
-    this.maxHealth += amount;
+    this.maxHealth = Math.max(1, this.maxHealth + amount);
     this.health = Math.min(this.maxHealth, this.health + amount);
+  }
+
+  heal(amount: number): void {
+    this.health = Math.min(this.maxHealth, this.health + Math.max(0, amount));
   }
 
   addMoveSpeed(amount: number): void {

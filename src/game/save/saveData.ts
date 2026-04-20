@@ -29,7 +29,7 @@ export function createDefaultSaveData(): GameSaveData {
     version: SAVE_VERSION,
     totalGold: 0,
     selectedHero: 'runner',
-    unlockedHeroes: ['runner'],
+    unlockedHeroes: ['runner', 'shade'],
     unlockedPermanentUpgrades: ['max-hp', 'move-speed', 'pickup-range'],
     purchasedPermanentUpgrades: {
       'max-hp': 0,
@@ -91,7 +91,10 @@ export function loadGameSave(): GameSaveData {
     const loaded: GameSaveData = {
       version: SAVE_VERSION,
       totalGold: Math.max(0, Number(parsed.totalGold ?? fallback.totalGold)),
-      selectedHero: unlockedHeroes.includes(selectedHero) ? selectedHero : unlockedHeroes[0] ?? fallback.selectedHero,
+      selectedHero:
+        unlockedHeroes.includes(selectedHero)
+          ? selectedHero
+          : unlockedHeroes[0] ?? fallback.selectedHero,
       unlockedHeroes: unlockedHeroes.length > 0 ? unlockedHeroes : fallback.unlockedHeroes,
       unlockedPermanentUpgrades:
         unlockedPermanentUpgrades.length > 0 ? unlockedPermanentUpgrades : fallback.unlockedPermanentUpgrades,

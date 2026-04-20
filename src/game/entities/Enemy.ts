@@ -56,6 +56,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private readonly responseScale = { x: 1, y: 1 };
   private deathPresentationActive = false;
   private eventMarkerColor: number | null = null;
+  private markedUntil = 0;
+  private deathRewardPending = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -92,6 +94,10 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     return this.health > 0;
   }
 
+  getCurrentHealth(): number {
+    return this.health;
+  }
+
   isBoss(): boolean {
     return Boolean(this.archetype.isBoss);
   }
@@ -118,6 +124,33 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   isEventMarked(): boolean {
     return this.eventMarkerColor !== null;
+  }
+
+  applyMark(currentTimeOrUntilMs: number, durationMs?: number): void {
+    const nextUntil = durationMs === undefined ? currentTimeOrUntilMs : currentTimeOrUntilMs + Math.max(0, durationMs);
+    this.markedUntil = Math.max(this.markedUntil, nextUntil);
+  }
+
+  isMarked(currentTime: number): boolean {
+    return currentTime < this.markedUntil;
+  }
+
+  consumeMark(currentTime: number): boolean {
+    if (!this.isMarked(currentTime)) {
+      return false;
+    }
+
+    this.markedUntil = 0;
+    return true;
+  }
+
+  consumeDeathRewardPending(): boolean {
+    if (!this.deathRewardPending) {
+      return false;
+    }
+
+    this.deathRewardPending = false;
+    return true;
   }
 
   setEventMarker(color: number | null): void {
@@ -182,6 +215,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     if (this.deathPresentationActive) {
       this.setScale(this.responseScale.x, this.responseScale.y);
+      if (this.markedUntil > currentTime) {
+        this.setStrokeStyle(this.baseStrokeWidth + 2, 0xfef08a, 1);
+      }
       return;
     }
 
@@ -257,6 +293,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return;
     }
 
+    if (this.isMarked(currentTime)) {
+      this.setResponseScale((1 + Math.sin((currentTime + this.x) * 0.018) * 0.05) * (hitReactionActive ? 0.9 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 2, 0xfef08a, 1);
+      this.setAlpha(hitReactionActive ? 0.76 : 1);
+      return;
+    }
+
     if (this.archetype.behavior === 'strafe') {
       this.setResponseScale(pulse * (hitReactionActive ? 0.88 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.86);
@@ -277,6 +320,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.health = Math.max(0, this.health - amount);
 
     if (this.health === 0) {
+      this.deathRewardPending = true;
       this.playDeathResponse(impactPoint);
       return true;
     }

@@ -1,6 +1,7 @@
+import type { AbilityId } from './abilities';
 import type { WeaponId } from './weapons';
 
-export type HeroId = 'runner' | 'vanguard' | 'shade' | 'verdant';
+export type HeroId = 'runner' | 'shade';
 
 export type HeroAppearance = {
   bodyColor: number;
@@ -16,51 +17,39 @@ export type HeroDefinition = {
   id: HeroId;
   name: string;
   description: string;
+  stateAffinity: 'guard' | 'mark';
+  passiveLabel: string;
+  chassisRule: string;
+  primaryAbilityId: AbilityId;
+  signatureAbilityId: AbilityId;
   unlockCost?: number;
   startingWeaponId: WeaponId;
-  passiveLabel: string;
   maxHealthBonus: number;
   moveSpeedBonus: number;
   pickupRangeBonus: number;
   startingDamageBonus: number;
   fireCooldownReductionMs: number;
+  baseGuardMax: number;
   appearance: HeroAppearance;
 };
 
 export const HEROES: Record<HeroId, HeroDefinition> = {
   runner: {
     id: 'runner',
-    name: 'Runner',
-    description: 'Default scout built for steady kiting and clean early clears.',
-    startingWeaponId: 'arc-bolt',
-    passiveLabel: 'Quickstep: moves faster and fires slightly sooner.',
-    maxHealthBonus: 0,
-    moveSpeedBonus: 24,
+    name: 'Iron Warden',
+    description: 'Close-range wall that turns contact and cleanup into Guard, then cashes it out with a short-range slam.',
+    stateAffinity: 'guard',
+    passiveLabel: 'Bulwark Loop: primary hits near the player feed Guard and the signature converts Guard into area damage.',
+    chassisRule: 'Primary hits within close range generate Guard. Signature spends Guard for stronger impact.',
+    primaryAbilityId: 'brace-shot',
+    signatureAbilityId: 'bulwark-slam',
+    startingWeaponId: 'ember-lance',
+    maxHealthBonus: 24,
+    moveSpeedBonus: -10,
     pickupRangeBonus: 0,
     startingDamageBonus: 0,
-    fireCooldownReductionMs: 35,
-    appearance: {
-      bodyColor: 0x6ee7b7,
-      strokeColor: 0xeafff7,
-      auraColor: 0x34d399,
-      markerColor: 0xe0f2fe,
-      markerShape: 'dot',
-      size: 32,
-      angle: 45,
-    },
-  },
-  vanguard: {
-    id: 'vanguard',
-    name: 'Vanguard',
-    description: 'Unlockable bruiser who opens with a heavy lance and a thicker health pool.',
-    unlockCost: 120,
-    startingWeaponId: 'ember-lance',
-    passiveLabel: 'Bulwark Core: more HP and heavier opening shots.',
-    maxHealthBonus: 35,
-    moveSpeedBonus: 0,
-    pickupRangeBonus: 0,
-    startingDamageBonus: 5,
     fireCooldownReductionMs: 0,
+    baseGuardMax: 24,
     appearance: {
       bodyColor: 0xf59e0b,
       strokeColor: 0xfffbeb,
@@ -73,50 +62,32 @@ export const HEROES: Record<HeroId, HeroDefinition> = {
   },
   shade: {
     id: 'shade',
-    name: 'Shade',
-    description: 'Fast unlockable duelist that starts with Twin Fangs and lives on repositioning.',
-    unlockCost: 180,
+    name: 'Raptor Frame',
+    description: 'Tempo hunter that tags priority targets with Mark, then cuts through them with a high-value sweep.',
+    stateAffinity: 'mark',
+    passiveLabel: 'Hunter Loop: primary shots keep marks active and the signature spends marks for burst damage and cooldown tempo.',
+    chassisRule: 'Primary applies Mark at range. Signature prefers marked targets and consumes Mark for bigger payoff.',
+    primaryAbilityId: 'seeker-burst',
+    signatureAbilityId: 'hunter-sweep',
     startingWeaponId: 'twin-fangs',
-    passiveLabel: 'Slipstream: higher speed and tighter opening cadence.',
     maxHealthBonus: 0,
-    moveSpeedBonus: 36,
+    moveSpeedBonus: 24,
     pickupRangeBonus: 0,
     startingDamageBonus: 0,
-    fireCooldownReductionMs: 55,
-    appearance: {
-      bodyColor: 0x818cf8,
-      strokeColor: 0xe0e7ff,
-      auraColor: 0x6366f1,
-      markerColor: 0xf5f3ff,
-      markerShape: 'dot',
-      size: 30,
-      angle: 20,
-    },
-  },
-  verdant: {
-    id: 'verdant',
-    name: 'Verdant',
-    description: 'Harvest mystic with Bloom Cannon, a wider pickup aura, and steadier sustain.',
-    unlockCost: 210,
-    startingWeaponId: 'bloom-cannon',
-    passiveLabel: 'Seedcall: wider pickup range and sturdier support fire.',
-    maxHealthBonus: 15,
-    moveSpeedBonus: 0,
-    pickupRangeBonus: 30,
-    startingDamageBonus: 2,
     fireCooldownReductionMs: 0,
+    baseGuardMax: 12,
     appearance: {
-      bodyColor: 0x4ade80,
-      strokeColor: 0xf0fdf4,
-      auraColor: 0x22c55e,
-      markerColor: 0x14532d,
-      markerShape: 'bar',
-      size: 34,
-      angle: -25,
+      bodyColor: 0x38bdf8,
+      strokeColor: 0xe0f2fe,
+      auraColor: 0x0ea5e9,
+      markerColor: 0xf8fafc,
+      markerShape: 'dot',
+      size: 32,
+      angle: 20,
     },
   },
 };
 
-export const HERO_IDS: HeroId[] = ['runner', 'vanguard', 'shade', 'verdant'];
+export const HERO_IDS: HeroId[] = ['runner', 'shade'];
 
 export const HERO_LIST: HeroDefinition[] = HERO_IDS.map((heroId) => HEROES[heroId]);

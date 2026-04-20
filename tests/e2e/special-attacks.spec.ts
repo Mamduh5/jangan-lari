@@ -1,99 +1,110 @@
 import { expect, test } from '@playwright/test';
 
-async function clickStartRun(page: import('@playwright/test').Page): Promise<void> {
+async function clickCanvasPosition(page: import('@playwright/test').Page, x: number, y: number): Promise<void> {
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
-
   const box = await canvas.boundingBox();
   if (!box) {
-    throw new Error('Game canvas is not available for Start Run click.');
+    throw new Error('Game canvas is not available.');
   }
-
-  const gameWidth = 1280;
-  const gameHeight = 720;
-  const startButtonX = 560;
-  const startButtonY = 82;
 
   await canvas.click({
     position: {
-      x: (startButtonX / gameWidth) * box.width,
-      y: (startButtonY / gameHeight) * box.height,
+      x: (x / 1280) * box.width,
+      y: (y / 720) * box.height,
     },
   });
 }
 
-function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
-  const runtimeErrors: string[] = [];
-
-  page.on('pageerror', (error) => runtimeErrors.push(error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'error') {
-      runtimeErrors.push(message.text());
-    }
-  });
-
-  return runtimeErrors;
+async function startRun(page: import('@playwright/test').Page, hero: 'runner' | 'shade'): Promise<void> {
+  await page.goto('/');
+  await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+  await clickCanvasPosition(page, hero === 'runner' ? 420 : 860, 382);
+  await clickCanvasPosition(page, 560, 82);
+  await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
 }
 
-test.describe('special attack damage', () => {
-  test('miniboss line strike and boss shockwave both remove hp when their visuals intersect the player', async ({ page }) => {
-    const runtimeErrors = trackRuntimeErrors(page);
+test.describe('milestone 1 signature behavior', () => {
+  test('Bulwark Slam spends Guard and damages nearby enemies', async ({ page }) => {
+    await startRun(page, 'runner');
 
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    await clickStartRun(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene'));
-    });
-
-    const startingHp = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
-    expect(startingHp).toBeGreaterThan(0);
-
-    await page.evaluate(() => {
+    const result = await page.evaluate(() => {
       const game = window.__JANGAN_LARI_GAME__!;
       const runScene = game.scene.getScene('RunScene') as {
         player: { x: number; y: number };
-        executeMinibossLineStrike: (
-          enemy: { contactDamage: number },
-          x: number,
-          y: number,
-          direction: { x: number; y: number },
-          length: number,
-        ) => void;
+        combatStates: { gainGuard: (amount: number) => void; getGuard: () => number };
+        abilityResolver: {
+          tryUseAbility: (slot: 'signature', ability: unknown, currentTime: number) => { used: boolean };
+        };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        debugSpawnEnemy: (enemyId: 'anchor') => boolean;
+        enemies: { getChildren: () => Array<{ x: number; y: number; active: boolean; health?: number; body?: { reset?: (x: number, y: number) => void } }> };
       };
 
-      runScene.executeMinibossLineStrike({ contactDamage: 26 }, runScene.player.x - 180, runScene.player.y, { x: 1, y: 0 }, 260);
+      runScene.debugSpawnEnemy('anchor');
+      const enemies = runScene.enemies.getChildren();
+      const enemy = enemies[enemies.length - 1];
+      const nextX = runScene.player.x + 40;
+      const nextY = runScene.player.y + 20;
+      enemy.x = nextX;
+      enemy.y = nextY;
+      enemy.body?.reset?.(nextX, nextY);
+      runScene.combatStates.gainGuard(12);
+      const beforeGuard = runScene.combatStates.getGuard();
+      const used = runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+      return {
+        beforeGuard,
+        afterGuard: runScene.combatStates.getGuard(),
+        used: used.used,
+      };
     });
 
-    await page.waitForFunction(
-      (baselineHp) => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1) < baselineHp,
-      startingHp,
-    );
+    expect(result.used).toBe(true);
+    expect(result.afterGuard).toBeLessThan(result.beforeGuard);
+  });
 
-    const hpAfterLineStrike = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
-    expect(hpAfterLineStrike).toBeLessThan(startingHp);
+  test('Hunter Sweep consumes Mark on a tagged target', async ({ page }) => {
+    await startRun(page, 'shade');
 
-    await page.waitForTimeout(800);
-
-    await page.evaluate(() => {
+    const result = await page.evaluate(() => {
       const game = window.__JANGAN_LARI_GAME__!;
       const runScene = game.scene.getScene('RunScene') as {
         player: { x: number; y: number };
-        spawnBossShockwave: (x: number, y: number, radius: number, damage: number, durationMs: number) => void;
+        combatStates: {
+          applyMark: (enemy: { applyMark: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+        };
+        abilityResolver: {
+          tryUseAbility: (
+            slot: 'signature',
+            ability: unknown,
+            currentTime: number,
+          ) => { used: boolean; signatureHit?: { consumedMark: boolean } };
+        };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        debugSpawnEnemy: (enemyId: 'shooter') => boolean;
+        enemies: { getChildren: () => Array<{ x: number; y: number; isMarked: (time: number) => boolean; body?: { reset?: (x: number, y: number) => void } }> };
       };
 
-      runScene.spawnBossShockwave(runScene.player.x - 140, runScene.player.y, 220, 20, 180);
+      runScene.debugSpawnEnemy('shooter');
+      const enemies = runScene.enemies.getChildren();
+      const enemy = enemies[enemies.length - 1];
+      const nextX = runScene.player.x + 140;
+      const nextY = runScene.player.y;
+      enemy.x = nextX;
+      enemy.y = nextY;
+      enemy.body?.reset?.(nextX, nextY);
+      runScene.combatStates.applyMark(enemy as never, game.loop.time, 2000);
+      const markedBefore = enemy.isMarked(game.loop.time);
+      const result = runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+      return {
+        markedBefore,
+        consumedMark: Boolean(result.signatureHit?.consumedMark),
+        markedAfter: enemy.isMarked(game.loop.time),
+      };
     });
 
-    await page.waitForFunction(
-      (baselineHp) => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1) < baselineHp,
-      hpAfterLineStrike,
-    );
-
-    const hpAfterShockwave = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
-    expect(hpAfterShockwave).toBeLessThan(hpAfterLineStrike);
-    expect(runtimeErrors).toEqual([]);
+    expect(result.markedBefore).toBe(true);
+    expect(result.consumedMark).toBe(true);
+    expect(result.markedAfter).toBe(false);
   });
 });

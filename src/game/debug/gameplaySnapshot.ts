@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { getCombatResponseTuningSnapshot, type CombatResponseTuningSnapshot } from '../combat/combatResponse';
 import type { EnemyArchetypeId } from '../data/enemies';
-import type { UpgradeId } from '../data/upgrades';
+import type { RewardId, RewardLane } from '../data/rewards';
 import type { WeaponId } from '../data/weapons';
 
 export type GameplayBotEnemySummary = {
@@ -13,6 +13,7 @@ export type GameplayBotEnemySummary = {
   isElite: boolean;
   isBoss: boolean;
   isEventTarget: boolean;
+  isMarked?: boolean;
 };
 
 export type GameplayBotGemSummary = {
@@ -23,8 +24,14 @@ export type GameplayBotGemSummary = {
 };
 
 export type GameplayBotUpgradeChoice = {
-  id: UpgradeId;
+  id: RewardId;
   title: string;
+};
+
+export type GameplayBotRewardChoice = {
+  id: RewardId;
+  title: string;
+  lane: RewardLane;
 };
 
 export type GameplayBotEventSnapshot = {
@@ -57,10 +64,14 @@ export type GameplayBotRunSnapshot = {
     y: number;
     moveSpeed: number;
     pickupRange: number;
+    guard: number;
+    maxGuard: number;
   };
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
+  traits: string[];
+  rewardChoices: GameplayBotRewardChoice[];
   waveTemplate: {
     id: string;
     label: string;

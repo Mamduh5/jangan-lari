@@ -1,276 +1,86 @@
 import { expect, test } from '@playwright/test';
 
-type GameState = {
-  menuActive: boolean;
-  metaActive: boolean;
-  runActive: boolean;
-  uiActive: boolean;
-  endActive: boolean;
-  elapsedMs: number;
-  goldEarned: number;
-  codexOpen: boolean;
-};
+async function clickCanvasPosition(page: import('@playwright/test').Page, x: number, y: number): Promise<void> {
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
 
-async function getGameState(page: import('@playwright/test').Page): Promise<GameState> {
-  return page.evaluate(() => {
-    const game = window.__JANGAN_LARI_GAME__;
-    return {
-      menuActive: game?.scene.isActive('MenuScene') ?? false,
-      metaActive: game?.scene.isActive('MetaScene') ?? false,
-      runActive: game?.scene.isActive('RunScene') ?? false,
-      uiActive: game?.scene.isActive('UIScene') ?? false,
-      endActive: Boolean(game?.registry.get('run.endActive')),
-      elapsedMs: Number(game?.registry.get('run.elapsedMs') ?? -1),
-      goldEarned: Number(game?.registry.get('run.goldEarned') ?? -1),
-      codexOpen: Boolean((game?.scene.getScene('MenuScene') as { codexOverlayVisible?: boolean } | undefined)?.codexOverlayVisible),
-    };
-  });
-}
-
-async function clickMenuButton(
-  page: import('@playwright/test').Page,
-  buttonKey: 'startButton' | 'metaButton' | 'codexButton',
-): Promise<void> {
-  if (buttonKey === 'startButton' || buttonKey === 'metaButton' || buttonKey === 'codexButton') {
-    const canvas = page.locator('canvas');
-    await expect(canvas).toBeVisible();
-
-    const box = await canvas.boundingBox();
-    if (!box) {
-      throw new Error(`Game canvas is not available for ${buttonKey} click.`);
-    }
-
-    const gameWidth = 1280;
-    const gameHeight = 720;
-    const buttonPositions = {
-      startButton: {
-        x: 560,
-        y: 82,
-      },
-      metaButton: {
-        x: 726,
-        y: 82,
-      },
-      codexButton: {
-        x: 892,
-        y: 82,
-      },
-    } as const;
-    const buttonPosition = buttonPositions[buttonKey];
-
-    await canvas.click({
-      position: {
-        x: (buttonPosition.x / gameWidth) * box.width,
-        y: (buttonPosition.y / gameHeight) * box.height,
-      },
-    });
-    return;
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error('Game canvas is not available.');
   }
 
-  await page.evaluate((key) => {
-    const game = window.__JANGAN_LARI_GAME__!;
-    const menuScene = game.scene.getScene('MenuScene') as Record<string, { emit: (eventName: string) => void }>;
-    menuScene[key].emit('pointerdown');
-  }, buttonKey);
-}
-
-async function clickMetaBackButton(page: import('@playwright/test').Page): Promise<void> {
-  await page.evaluate(() => {
-    const game = window.__JANGAN_LARI_GAME__!;
-    const metaScene = game.scene.getScene('MetaScene') as {
-      children: { list: Array<{ text?: string; emit?: (eventName: string) => void }> };
-    };
-    const backButton = metaScene.children.list.find((child) => child.text === 'Back to Menu');
-    backButton?.emit?.('pointerdown');
-  });
-}
-
-async function clickCodexCloseButton(page: import('@playwright/test').Page): Promise<void> {
-  await page.evaluate(() => {
-    const game = window.__JANGAN_LARI_GAME__!;
-    const menuScene = game.scene.getScene('MenuScene') as Record<string, { emit: (eventName: string) => void }>;
-    menuScene.codexCloseButton.emit('pointerdown');
-  });
-}
-
-async function triggerRunEscape(page: import('@playwright/test').Page): Promise<void> {
-  await page.evaluate(() => {
-    const game = window.__JANGAN_LARI_GAME__!;
-    const runScene = game.scene.getScene('RunScene') as {
-      input?: { keyboard?: { emit?: (eventName: string) => void } };
-    };
-    runScene.input?.keyboard?.emit?.('keydown-ESC');
+  await canvas.click({
+    position: {
+      x: (x / 1280) * box.width,
+      y: (y / 720) * box.height,
+    },
   });
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
   const runtimeErrors: string[] = [];
-
   page.on('pageerror', (error) => runtimeErrors.push(error.message));
   page.on('console', (message) => {
     if (message.type() === 'error') {
       runtimeErrors.push(message.text());
     }
   });
-
   return runtimeErrors;
 }
 
-function expectNoBrokenSceneApiErrors(runtimeErrors: string[]): void {
-  const brokenSceneApiErrors = runtimeErrors.filter(
-    (error) =>
-      error.includes('this.scene.isActive is not a function') || error.includes('this.scene.start is not a function'),
-  );
-
-  expect(brokenSceneApiErrors).toEqual([]);
-}
-
-test.describe('menu and run scene flow', () => {
-  test('codex opens as a separate menu surface and closes back to the normal menu view', async ({ page }) => {
+test.describe('milestone 1 menu flow', () => {
+  test('menu can switch heroes, open meta, and start a run', async ({ page }) => {
     const runtimeErrors = trackRuntimeErrors(page);
 
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
 
-    let state = await getGameState(page);
-    expect(state.menuActive).toBe(true);
-    expect(state.codexOpen).toBe(false);
+    await clickCanvasPosition(page, 860, 382);
+    await page.waitForTimeout(150);
 
-    await clickMenuButton(page, 'codexButton');
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      const menuScene = game?.scene.getScene('MenuScene') as { codexOverlayVisible?: boolean } | undefined;
-      return Boolean(menuScene?.codexOverlayVisible);
-    });
+    let selectedHero = await page.evaluate(() => window.localStorage.getItem('jangan-lari-save-v1') ?? '');
+    expect(selectedHero).toContain('shade');
 
-    state = await getGameState(page);
-    expect(state.menuActive).toBe(true);
-    expect(state.codexOpen).toBe(true);
-    expect(state.metaActive).toBe(false);
-    expect(state.runActive).toBe(false);
-
-    await clickCodexCloseButton(page);
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      const menuScene = game?.scene.getScene('MenuScene') as { codexOverlayVisible?: boolean } | undefined;
-      return !menuScene?.codexOverlayVisible;
-    });
-
-    state = await getGameState(page);
-    expect(state.menuActive).toBe(true);
-    expect(state.codexOpen).toBe(false);
-    expectNoBrokenSceneApiErrors(runtimeErrors);
-    expect(runtimeErrors).toEqual([]);
-  });
-
-  test('menu buttons can open meta, start a run, return to menu, and start another run', async ({ page }) => {
-    test.slow();
-    const runtimeErrors = trackRuntimeErrors(page);
-
-    await page.goto('/');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    await clickMenuButton(page, 'metaButton');
+    await clickCanvasPosition(page, 726, 82);
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MetaScene')));
-
-    let state = await getGameState(page);
-    expect(state.menuActive).toBe(false);
-    expect(state.metaActive).toBe(true);
-    expectNoBrokenSceneApiErrors(runtimeErrors);
-
-    await clickMetaBackButton(page);
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    state = await getGameState(page);
-    expect(state.menuActive).toBe(true);
-    expect(state.metaActive).toBe(false);
-
-    await clickMenuButton(page, 'metaButton');
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MetaScene')));
-
-    state = await getGameState(page);
-    expect(state.menuActive).toBe(false);
-    expect(state.metaActive).toBe(true);
-    expectNoBrokenSceneApiErrors(runtimeErrors);
-
-    await clickMetaBackButton(page);
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-
-    state = await getGameState(page);
-    expect(state.menuActive).toBe(true);
-    expect(state.metaActive).toBe(false);
-
-    await clickMenuButton(page, 'startButton');
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
-
-    state = await getGameState(page);
-    expect(state.runActive).toBe(true);
-    expect(state.uiActive).toBe(true);
-    expect(state.elapsedMs).toBeGreaterThanOrEqual(0);
-
-    await page.waitForFunction(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.elapsedMs') ?? -1) >= 2000);
-    const firstRunState = await getGameState(page);
+    expect(await page.evaluate(() => window.__JANGAN_LARI_GAME__?.scene.isActive('MetaScene'))).toBe(true);
 
     await page.evaluate(() => {
       const game = window.__JANGAN_LARI_GAME__!;
-      const runScene = game.scene.getScene('RunScene') as { runElapsedMs: number };
-      runScene.runElapsedMs = Number(game.registry.get('run.targetMs') ?? 120000);
+      const metaScene = game.scene.getScene('MetaScene') as {
+        children: { list: Array<{ text?: string; emit?: (eventName: string) => void }> };
+      };
+      const backButton = metaScene.children.list.find((child) => child.text === 'Back to Menu');
+      backButton?.emit?.('pointerdown');
     });
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.registry.get('run.endActive')));
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
 
-    await page.keyboard.press('Enter');
+    await clickCanvasPosition(page, 560, 82);
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('MenuScene') && !game.scene.isActive('RunScene') && !game.scene.isActive('UIScene'));
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene'));
     });
 
-    state = await getGameState(page);
-    expect(state.menuActive).toBe(true);
-    expect(state.runActive).toBe(false);
-    expect(state.uiActive).toBe(false);
-    expect(state.endActive).toBe(false);
-
-    await clickMenuButton(page, 'startButton');
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
-    });
-    await page.waitForFunction(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.elapsedMs') ?? -1) >= 0);
-
-    state = await getGameState(page);
-    expect(state.runActive).toBe(true);
-    expect(state.uiActive).toBe(true);
-    expect(state.endActive).toBe(false);
-    expect(state.goldEarned).toBe(0);
-    expect(state.elapsedMs).toBeLessThan(firstRunState.elapsedMs);
-    expectNoBrokenSceneApiErrors(runtimeErrors);
+    const snapshot = await page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot());
+    expect(snapshot?.run?.weaponNames).toEqual(['Seeker Burst', 'Hunter Sweep']);
     expect(runtimeErrors).toEqual([]);
   });
 
-  test('ESC flow returns to menu cleanly after starting from the actual Start Run button', async ({ page }) => {
+  test('ESC returns from an active run back to the menu cleanly', async ({ page }) => {
     const runtimeErrors = trackRuntimeErrors(page);
 
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
 
-    await clickMenuButton(page, 'startButton');
+    await clickCanvasPosition(page, 560, 82);
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
-    await triggerRunEscape(page);
+    await page.keyboard.press('Escape');
 
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;
       return Boolean(game?.scene.isActive('MenuScene') && !game.scene.isActive('RunScene') && !game.scene.isActive('UIScene'));
     });
 
-    const state = await getGameState(page);
-    expect(state.menuActive).toBe(true);
-    expect(state.runActive).toBe(false);
-    expect(state.uiActive).toBe(false);
-    expect(state.endActive).toBe(false);
-    expectNoBrokenSceneApiErrors(runtimeErrors);
     expect(runtimeErrors).toEqual([]);
   });
 });

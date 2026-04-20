@@ -64,10 +64,10 @@ export const QUESTS: QuestDefinition[] = [
   },
   {
     id: 'defeat-1-elite',
-    title: 'Break The Captain',
-    description: 'Defeat 1 elite enemy.',
-    metric: 'eliteKills',
-    target: 1,
-    reward: { type: 'unlockHero', heroId: 'vanguard' },
+    title: 'Break The Line',
+    description: 'Reach level 4 in a run.',
+    metric: 'maxLevelReached',
+    target: 4,
+    reward: { type: 'gold', amount: 90 },
   },
 ];

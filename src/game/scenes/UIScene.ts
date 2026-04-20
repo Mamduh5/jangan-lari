@@ -1,810 +1,303 @@
 import Phaser from 'phaser';
-import type { UpgradeDefinition } from '../data/upgrades';
-import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import type { RewardDefinition } from '../data/rewards';
 import { RunScene } from './RunScene';
 
 export class UIScene extends Phaser.Scene {
   private heroText!: Phaser.GameObjects.Text;
-  private hpValueText!: Phaser.GameObjects.Text;
+  private hpText!: Phaser.GameObjects.Text;
   private hpBarFill!: Phaser.GameObjects.Rectangle;
+  private guardText!: Phaser.GameObjects.Text;
+  private guardBarFill!: Phaser.GameObjects.Rectangle;
   private timerText!: Phaser.GameObjects.Text;
-  private goldText!: Phaser.GameObjects.Text;
   private killsText!: Phaser.GameObjects.Text;
-  private alertText!: Phaser.GameObjects.Text;
-  private rewardText!: Phaser.GameObjects.Text;
-  private instructionText!: Phaser.GameObjects.Text;
-  private eventPanel!: Phaser.GameObjects.Rectangle;
-  private eventTitleText!: Phaser.GameObjects.Text;
-  private eventBodyText!: Phaser.GameObjects.Text;
-  private eventTimerText!: Phaser.GameObjects.Text;
-  private weaponIconFrames: Phaser.GameObjects.Rectangle[] = [];
-  private weaponIconTexts: Phaser.GameObjects.Text[] = [];
-  private xpBarFill!: Phaser.GameObjects.Rectangle;
-  private xpBarLabel!: Phaser.GameObjects.Text;
+  private levelText!: Phaser.GameObjects.Text;
+  private traitText!: Phaser.GameObjects.Text;
+  private stateText!: Phaser.GameObjects.Text;
+  private abilityTexts: Phaser.GameObjects.Text[] = [];
+  private levelUpContainer!: Phaser.GameObjects.Container;
+  private levelUpCards: Phaser.GameObjects.Rectangle[] = [];
+  private levelUpTitles: Phaser.GameObjects.Text[] = [];
+  private levelUpBodies: Phaser.GameObjects.Text[] = [];
   private endContainer!: Phaser.GameObjects.Container;
   private endTitleText!: Phaser.GameObjects.Text;
-  private endSubtitleText!: Phaser.GameObjects.Text;
-  private endStatsText!: Phaser.GameObjects.Text;
-  private endButton!: Phaser.GameObjects.Text;
-  private levelUpContainer!: Phaser.GameObjects.Container;
-  private levelUpHeadingText!: Phaser.GameObjects.Text;
-  private levelUpTimerText!: Phaser.GameObjects.Text;
-  private levelUpCards: Phaser.GameObjects.Rectangle[] = [];
-  private levelUpButtons: Phaser.GameObjects.Text[] = [];
-  private levelUpDescriptions: Phaser.GameObjects.Text[] = [];
-  private levelUpBadges: Phaser.GameObjects.Text[] = [];
+  private endBodyText!: Phaser.GameObjects.Text;
 
-  private readonly handleSelectUpgradeOne = (): void => {
-    this.selectUpgrade(0);
-  };
-
-  private readonly handleSelectUpgradeTwo = (): void => {
-    this.selectUpgrade(1);
-  };
-
-  private readonly handleSelectUpgradeThree = (): void => {
-    this.selectUpgrade(2);
-  };
+  private readonly handleChoiceOne = (): void => this.selectChoice(0);
+  private readonly handleChoiceTwo = (): void => this.selectChoice(1);
+  private readonly handleChoiceThree = (): void => this.selectChoice(2);
 
   constructor() {
     super('UIScene');
   }
 
   create(): void {
-    this.weaponIconFrames = [];
-    this.weaponIconTexts = [];
+    this.abilityTexts = [];
     this.levelUpCards = [];
-    this.levelUpButtons = [];
-    this.levelUpDescriptions = [];
-    this.levelUpBadges = [];
+    this.levelUpTitles = [];
+    this.levelUpBodies = [];
+    this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
 
-    const topLeftPanel = this.add.rectangle(24, 18, 274, 86, 0x030712, 0.88).setOrigin(0);
-    topLeftPanel.setStrokeStyle(1, 0x334155, 0.96);
-    topLeftPanel.setScrollFactor(0);
+    this.add.rectangle(28, 18, 320, 118, 0x030712, 0.9).setOrigin(0).setScrollFactor(0).setStrokeStyle(1, 0x334155, 0.95);
+    this.heroText = this.add.text(42, 30, '--', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '24px',
+      color: '#f8fafc',
+    }).setScrollFactor(0);
 
-    this.heroText = this.add
-      .text(38, 30, '--', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '24px',
-        color: '#f8fafc',
-      })
-      .setScrollFactor(0);
+    this.hpBarFill = this.add.rectangle(42, 70, 0, 12, 0xf87171, 1).setOrigin(0, 0.5).setScrollFactor(0);
+    this.add.rectangle(42, 70, 240, 18, 0x172033, 0.98).setOrigin(0, 0.5).setScrollFactor(0).setStrokeStyle(1, 0x475569, 0.95);
+    this.hpText = this.add.text(42, 82, 'HP --/--', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '13px',
+      color: '#fecaca',
+    }).setScrollFactor(0);
 
-    const hpBarFrame = this.add.rectangle(38, 68, 220, 18, 0x172033, 0.98).setOrigin(0, 0.5);
-    hpBarFrame.setStrokeStyle(1, 0x475569, 0.95);
-    hpBarFrame.setScrollFactor(0);
+    this.guardBarFill = this.add.rectangle(42, 104, 0, 10, 0xfbbf24, 1).setOrigin(0, 0.5).setScrollFactor(0);
+    this.add.rectangle(42, 104, 240, 16, 0x241b0c, 0.98).setOrigin(0, 0.5).setScrollFactor(0).setStrokeStyle(1, 0x7c5c1f, 0.95);
+    this.guardText = this.add.text(42, 114, 'Guard --/--', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '13px',
+      color: '#fde68a',
+    }).setScrollFactor(0);
 
-    this.hpBarFill = this.add.rectangle(38, 68, 0, 12, 0xf87171, 1).setOrigin(0, 0.5);
-    this.hpBarFill.setScrollFactor(0);
+    this.timerText = this.add.text(GAME_WIDTH / 2, 28, '00:00', {
+      fontFamily: 'Georgia, serif',
+      fontSize: '34px',
+      color: '#e0f2fe',
+    }).setOrigin(0.5, 0).setScrollFactor(0);
 
-    this.hpValueText = this.add
-      .text(38, 82, 'HP --/--', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#fecaca',
-      })
-      .setScrollFactor(0);
+    this.killsText = this.add.text(GAME_WIDTH - 34, 24, 'Kills 0', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '18px',
+      color: '#cbd5e1',
+      backgroundColor: '#172036',
+      padding: { left: 12, right: 12, top: 8, bottom: 8 },
+    }).setOrigin(1, 0).setScrollFactor(0);
 
-    this.timerText = this.add
-      .text(GAME_WIDTH / 2, 34, '00:00', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '36px',
-        color: '#e0f2fe',
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0);
+    this.levelText = this.add.text(GAME_WIDTH - 34, 64, 'LV 1', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '18px',
+      color: '#bfdbfe',
+      backgroundColor: '#172036',
+      padding: { left: 12, right: 12, top: 8, bottom: 8 },
+    }).setOrigin(1, 0).setScrollFactor(0);
 
-    this.alertText = this.add
-      .text(GAME_WIDTH / 2, 76, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#dbeafe',
-        backgroundColor: '#1e3a8a',
-        padding: { left: 12, right: 12, top: 6, bottom: 6 },
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setVisible(false);
+    this.stateText = this.add.text(GAME_WIDTH / 2, 72, '', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '14px',
+      color: '#dbeafe',
+      backgroundColor: '#10233f',
+      padding: { left: 12, right: 12, top: 6, bottom: 6 },
+    }).setOrigin(0.5, 0).setScrollFactor(0);
 
-    this.rewardText = this.add
-      .text(GAME_WIDTH / 2, 112, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#fef3c7',
-        backgroundColor: '#111827',
-        padding: { left: 12, right: 12, top: 6, bottom: 6 },
-        wordWrap: { width: 640 },
-        align: 'center',
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setVisible(false);
+    this.traitText = this.add.text(38, GAME_HEIGHT - 74, 'Traits: --', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '14px',
+      color: '#cbd5e1',
+      backgroundColor: '#0f172a',
+      padding: { left: 12, right: 12, top: 8, bottom: 8 },
+      wordWrap: { width: 700 },
+    }).setOrigin(0, 0).setScrollFactor(0);
 
-    this.instructionText = this.add
-      .text(GAME_WIDTH / 2, 148, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#cbd5e1',
-        backgroundColor: '#0f172a',
-        padding: { left: 14, right: 14, top: 6, bottom: 6 },
-        wordWrap: { width: 760 },
-        align: 'center',
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setVisible(false);
-
-    this.eventPanel = this.add.rectangle(GAME_WIDTH / 2, 206, 520, 68, 0x111827, 0.9).setScrollFactor(0).setVisible(false);
-    this.eventPanel.setStrokeStyle(1, 0xfbbf24, 0.9);
-
-    this.eventTitleText = this.add
-      .text(GAME_WIDTH / 2 - 240, 182, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#fde68a',
-      })
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setVisible(false);
-
-    this.eventBodyText = this.add
-      .text(GAME_WIDTH / 2 - 240, 202, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#f8fafc',
-        wordWrap: { width: 400 },
-      })
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setVisible(false);
-
-    this.eventTimerText = this.add
-      .text(GAME_WIDTH / 2 + 224, 182, '', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '24px',
-        color: '#fde68a',
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setVisible(false);
-
-    this.goldText = this.add
-      .text(GAME_WIDTH - 34, 24, 'Gold 0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#fde68a',
-        backgroundColor: '#172036',
-        padding: { left: 12, right: 12, top: 8, bottom: 8 },
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0);
-
-    this.killsText = this.add
-      .text(GAME_WIDTH - 34, 64, 'Kills 0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#cbd5e1',
-        backgroundColor: '#172036',
-        padding: { left: 12, right: 12, top: 8, bottom: 8 },
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0);
-
-    for (let index = 0; index < 4; index += 1) {
-      const frame = this.add.rectangle(38 + index * 52, GAME_HEIGHT - 88, 40, 40, 0x172033, 0.98).setOrigin(0);
-      frame.setStrokeStyle(1, 0x334155, 0.92);
-      frame.setScrollFactor(0);
-
-      const icon = this.add
-        .text(58 + index * 52, GAME_HEIGHT - 68, '--', {
+    const labels = ['Primary', 'Signature', 'Support'];
+    labels.forEach((label, index) => {
+      const x = 38 + index * 168;
+      this.add.rectangle(x, GAME_HEIGHT - 128, 148, 42, 0x172033, 0.98).setOrigin(0, 0).setScrollFactor(0).setStrokeStyle(1, 0x334155, 0.92);
+      this.abilityTexts.push(
+        this.add.text(x + 10, GAME_HEIGHT - 117, `${label}: --`, {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '13px',
           color: '#eff6ff',
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setVisible(false);
+        }).setScrollFactor(0),
+      );
+    });
 
-      this.weaponIconFrames.push(frame);
-      this.weaponIconTexts.push(icon);
-    }
-
-    const xpBarFrame = this.add.rectangle(38, GAME_HEIGHT - 38, 272, 18, 0x172554, 0.98).setOrigin(0, 0.5);
-    xpBarFrame.setStrokeStyle(1, 0x60a5fa, 0.9);
-    xpBarFrame.setScrollFactor(0);
-
-    this.xpBarFill = this.add.rectangle(38, GAME_HEIGHT - 38, 0, 12, 0x38bdf8, 1).setOrigin(0, 0.5);
-    this.xpBarFill.setScrollFactor(0);
-
-    this.xpBarLabel = this.add
-      .text(38, GAME_HEIGHT - 18, 'LV 1  XP 0/0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#bfdbfe',
-      })
-      .setScrollFactor(0);
-
-    this.add
-      .text(GAME_WIDTH - 30, GAME_HEIGHT - 28, 'ESC: Return to Menu', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
-        color: '#cbd5e1',
-      })
-      .setOrigin(1, 1)
-      .setScrollFactor(0);
-
-    this.endContainer = this.createEndOverlay();
     this.levelUpContainer = this.createLevelUpOverlay();
+    this.endContainer = this.createEndOverlay();
 
-    this.input.keyboard?.on('keydown-ENTER', this.handleConfirmInput, this);
-    this.input.keyboard?.on('keydown-SPACE', this.handleConfirmInput, this);
-    this.input.keyboard?.on('keydown-ONE', this.handleSelectUpgradeOne, this);
-    this.input.keyboard?.on('keydown-TWO', this.handleSelectUpgradeTwo, this);
-    this.input.keyboard?.on('keydown-THREE', this.handleSelectUpgradeThree, this);
+    this.input.keyboard?.on('keydown-ONE', this.handleChoiceOne, this);
+    this.input.keyboard?.on('keydown-TWO', this.handleChoiceTwo, this);
+    this.input.keyboard?.on('keydown-THREE', this.handleChoiceThree, this);
+    this.input.keyboard?.on('keydown-ENTER', this.handleEnter, this);
+    this.input.keyboard?.on('keydown-SPACE', this.handleEnter, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
   }
 
   update(): void {
-    const currentHp = Number(this.registry.get('run.hp') ?? 0);
-    const maxHp = Number(this.registry.get('run.maxHp') ?? 0);
-    const level = Number(this.registry.get('run.level') ?? 1);
-    const kills = Number(this.registry.get('run.kills') ?? 0);
-    const xp = Number(this.registry.get('run.xp') ?? 0);
-    const xpNext = Number(this.registry.get('run.xpNext') ?? 1);
+    const hp = Number(this.registry.get('run.hp') ?? 0);
+    const maxHp = Math.max(1, Number(this.registry.get('run.maxHp') ?? 1));
+    const guard = Number(this.registry.get('run.guard') ?? 0);
+    const maxGuard = Math.max(1, Number(this.registry.get('run.maxGuard') ?? 1));
     const elapsedMs = Number(this.registry.get('run.elapsedMs') ?? 0);
-    const targetMs = Number(this.registry.get('run.targetMs') ?? 0);
-    const totalGold = Number(this.registry.get('run.totalGold') ?? this.registry.get('save.totalGold') ?? 0);
+    const targetMs = Math.max(1, Number(this.registry.get('run.targetMs') ?? 1));
+    const kills = Number(this.registry.get('run.kills') ?? 0);
+    const level = Number(this.registry.get('run.level') ?? 1);
     const heroName = String(this.registry.get('run.heroName') ?? '--');
-    const weaponNames = (this.registry.get('run.weaponNames') ?? []) as string[];
-    const levelUpRemainingMs = Number(this.registry.get('run.levelUpRemainingMs') ?? 0);
+    const markedEnemies = Number(this.registry.get('run.markedEnemies') ?? 0);
+    const stateLabel = String(this.registry.get('run.stateLabel') ?? '');
+    const traits = (this.registry.get('run.traits') ?? []) as string[];
+    const abilityLabels = (this.registry.get('run.abilityLabels') ?? []) as string[];
     const endActive = Boolean(this.registry.get('run.endActive'));
     const levelUpActive = Boolean(this.registry.get('run.levelUpActive'));
-    const alertKind = String(this.registry.get('run.alertKind') ?? 'objective');
-    const alertMessage = String(this.registry.get('run.alertText') ?? '');
-    const rewardMessage = String(this.registry.get('run.rewardText') ?? '');
-    const rewardColor = String(this.registry.get('run.rewardColor') ?? '#fcd34d');
-    const instructionMessage = String(this.registry.get('run.instructions') ?? '');
-    const eventActive = Boolean(this.registry.get('run.eventActive'));
-    const eventTitle = String(this.registry.get('run.eventTitle') ?? '');
-    const eventText = String(this.registry.get('run.eventText') ?? '');
-    const eventRemainingMs = Number(this.registry.get('run.eventRemainingMs') ?? 0);
-    const levelUpMode = String(this.registry.get('run.levelUpMode') ?? 'normal');
-    const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
+    const rewards = (this.registry.get('run.levelUpChoices') ?? []) as RewardDefinition[];
 
-    this.setTextIfChanged(this.heroText, heroName || '--');
-    this.setTextIfChanged(this.hpValueText, `HP ${currentHp}/${maxHp}`);
-    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 220, 0, 220);
-    this.setTextIfChanged(this.timerText, this.formatTime(Math.max(0, targetMs - elapsedMs)));
-    this.setTextIfChanged(this.goldText, `Gold ${totalGold}`);
-    this.setTextIfChanged(this.killsText, `Kills ${kills}`);
-    this.setTextIfChanged(this.xpBarLabel, `LV ${level}  XP ${xp}/${xpNext}`);
-    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 272, 0, 272);
-    this.refreshWeaponIcons(weaponNames);
-    this.refreshAlert(alertKind, alertMessage);
-    this.refreshRewardToast(rewardMessage, rewardColor);
-    this.refreshInstruction(instructionMessage, levelUpActive, endActive);
-    this.refreshEventHud(eventActive, eventTitle, eventText, eventRemainingMs, levelUpActive, endActive);
-
-    this.endContainer.setVisible(endActive);
-    this.levelUpContainer.setVisible(levelUpActive && !endActive);
-
-    if (endActive) {
-      this.refreshEndOverlay(kills, elapsedMs);
-    }
-
-    if (levelUpActive && !endActive) {
-      this.refreshLevelUpChoices(levelUpChoices, levelUpRemainingMs, levelUpMode === 'breakthrough' ? 'breakthrough' : 'normal');
-    }
-  }
-
-  private createEndOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.78).setOrigin(0).setScrollFactor(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 520, 314, 0x0f172a, 0.995).setScrollFactor(0);
-    panel.setStrokeStyle(2, 0x475569, 1);
-
-    this.endTitleText = this.add
-      .text(GAME_WIDTH / 2, 246, 'Victory', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '46px',
-        color: '#f8fafc',
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0);
-
-    this.endSubtitleText = this.add
-      .text(GAME_WIDTH / 2, 294, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#cbd5e1',
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0);
-
-    this.endStatsText = this.add
-      .text(GAME_WIDTH / 2, 366, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
-        color: '#bfdbfe',
-        align: 'center',
-        lineSpacing: 6,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0);
-
-    this.endButton = this.add
-      .text(GAME_WIDTH / 2, 466, 'Return to Menu', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '24px',
-        color: '#fef3c7',
-        backgroundColor: '#1f2937',
-        padding: { left: 24, right: 24, top: 12, bottom: 12 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true });
-
-    this.endButton.on('pointerdown', () => this.returnToMenuIfEnded());
-    this.endButton.on('pointerover', () => {
-      this.endButton.setStyle({ color: '#ffffff', backgroundColor: '#374151' });
-    });
-    this.endButton.on('pointerout', () => {
-      this.endButton.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
+    this.heroText.setText(heroName);
+    this.hpBarFill.setSize(240 * Phaser.Math.Clamp(hp / maxHp, 0, 1), 12);
+    this.hpText.setText(`HP ${Math.max(0, Math.round(hp))}/${Math.round(maxHp)}`);
+    this.guardBarFill.setSize(240 * Phaser.Math.Clamp(guard / maxGuard, 0, 1), 10);
+    this.guardText.setText(`Guard ${Math.max(0, Math.round(guard))}/${Math.round(maxGuard)}`);
+    this.timerText.setText(`${this.formatTime(elapsedMs)} / ${this.formatTime(targetMs)}`);
+    this.killsText.setText(`Kills ${kills}`);
+    this.levelText.setText(`LV ${level}`);
+    this.stateText.setText(stateLabel || `Marked Enemies ${markedEnemies}`);
+    this.traitText.setText(`Traits: ${traits.length > 0 ? traits.join(' | ') : 'None yet'}`);
+    this.abilityTexts.forEach((text, index) => {
+      text.setText(abilityLabels[index] ?? '--');
     });
 
-    const helpText = this.add
-      .text(GAME_WIDTH / 2, 514, 'Enter or Space continues', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
-        color: '#93c5fd',
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0);
-
-    const container = this.add.container(0, 0, [
-      backdrop,
-      panel,
-      this.endTitleText,
-      this.endSubtitleText,
-      this.endStatsText,
-      this.endButton,
-      helpText,
-    ]);
-    container.setDepth(100);
-    container.setVisible(false);
-    container.setScrollFactor(0);
-
-    return container;
+    this.syncLevelUpOverlay(levelUpActive, rewards);
+    this.syncEndOverlay(endActive);
   }
 
   private createLevelUpOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.8).setOrigin(0).setScrollFactor(0);
-    this.levelUpHeadingText = this.add
-      .text(GAME_WIDTH / 2, 126, 'LEVEL UP', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '24px',
-        color: '#bfdbfe',
-        letterSpacing: 2,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0);
-    this.levelUpTimerText = this.add
-      .text(GAME_WIDTH / 2, 184, '15.0', {
+    const objects: Phaser.GameObjects.GameObject[] = [];
+    objects.push(this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.8).setScrollFactor(0));
+    objects.push(
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1140, 320, 0x0f172a, 0.98).setStrokeStyle(2, 0x334155, 0.95).setScrollFactor(0),
+    );
+    objects.push(
+      this.add.text(GAME_WIDTH / 2, 218, 'Choose A Reward', {
         fontFamily: 'Georgia, serif',
-        fontSize: '42px',
-        color: '#fef08a',
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0);
-
-    const children: Phaser.GameObjects.GameObject[] = [backdrop, this.levelUpHeadingText, this.levelUpTimerText];
+        fontSize: '34px',
+        color: '#f8fafc',
+      }).setOrigin(0.5).setScrollFactor(0),
+    );
 
     for (let index = 0; index < 3; index += 1) {
       const x = 258 + index * 382;
-      const card = this.add.rectangle(x, 372, 286, 166, 0x111827, 0.99).setOrigin(0.5).setScrollFactor(0);
-      card.setStrokeStyle(2, 0x334155, 1);
+      const card = this.add.rectangle(x, 372, 318, 184, 0x172033, 0.98).setScrollFactor(0).setStrokeStyle(2, 0x334155, 0.92);
       card.setInteractive({ useHandCursor: true });
-      card.on('pointerdown', () => this.selectUpgrade(index));
-      card.on('pointerover', () => this.applyLevelUpCardHover(index, true));
-      card.on('pointerout', () => this.applyLevelUpCardHover(index, false));
-
-      const badge = this.add
-        .text(x - 106, 320, '--', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '14px',
-          color: '#eff6ff',
-          backgroundColor: '#334155',
-          padding: { left: 8, right: 8, top: 5, bottom: 5 },
-        })
-        .setOrigin(0, 0.5)
-        .setScrollFactor(0);
-
-      const button = this.add
-        .text(x - 106, 348, '', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '24px',
-          color: '#f8fafc',
-          wordWrap: { width: 214 },
-        })
-        .setOrigin(0, 0.5)
-        .setScrollFactor(0);
-
-      const description = this.add
-        .text(x - 106, 384, '', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '14px',
-          color: '#cbd5e1',
-          wordWrap: { width: 214 },
-          lineSpacing: 4,
-        })
-        .setOrigin(0, 0)
-        .setScrollFactor(0);
+      card.on('pointerdown', () => this.selectChoice(index));
+      const title = this.add.text(x - 136, 306, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '20px',
+        color: '#f8fafc',
+        wordWrap: { width: 272 },
+      }).setOrigin(0, 0).setScrollFactor(0);
+      const body = this.add.text(x - 136, 340, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#cbd5e1',
+        wordWrap: { width: 272 },
+        lineSpacing: 5,
+      }).setOrigin(0, 0).setScrollFactor(0);
 
       this.levelUpCards.push(card);
-      this.levelUpBadges.push(badge);
-      this.levelUpButtons.push(button);
-      this.levelUpDescriptions.push(description);
-      children.push(card, badge, button, description);
+      this.levelUpTitles.push(title);
+      this.levelUpBodies.push(body);
+      objects.push(card, title, body);
     }
 
-    const container = this.add.container(0, 0, children);
-    container.setDepth(90);
-    container.setVisible(false);
-    container.setScrollFactor(0);
-
-    return container;
+    return this.add.container(0, 0, objects).setDepth(30).setVisible(false);
   }
 
-  private refreshEndOverlay(kills: number, elapsedMs: number): void {
-    const victory = Boolean(this.registry.get('run.victory'));
-    const title = String(this.registry.get('run.endTitle') ?? (victory ? 'Victory' : 'Defeat'));
-    const subtitle = String(this.registry.get('run.endSubtitle') ?? '');
-    const goldEarned = Number(this.registry.get('run.goldEarned') ?? 0);
+  private createEndOverlay(): Phaser.GameObjects.Container {
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 540, 260, 0x0f172a, 0.98).setScrollFactor(0).setStrokeStyle(2, 0x334155, 0.95);
+    const title = this.add.text(GAME_WIDTH / 2, 276, '', {
+      fontFamily: 'Georgia, serif',
+      fontSize: '38px',
+      color: '#f8fafc',
+    }).setOrigin(0.5).setScrollFactor(0);
+    const body = this.add.text(GAME_WIDTH / 2, 334, '', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '16px',
+      color: '#cbd5e1',
+      align: 'center',
+      wordWrap: { width: 420 },
+      lineSpacing: 5,
+    }).setOrigin(0.5, 0).setScrollFactor(0);
+    const hint = this.add.text(GAME_WIDTH / 2, 458, 'Press Enter to return to menu', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '16px',
+      color: '#93c5fd',
+    }).setOrigin(0.5).setScrollFactor(0);
 
-    this.setTextIfChanged(this.endTitleText, title);
-    this.endTitleText.setColor(victory ? '#fef08a' : '#fca5a5');
-    this.setTextIfChanged(this.endSubtitleText, subtitle);
-    this.setTextIfChanged(
-      this.endStatsText,
-      `Time ${this.formatTime(elapsedMs)}\nGold +${goldEarned}\nKills ${kills}`,
-    );
+    this.endTitleText = title;
+    this.endBodyText = body;
+    return this.add.container(0, 0, [
+      this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.78).setScrollFactor(0),
+      panel,
+      title,
+      body,
+      hint,
+    ]).setDepth(40).setVisible(false);
   }
 
-  private refreshLevelUpChoices(
-    choices: UpgradeDefinition[],
-    remainingMs: number,
-    mode: 'normal' | 'breakthrough',
-  ): void {
-    this.setTextIfChanged(this.levelUpHeadingText, mode === 'breakthrough' ? 'BREAKTHROUGH' : 'LEVEL UP');
-    this.levelUpHeadingText.setColor(mode === 'breakthrough' ? '#f9a8d4' : '#bfdbfe');
-    this.levelUpTimerText.setColor(mode === 'breakthrough' ? '#f9a8d4' : '#fef08a');
-    this.setTextIfChanged(this.levelUpTimerText, `${(remainingMs / 1000).toFixed(1)}`);
+  private syncLevelUpOverlay(active: boolean, rewards: RewardDefinition[]): void {
+    this.levelUpContainer.setVisible(active);
+    if (!active) {
+      return;
+    }
 
-    for (let index = 0; index < this.levelUpButtons.length; index += 1) {
-      const choice = choices[index];
-      const card = this.levelUpCards[index];
-      const badge = this.levelUpBadges[index];
-      const button = this.levelUpButtons[index];
-      const description = this.levelUpDescriptions[index];
-
-      if (!choice) {
-        card.setVisible(false);
-        badge.setVisible(false);
-        button.setVisible(false);
-        description.setVisible(false);
-        continue;
-      }
-
-      const presentation = this.getUpgradePresentation(choice);
-      card.setVisible(true);
-      badge.setVisible(true);
-      button.setVisible(true);
-      description.setVisible(true);
-      card.setData('baseColor', presentation.cardColor);
-      badge.setBackgroundColor(presentation.badgeColor);
-      this.setTextIfChanged(badge, presentation.badgeText);
-      this.setTextIfChanged(button, presentation.title);
-      this.setTextIfChanged(description, presentation.summary);
-      this.applyLevelUpCardHover(index, false);
+    for (let index = 0; index < 3; index += 1) {
+      const reward = rewards[index];
+      this.levelUpTitles[index].setText(reward ? `${index + 1}. ${reward.title}` : `${index + 1}. --`);
+      this.levelUpBodies[index].setText(reward ? `${reward.lane.toUpperCase()}\n${reward.description}` : '');
+      this.levelUpCards[index].setStrokeStyle(2, reward ? this.getLaneColor(reward.lane) : 0x334155, 0.95);
     }
   }
 
-  private selectUpgrade(index: number): void {
+  private syncEndOverlay(active: boolean): void {
+    this.endContainer.setVisible(active);
+    if (!active) {
+      return;
+    }
+
+    this.endTitleText.setText(String(this.registry.get('run.endTitle') ?? 'Run Over'));
+    this.endBodyText.setText(String(this.registry.get('run.endSubtitle') ?? ''));
+  }
+
+  private selectChoice(index: number): void {
     if (!this.registry.get('run.levelUpActive') || this.registry.get('run.endActive') || !this.scene.isActive('RunScene')) {
       return;
     }
 
     const runScene = this.scene.get('RunScene') as RunScene;
-    runScene.selectLevelUp(index);
+    runScene.selectReward(index);
   }
 
-  private handleConfirmInput(): void {
-    if (this.registry.get('run.endActive')) {
-      this.returnToMenuIfEnded();
-    }
-  }
-
-  private returnToMenuIfEnded(): void {
-    if (!this.registry.get('run.endActive')) {
-      return;
-    }
-
-    if (this.scene.isActive('RunScene')) {
+  private handleEnter(): void {
+    if (this.registry.get('run.endActive') && this.scene.isActive('RunScene')) {
       const runScene = this.scene.get('RunScene') as RunScene;
-      runScene.exitToMenu();
-      return;
+      runScene.returnToMenu();
     }
-
-    this.scene.stop();
-    this.scene.start('MenuScene');
   }
 
-  private formatTime(elapsedMs: number): string {
-    const totalSeconds = Math.floor(elapsedMs / 1000);
+  private getLaneColor(lane: RewardDefinition['lane']): number {
+    switch (lane) {
+      case 'deepen':
+        return 0xf59e0b;
+      case 'bridge':
+        return 0x60a5fa;
+      case 'stabilize':
+      default:
+        return 0x4ade80;
+    }
+  }
+
+  private formatTime(ms: number): string {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
-
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  private refreshWeaponIcons(weaponNames: string[]): void {
-    for (let index = 0; index < this.weaponIconTexts.length; index += 1) {
-      const frame = this.weaponIconFrames[index];
-      const label = this.weaponIconTexts[index];
-      const weaponName = weaponNames[index];
-      const definition = weaponName ? findWeaponDefinitionByName(weaponName) : undefined;
-
-      if (!definition) {
-        frame.setFillStyle(0x172033, 0.98);
-        frame.setStrokeStyle(1, 0x334155, 0.92);
-        label.setVisible(false);
-        continue;
-      }
-
-      frame.setFillStyle(definition.projectileColor, 0.28);
-      frame.setStrokeStyle(1, definition.projectileStrokeColor, 0.98);
-      this.setTextIfChanged(label, definition.shortLabel);
-      label.setVisible(true);
-    }
-  }
-
-  private refreshAlert(kind: string, message: string): void {
-    if (!message) {
-      this.alertText.setVisible(false);
-      return;
-    }
-
-    const palette = this.getAlertPalette(kind);
-    this.setTextIfChanged(this.alertText, message.toUpperCase());
-    if (this.alertText.style.color !== palette.textColor) {
-      this.alertText.setColor(palette.textColor);
-    }
-    if (this.alertText.style.backgroundColor !== palette.backgroundColor) {
-      this.alertText.setBackgroundColor(palette.backgroundColor);
-    }
-    this.alertText.setVisible(true);
-  }
-
-  private refreshRewardToast(message: string, color: string): void {
-    if (!message) {
-      this.rewardText.setVisible(false);
-      return;
-    }
-
-    this.setTextIfChanged(this.rewardText, message);
-    if (this.rewardText.style.color !== color) {
-      this.rewardText.setColor(color);
-    }
-    this.rewardText.setVisible(true);
-  }
-
-  private refreshInstruction(message: string, levelUpActive: boolean, endActive: boolean): void {
-    if (!message || levelUpActive || endActive) {
-      this.instructionText.setVisible(false);
-      return;
-    }
-
-    this.setTextIfChanged(this.instructionText, message);
-    this.instructionText.setVisible(true);
-  }
-
-  private refreshEventHud(
-    active: boolean,
-    title: string,
-    objective: string,
-    remainingMs: number,
-    levelUpActive: boolean,
-    endActive: boolean,
-  ): void {
-    const visible = active && !levelUpActive && !endActive;
-    this.eventPanel.setVisible(visible);
-    this.eventTitleText.setVisible(visible);
-    this.eventBodyText.setVisible(visible);
-    this.eventTimerText.setVisible(visible);
-
-    if (!visible) {
-      return;
-    }
-
-    this.setTextIfChanged(this.eventTitleText, title.toUpperCase());
-    this.setTextIfChanged(this.eventBodyText, objective);
-    this.setTextIfChanged(this.eventTimerText, `${Math.max(0, remainingMs / 1000).toFixed(1)}s`);
-  }
-
-  private getAlertPalette(kind: string): { textColor: string; backgroundColor: string } {
-    switch (kind) {
-      case 'hero':
-        return { textColor: '#f5d0fe', backgroundColor: '#3b0764' };
-      case 'elite':
-        return { textColor: '#e9d5ff', backgroundColor: '#4c1d95' };
-      case 'miniboss':
-        return { textColor: '#fbcfe8', backgroundColor: '#831843' };
-      case 'boss':
-        return { textColor: '#fecaca', backgroundColor: '#7f1d1d' };
-      case 'victory':
-        return { textColor: '#fef08a', backgroundColor: '#713f12' };
-      case 'defeat':
-        return { textColor: '#fecaca', backgroundColor: '#7f1d1d' };
-      default:
-        return { textColor: '#dbeafe', backgroundColor: '#1e3a8a' };
-    }
-  }
-
-  private getUpgradePresentation(choice: UpgradeDefinition): {
-    badgeText: string;
-    badgeColor: string;
-    cardColor: number;
-    title: string;
-    summary: string;
-  } {
-    if (choice.kind === 'signature' && choice.requiresWeaponId) {
-      const weapon = WEAPON_DEFINITIONS[choice.requiresWeaponId];
-      return {
-        badgeText: 'SIGNATURE',
-        badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
-        cardColor: 0x1a2235,
-        title: choice.title,
-        summary: `${weapon.name}: ${choice.description}`,
-      };
-    }
-
-    if (choice.kind === 'branch' && choice.requiresWeaponId) {
-      const weapon = WEAPON_DEFINITIONS[choice.requiresWeaponId];
-      return {
-        badgeText: 'BRANCH',
-        badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
-        cardColor: 0x162033,
-        title: choice.title,
-        summary: `${weapon.name}: ${choice.description}`,
-      };
-    }
-
-    const weapon = this.getWeaponUpgrade(choice.id);
-    if (weapon) {
-      return {
-        badgeText: 'WEAPON',
-        badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
-        cardColor: 0x132033,
-        title: weapon.name,
-        summary: weapon.codexSummary,
-      };
-    }
-
-    switch (choice.id) {
-      case 'vitality':
-        return {
-          badgeText: 'SUPPORT',
-          badgeColor: '#991b1b',
-          cardColor: 0x1a1623,
-          title: 'Vitality',
-          summary: '+25 max HP',
-        };
-      case 'swiftness':
-        return {
-          badgeText: 'SUPPORT',
-          badgeColor: '#1d4ed8',
-          cardColor: 0x132033,
-          title: 'Swiftness',
-          summary: '+22 move speed',
-        };
-      case 'power':
-        return {
-          badgeText: 'SUPPORT',
-          badgeColor: '#92400e',
-          cardColor: 0x211915,
-          title: 'Power',
-          summary: '+5 damage to all weapons',
-        };
-      case 'rapid-fire':
-        return {
-          badgeText: 'SUPPORT',
-          badgeColor: '#0f766e',
-          cardColor: 0x122225,
-          title: 'Rapid Fire',
-          summary: '-40 ms cooldown',
-        };
-      case 'velocity':
-        return {
-          badgeText: 'SUPPORT',
-          badgeColor: '#7c3aed',
-          cardColor: 0x171a2e,
-          title: 'Velocity',
-          summary: '+90 projectile speed',
-        };
-      case 'magnet':
-        return {
-          badgeText: 'SUPPORT',
-          badgeColor: '#15803d',
-          cardColor: 0x13251c,
-          title: 'Magnet',
-          summary: '+35 pickup range',
-        };
-      case 'reach':
-        return {
-          badgeText: 'SUPPORT',
-          badgeColor: '#1d4ed8',
-          cardColor: 0x132033,
-          title: 'Reach',
-          summary: '+55 weapon range',
-        };
-      default:
-        return {
-          badgeText: 'SUPPORT',
-          badgeColor: '#334155',
-          cardColor: 0x111827,
-          title: choice.title,
-          summary: choice.description,
-        };
-    }
-  }
-
-  private getWeaponUpgrade(upgradeId: UpgradeDefinition['id']): WeaponDefinition | null {
-    switch (upgradeId) {
-      case 'unlock-twin-fangs':
-        return WEAPON_DEFINITIONS['twin-fangs'];
-      case 'unlock-ember-lance':
-        return WEAPON_DEFINITIONS['ember-lance'];
-      case 'unlock-bloom-cannon':
-        return WEAPON_DEFINITIONS['bloom-cannon'];
-      case 'unlock-phase-disc':
-        return WEAPON_DEFINITIONS['phase-disc'];
-      case 'unlock-sunwheel':
-        return WEAPON_DEFINITIONS.sunwheel;
-      case 'unlock-shatterbell':
-        return WEAPON_DEFINITIONS.shatterbell;
-      default:
-        return null;
-    }
-  }
-
-  private applyLevelUpCardHover(index: number, hovered: boolean): void {
-    const card = this.levelUpCards[index];
-    if (!card.visible) {
-      return;
-    }
-
-    const baseColor = Number(card.getData('baseColor') ?? 0x111827);
-    card.setFillStyle(baseColor, hovered ? 1 : 0.99);
-    card.setStrokeStyle(2, hovered ? 0x93c5fd : 0x334155, 1);
-  }
-
-  private setTextIfChanged(target: Phaser.GameObjects.Text, nextText: string): void {
-    if (target.text !== nextText) {
-      target.setText(nextText);
-    }
-  }
-
   private handleShutdown(): void {
-    this.input.keyboard?.off('keydown-ENTER', this.handleConfirmInput, this);
-    this.input.keyboard?.off('keydown-SPACE', this.handleConfirmInput, this);
-    this.input.keyboard?.off('keydown-ONE', this.handleSelectUpgradeOne, this);
-    this.input.keyboard?.off('keydown-TWO', this.handleSelectUpgradeTwo, this);
-    this.input.keyboard?.off('keydown-THREE', this.handleSelectUpgradeThree, this);
-    this.weaponIconFrames = [];
-    this.weaponIconTexts = [];
-    this.levelUpCards = [];
-    this.levelUpButtons = [];
-    this.levelUpDescriptions = [];
-    this.levelUpBadges = [];
+    this.input.keyboard?.off('keydown-ONE', this.handleChoiceOne, this);
+    this.input.keyboard?.off('keydown-TWO', this.handleChoiceTwo, this);
+    this.input.keyboard?.off('keydown-THREE', this.handleChoiceThree, this);
+    this.input.keyboard?.off('keydown-ENTER', this.handleEnter, this);
+    this.input.keyboard?.off('keydown-SPACE', this.handleEnter, this);
   }
 }
