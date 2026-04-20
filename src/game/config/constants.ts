@@ -10,8 +10,8 @@ export const PLAYER_HIT_INVULNERABILITY_MS = 700;
 export const PLAYER_HIT_FLASH_MS = 120;
 export const PLAYER_PICKUP_RANGE = 90;
 export const PLAYER_START_LEVEL = 1;
-export const PLAYER_START_XP_TO_NEXT_LEVEL = 18;
-export const PLAYER_XP_PER_LEVEL = 10;
+export const PLAYER_START_XP_TO_NEXT_LEVEL = 24;
+export const PLAYER_XP_PER_LEVEL = 12;
 
 export const ENEMY_SPAWN_INTERVAL_MS = 1000;
 export const RUN_TARGET_DURATION_MS = 420000;
