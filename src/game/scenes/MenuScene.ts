@@ -129,8 +129,14 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private chooseHero(heroId: HeroDefinition['id']): void {
+    console.log('clicked heroId =', heroId);
+  console.log('current selectedHero =', this.saveData.selectedHero);
+  console.log('current unlockedHeroes =', this.saveData.unlockedHeroes);
     const nextSave = selectHero(this.saveData, heroId);
+
+    console.log('selectHero returned =', nextSave);
     if (!nextSave) {
+      console.warn('hero selection rejected for heroId =', heroId);
       return;
     }
 
