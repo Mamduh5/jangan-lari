@@ -690,8 +690,24 @@ export class RunScene extends Phaser.Scene {
   private beginLevelUp(): void {
     this.isLevelingUp = true;
     this.physics.world.pause();
+
     this.currentRewardChoices = this.levelUpDirector.buildChoices(this.selectedHero.id, this.traitRuntime);
+
+    const validChoices = this.currentRewardChoices.filter(
+      (reward): reward is RewardDefinition => Boolean(reward),
+    );
+
+    if (validChoices.length === 0) {
+      this.currentRewardChoices = [];
+      this.isLevelingUp = false;
+      this.physics.world.resume();
+      this.publishHudState();
+      return;
+    }
+
+    this.currentRewardChoices = validChoices.slice(0, 3);
     this.publishHudState();
+
   }
 
   private applyReward(reward: RewardDefinition): void {
@@ -780,8 +796,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.endTitle', victory ? 'Victory' : 'Defeat');
     this.registry.set(
       'run.endSubtitle',
-      `${victory ? 'Held the line' : 'Run collapsed'} at ${Math.floor(this.runElapsedMs / 1000)}s.\nKills ${this.killCount}  |  Level ${this.player.getLevel()}  |  Gold +${reward}${
-        questResolution.rewardMessages.length > 0 ? `\n${questResolution.rewardMessages.join('\n')}` : ''
+      `${victory ? 'Held the line' : 'Run collapsed'} at ${Math.floor(this.runElapsedMs / 1000)}s.\nKills ${this.killCount}  |  Level ${this.player.getLevel()}  |  Gold +${reward}${questResolution.rewardMessages.length > 0 ? `\n${questResolution.rewardMessages.join('\n')}` : ''
       }`,
     );
     this.currentRewardChoices = [];

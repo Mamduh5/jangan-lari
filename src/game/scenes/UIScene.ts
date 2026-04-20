@@ -166,6 +166,32 @@ export class UIScene extends Phaser.Scene {
     const endActive = Boolean(this.registry.get('run.endActive'));
     const levelUpActive = Boolean(this.registry.get('run.levelUpActive'));
     const rewards = (this.registry.get('run.levelUpChoices') ?? []) as RewardDefinition[];
+    this.levelUpCards.forEach((card, index) => {
+      const reward = rewards[index];
+      const title = this.levelUpTitles[index];
+      const body = this.levelUpBodies[index];
+
+      if (!reward) {
+        card.setVisible(false);
+        card.disableInteractive();
+
+        title.setVisible(false);
+        title.setText('');
+
+        body.setVisible(false);
+        body.setText('');
+        return;
+      }
+
+      card.setVisible(true);
+      card.setInteractive({ useHandCursor: true });
+
+      title.setVisible(true);
+      title.setText(reward.title);
+
+      body.setVisible(true);
+      body.setText(reward.description);
+    });
 
     this.heroText.setText(heroName);
     this.hpBarRatio = Phaser.Math.Clamp(hp / maxHp, 0, 1);
