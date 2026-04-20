@@ -706,7 +706,7 @@ export class RunScene extends Phaser.Scene {
 
   private getSpawnIntervalMs(): number {
     const progress = Phaser.Math.Clamp(this.runElapsedMs / RUN_TARGET_DURATION_MS, 0, 1);
-    return Math.round(Phaser.Math.Linear(1600, ENEMY_SPAWN_INTERVAL_MS, progress));
+    return Math.round(Phaser.Math.Linear(2100, ENEMY_SPAWN_INTERVAL_MS, progress));
   }
 
   private spawnEnemy(archetype: EnemyArchetype, index: number, count: number): void {

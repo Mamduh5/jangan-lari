@@ -54,6 +54,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private hitReactionUntil = 0;
   private readonly responseProfile: EnemyCombatResponseProfile | null;
   private readonly responseScale = { x: 1, y: 1 };
+  private readonly markRing: Phaser.GameObjects.Arc;
+  private readonly markPip: Phaser.GameObjects.Arc;
   private deathPresentationActive = false;
   private eventMarkerColor: number | null = null;
   private markedUntil = 0;
@@ -84,6 +86,16 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
+
+    this.markRing = scene.add.circle(x, y, Math.round(archetype.size * 0.76), 0xfef08a, 0.08);
+    this.markRing.setDepth(this.depth - 0.2);
+    this.markRing.setStrokeStyle(2, 0xfef08a, 0.9);
+    this.markRing.setVisible(false);
+
+    this.markPip = scene.add.circle(x, y - archetype.size * 0.7, Math.max(4, Math.round(archetype.size * 0.16)), 0xfef08a, 1);
+    this.markPip.setDepth(this.depth + 0.2);
+    this.markPip.setStrokeStyle(2, 0xfffbeb, 0.95);
+    this.markPip.setVisible(false);
 
     const bodySize = Math.max(16, archetype.size - 6);
     this.body.setSize(bodySize, bodySize);
@@ -208,6 +220,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   }
 
   updatePresentation(currentTime: number): void {
+    this.syncMarkPresentation(currentTime);
+
     const velocity = this.body.velocity;
     if (velocity.lengthSq() > 0) {
       this.setAngle(Phaser.Math.RadToDeg(Math.atan2(velocity.y, velocity.x)) + 90);
@@ -587,10 +601,32 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   destroy(fromScene?: boolean): void {
     this.scene.tweens.killTweensOf(this);
     this.scene.tweens.killTweensOf(this.responseScale);
+    this.scene.tweens.killTweensOf(this.markRing);
+    this.scene.tweens.killTweensOf(this.markPip);
     this.responseScale.x = 1;
     this.responseScale.y = 1;
     this.deathPresentationActive = false;
     this.hitReactionUntil = 0;
+    this.markRing.destroy();
+    this.markPip.destroy();
     super.destroy(fromScene);
+  }
+
+  private syncMarkPresentation(currentTime: number): void {
+    const marked = this.isMarked(currentTime) && this.active;
+    this.markRing.setVisible(marked);
+    this.markPip.setVisible(marked);
+
+    if (!marked) {
+      return;
+    }
+
+    const pulse = 1 + Math.sin((currentTime + this.x) * 0.022) * 0.08;
+    this.markRing.setPosition(this.x, this.y);
+    this.markRing.setRadius(Math.round(this.archetype.size * 0.82 * pulse));
+    this.markRing.setAlpha(this.deathPresentationActive ? 0.28 : 0.5);
+    this.markPip.setPosition(this.x, this.y - this.archetype.size * 0.74);
+    this.markPip.setScale(1 + Math.sin((currentTime + this.y) * 0.026) * 0.12);
+    this.markPip.setAlpha(this.deathPresentationActive ? 0.45 : 1);
   }
 }

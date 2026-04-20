@@ -73,7 +73,7 @@ export class TraitRuntime {
   }
 
   getSignatureMarkedDamageMultiplier(): number {
-    return this.hasTrait('focused-breach') ? 1.45 : 1;
+    return this.hasTrait('focused-breach') ? 1.8 : 1.45;
   }
 
   getSignatureMarkedCooldownRefundMs(): number {

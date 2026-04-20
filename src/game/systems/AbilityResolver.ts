@@ -185,18 +185,33 @@ export class AbilityResolver {
       this.options.player.y,
       target.x,
       target.y,
-      ability.strokeColor,
+      consumedMark ? 0xfef08a : ability.strokeColor,
       0.95,
     );
-    line.setLineWidth(4, 4);
+    line.setLineWidth(consumedMark ? 7 : 4, consumedMark ? 7 : 4);
     line.setDepth(8);
     this.options.scene.tweens.add({
       targets: line,
       alpha: 0,
-      duration: 120,
+      duration: consumedMark ? 180 : 120,
       ease: 'Quad.Out',
       onComplete: () => line.destroy(),
     });
+
+    if (consumedMark) {
+      const burst = this.options.scene.add.circle(target.x, target.y, 12, 0xfef08a, 0.24).setDepth(9);
+      burst.setStrokeStyle(4, 0xfffbeb, 1);
+      this.options.scene.tweens.add({
+        targets: burst,
+        radius: 42,
+        alpha: 0,
+        duration: 180,
+        ease: 'Quad.Out',
+        onComplete: () => burst.destroy(),
+      });
+
+      this.options.scene.cameras.main.shake(70, 0.0022);
+    }
 
     return {
       used: true,

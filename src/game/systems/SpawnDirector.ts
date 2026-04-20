@@ -22,17 +22,17 @@ export type SpawnWaveResult = {
 
 const STAGES: StageRule[] = [
   {
-    untilMs: 75_000,
+    untilMs: 90_000,
     templates: [
       {
         id: 'space-pressure',
         label: 'Space Pressure',
-        wave: [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer],
+        wave: [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer],
       },
       {
         id: 'first-anchor',
         label: 'First Anchor',
-        wave: [ENEMY_ARCHETYPES.anchor, ENEMY_ARCHETYPES.swarmer],
+        wave: [ENEMY_ARCHETYPES.anchor],
       },
       {
         id: 'first-shots',

@@ -7,11 +7,16 @@ export class UIScene extends Phaser.Scene {
   private heroText!: Phaser.GameObjects.Text;
   private hpText!: Phaser.GameObjects.Text;
   private hpBarFill!: Phaser.GameObjects.Rectangle;
+  private hpBarFrame!: Phaser.GameObjects.Rectangle;
   private guardText!: Phaser.GameObjects.Text;
   private guardBarFill!: Phaser.GameObjects.Rectangle;
+  private guardBarFrame!: Phaser.GameObjects.Rectangle;
   private timerText!: Phaser.GameObjects.Text;
   private killsText!: Phaser.GameObjects.Text;
   private levelText!: Phaser.GameObjects.Text;
+  private xpText!: Phaser.GameObjects.Text;
+  private xpBarFill!: Phaser.GameObjects.Rectangle;
+  private xpBarFrame!: Phaser.GameObjects.Rectangle;
   private traitText!: Phaser.GameObjects.Text;
   private stateText!: Phaser.GameObjects.Text;
   private abilityTexts: Phaser.GameObjects.Text[] = [];
@@ -38,28 +43,43 @@ export class UIScene extends Phaser.Scene {
     this.levelUpBodies = [];
     this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
 
-    this.add.rectangle(28, 18, 320, 118, 0x030712, 0.9).setOrigin(0).setScrollFactor(0).setStrokeStyle(1, 0x334155, 0.95);
+    this.add.rectangle(28, 18, 320, 150, 0x030712, 0.9).setOrigin(0).setScrollFactor(0).setStrokeStyle(1, 0x334155, 0.95);
     this.heroText = this.add.text(42, 30, '--', {
       fontFamily: 'Trebuchet MS, sans-serif',
       fontSize: '24px',
       color: '#f8fafc',
     }).setScrollFactor(0);
 
+    this.hpBarFrame = this.add.rectangle(42, 70, 240, 18, 0x172033, 0.98).setOrigin(0, 0.5).setScrollFactor(0).setStrokeStyle(1, 0x475569, 0.95);
     this.hpBarFill = this.add.rectangle(42, 70, 0, 12, 0xf87171, 1).setOrigin(0, 0.5).setScrollFactor(0);
-    this.add.rectangle(42, 70, 240, 18, 0x172033, 0.98).setOrigin(0, 0.5).setScrollFactor(0).setStrokeStyle(1, 0x475569, 0.95);
     this.hpText = this.add.text(42, 82, 'HP --/--', {
       fontFamily: 'Trebuchet MS, sans-serif',
       fontSize: '13px',
       color: '#fecaca',
     }).setScrollFactor(0);
 
+    this.guardBarFrame = this.add.rectangle(42, 104, 240, 16, 0x241b0c, 0.98).setOrigin(0, 0.5).setScrollFactor(0).setStrokeStyle(1, 0x7c5c1f, 0.95);
     this.guardBarFill = this.add.rectangle(42, 104, 0, 10, 0xfbbf24, 1).setOrigin(0, 0.5).setScrollFactor(0);
-    this.add.rectangle(42, 104, 240, 16, 0x241b0c, 0.98).setOrigin(0, 0.5).setScrollFactor(0).setStrokeStyle(1, 0x7c5c1f, 0.95);
     this.guardText = this.add.text(42, 114, 'Guard --/--', {
       fontFamily: 'Trebuchet MS, sans-serif',
       fontSize: '13px',
       color: '#fde68a',
     }).setScrollFactor(0);
+
+    this.xpBarFrame = this.add.rectangle(42, 136, 240, 16, 0x10233f, 0.98).setOrigin(0, 0.5).setScrollFactor(0).setStrokeStyle(1, 0x60a5fa, 0.95);
+    this.xpBarFill = this.add.rectangle(42, 136, 0, 10, 0x38bdf8, 1).setOrigin(0, 0.5).setScrollFactor(0);
+    this.xpText = this.add.text(42, 146, 'XP 0/0', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '13px',
+      color: '#bfdbfe',
+    }).setScrollFactor(0);
+
+    this.hpBarFill.setDepth(11);
+    this.hpBarFrame.setDepth(12);
+    this.guardBarFill.setDepth(11);
+    this.guardBarFrame.setDepth(12);
+    this.xpBarFill.setDepth(11);
+    this.xpBarFrame.setDepth(12);
 
     this.timerText = this.add.text(GAME_WIDTH / 2, 28, '00:00', {
       fontFamily: 'Georgia, serif',
@@ -133,6 +153,8 @@ export class UIScene extends Phaser.Scene {
     const targetMs = Math.max(1, Number(this.registry.get('run.targetMs') ?? 1));
     const kills = Number(this.registry.get('run.kills') ?? 0);
     const level = Number(this.registry.get('run.level') ?? 1);
+    const xp = Number(this.registry.get('run.xp') ?? 0);
+    const xpNext = Math.max(1, Number(this.registry.get('run.xpNext') ?? 1));
     const heroName = String(this.registry.get('run.heroName') ?? '--');
     const markedEnemies = Number(this.registry.get('run.markedEnemies') ?? 0);
     const stateLabel = String(this.registry.get('run.stateLabel') ?? '');
@@ -147,6 +169,8 @@ export class UIScene extends Phaser.Scene {
     this.hpText.setText(`HP ${Math.max(0, Math.round(hp))}/${Math.round(maxHp)}`);
     this.guardBarFill.setSize(240 * Phaser.Math.Clamp(guard / maxGuard, 0, 1), 10);
     this.guardText.setText(`Guard ${Math.max(0, Math.round(guard))}/${Math.round(maxGuard)}`);
+    this.xpBarFill.setSize(240 * Phaser.Math.Clamp(xp / xpNext, 0, 1), 10);
+    this.xpText.setText(`XP ${Math.round(xp)}/${Math.round(xpNext)}`);
     this.timerText.setText(`${this.formatTime(elapsedMs)} / ${this.formatTime(targetMs)}`);
     this.killsText.setText(`Kills ${kills}`);
     this.levelText.setText(`LV ${level}`);
