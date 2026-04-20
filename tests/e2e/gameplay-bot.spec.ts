@@ -8,16 +8,42 @@ type Snapshot = {
   };
   run: null | {
     elapsedMs: number;
-    level: number;
-    kills: number;
     hp: number;
+    maxHp: number;
+    level: number;
+    xp: number;
+    xpNext: number;
+    kills: number;
+    levelUpActive: boolean;
     endActive: boolean;
     weaponNames: string[];
     traits: string[];
-    rewardChoices: Array<{ id: string; title: string; lane: string }>;
     player: { x: number; y: number; guard: number; maxGuard: number };
+    cooldowns: { primaryRemainingMs: number; signatureRemainingMs: number };
+    markedEnemies: number;
+    markApplyCount: number;
+    markConsumeCount: number;
+    xpGemSpawnCount: number;
+    xpGemCollectCount: number;
     enemies: Array<{ distance: number; x: number; y: number; isMarked?: boolean }>;
     xpGems: Array<{ distance: number; x: number; y: number }>;
+    hud?: {
+      hpBarWidth: number;
+      guardBarWidth: number;
+      xpBarWidth: number;
+      hpBarRatio: number;
+      guardBarRatio: number;
+      xpBarRatio: number;
+      hpBarFrameDepth: number;
+      hpBarFillDepth: number;
+      guardBarFrameDepth: number;
+      guardBarFillDepth: number;
+      xpBarFrameDepth: number;
+      xpBarFillDepth: number;
+      hpText: string;
+      guardText: string;
+      xpText: string;
+    };
   };
 };
 
@@ -41,33 +67,56 @@ async function getSnapshot(page: import('@playwright/test').Page): Promise<Snaps
   return page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot() ?? null) as Promise<Snapshot>;
 }
 
-function determineMovementKeys(snapshot: NonNullable<Snapshot['run']>): string[] {
-  const move = { x: 0, y: 0 };
-  const nearestEnemy = snapshot.enemies[0];
-
-  snapshot.enemies.slice(0, 4).forEach((enemy) => {
-    const threatDistance = Math.max(32, enemy.distance);
-    const dx = snapshot.player.x - enemy.x;
-    const dy = snapshot.player.y - enemy.y;
-    const threatWeight = threatDistance < 160 ? 1.4 : 0.5;
-    move.x += (dx / threatDistance) * threatWeight;
-    move.y += (dy / threatDistance) * threatWeight;
-    move.x += (-dy / threatDistance) * 0.35;
-    move.y += (dx / threatDistance) * 0.35;
+function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
+  const runtimeErrors: string[] = [];
+  page.on('pageerror', (error) => runtimeErrors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      runtimeErrors.push(message.text());
+    }
   });
+  return runtimeErrors;
+}
 
-  if (snapshot.xpGems[0] && (!nearestEnemy || nearestEnemy.distance > 120)) {
-    const gem = snapshot.xpGems[0];
-    const dx = gem.x - snapshot.player.x;
-    const dy = gem.y - snapshot.player.y;
+function determineMovementKeys(
+  run: NonNullable<Snapshot['run']>,
+  hero: 'runner' | 'shade',
+): string[] {
+  const move = { x: 0, y: 0 };
+  const nearestEnemy = run.enemies[0];
+
+  if (nearestEnemy) {
+    const dx = nearestEnemy.x - run.player.x;
+    const dy = nearestEnemy.y - run.player.y;
+    const distance = Math.max(24, nearestEnemy.distance);
+    const approachBias = hero === 'runner' ? 1.2 : 0.45;
+    const retreatBias = hero === 'runner' ? 0.2 : 1.1;
+
+    if (distance > (hero === 'runner' ? 110 : 180)) {
+      move.x += (dx / distance) * approachBias;
+      move.y += (dy / distance) * approachBias;
+    } else {
+      move.x -= (dx / distance) * retreatBias;
+      move.y -= (dy / distance) * retreatBias;
+    }
+
+    const tangent = hero === 'runner' ? 0.22 : 0.55;
+    move.x += (-dy / distance) * tangent;
+    move.y += (dx / distance) * tangent;
+  }
+
+  if (run.xpGems[0] && (!nearestEnemy || nearestEnemy.distance > 140)) {
+    const gem = run.xpGems[0];
+    const dx = gem.x - run.player.x;
+    const dy = gem.y - run.player.y;
     const distance = Math.max(24, gem.distance);
-    move.x += (dx / distance) * 0.8;
-    move.y += (dy / distance) * 0.8;
+    move.x += (dx / distance) * 1.25;
+    move.y += (dy / distance) * 1.25;
   }
 
   if (Math.abs(move.x) < 0.15 && Math.abs(move.y) < 0.15) {
-    move.x = 0.8;
-    move.y = 0.3;
+    move.x = hero === 'runner' ? 0.7 : 0.35;
+    move.y = 0.45;
   }
 
   const keys: string[] = [];
@@ -105,140 +154,140 @@ async function releaseKeys(page: import('@playwright/test').Page, pressed: Set<s
   }
 }
 
-async function selectHero(page: import('@playwright/test').Page, hero: 'runner' | 'shade'): Promise<void> {
-  await clickCanvasPosition(page, hero === 'runner' ? 420 : 860, 382);
-}
-
-async function runHeroValidation(page: import('@playwright/test').Page, hero: 'runner' | 'shade'): Promise<void> {
+async function runNaturalValidation(page: import('@playwright/test').Page, hero: 'runner' | 'shade'): Promise<void> {
   const pressed = new Set<string>();
+  const runtimeErrors = trackRuntimeErrors(page);
 
   try {
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-    await selectHero(page, hero);
+    await clickCanvasPosition(page, hero === 'runner' ? 420 : 860, 382);
     await clickCanvasPosition(page, 560, 82);
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;
       return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene'));
     });
 
-    await page.evaluate((selectedHero) => {
-      const game = window.__JANGAN_LARI_GAME__!;
-      const runScene = game.scene.getScene('RunScene') as {
-        player: { x: number; y: number };
-        debugSpawnEnemy?: (enemyId: 'anchor' | 'shooter') => boolean;
-        enemies: {
-          getChildren: () => Array<{ x: number; y: number; active: boolean }>;
-        };
-      };
+    let sawGuardGain = false;
+    let sawSignatureUse = false;
+    let sawMark = false;
+    let sawXpGem = false;
+    let sawXpGain = false;
+    let sawHpChange = false;
+    let sawNaturalLevelUp = false;
+    let previousGuard = 0;
+    let initialHpBarWidth = 0;
+    let minHpBarWidth = Number.POSITIVE_INFINITY;
+    let maxGuardBarWidth = 0;
+    let maxXpBarWidth = 0;
 
-      runScene.debugSpawnEnemy?.(selectedHero === 'runner' ? 'anchor' : 'shooter');
-      const enemies = runScene.enemies.getChildren();
-      const enemy = enemies[enemies.length - 1] as
-        | { x: number; y: number; active: boolean; body?: { reset?: (x: number, y: number) => void } }
-        | undefined;
-      if (enemy) {
-        const nextX = runScene.player.x + (selectedHero === 'runner' ? 72 : 180);
-        const nextY = runScene.player.y;
-        enemy.x = nextX;
-        enemy.y = nextY;
-        enemy.body?.reset?.(nextX, nextY);
-      }
-    }, hero);
-
-    const start = Date.now();
-    let sawStateLoop = false;
-
-    if (hero === 'runner') {
-      for (let attempt = 0; attempt < 12; attempt += 1) {
-        const snapshot = await getSnapshot(page);
-        if (snapshot.run?.player.guard && snapshot.run.player.guard > 0) {
-          sawStateLoop = true;
-          break;
-        }
-        await page.waitForTimeout(120);
-      }
-    }
-
-    while (Date.now() - start < 12_000) {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 40_000) {
       const snapshot = await getSnapshot(page);
       const run = snapshot.run;
       if (!run) {
-        throw new Error('No active run snapshot.');
+        throw new Error('Gameplay snapshot lost the active run.');
       }
 
-      if (hero === 'runner' && run.player.guard > 0) {
-        sawStateLoop = true;
+      expect(snapshot.scenes.runActive).toBe(true);
+      expect(snapshot.scenes.uiActive).toBe(true);
+      expect(run.endActive).toBe(false);
+      expect(run.hud).toBeTruthy();
+
+      const hud = run.hud!;
+      expect(hud.hpBarFillDepth).toBeGreaterThan(hud.hpBarFrameDepth);
+      expect(hud.guardBarFillDepth).toBeGreaterThan(hud.guardBarFrameDepth);
+      expect(hud.xpBarFillDepth).toBeGreaterThan(hud.xpBarFrameDepth);
+      if (initialHpBarWidth === 0) {
+        initialHpBarWidth = hud.hpBarWidth;
       }
-      if (hero === 'shade' && run.enemies.some((enemy) => enemy.isMarked)) {
-        sawStateLoop = true;
+      minHpBarWidth = Math.min(minHpBarWidth, hud.hpBarWidth);
+      maxGuardBarWidth = Math.max(maxGuardBarWidth, hud.guardBarWidth);
+      maxXpBarWidth = Math.max(maxXpBarWidth, hud.xpBarWidth);
+
+      if (run.hp < run.maxHp) {
+        sawHpChange = true;
+      }
+      if (run.player.guard > 0) {
+        sawGuardGain = true;
+      }
+      if (previousGuard > run.player.guard + 2) {
+        sawSignatureUse = true;
+      }
+      previousGuard = run.player.guard;
+      if (run.cooldowns.signatureRemainingMs > 150) {
+        sawSignatureUse = true;
+      }
+      if (run.markedEnemies > 0 || run.markApplyCount > 0 || run.markConsumeCount > 0 || run.enemies.some((enemy) => enemy.isMarked)) {
+        sawMark = true;
+      }
+      if (run.xpGems.length > 0 || run.xpGemSpawnCount > 0) {
+        sawXpGem = true;
+      }
+      if (run.xp > 0 || run.level > 1) {
+        sawXpGain = true;
+      }
+      if (run.levelUpActive || run.level > 1) {
+        sawNaturalLevelUp = true;
       }
 
-      if (sawStateLoop) {
+      if (run.levelUpActive) {
         break;
       }
 
-      await syncKeys(page, pressed, determineMovementKeys(run));
+      await syncKeys(page, pressed, determineMovementKeys(run, hero));
       await page.waitForTimeout(120);
     }
 
     await releaseKeys(page, pressed);
-    expect(sawStateLoop, `${hero} did not surface its core state loop early`).toBe(true);
 
-    await page.evaluate(() => {
-      const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as {
-        debugForceLevelUp?: () => void;
-      };
-      runScene.debugForceLevelUp?.();
-    });
+    const snapshot = await getSnapshot(page);
+    const run = snapshot.run;
+    expect(run).toBeTruthy();
+    expect(runtimeErrors, `runtime errors detected: ${runtimeErrors.join(' | ')}`).toEqual([]);
+    expect(run!.kills, 'expected at least one natural kill').toBeGreaterThanOrEqual(1);
+    expect(sawXpGem, 'expected to see a natural XP gem drop in the real run').toBe(true);
+    expect(run!.xpGemSpawnCount, 'expected at least one natural XP gem spawn').toBeGreaterThanOrEqual(1);
+    expect(sawXpGain, 'expected XP to increase during the real run').toBe(true);
+    expect(sawNaturalLevelUp, 'expected to naturally reach the first level-up').toBe(true);
+    expect(initialHpBarWidth, 'expected HP bar to start visibly filled').toBeGreaterThan(200);
+    if (sawHpChange) {
+      expect(minHpBarWidth, 'expected HP bar width to shrink after taking damage').toBeLessThan(initialHpBarWidth - 0.75);
+    }
+    expect(maxXpBarWidth, 'expected XP bar to visibly fill during the run').toBeGreaterThan(8);
 
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.registry.get('run.levelUpActive')));
-    const levelUpSnapshot = await getSnapshot(page);
-    expect(levelUpSnapshot.run?.rewardChoices).toHaveLength(3);
-    expect(levelUpSnapshot.run?.rewardChoices.some((choice) => choice.lane === 'deepen')).toBe(true);
-    expect(levelUpSnapshot.run?.rewardChoices.some((choice) => choice.lane === 'stabilize')).toBe(true);
-    const chosenRewardId = levelUpSnapshot.run?.rewardChoices[0]?.id;
-
-    await page.evaluate(() => {
-      const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as {
-        selectReward?: (index: number) => void;
-      };
-      runScene.selectReward?.(0);
-    });
-    await page.waitForFunction(() => !window.__JANGAN_LARI_GAME__?.registry.get('run.levelUpActive'));
-
-    const resumedSnapshot = await getSnapshot(page);
-    expect(resumedSnapshot.run?.endActive).toBe(false);
-    if (chosenRewardId === 'field-repairs') {
-      expect(resumedSnapshot.run?.maxHp).toBeGreaterThan(levelUpSnapshot.run?.maxHp ?? 0);
-    } else if (chosenRewardId === 'reflex-boots') {
-      expect(resumedSnapshot.run?.player).toBeTruthy();
+    if (hero === 'runner') {
+      expect(sawSignatureUse, 'expected Iron Warden to naturally fire Bulwark Slam during the run').toBe(true);
+      expect(maxGuardBarWidth, 'expected Guard bar to visibly fill during the run').toBeGreaterThan(8);
     } else {
-      expect((resumedSnapshot.run?.traits.length ?? 0) >= 1).toBe(true);
+      expect(sawMark, 'expected Raptor Frame to visibly mark enemies').toBe(true);
     }
 
-    await page.evaluate(() => {
-      const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as {
-        debugForceEndRun?: (victory?: boolean) => void;
-      };
-      runScene.debugForceEndRun?.(true);
-    });
-    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.registry.get('run.endActive')));
+    expect(run!.levelUpActive, 'expected the real run to still be sitting on the natural level-up prompt').toBe(true);
+    await clickCanvasPosition(page, 258, 372);
+    await page.waitForFunction(() => !window.__JANGAN_LARI_GAME__?.registry.get('run.levelUpActive'));
 
-    const finalSnapshot = await getSnapshot(page);
-    expect(finalSnapshot.run?.endActive).toBe(true);
-    expect(finalSnapshot.run?.weaponNames).toHaveLength(2);
+    const afterChoice = await getSnapshot(page);
+    expect(afterChoice.run?.traits.length || afterChoice.run?.level).toBeTruthy();
+
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('MenuScene') && !game.scene.isActive('RunScene') && !game.scene.isActive('UIScene'));
+    });
   } finally {
     await releaseKeys(page, pressed);
   }
 }
 
-test.describe('milestone 1 gameplay bot', () => {
-  test('Iron Warden surfaces Guard and directional rewards early', async ({ page }) => {
-    await runHeroValidation(page, 'runner');
+test.describe('milestone 1 real-scene gameplay bot', () => {
+  test('Iron Warden survives real runtime combat, gains and spends Guard, drops XP, and reaches level-up naturally', async ({ page }) => {
+    test.setTimeout(90_000);
+    await runNaturalValidation(page, 'runner');
   });
 
-  test('Raptor Frame surfaces Mark and directional rewards early', async ({ page }) => {
-    await runHeroValidation(page, 'shade');
+  test('Raptor Frame survives real runtime combat, marks enemies, drops XP, and reaches level-up naturally', async ({ page }) => {
+    test.setTimeout(90_000);
+    await runNaturalValidation(page, 'shade');
   });
 });

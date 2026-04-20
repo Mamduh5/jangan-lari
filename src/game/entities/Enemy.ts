@@ -557,7 +557,25 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   private playDeathResponse(impactPoint?: { x: number; y: number }): void {
     if (!this.responseProfile) {
-      this.destroyEnemy();
+      this.deathPresentationActive = true;
+      this.pendingAttackSignal = null;
+      if (this.body) {
+        this.body.stop();
+        this.body.enable = false;
+      }
+      this.setFillStyle(0xffffff);
+      this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffffff, 1);
+      this.scene.tweens.add({
+        targets: this,
+        alpha: 0.16,
+        duration: 96,
+        ease: 'Quad.Out',
+      });
+      this.scene.time.delayedCall(120, () => {
+        if (this.active) {
+          this.destroyEnemy();
+        }
+      });
       return;
     }
 

@@ -108,9 +108,9 @@ export class AbilityResolver {
     const damageBonus = Math.round(spentGuard * 1.2);
 
     for (const enemy of targets) {
-      enemy.takeDamage(ability.damage + damageBonus, { x: this.options.player.x, y: this.options.player.y });
+      const killed = enemy.takeDamage(ability.damage + damageBonus, { x: this.options.player.x, y: this.options.player.y });
       const knockback = new Phaser.Math.Vector2(enemy.x - this.options.player.x, enemy.y - this.options.player.y);
-      if (knockback.lengthSq() > 0) {
+      if (!killed && enemy.active && enemy.body && knockback.lengthSq() > 0) {
         knockback.normalize().scale(180 + spentGuard * 5);
         enemy.body.setVelocity(knockback.x, knockback.y);
       }

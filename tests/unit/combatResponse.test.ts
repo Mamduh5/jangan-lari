@@ -10,6 +10,9 @@ import {
 
 describe('combat response helpers', () => {
   test('profiles cover the current roster plus encounter enemies with distinct authored tuning', () => {
+    expect(getEnemyCombatResponseProfile('swarmer')).not.toBeNull();
+    expect(getEnemyCombatResponseProfile('shooter')).not.toBeNull();
+    expect(getEnemyCombatResponseProfile('anchor')).not.toBeNull();
     expect(getEnemyCombatResponseProfile('scuttler')).not.toBeNull();
     expect(getEnemyCombatResponseProfile('skimmer')).not.toBeNull();
     expect(getEnemyCombatResponseProfile('harrier')).not.toBeNull();

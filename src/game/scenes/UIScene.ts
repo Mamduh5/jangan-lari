@@ -17,6 +17,9 @@ export class UIScene extends Phaser.Scene {
   private xpText!: Phaser.GameObjects.Text;
   private xpBarFill!: Phaser.GameObjects.Rectangle;
   private xpBarFrame!: Phaser.GameObjects.Rectangle;
+  private hpBarRatio = 0;
+  private guardBarRatio = 0;
+  private xpBarRatio = 0;
   private traitText!: Phaser.GameObjects.Text;
   private stateText!: Phaser.GameObjects.Text;
   private abilityTexts: Phaser.GameObjects.Text[] = [];
@@ -74,12 +77,12 @@ export class UIScene extends Phaser.Scene {
       color: '#bfdbfe',
     }).setScrollFactor(0);
 
+    this.hpBarFrame.setDepth(10);
     this.hpBarFill.setDepth(11);
-    this.hpBarFrame.setDepth(12);
+    this.guardBarFrame.setDepth(10);
     this.guardBarFill.setDepth(11);
-    this.guardBarFrame.setDepth(12);
+    this.xpBarFrame.setDepth(10);
     this.xpBarFill.setDepth(11);
-    this.xpBarFrame.setDepth(12);
 
     this.timerText = this.add.text(GAME_WIDTH / 2, 28, '00:00', {
       fontFamily: 'Georgia, serif',
@@ -165,11 +168,14 @@ export class UIScene extends Phaser.Scene {
     const rewards = (this.registry.get('run.levelUpChoices') ?? []) as RewardDefinition[];
 
     this.heroText.setText(heroName);
-    this.hpBarFill.setSize(240 * Phaser.Math.Clamp(hp / maxHp, 0, 1), 12);
+    this.hpBarRatio = Phaser.Math.Clamp(hp / maxHp, 0, 1);
+    this.guardBarRatio = Phaser.Math.Clamp(guard / maxGuard, 0, 1);
+    this.xpBarRatio = Phaser.Math.Clamp(xp / xpNext, 0, 1);
+    this.hpBarFill.setSize(240 * this.hpBarRatio, 12);
     this.hpText.setText(`HP ${Math.max(0, Math.round(hp))}/${Math.round(maxHp)}`);
-    this.guardBarFill.setSize(240 * Phaser.Math.Clamp(guard / maxGuard, 0, 1), 10);
+    this.guardBarFill.setSize(240 * this.guardBarRatio, 10);
     this.guardText.setText(`Guard ${Math.max(0, Math.round(guard))}/${Math.round(maxGuard)}`);
-    this.xpBarFill.setSize(240 * Phaser.Math.Clamp(xp / xpNext, 0, 1), 10);
+    this.xpBarFill.setSize(240 * this.xpBarRatio, 10);
     this.xpText.setText(`XP ${Math.round(xp)}/${Math.round(xpNext)}`);
     this.timerText.setText(`${this.formatTime(elapsedMs)} / ${this.formatTime(targetMs)}`);
     this.killsText.setText(`Kills ${kills}`);
@@ -323,5 +329,41 @@ export class UIScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-THREE', this.handleChoiceThree, this);
     this.input.keyboard?.off('keydown-ENTER', this.handleEnter, this);
     this.input.keyboard?.off('keydown-SPACE', this.handleEnter, this);
+  }
+
+  getDebugHudSnapshot(): {
+    hpBarWidth: number;
+    guardBarWidth: number;
+    xpBarWidth: number;
+    hpBarRatio: number;
+    guardBarRatio: number;
+    xpBarRatio: number;
+    hpBarFrameDepth: number;
+    hpBarFillDepth: number;
+    guardBarFrameDepth: number;
+    guardBarFillDepth: number;
+    xpBarFrameDepth: number;
+    xpBarFillDepth: number;
+    hpText: string;
+    guardText: string;
+    xpText: string;
+  } {
+    return {
+      hpBarWidth: this.hpBarFill.displayWidth,
+      guardBarWidth: this.guardBarFill.displayWidth,
+      xpBarWidth: this.xpBarFill.displayWidth,
+      hpBarRatio: this.hpBarRatio,
+      guardBarRatio: this.guardBarRatio,
+      xpBarRatio: this.xpBarRatio,
+      hpBarFrameDepth: this.hpBarFrame.depth,
+      hpBarFillDepth: this.hpBarFill.depth,
+      guardBarFrameDepth: this.guardBarFrame.depth,
+      guardBarFillDepth: this.guardBarFill.depth,
+      xpBarFrameDepth: this.xpBarFrame.depth,
+      xpBarFillDepth: this.xpBarFill.depth,
+      hpText: this.hpText.text,
+      guardText: this.guardText.text,
+      xpText: this.xpText.text,
+    };
   }
 }

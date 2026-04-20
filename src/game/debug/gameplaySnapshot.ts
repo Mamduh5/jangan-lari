@@ -51,6 +51,8 @@ export type GameplayBotRunSnapshot = {
   hp: number;
   maxHp: number;
   level: number;
+  xp: number;
+  xpNext: number;
   kills: number;
   weaponCount: number;
   goldEarned: number;
@@ -67,6 +69,15 @@ export type GameplayBotRunSnapshot = {
     guard: number;
     maxGuard: number;
   };
+  cooldowns: {
+    primaryRemainingMs: number;
+    signatureRemainingMs: number;
+  };
+  markedEnemies: number;
+  markApplyCount: number;
+  markConsumeCount: number;
+  xpGemSpawnCount: number;
+  xpGemCollectCount: number;
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
@@ -85,6 +96,23 @@ export type GameplayBotRunSnapshot = {
     hitStopActive: boolean;
     weaponImpactCounts: Partial<Record<WeaponId, number>>;
     enemyImpactCounts: Partial<Record<EnemyArchetypeId, number>>;
+  };
+  hud?: {
+    hpBarWidth: number;
+    guardBarWidth: number;
+    xpBarWidth: number;
+    hpBarRatio: number;
+    guardBarRatio: number;
+    xpBarRatio: number;
+    hpBarFrameDepth: number;
+    hpBarFillDepth: number;
+    guardBarFrameDepth: number;
+    guardBarFillDepth: number;
+    xpBarFrameDepth: number;
+    xpBarFillDepth: number;
+    hpText: string;
+    guardText: string;
+    xpText: string;
   };
 };
 
@@ -122,6 +150,12 @@ export function createGameplayDebugHandle(game: Phaser.Game): GameplayDebugHandl
           getGameplayBotSnapshot?: () => GameplayBotRunSnapshot;
         };
         run = runScene.getGameplayBotSnapshot?.() ?? null;
+        if (run && scenes.uiActive) {
+          const uiScene = game.scene.getScene('UIScene') as {
+            getDebugHudSnapshot?: () => GameplayBotRunSnapshot['hud'];
+          };
+          run.hud = uiScene.getDebugHudSnapshot?.();
+        }
       }
 
       return {

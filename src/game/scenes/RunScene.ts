@@ -67,7 +67,11 @@ export class RunScene extends Phaser.Scene {
   private nextSpawnAtMs = 0;
   private currentRewardChoices: RewardDefinition[] = [];
   private markedEnemyCount = 0;
+  private markApplyCount = 0;
+  private markConsumeCount = 0;
   private goldEarned = 0;
+  private xpGemSpawnCount = 0;
+  private xpGemCollectCount = 0;
 
   private readonly handlePageVisibilityChange = (): void => {
     if (document.hidden && !this.isEnded && !this.isLevelingUp) {
@@ -93,7 +97,11 @@ export class RunScene extends Phaser.Scene {
     this.currentRewardChoices = [];
     this.enemyBolts = [];
     this.markedEnemyCount = 0;
+    this.markApplyCount = 0;
+    this.markConsumeCount = 0;
     this.goldEarned = 0;
+    this.xpGemSpawnCount = 0;
+    this.xpGemCollectCount = 0;
 
     this.cameras.main.setBackgroundColor('#111827');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -344,6 +352,8 @@ export class RunScene extends Phaser.Scene {
       hp: this.player.getCurrentHealth(),
       maxHp: this.player.getMaxHealth(),
       level: this.player.getLevel(),
+      xp: this.player.getExperience(),
+      xpNext: this.player.getExperienceToNextLevel(),
       kills: this.killCount,
       weaponCount: 2,
       goldEarned: this.goldEarned,
@@ -366,6 +376,15 @@ export class RunScene extends Phaser.Scene {
         guard: this.combatStates.getGuard(),
         maxGuard: this.combatStates.getMaxGuard(),
       },
+      cooldowns: {
+        primaryRemainingMs: this.abilityLoadout.getRemainingCooldownMs('primary', this.time.now),
+        signatureRemainingMs: this.abilityLoadout.getRemainingCooldownMs('signature', this.time.now),
+      },
+      markedEnemies: this.markedEnemyCount,
+      markApplyCount: this.markApplyCount,
+      markConsumeCount: this.markConsumeCount,
+      xpGemSpawnCount: this.xpGemSpawnCount,
+      xpGemCollectCount: this.xpGemCollectCount,
       enemies,
       xpGems,
       upgradeChoices: this.currentRewardChoices.map((reward) => ({
@@ -458,7 +477,7 @@ export class RunScene extends Phaser.Scene {
 
     const signature = this.abilityLoadout.getAbility('signature');
     if (signature && this.abilityLoadout.canUse('signature', currentTime)) {
-      if (this.selectedHero.id === 'runner' && this.combatStates.getGuard() < 10) {
+      if (this.selectedHero.id === 'runner' && this.combatStates.getGuard() < 6) {
         return;
       }
 
@@ -466,6 +485,7 @@ export class RunScene extends Phaser.Scene {
       if (result.used) {
         this.abilityLoadout.commitUse('signature', currentTime);
         if (result.signatureHit?.consumedMark) {
+          this.markConsumeCount += 1;
           this.abilityLoadout.reduceCooldown(
             'signature',
             this.traitRuntime.getSignatureMarkedCooldownRefundMs(),
@@ -586,6 +606,7 @@ export class RunScene extends Phaser.Scene {
     if (sourceAbilityId === 'seeker-burst') {
       const markDuration = this.traitRuntime.getMarkDurationMs(getAbilityDefinition('seeker-burst').markDurationMs ?? 1600);
       this.combatStates.applyMark(enemy, currentTime, markDuration);
+      this.markApplyCount += 1;
     }
 
     projectile.deactivate();
@@ -624,6 +645,7 @@ export class RunScene extends Phaser.Scene {
     const value = gem.getValue();
     gem.playCollectFeedback();
     gem.destroy();
+    this.xpGemCollectCount += 1;
     this.handleExperienceGain(value);
   }
 
@@ -656,6 +678,7 @@ export class RunScene extends Phaser.Scene {
     }
     const gem = new XPGem(this, enemy.x, enemy.y, enemy.getXpValue());
     this.xpGems.add(gem);
+    this.xpGemSpawnCount += 1;
   }
 
   private refreshMarkedEnemyCount(currentTime: number): void {
