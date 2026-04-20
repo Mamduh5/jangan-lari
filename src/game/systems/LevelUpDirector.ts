@@ -14,7 +14,16 @@ export class LevelUpDirector {
   ): RewardDefinition[] {
     const selectedTraits = new Set(traitRuntime.getSelectedTraitIds());
     const hasSupportAbility = Boolean(options?.hasSupportAbility);
-    const applyShuffle = options?.shuffle ?? ((items) => [...items]);
+    const applyShuffle =
+      options?.shuffle ??
+      ((items) => {
+        const copy = [...items];
+        for (let i = copy.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        return copy;
+      });
 
     const alignedTraits = applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter(
@@ -37,26 +46,31 @@ export class LevelUpDirector {
       ),
     );
 
-    const supportRewards = hasSupportAbility
-      ? []
-      : applyShuffle(
-          [
-            ...Object.values(REWARD_DEFINITIONS).filter(
-              (reward) =>
-                reward.category === 'support' &&
-                reward.abilityId &&
-                (reward.heroBias === heroId || reward.heroBias === 'shared'),
-            ),
-            ...Object.values(REWARD_DEFINITIONS).filter(
-              (reward) =>
-                reward.category === 'support' &&
-                reward.abilityId,
-            ),
-          ],
-        );
-    const supportChoice = supportRewards.find(
-      (reward, index, rewards) => rewards.findIndex((candidate) => candidate.id === reward.id) === index,
+    const preferredSupportRewards = Object.values(REWARD_DEFINITIONS).filter(
+      (reward) =>
+        reward.category === 'support' &&
+        reward.abilityId &&
+        (reward.heroBias === heroId || reward.heroBias === 'shared'),
     );
+
+    const otherSupportRewards = Object.values(REWARD_DEFINITIONS).filter(
+      (reward) =>
+        reward.category === 'support' &&
+        reward.abilityId &&
+        reward.heroBias !== heroId &&
+        reward.heroBias !== 'shared',
+    );
+
+    const supportPool = hasSupportAbility
+      ? []
+      : applyShuffle([
+        ...preferredSupportRewards,
+        ...preferredSupportRewards, // explicit extra weight
+        ...preferredSupportRewards, // explicit extra weight
+        ...otherSupportRewards,
+      ]);
+
+    const supportChoice = supportPool[0];
 
     const stabilizers = applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter((reward) => reward.category === 'stabilizer'),
