@@ -7,21 +7,26 @@ describe('milestone 1 runtime helpers', () => {
   test('level up director gives directional offers for Iron Warden', () => {
     const director = new LevelUpDirector();
     const traits = new TraitRuntime();
-    const choices = director.buildChoices('runner', traits, <T>(items: T[]) => [...items]);
+    const choices = director.buildChoices('runner', traits, {
+      shuffle: <T>(items: T[]) => [...items],
+    });
 
     expect(choices).toHaveLength(3);
     expect(choices.some((choice) => choice.id === 'close-guard' || choice.id === 'steadfast-posture')).toBe(true);
+    expect(choices.some((choice) => choice.id === 'shock-lattice')).toBe(true);
     expect(choices.some((choice) => choice.lane === 'stabilize')).toBe(true);
   });
 
   test('level up director gives Raptor Frame a mark path plus a bridge option', () => {
     const director = new LevelUpDirector();
     const traits = new TraitRuntime();
-    const choices = director.buildChoices('shade', traits, <T>(items: T[]) => [...items]);
+    const choices = director.buildChoices('shade', traits, {
+      shuffle: <T>(items: T[]) => [...items],
+    });
 
     expect(choices).toHaveLength(3);
     expect(choices.some((choice) => choice.id === 'target-painter' || choice.id === 'focused-breach')).toBe(true);
-    expect(choices.some((choice) => choice.id === 'scavenger-shield')).toBe(true);
+    expect(choices.some((choice) => choice.id === 'spotter-drone')).toBe(true);
   });
 
   test('trait runtime only turns on stronger Guard patterns when the matching trait is owned', () => {
@@ -63,5 +68,35 @@ describe('milestone 1 runtime helpers', () => {
     const secondHit = states.absorbDamage(10);
     expect(secondHit).toEqual({ absorbed: 4, remaining: 6 });
     expect(states.getGuard()).toBe(0);
+  });
+
+  test('support rewards leave the offer pool once the support slot is filled', () => {
+    const director = new LevelUpDirector();
+    const traits = new TraitRuntime();
+
+    const beforeSupport = director.buildChoices('runner', traits, {
+      shuffle: <T>(items: T[]) => [...items],
+      hasSupportAbility: false,
+    });
+    const afterSupport = director.buildChoices('runner', traits, {
+      shuffle: <T>(items: T[]) => [...items],
+      hasSupportAbility: true,
+    });
+
+    expect(beforeSupport.some((choice) => choice.category === 'support')).toBe(true);
+    expect(afterSupport.some((choice) => choice.category === 'support')).toBe(false);
+  });
+
+  test('trait runtime extends disrupted setup and signature payoff when the new traits are owned', () => {
+    const traits = new TraitRuntime();
+
+    expect(traits.getDisruptedDurationMs(2400)).toBe(2400);
+    expect(traits.getSignatureDisruptedDamageMultiplier()).toBeCloseTo(1.25);
+
+    traits.addTrait('lingering-static');
+    traits.addTrait('breach-capacitor');
+
+    expect(traits.getDisruptedDurationMs(2400)).toBe(3300);
+    expect(traits.getSignatureDisruptedDamageMultiplier()).toBeCloseTo(1.45);
   });
 });

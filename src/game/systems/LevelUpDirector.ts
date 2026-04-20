@@ -4,16 +4,24 @@ import type { HeroId } from '../data/heroes';
 import type { TraitRuntime } from './TraitRuntime';
 
 export class LevelUpDirector {
-  buildChoices(heroId: HeroId, traitRuntime: TraitRuntime, shuffle?: <T>(items: T[]) => T[]): RewardDefinition[] {
+  buildChoices(
+    heroId: HeroId,
+    traitRuntime: TraitRuntime,
+    options?: {
+      hasSupportAbility?: boolean;
+      shuffle?: <T>(items: T[]) => T[];
+    },
+  ): RewardDefinition[] {
     const selectedTraits = new Set(traitRuntime.getSelectedTraitIds());
-    const applyShuffle = shuffle ?? ((items) => [...items]);
+    const hasSupportAbility = Boolean(options?.hasSupportAbility);
+    const applyShuffle = options?.shuffle ?? ((items) => [...items]);
 
     const alignedTraits = applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter(
         (reward) =>
           reward.category === 'trait' &&
           reward.lane === 'deepen' &&
-          reward.heroBias === heroId &&
+          (reward.heroBias === heroId || reward.heroBias === 'shared') &&
           reward.traitId &&
           !selectedTraits.has(reward.traitId),
       ),
@@ -28,6 +36,17 @@ export class LevelUpDirector {
           !selectedTraits.has(reward.traitId),
       ),
     );
+
+    const supportRewards = hasSupportAbility
+      ? []
+      : applyShuffle(
+          Object.values(REWARD_DEFINITIONS).filter(
+            (reward) =>
+              reward.category === 'support' &&
+              reward.abilityId &&
+              (reward.heroBias === heroId || reward.heroBias === 'shared'),
+          ),
+        );
 
     const stabilizers = applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter((reward) => reward.category === 'stabilizer'),
@@ -46,15 +65,17 @@ export class LevelUpDirector {
 
     addIfUnique(alignedTraits[0]);
 
-    if (heroId === 'shade') {
+    if (!hasSupportAbility) {
+      addIfUnique(supportRewards[0] ?? bridgeTraits[0]);
+    } else if (heroId === 'shade') {
       addIfUnique(bridgeTraits.find((reward) => reward.id === 'scavenger-shield'));
     } else {
-      addIfUnique(alignedTraits[1]);
+      addIfUnique(bridgeTraits[0] ?? alignedTraits[1]);
     }
 
     addIfUnique(stabilizers[0]);
 
-    for (const reward of [...alignedTraits, ...bridgeTraits, ...stabilizers]) {
+    for (const reward of [...alignedTraits, ...bridgeTraits, ...supportRewards, ...stabilizers]) {
       if (picks.length >= 3) {
         break;
       }

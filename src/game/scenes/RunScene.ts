@@ -67,8 +67,12 @@ export class RunScene extends Phaser.Scene {
   private nextSpawnAtMs = 0;
   private currentRewardChoices: RewardDefinition[] = [];
   private markedEnemyCount = 0;
+  private disruptedEnemyCount = 0;
   private markApplyCount = 0;
   private markConsumeCount = 0;
+  private disruptedApplyCount = 0;
+  private disruptedSignatureHitCount = 0;
+  private supportUseCount = 0;
   private goldEarned = 0;
   private xpGemSpawnCount = 0;
   private xpGemCollectCount = 0;
@@ -97,8 +101,12 @@ export class RunScene extends Phaser.Scene {
     this.currentRewardChoices = [];
     this.enemyBolts = [];
     this.markedEnemyCount = 0;
+    this.disruptedEnemyCount = 0;
     this.markApplyCount = 0;
     this.markConsumeCount = 0;
+    this.disruptedApplyCount = 0;
+    this.disruptedSignatureHitCount = 0;
+    this.supportUseCount = 0;
     this.goldEarned = 0;
     this.xpGemSpawnCount = 0;
     this.xpGemCollectCount = 0;
@@ -182,7 +190,7 @@ export class RunScene extends Phaser.Scene {
     this.updateProjectiles(activeDelta);
     this.updateEnemyBolts(activeDelta);
     this.harvestPendingDeaths();
-    this.refreshMarkedEnemyCount(time);
+    this.refreshCombatStateCounts(time);
 
     if (this.isEnded) {
       this.player.move(new Phaser.Math.Vector2(0, 0));
@@ -290,6 +298,7 @@ export class RunScene extends Phaser.Scene {
   publishHudState(): void {
     const primary = getAbilityDefinition(this.selectedHero.primaryAbilityId);
     const signature = getAbilityDefinition(this.selectedHero.signatureAbilityId);
+    const support = this.abilityLoadout.getAbility('support');
     this.registry.set('run.heroName', this.selectedHero.name);
     this.registry.set('run.hp', this.player.getCurrentHealth());
     this.registry.set('run.maxHp', this.player.getMaxHealth());
@@ -307,17 +316,20 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.levelUpChoices', this.currentRewardChoices);
     this.registry.set('run.traits', this.traitRuntime.getSelectedTraitIds().map((id) => getTraitDefinition(id)?.title ?? id));
     this.registry.set('run.markedEnemies', this.markedEnemyCount);
+    this.registry.set('run.disruptedEnemies', this.disruptedEnemyCount);
     this.registry.set(
       'run.stateLabel',
       this.selectedHero.stateAffinity === 'guard'
         ? `Guard ${this.combatStates.getGuard()}/${this.combatStates.getMaxGuard()}`
-        : `Marked Enemies ${this.markedEnemyCount}`,
+        : `Marked ${this.markedEnemyCount}  |  Disrupted ${this.disruptedEnemyCount}`,
     );
     this.registry.set('run.weaponNames', [primary.name, signature.name]);
     this.registry.set('run.abilityLabels', [
       `Primary: ${primary.shortLabel} ${primary.name} (${Math.ceil(this.abilityLoadout.getRemainingCooldownMs('primary', this.time.now) / 100) / 10}s)`,
       `Signature: ${signature.shortLabel} ${signature.name} (${Math.ceil(this.abilityLoadout.getRemainingCooldownMs('signature', this.time.now) / 100) / 10}s)`,
-      'Support: Locked',
+      support
+        ? `Support: ${support.shortLabel} ${support.name} (${Math.ceil(this.abilityLoadout.getRemainingCooldownMs('support', this.time.now) / 100) / 10}s)`
+        : 'Support: Locked',
     ]);
   }
 
@@ -334,6 +346,7 @@ export class RunScene extends Phaser.Scene {
         isBoss: enemy.isBoss(),
         isEventTarget: false,
         isMarked: enemy.isMarked(this.time.now),
+        isDisrupted: enemy.isDisrupted(this.time.now),
       }))
       .sort((left, right) => left.distance - right.distance);
 
@@ -355,7 +368,7 @@ export class RunScene extends Phaser.Scene {
       xp: this.player.getExperience(),
       xpNext: this.player.getExperienceToNextLevel(),
       kills: this.killCount,
-      weaponCount: 2,
+      weaponCount: this.abilityLoadout.hasAbility('support') ? 3 : 2,
       goldEarned: this.goldEarned,
       levelUpActive: this.isLevelingUp,
       endActive: this.isEnded,
@@ -379,10 +392,16 @@ export class RunScene extends Phaser.Scene {
       cooldowns: {
         primaryRemainingMs: this.abilityLoadout.getRemainingCooldownMs('primary', this.time.now),
         signatureRemainingMs: this.abilityLoadout.getRemainingCooldownMs('signature', this.time.now),
+        supportRemainingMs: this.abilityLoadout.getRemainingCooldownMs('support', this.time.now),
       },
       markedEnemies: this.markedEnemyCount,
+      disruptedEnemies: this.disruptedEnemyCount,
       markApplyCount: this.markApplyCount,
       markConsumeCount: this.markConsumeCount,
+      disruptedApplyCount: this.disruptedApplyCount,
+      disruptedSignatureHitCount: this.disruptedSignatureHitCount,
+      supportAbilityId: this.abilityLoadout.getAbilityId('support'),
+      supportUseCount: this.supportUseCount,
       xpGemSpawnCount: this.xpGemSpawnCount,
       xpGemCollectCount: this.xpGemCollectCount,
       enemies,
@@ -475,6 +494,18 @@ export class RunScene extends Phaser.Scene {
       }
     }
 
+    const support = this.abilityLoadout.getAbility('support');
+    if (support && this.abilityLoadout.canUse('support', currentTime)) {
+      const result = this.abilityResolver.tryUseAbility('support', support, currentTime);
+      if (result.used) {
+        this.abilityLoadout.commitUse('support', currentTime);
+        this.supportUseCount += 1;
+        if ((result.disruptedApplications ?? 0) > 0) {
+          this.disruptedApplyCount += result.disruptedApplications ?? 0;
+        }
+      }
+    }
+
     const signature = this.abilityLoadout.getAbility('signature');
     if (signature && this.abilityLoadout.canUse('signature', currentTime)) {
       if (this.selectedHero.id === 'runner' && this.combatStates.getGuard() < 3) {
@@ -484,6 +515,9 @@ export class RunScene extends Phaser.Scene {
       const result = this.abilityResolver.tryUseAbility('signature', signature, currentTime);
       if (result.used) {
         this.abilityLoadout.commitUse('signature', currentTime);
+        if ((result.disruptedTargetsHit ?? 0) > 0) {
+          this.disruptedSignatureHitCount += result.disruptedTargetsHit ?? 0;
+        }
         if (result.signatureHit?.consumedMark) {
           this.markConsumeCount += 1;
           this.abilityLoadout.reduceCooldown(
@@ -609,6 +643,14 @@ export class RunScene extends Phaser.Scene {
       this.markApplyCount += 1;
     }
 
+    if (sourceAbilityId === 'spotter-drone') {
+      const disruptedDuration = this.traitRuntime.getDisruptedDurationMs(
+        getAbilityDefinition('spotter-drone').disruptedDurationMs ?? 1500,
+      );
+      this.combatStates.applyDisrupted(enemy, currentTime, disruptedDuration);
+      this.disruptedApplyCount += 1;
+    }
+
     projectile.deactivate();
   }
 
@@ -681,9 +723,12 @@ export class RunScene extends Phaser.Scene {
     this.xpGemSpawnCount += 1;
   }
 
-  private refreshMarkedEnemyCount(currentTime: number): void {
+  private refreshCombatStateCounts(currentTime: number): void {
     this.markedEnemyCount = (this.enemies.getChildren() as Enemy[]).filter(
       (enemy) => enemy.active && enemy.isAlive() && enemy.isMarked(currentTime),
+    ).length;
+    this.disruptedEnemyCount = (this.enemies.getChildren() as Enemy[]).filter(
+      (enemy) => enemy.active && enemy.isAlive() && enemy.isDisrupted(currentTime),
     ).length;
   }
 
@@ -691,7 +736,9 @@ export class RunScene extends Phaser.Scene {
     this.isLevelingUp = true;
     this.physics.world.pause();
 
-    this.currentRewardChoices = this.levelUpDirector.buildChoices(this.selectedHero.id, this.traitRuntime);
+    this.currentRewardChoices = this.levelUpDirector.buildChoices(this.selectedHero.id, this.traitRuntime, {
+      hasSupportAbility: this.abilityLoadout.hasAbility('support'),
+    });
 
     const validChoices = this.currentRewardChoices.filter(
       (reward): reward is RewardDefinition => Boolean(reward),
@@ -713,6 +760,11 @@ export class RunScene extends Phaser.Scene {
   private applyReward(reward: RewardDefinition): void {
     if (reward.category === 'trait' && reward.traitId) {
       this.traitRuntime.addTrait(reward.traitId);
+      return;
+    }
+
+    if (reward.category === 'support' && reward.abilityId) {
+      this.abilityLoadout.setAbility('support', reward.abilityId);
       return;
     }
 

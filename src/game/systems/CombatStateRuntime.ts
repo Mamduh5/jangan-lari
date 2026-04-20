@@ -60,4 +60,12 @@ export class CombatStateRuntime {
   consumeMark(enemy: Enemy, currentTime: number): boolean {
     return enemy.consumeMark(currentTime);
   }
+
+  applyDisrupted(enemy: Enemy, currentTime: number, durationMs: number): void {
+    enemy.applyDisrupted(currentTime, durationMs);
+  }
+
+  isDisrupted(enemy: Enemy, currentTime: number): boolean {
+    return enemy.isDisrupted(currentTime);
+  }
 }

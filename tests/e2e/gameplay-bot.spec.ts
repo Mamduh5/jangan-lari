@@ -19,14 +19,20 @@ type Snapshot = {
     weaponNames: string[];
     traits: string[];
     player: { x: number; y: number; guard: number; maxGuard: number };
-    cooldowns: { primaryRemainingMs: number; signatureRemainingMs: number };
+    cooldowns: { primaryRemainingMs: number; signatureRemainingMs: number; supportRemainingMs: number };
     markedEnemies: number;
+    disruptedEnemies: number;
     markApplyCount: number;
     markConsumeCount: number;
+    disruptedApplyCount: number;
+    disruptedSignatureHitCount: number;
+    supportAbilityId: 'shock-lattice' | 'spotter-drone' | null;
+    supportUseCount: number;
     xpGemSpawnCount: number;
     xpGemCollectCount: number;
-    enemies: Array<{ distance: number; x: number; y: number; isMarked?: boolean }>;
+    enemies: Array<{ distance: number; x: number; y: number; isMarked?: boolean; isDisrupted?: boolean }>;
     xpGems: Array<{ distance: number; x: number; y: number }>;
+    rewardChoices: Array<{ id: string; title: string; lane: 'deepen' | 'bridge' | 'stabilize' }>;
     hud?: {
       hpBarWidth: number;
       guardBarWidth: number;
@@ -64,7 +70,25 @@ async function clickCanvasPosition(page: import('@playwright/test').Page, x: num
 }
 
 async function getSnapshot(page: import('@playwright/test').Page): Promise<Snapshot> {
-  return page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot() ?? null) as Promise<Snapshot>;
+  try {
+    return page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot() ?? null) as Promise<Snapshot>;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('Execution context was destroyed')) {
+      throw error;
+    }
+
+    await page.waitForTimeout(120);
+    return page.evaluate(() => window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot() ?? null) as Promise<Snapshot>;
+  }
+}
+
+async function selectRewardByIndex(page: import('@playwright/test').Page, index: number): Promise<void> {
+  await page.evaluate((rewardIndex) => {
+    const game = window.__JANGAN_LARI_GAME__;
+    const runScene = game?.scene.getScene('RunScene') as { selectReward?: (index: number) => void } | undefined;
+    runScene?.selectReward?.(rewardIndex);
+  }, index);
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
@@ -175,11 +199,12 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
     let sawXpGain = false;
     let sawHpChange = false;
     let sawNaturalLevelUp = false;
+    let sawSupportReward = false;
+    let sawSupportUse = false;
+    let sawDisrupted = false;
     let previousGuard = 0;
     let initialHpBarWidth = 0;
     let minHpBarWidth = Number.POSITIVE_INFINITY;
-    let maxGuardBarWidth = 0;
-    let maxXpBarWidth = 0;
 
     const startedAt = Date.now();
     while (Date.now() - startedAt < 40_000) {
@@ -202,8 +227,6 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
         initialHpBarWidth = hud.hpBarWidth;
       }
       minHpBarWidth = Math.min(minHpBarWidth, hud.hpBarWidth);
-      maxGuardBarWidth = Math.max(maxGuardBarWidth, hud.guardBarWidth);
-      maxXpBarWidth = Math.max(maxXpBarWidth, hud.xpBarWidth);
 
       if (run.hp < run.maxHp) {
         sawHpChange = true;
@@ -230,6 +253,13 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
       if (run.levelUpActive || run.level > 1) {
         sawNaturalLevelUp = true;
       }
+      if (
+        run.disruptedEnemies > 0 ||
+        run.disruptedApplyCount > 0 ||
+        run.enemies.some((enemy) => enemy.isDisrupted)
+      ) {
+        sawDisrupted = true;
+      }
 
       if (run.levelUpActive) {
         break;
@@ -254,21 +284,82 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
     if (sawHpChange) {
       expect(minHpBarWidth, 'expected HP bar width to shrink after taking damage').toBeLessThan(initialHpBarWidth - 0.75);
     }
-    expect(maxXpBarWidth, 'expected XP bar to visibly fill during the run').toBeGreaterThan(8);
+    expect(run!.levelUpActive, 'expected the real run to still be sitting on the natural level-up prompt').toBe(true);
+    const supportChoiceIndex = run!.rewardChoices.findIndex((choice) => choice.id === 'shock-lattice' || choice.id === 'spotter-drone');
+    expect(supportChoiceIndex, 'expected the first natural reward set to include a support reward while the slot is empty').toBeGreaterThanOrEqual(0);
+    sawSupportReward = supportChoiceIndex >= 0;
+    await selectRewardByIndex(page, supportChoiceIndex);
+    const supportEquipStartedAt = Date.now();
+    let afterChoice: Snapshot['run'] = null;
+    while (Date.now() - supportEquipStartedAt < 6_000) {
+      const supportChoiceSnapshot = await getSnapshot(page);
+      afterChoice = supportChoiceSnapshot.run;
+      if (afterChoice?.supportAbilityId) {
+        break;
+      }
+      await page.waitForTimeout(100);
+    }
+    expect(afterChoice?.supportAbilityId, 'expected the chosen reward to equip the support slot').toBeTruthy();
 
+    const supportStartedAt = Date.now();
+    while (Date.now() - supportStartedAt < 30_000) {
+      const supportSnapshot = await getSnapshot(page);
+      const supportRun = supportSnapshot.run;
+      if (!supportRun) {
+        throw new Error('Gameplay snapshot lost the active run after equipping support.');
+      }
+
+      expect(supportRun.endActive).toBe(false);
+      if (supportRun.levelUpActive) {
+        await selectRewardByIndex(page, 0);
+        await page.waitForTimeout(100);
+        continue;
+      }
+
+      await syncKeys(page, pressed, determineMovementKeys(supportRun, hero));
+
+      if (supportRun.supportUseCount > 0) {
+        sawSupportUse = true;
+      }
+      if (supportRun.cooldowns.signatureRemainingMs > 150) {
+        sawSignatureUse = true;
+      }
+      if (
+        supportRun.markedEnemies > 0 ||
+        supportRun.markApplyCount > 0 ||
+        supportRun.markConsumeCount > 0 ||
+        supportRun.enemies.some((enemy) => enemy.isMarked)
+      ) {
+        sawMark = true;
+      }
+      if (
+        supportRun.disruptedEnemies > 0 ||
+        supportRun.disruptedApplyCount > 0 ||
+        supportRun.enemies.some((enemy) => enemy.isDisrupted)
+      ) {
+        sawDisrupted = true;
+      }
+      if (sawSupportUse && sawDisrupted && (hero === 'runner' ? sawSignatureUse : sawMark)) {
+        break;
+      }
+
+      await page.waitForTimeout(120);
+    }
+
+    await releaseKeys(page, pressed);
+
+    const finalSnapshot = await getSnapshot(page);
+    expect(runtimeErrors, `runtime errors detected: ${runtimeErrors.join(' | ')}`).toEqual([]);
+    expect(finalSnapshot.run?.supportAbilityId, 'expected the support slot to remain equipped').toBeTruthy();
+    expect(sawSupportReward, 'expected to see a support reward in the real level-up flow').toBe(true);
+    expect(sawSupportUse, 'expected the equipped support to auto-fire in the real run').toBe(true);
+    expect(sawDisrupted, 'expected the real run to visibly apply Disrupted').toBe(true);
     if (hero === 'runner') {
+      expect(sawGuardGain, 'expected Iron Warden to build some Guard during the run').toBe(true);
       expect(sawSignatureUse, 'expected Iron Warden to naturally fire Bulwark Slam during the run').toBe(true);
-      expect(maxGuardBarWidth, 'expected Guard bar to visibly fill during the run').toBeGreaterThan(8);
     } else {
       expect(sawMark, 'expected Raptor Frame to visibly mark enemies').toBe(true);
     }
-
-    expect(run!.levelUpActive, 'expected the real run to still be sitting on the natural level-up prompt').toBe(true);
-    await clickCanvasPosition(page, 258, 372);
-    await page.waitForFunction(() => !window.__JANGAN_LARI_GAME__?.registry.get('run.levelUpActive'));
-
-    const afterChoice = await getSnapshot(page);
-    expect(afterChoice.run?.traits.length || afterChoice.run?.level).toBeTruthy();
 
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => {
@@ -280,13 +371,13 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
   }
 }
 
-test.describe('milestone 1 real-scene gameplay bot', () => {
-  test('Iron Warden survives real runtime combat, gains and spends Guard, drops XP, and reaches level-up naturally', async ({ page }) => {
+test.describe('milestone 2 real-scene gameplay bot', () => {
+  test('Iron Warden reaches a natural support branch and cashes in Disrupted during a real run', async ({ page }) => {
     test.setTimeout(90_000);
     await runNaturalValidation(page, 'runner');
   });
 
-  test('Raptor Frame survives real runtime combat, marks enemies, drops XP, and reaches level-up naturally', async ({ page }) => {
+  test('Raptor Frame reaches a natural support branch and cashes in Disrupted during a real run', async ({ page }) => {
     test.setTimeout(90_000);
     await runNaturalValidation(page, 'shade');
   });

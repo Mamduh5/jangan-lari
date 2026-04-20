@@ -4,13 +4,17 @@ export type AbilityId =
   | 'brace-shot'
   | 'bulwark-slam'
   | 'seeker-burst'
-  | 'hunter-sweep';
+  | 'hunter-sweep'
+  | 'shock-lattice'
+  | 'spotter-drone';
 
 export type AbilityBehaviorId =
   | 'brace-shot'
   | 'bulwark-slam'
   | 'seeker-burst'
-  | 'hunter-sweep';
+  | 'hunter-sweep'
+  | 'shock-lattice'
+  | 'spotter-drone';
 
 export type AbilityDefinition = {
   id: AbilityId;
@@ -31,6 +35,7 @@ export type AbilityDefinition = {
   radius?: number;
   baseGuardGain?: number;
   markDurationMs?: number;
+  disruptedDurationMs?: number;
 };
 
 export const ABILITY_DEFINITIONS: Record<AbilityId, AbilityDefinition> = {
@@ -96,6 +101,37 @@ export const ABILITY_DEFINITIONS: Record<AbilityId, AbilityDefinition> = {
     range: 520,
     color: 0x93c5fd,
     strokeColor: 0xf8fafc,
+  },
+  'shock-lattice': {
+    id: 'shock-lattice',
+    name: 'Shock Lattice',
+    shortLabel: 'XL',
+    slot: 'support',
+    description: 'A close pulse that disrupts nearby enemies and gives signatures a cleaner payoff window.',
+    behaviorId: 'shock-lattice',
+    cooldownMs: 3800,
+    damage: 8,
+    range: 170,
+    radius: 170,
+    color: 0x22d3ee,
+    strokeColor: 0xecfeff,
+    disruptedDurationMs: 2400,
+  },
+  'spotter-drone': {
+    id: 'spotter-drone',
+    name: 'Spotter Drone',
+    shortLabel: 'DR',
+    slot: 'support',
+    description: 'A tracking support shot that prefers marked targets, then disrupted targets, then the nearest threat.',
+    behaviorId: 'spotter-drone',
+    cooldownMs: 2800,
+    damage: 7,
+    range: 560,
+    color: 0x34d399,
+    strokeColor: 0xf0fdf4,
+    projectileSpeed: 660,
+    projectileRadius: 4,
+    disruptedDurationMs: 1500,
   },
 };
 

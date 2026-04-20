@@ -81,7 +81,7 @@ test.describe('milestone 1 signature behavior', () => {
           ) => { used: boolean; signatureHit?: { consumedMark: boolean } };
         };
         abilityLoadout: { getAbility: (slot: 'signature') => unknown };
-        debugSpawnEnemy: (enemyId: 'shooter') => boolean;
+        debugSpawnEnemy: (enemyId: 'anchor') => boolean;
         enemies: { getChildren: () => Array<{ x: number; y: number; isMarked: (time: number) => boolean; body?: { reset?: (x: number, y: number) => void } }> };
       };
 
@@ -106,5 +106,166 @@ test.describe('milestone 1 signature behavior', () => {
     expect(result.markedBefore).toBe(true);
     expect(result.consumedMark).toBe(true);
     expect(result.markedAfter).toBe(false);
+  });
+
+  test('Shock Lattice equips into the support slot and disrupts nearby enemies', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        debugForceReward: (rewardId: 'shock-lattice') => boolean;
+        debugSpawnEnemy: (enemyId: 'shooter') => boolean;
+        enemies: { getChildren: () => Array<{ x: number; y: number; isDisrupted: (time: number) => boolean; body?: { reset?: (x: number, y: number) => void } }> };
+        abilityResolver: {
+          tryUseAbility: (slot: 'support', ability: unknown, currentTime: number) => { used: boolean };
+        };
+        abilityLoadout: { getAbility: (slot: 'support') => unknown; getAbilityId: (slot: 'support') => string | null };
+      };
+
+      runScene.debugForceReward('shock-lattice');
+      runScene.debugSpawnEnemy('shooter');
+      const enemies = runScene.enemies.getChildren();
+      const enemy = enemies[enemies.length - 1]!;
+      const nextX = runScene.player.x + 60;
+      const nextY = runScene.player.y + 20;
+      enemy.x = nextX;
+      enemy.y = nextY;
+      enemy.body?.reset?.(nextX, nextY);
+      const used = runScene.abilityResolver.tryUseAbility('support', runScene.abilityLoadout.getAbility('support'), game.loop.time);
+
+      return {
+        supportAbilityId: runScene.abilityLoadout.getAbilityId('support'),
+        used: used.used,
+        disrupted: enemy.isDisrupted(game.loop.time),
+      };
+    });
+
+    expect(result.supportAbilityId).toBe('shock-lattice');
+    expect(result.used).toBe(true);
+    expect(result.disrupted).toBe(true);
+  });
+
+  test('Bulwark Slam hits disrupted enemies harder than normal targets', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        combatStates: {
+          gainGuard: (amount: number) => void;
+          applyDisrupted: (enemy: { applyDisrupted: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+        };
+        abilityResolver: {
+          tryUseAbility: (
+            slot: 'signature',
+            ability: unknown,
+            currentTime: number,
+          ) => { used: boolean };
+        };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        debugSpawnEnemy: (enemyId: 'anchor') => boolean;
+        enemies: {
+          getChildren: () => Array<{
+            x: number;
+            y: number;
+            getCurrentHealth: () => number;
+            body?: { reset?: (x: number, y: number) => void };
+          }>;
+        };
+      };
+
+      const spawnAndPositionEnemy = (): { getCurrentHealth: () => number; body?: { reset?: (x: number, y: number) => void }; x: number; y: number } => {
+        runScene.debugSpawnEnemy('anchor');
+        const enemies = runScene.enemies.getChildren();
+        const enemy = enemies[enemies.length - 1]!;
+        const nextX = runScene.player.x + 40;
+        const nextY = runScene.player.y + 20;
+        enemy.x = nextX;
+        enemy.y = nextY;
+        enemy.body?.reset?.(nextX, nextY);
+        return enemy;
+      };
+
+      const normalEnemy = spawnAndPositionEnemy();
+      const normalBefore = normalEnemy.getCurrentHealth();
+      runScene.combatStates.gainGuard(12);
+      runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+      const normalDamage = normalBefore - normalEnemy.getCurrentHealth();
+
+      const disruptedEnemy = spawnAndPositionEnemy();
+      const disruptedBefore = disruptedEnemy.getCurrentHealth();
+      runScene.combatStates.gainGuard(12);
+      runScene.combatStates.applyDisrupted(disruptedEnemy as never, game.loop.time, 2400);
+      runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+      const disruptedDamage = disruptedBefore - disruptedEnemy.getCurrentHealth();
+
+      return { normalDamage, disruptedDamage };
+    });
+
+    expect(result.disruptedDamage).toBeGreaterThan(result.normalDamage);
+  });
+
+  test('Hunter Sweep hits marked and disrupted enemies harder than marked targets alone', async ({ page }) => {
+    await startRun(page, 'shade');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        combatStates: {
+          applyMark: (enemy: { applyMark: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+          applyDisrupted: (enemy: { applyDisrupted: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+        };
+        abilityResolver: {
+          tryUseAbility: (
+            slot: 'signature',
+            ability: unknown,
+            currentTime: number,
+          ) => { used: boolean };
+        };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        debugSpawnEnemy: (enemyId: 'shooter') => boolean;
+        enemies: {
+          getChildren: () => Array<{
+            x: number;
+            y: number;
+            getCurrentHealth: () => number;
+            body?: { reset?: (x: number, y: number) => void };
+          }>;
+        };
+      };
+
+      const spawnAndPositionEnemy = (): { getCurrentHealth: () => number; body?: { reset?: (x: number, y: number) => void }; x: number; y: number } => {
+        runScene.debugSpawnEnemy('anchor');
+        const enemies = runScene.enemies.getChildren();
+        const enemy = enemies[enemies.length - 1]!;
+        const nextX = runScene.player.x + 160;
+        const nextY = runScene.player.y;
+        enemy.x = nextX;
+        enemy.y = nextY;
+        enemy.body?.reset?.(nextX, nextY);
+        return enemy;
+      };
+
+      const markedEnemy = spawnAndPositionEnemy();
+      const markedBefore = markedEnemy.getCurrentHealth();
+      runScene.combatStates.applyMark(markedEnemy as never, game.loop.time, 2000);
+      runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+      const markedDamage = markedBefore - markedEnemy.getCurrentHealth();
+
+      const disruptedEnemy = spawnAndPositionEnemy();
+      const disruptedBefore = disruptedEnemy.getCurrentHealth();
+      runScene.combatStates.applyMark(disruptedEnemy as never, game.loop.time, 2000);
+      runScene.combatStates.applyDisrupted(disruptedEnemy as never, game.loop.time, 2400);
+      runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+      const disruptedDamage = disruptedBefore - disruptedEnemy.getCurrentHealth();
+
+      return { markedDamage, disruptedDamage };
+    });
+
+    expect(result.disruptedDamage).toBeGreaterThan(result.markedDamage);
   });
 });

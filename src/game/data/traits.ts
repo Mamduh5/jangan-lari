@@ -7,7 +7,9 @@ export type TraitId =
   | 'steadfast-posture'
   | 'target-painter'
   | 'focused-breach'
-  | 'scavenger-shield';
+  | 'scavenger-shield'
+  | 'lingering-static'
+  | 'breach-capacitor';
 
 export type TraitDefinition = {
   id: TraitId;
@@ -51,6 +53,20 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     category: 'converter',
     title: 'Scavenger Shield',
     description: 'Killing a Marked enemy grants a small burst of Guard.',
+    heroBias: 'shared',
+  },
+  'lingering-static': {
+    id: 'lingering-static',
+    category: 'enabler',
+    title: 'Lingering Static',
+    description: 'Disrupted lingers longer, making support setup windows easier to cash in.',
+    heroBias: 'shared',
+  },
+  'breach-capacitor': {
+    id: 'breach-capacitor',
+    category: 'amplifier',
+    title: 'Breach Capacitor',
+    description: 'Signature abilities hit Disrupted enemies harder.',
     heroBias: 'shared',
   },
 };

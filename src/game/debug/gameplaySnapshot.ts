@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { getCombatResponseTuningSnapshot, type CombatResponseTuningSnapshot } from '../combat/combatResponse';
+import type { AbilityId } from '../data/abilities';
 import type { EnemyArchetypeId } from '../data/enemies';
 import type { RewardId, RewardLane } from '../data/rewards';
 import type { WeaponId } from '../data/weapons';
@@ -14,6 +15,7 @@ export type GameplayBotEnemySummary = {
   isBoss: boolean;
   isEventTarget: boolean;
   isMarked?: boolean;
+  isDisrupted?: boolean;
 };
 
 export type GameplayBotGemSummary = {
@@ -72,10 +74,16 @@ export type GameplayBotRunSnapshot = {
   cooldowns: {
     primaryRemainingMs: number;
     signatureRemainingMs: number;
+    supportRemainingMs: number;
   };
   markedEnemies: number;
+  disruptedEnemies: number;
   markApplyCount: number;
   markConsumeCount: number;
+  disruptedApplyCount: number;
+  disruptedSignatureHitCount: number;
+  supportAbilityId: AbilityId | null;
+  supportUseCount: number;
   xpGemSpawnCount: number;
   xpGemCollectCount: number;
   enemies: GameplayBotEnemySummary[];

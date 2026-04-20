@@ -56,9 +56,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private readonly responseScale = { x: 1, y: 1 };
   private readonly markRing: Phaser.GameObjects.Arc;
   private readonly markPip: Phaser.GameObjects.Arc;
+  private readonly disruptedRing: Phaser.GameObjects.Arc;
+  private readonly disruptedPipLeft: Phaser.GameObjects.Arc;
+  private readonly disruptedPipRight: Phaser.GameObjects.Arc;
   private deathPresentationActive = false;
   private eventMarkerColor: number | null = null;
   private markedUntil = 0;
+  private disruptedUntil = 0;
   private deathRewardPending = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
@@ -96,6 +100,22 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.markPip.setDepth(this.depth + 0.2);
     this.markPip.setStrokeStyle(2, 0xfffbeb, 0.95);
     this.markPip.setVisible(false);
+
+    this.disruptedRing = scene.add.circle(x, y, Math.round(archetype.size * 0.92), 0x22d3ee, 0.06);
+    this.disruptedRing.setDepth(this.depth - 0.3);
+    this.disruptedRing.setStrokeStyle(2, 0x67e8f9, 0.92);
+    this.disruptedRing.setVisible(false);
+
+    const disruptedPipRadius = Math.max(3, Math.round(archetype.size * 0.12));
+    this.disruptedPipLeft = scene.add.circle(x, y, disruptedPipRadius, 0x67e8f9, 0.95);
+    this.disruptedPipLeft.setDepth(this.depth + 0.15);
+    this.disruptedPipLeft.setStrokeStyle(1, 0xecfeff, 0.95);
+    this.disruptedPipLeft.setVisible(false);
+
+    this.disruptedPipRight = scene.add.circle(x, y, disruptedPipRadius, 0x67e8f9, 0.95);
+    this.disruptedPipRight.setDepth(this.depth + 0.15);
+    this.disruptedPipRight.setStrokeStyle(1, 0xecfeff, 0.95);
+    this.disruptedPipRight.setVisible(false);
 
     const bodySize = Math.max(16, archetype.size - 6);
     this.body.setSize(bodySize, bodySize);
@@ -156,6 +176,15 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     return true;
   }
 
+  applyDisrupted(currentTimeOrUntilMs: number, durationMs?: number): void {
+    const nextUntil = durationMs === undefined ? currentTimeOrUntilMs : currentTimeOrUntilMs + Math.max(0, durationMs);
+    this.disruptedUntil = Math.max(this.disruptedUntil, nextUntil);
+  }
+
+  isDisrupted(currentTime: number): boolean {
+    return currentTime < this.disruptedUntil;
+  }
+
   consumeDeathRewardPending(): boolean {
     if (!this.deathRewardPending) {
       return false;
@@ -206,13 +235,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
         this.applyRangedMovement(towardTarget, currentTime);
         break;
       case 'strafe':
-        this.applyStrafeMovement(towardTarget);
+        this.applyStrafeMovement(towardTarget, currentTime);
         break;
       case 'dash':
         this.applyDashMovement(towardTarget, currentTime);
         break;
       default:
-        this.applyChaseMovement(towardTarget);
+        this.applyChaseMovement(towardTarget, currentTime);
         break;
     }
 
@@ -221,6 +250,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   updatePresentation(currentTime: number): void {
     this.syncMarkPresentation(currentTime);
+    this.syncDisruptedPresentation(currentTime);
 
     const velocity = this.body.velocity;
     if (velocity.lengthSq() > 0) {
@@ -231,10 +261,14 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setScale(this.responseScale.x, this.responseScale.y);
       if (this.markedUntil > currentTime) {
         this.setStrokeStyle(this.baseStrokeWidth + 2, 0xfef08a, 1);
+      } else if (this.isDisrupted(currentTime)) {
+        this.setStrokeStyle(this.baseStrokeWidth + 1, 0x67e8f9, 1);
       }
       return;
     }
 
+    const marked = this.isMarked(currentTime);
+    const disrupted = this.isDisrupted(currentTime);
     const chargingDash = this.isChargingDash(currentTime);
     const pulse = 1 + Math.sin((currentTime + this.y) * 0.012) * 0.03;
     const hitReactionActive = currentTime < this.hitReactionUntil;
@@ -307,9 +341,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return;
     }
 
-    if (this.isMarked(currentTime)) {
+    if (marked || disrupted) {
       this.setResponseScale((1 + Math.sin((currentTime + this.x) * 0.018) * 0.05) * (hitReactionActive ? 0.9 : 1));
-      this.setStrokeStyle(this.baseStrokeWidth + 2, 0xfef08a, 1);
+      this.setStrokeStyle(marked ? this.baseStrokeWidth + 2 : this.baseStrokeWidth + 1, marked ? 0xfef08a : 0x67e8f9, 1);
       this.setAlpha(hitReactionActive ? 0.76 : 1);
       return;
     }
@@ -355,12 +389,14 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     return false;
   }
 
-  private applyChaseMovement(towardTarget: Phaser.Math.Vector2): void {
+  private applyChaseMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
+    const speed = this.getEffectiveSpeed(currentTime);
     towardTarget.normalize();
-    this.body.setVelocity(towardTarget.x * this.speed, towardTarget.y * this.speed);
+    this.body.setVelocity(towardTarget.x * speed, towardTarget.y * speed);
   }
 
-  private applyStrafeMovement(towardTarget: Phaser.Math.Vector2): void {
+  private applyStrafeMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
+    const speed = this.getEffectiveSpeed(currentTime);
     const distance = Math.max(1, towardTarget.length());
     const forward = towardTarget.clone().normalize();
     const orbit = new Phaser.Math.Vector2(-forward.y * this.strafeDirection, forward.x * this.strafeDirection);
@@ -368,11 +404,12 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const distanceError = Phaser.Math.Clamp((distance - preferredDistance) / preferredDistance, -0.8, 1);
     const strafeStrength = this.archetype.strafeStrength ?? 0.8;
 
-    const velocity = forward.scale(this.speed * distanceError).add(orbit.scale(this.speed * strafeStrength));
+    const velocity = forward.scale(speed * distanceError).add(orbit.scale(speed * strafeStrength));
     this.body.setVelocity(velocity.x, velocity.y);
   }
 
   private applyRangedMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
+    const speed = this.getEffectiveSpeed(currentTime);
     const distance = Math.max(1, towardTarget.length());
     const forward = towardTarget.clone().normalize();
     const orbit = new Phaser.Math.Vector2(-forward.y * this.strafeDirection, forward.x * this.strafeDirection);
@@ -382,8 +419,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const forwardScale = distance < preferredDistance * 0.85 ? 1.2 : 0.72;
 
     const velocity = forward
-      .scale(this.speed * distanceError * forwardScale)
-      .add(orbit.scale(this.speed * strafeStrength));
+      .scale(speed * distanceError * forwardScale)
+      .add(orbit.scale(speed * strafeStrength));
     this.body.setVelocity(velocity.x, velocity.y);
 
     if (currentTime < this.nextRangedShotAt || towardTarget.lengthSq() === 0) {
@@ -405,6 +442,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   }
 
   private applyDashMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
+    const speed = this.getEffectiveSpeed(currentTime);
     if (currentTime < this.dashUntil) {
       this.body.setVelocity(this.dashVector.x, this.dashVector.y);
       return;
@@ -412,7 +450,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     if (currentTime >= this.nextDashAt) {
       const dashDirection = (this.primedMinibossCharge ?? towardTarget).clone().normalize();
-      const dashSpeed = this.speed * (this.archetype.dashSpeedMultiplier ?? 2);
+      const dashSpeed = speed * (this.archetype.dashSpeedMultiplier ?? 2);
       this.dashVector = dashDirection.scale(dashSpeed);
       this.dashUntil = currentTime + (this.archetype.dashDurationMs ?? 240);
       this.nextDashAt = this.dashUntil + (this.archetype.dashCooldownMs ?? 1400);
@@ -436,7 +474,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
 
     towardTarget.normalize();
-    this.body.setVelocity(towardTarget.x * this.speed * 0.62, towardTarget.y * this.speed * 0.62);
+    this.body.setVelocity(towardTarget.x * speed * 0.62, towardTarget.y * speed * 0.62);
   }
 
   private updateSignatureAttackState(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
@@ -509,6 +547,10 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.body.stop();
     this.body.enable = false;
     this.destroy();
+  }
+
+  private getEffectiveSpeed(currentTime: number): number {
+    return this.isDisrupted(currentTime) ? this.speed * 0.8 : this.speed;
   }
 
   private consumePendingAttackSignal(): EnemyAttackSignal | null {
@@ -621,12 +663,18 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.scene.tweens.killTweensOf(this.responseScale);
     this.scene.tweens.killTweensOf(this.markRing);
     this.scene.tweens.killTweensOf(this.markPip);
+    this.scene.tweens.killTweensOf(this.disruptedRing);
+    this.scene.tweens.killTweensOf(this.disruptedPipLeft);
+    this.scene.tweens.killTweensOf(this.disruptedPipRight);
     this.responseScale.x = 1;
     this.responseScale.y = 1;
     this.deathPresentationActive = false;
     this.hitReactionUntil = 0;
     this.markRing.destroy();
     this.markPip.destroy();
+    this.disruptedRing.destroy();
+    this.disruptedPipLeft.destroy();
+    this.disruptedPipRight.destroy();
     super.destroy(fromScene);
   }
 
@@ -646,5 +694,28 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.markPip.setPosition(this.x, this.y - this.archetype.size * 0.74);
     this.markPip.setScale(1 + Math.sin((currentTime + this.y) * 0.026) * 0.12);
     this.markPip.setAlpha(this.deathPresentationActive ? 0.45 : 1);
+  }
+
+  private syncDisruptedPresentation(currentTime: number): void {
+    const disrupted = this.isDisrupted(currentTime) && this.active;
+    this.disruptedRing.setVisible(disrupted);
+    this.disruptedPipLeft.setVisible(disrupted);
+    this.disruptedPipRight.setVisible(disrupted);
+
+    if (!disrupted) {
+      return;
+    }
+
+    const pulse = 1 + Math.sin((currentTime + this.y) * 0.02) * 0.07;
+    const lateralOffset = this.archetype.size * 0.56;
+    const verticalOffset = this.archetype.size * 0.16;
+    this.disruptedRing.setPosition(this.x, this.y);
+    this.disruptedRing.setRadius(Math.round(this.archetype.size * 0.96 * pulse));
+    this.disruptedRing.setAlpha(this.deathPresentationActive ? 0.2 : 0.34);
+
+    this.disruptedPipLeft.setPosition(this.x - lateralOffset, this.y + Math.sin(currentTime * 0.018) * verticalOffset);
+    this.disruptedPipRight.setPosition(this.x + lateralOffset, this.y - Math.sin(currentTime * 0.018) * verticalOffset);
+    this.disruptedPipLeft.setAlpha(this.deathPresentationActive ? 0.34 : 0.92);
+    this.disruptedPipRight.setAlpha(this.deathPresentationActive ? 0.34 : 0.92);
   }
 }

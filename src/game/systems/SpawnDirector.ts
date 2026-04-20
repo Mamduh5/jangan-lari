@@ -59,6 +59,11 @@ const STAGES: StageRule[] = [
         label: 'Wall And Rush',
         wave: [ENEMY_ARCHETYPES.anchor, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer],
       },
+      {
+        id: 'strafe-screen',
+        label: 'Strafe Screen',
+        wave: [ENEMY_ARCHETYPES.skimmer, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.swarmer],
+      },
     ],
   },
   {
@@ -83,6 +88,11 @@ const STAGES: StageRule[] = [
           ENEMY_ARCHETYPES.shooter,
           ENEMY_ARCHETYPES.anchor,
         ],
+      },
+      {
+        id: 'dash-pocket',
+        label: 'Dash Pocket',
+        wave: [ENEMY_ARCHETYPES.crusher, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.swarmer],
       },
     ],
   },
@@ -117,6 +127,16 @@ const STAGES: StageRule[] = [
           ENEMY_ARCHETYPES.shooter,
           ENEMY_ARCHETYPES.swarmer,
           ENEMY_ARCHETYPES.swarmer,
+        ],
+      },
+      {
+        id: 'collapse-and-strafe',
+        label: 'Collapse And Strafe',
+        wave: [
+          ENEMY_ARCHETYPES.crusher,
+          ENEMY_ARCHETYPES.skimmer,
+          ENEMY_ARCHETYPES.shooter,
+          ENEMY_ARCHETYPES.anchor,
         ],
       },
     ],

@@ -80,6 +80,14 @@ export class TraitRuntime {
     return this.hasTrait('focused-breach') ? 220 : 0;
   }
 
+  getDisruptedDurationMs(baseDurationMs: number): number {
+    return this.hasTrait('lingering-static') ? baseDurationMs + 900 : baseDurationMs;
+  }
+
+  getSignatureDisruptedDamageMultiplier(): number {
+    return this.hasTrait('breach-capacitor') ? 1.45 : 1.25;
+  }
+
   getGuardGainOnPrimaryHit(options: PrimaryHitContext): number {
     if (options.heroId !== 'runner' || options.abilityId !== 'brace-shot') {
       return 0;

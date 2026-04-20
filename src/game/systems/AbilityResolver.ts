@@ -16,7 +16,13 @@ export type SignatureHitResult = {
 
 export type AbilityUseResult =
   | { used: false }
-  | { used: true; slot: AbilitySlot; signatureHit?: SignatureHitResult };
+  | {
+      used: true;
+      slot: AbilitySlot;
+      signatureHit?: SignatureHitResult;
+      disruptedApplications?: number;
+      disruptedTargetsHit?: number;
+    };
 
 type AbilityResolverOptions = {
   scene: Phaser.Scene;
@@ -36,11 +42,15 @@ export class AbilityResolver {
       case 'brace-shot':
         return this.tryUseBraceShot(slot, ability);
       case 'bulwark-slam':
-        return this.tryUseBulwarkSlam(slot, ability);
+        return this.tryUseBulwarkSlam(slot, ability, currentTime);
       case 'seeker-burst':
         return this.tryUseSeekerBurst(slot, ability, currentTime);
       case 'hunter-sweep':
         return this.tryUseHunterSweep(slot, ability, currentTime);
+      case 'shock-lattice':
+        return this.tryUseShockLattice(slot, ability, currentTime);
+      case 'spotter-drone':
+        return this.tryUseSpotterDrone(slot, ability, currentTime);
       default:
         return { used: false };
     }
@@ -88,7 +98,7 @@ export class AbilityResolver {
     return { used: true, slot };
   }
 
-  private tryUseBulwarkSlam(slot: AbilitySlot, ability: AbilityDefinition): AbilityUseResult {
+  private tryUseBulwarkSlam(slot: AbilitySlot, ability: AbilityDefinition, currentTime: number): AbilityUseResult {
     const guard = this.options.combatStates.getGuard();
     if (guard <= 0) {
       return { used: false };
@@ -106,9 +116,17 @@ export class AbilityResolver {
 
     const spentGuard = Math.max(6, this.options.combatStates.spendGuard(Math.min(12, guard)));
     const damageBonus = Math.round(spentGuard * 1.2);
+    let disruptedTargetsHit = 0;
 
     for (const enemy of targets) {
-      const killed = enemy.takeDamage(ability.damage + damageBonus, { x: this.options.player.x, y: this.options.player.y });
+      const targetWasDisrupted = this.options.combatStates.isDisrupted(enemy, currentTime);
+      let damage = ability.damage + damageBonus;
+      if (targetWasDisrupted) {
+        damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());
+        disruptedTargetsHit += 1;
+      }
+
+      const killed = enemy.takeDamage(damage, { x: this.options.player.x, y: this.options.player.y });
       const knockback = new Phaser.Math.Vector2(enemy.x - this.options.player.x, enemy.y - this.options.player.y);
       if (!killed && enemy.active && enemy.body && knockback.lengthSq() > 0) {
         knockback.normalize().scale(180 + spentGuard * 5);
@@ -127,7 +145,7 @@ export class AbilityResolver {
       onComplete: () => ring.destroy(),
     });
 
-    return { used: true, slot };
+    return { used: true, slot, disruptedTargetsHit };
   }
 
   private tryUseSeekerBurst(slot: AbilitySlot, ability: AbilityDefinition, currentTime: number): AbilityUseResult {
@@ -170,10 +188,14 @@ export class AbilityResolver {
     }
 
     const consumedMark = this.options.combatStates.consumeMark(target, currentTime);
+    const targetWasDisrupted = this.options.combatStates.isDisrupted(target, currentTime);
     let damage = ability.damage;
 
     if (consumedMark) {
       damage = Math.round(damage * this.options.traits.getSignatureMarkedDamageMultiplier());
+    }
+    if (targetWasDisrupted) {
+      damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());
     }
 
     const killed = target.takeDamage(damage, { x: this.options.player.x, y: this.options.player.y });
@@ -216,6 +238,7 @@ export class AbilityResolver {
     return {
       used: true,
       slot,
+      disruptedTargetsHit: targetWasDisrupted ? 1 : 0,
       signatureHit: {
         target,
         damage,
@@ -223,6 +246,60 @@ export class AbilityResolver {
         killed,
       },
     };
+  }
+
+  private tryUseShockLattice(slot: AbilitySlot, ability: AbilityDefinition, currentTime: number): AbilityUseResult {
+    const radius = ability.radius ?? ability.range;
+    const targets = this.getActiveEnemies().filter(
+      (enemy) => Phaser.Math.Distance.Between(this.options.player.x, this.options.player.y, enemy.x, enemy.y) <= radius,
+    );
+
+    if (targets.length === 0) {
+      return { used: false };
+    }
+
+    const disruptedDuration = this.options.traits.getDisruptedDurationMs(ability.disruptedDurationMs ?? 2400);
+    for (const enemy of targets) {
+      enemy.takeDamage(ability.damage, { x: this.options.player.x, y: this.options.player.y });
+      this.options.combatStates.applyDisrupted(enemy, currentTime, disruptedDuration);
+    }
+
+    const ring = this.options.scene.add.circle(this.options.player.x, this.options.player.y, 22, ability.color, 0.18).setDepth(8);
+    ring.setStrokeStyle(3, ability.strokeColor, 0.95);
+    this.options.scene.tweens.add({
+      targets: ring,
+      radius,
+      alpha: 0,
+      duration: 260,
+      ease: 'Quad.Out',
+      onComplete: () => ring.destroy(),
+    });
+
+    return { used: true, slot, disruptedApplications: targets.length };
+  }
+
+  private tryUseSpotterDrone(slot: AbilitySlot, ability: AbilityDefinition, currentTime: number): AbilityUseResult {
+    const target = this.findSupportPriorityEnemy(currentTime, ability.range);
+    if (!target) {
+      return { used: false };
+    }
+
+    const direction = new Phaser.Math.Vector2(target.x - this.options.player.x, target.y - this.options.player.y);
+    if (direction.lengthSq() === 0) {
+      return { used: false };
+    }
+
+    this.spawnProjectile(direction.normalize(), {
+      sourceAbilityId: ability.id,
+      damage: ability.damage,
+      maxDistance: ability.range,
+      speed: ability.projectileSpeed ?? 660,
+      radius: ability.projectileRadius ?? 4,
+      color: ability.color,
+      strokeColor: ability.strokeColor,
+    });
+
+    return { used: true, slot };
   }
 
   private spawnProjectile(direction: Phaser.Math.Vector2, payload: AbilityProjectilePayload): void {
@@ -292,5 +369,35 @@ export class AbilityResolver {
     }
 
     return nearest;
+  }
+
+  private findDisruptedEnemy(currentTime: number, range: number): Enemy | null {
+    const disruptedEnemies = this.getActiveEnemies().filter((enemy) => enemy.isDisrupted(currentTime));
+    if (disruptedEnemies.length === 0) {
+      return null;
+    }
+
+    const maxDistanceSq = range * range;
+    let nearest: Enemy | null = null;
+    let nearestDistanceSq = maxDistanceSq;
+
+    for (const enemy of disruptedEnemies) {
+      const distanceSq = Phaser.Math.Distance.Squared(this.options.player.x, this.options.player.y, enemy.x, enemy.y);
+      if (distanceSq > nearestDistanceSq) {
+        continue;
+      }
+      nearest = enemy;
+      nearestDistanceSq = distanceSq;
+    }
+
+    return nearest;
+  }
+
+  private findSupportPriorityEnemy(currentTime: number, range: number): Enemy | null {
+    return (
+      this.findMarkedEnemy(currentTime, range) ??
+      this.findDisruptedEnemy(currentTime, range) ??
+      this.findNearestEnemy(range)
+    );
   }
 }

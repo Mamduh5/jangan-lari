@@ -1,10 +1,13 @@
+import type { AbilityId } from './abilities';
 import type { HeroId } from './heroes';
 import type { TraitId } from './traits';
 
-export type RewardCategory = 'trait' | 'stabilizer';
+export type RewardCategory = 'trait' | 'stabilizer' | 'support';
 
 export type RewardId =
   | TraitId
+  | 'shock-lattice'
+  | 'spotter-drone'
   | 'field-repairs'
   | 'reflex-boots';
 
@@ -17,6 +20,7 @@ export type RewardDefinition = {
   title: string;
   description: string;
   traitId?: TraitId;
+  abilityId?: AbilityId;
   heroBias?: HeroId | 'shared';
   repeatable?: boolean;
 };
@@ -66,6 +70,42 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     description: 'Killing a Marked enemy grants a small burst of Guard.',
     traitId: 'scavenger-shield',
     heroBias: 'shared',
+  },
+  'lingering-static': {
+    id: 'lingering-static',
+    category: 'trait',
+    lane: 'bridge',
+    title: 'Lingering Static',
+    description: 'Disrupted lasts 0.9s longer.',
+    traitId: 'lingering-static',
+    heroBias: 'shared',
+  },
+  'breach-capacitor': {
+    id: 'breach-capacitor',
+    category: 'trait',
+    lane: 'deepen',
+    title: 'Breach Capacitor',
+    description: 'Signature abilities deal more damage to Disrupted enemies.',
+    traitId: 'breach-capacitor',
+    heroBias: 'shared',
+  },
+  'shock-lattice': {
+    id: 'shock-lattice',
+    category: 'support',
+    lane: 'bridge',
+    title: 'Shock Lattice',
+    description: 'Equip a support pulse that disrupts nearby enemies every few seconds.',
+    abilityId: 'shock-lattice',
+    heroBias: 'runner',
+  },
+  'spotter-drone': {
+    id: 'spotter-drone',
+    category: 'support',
+    lane: 'bridge',
+    title: 'Spotter Drone',
+    description: 'Equip a support drone shot that disrupts priority targets from range.',
+    abilityId: 'spotter-drone',
+    heroBias: 'shade',
   },
   'field-repairs': {
     id: 'field-repairs',

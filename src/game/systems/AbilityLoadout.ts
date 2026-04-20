@@ -18,6 +18,19 @@ export class AbilityLoadout {
     this.slots.signature.abilityId = signatureAbilityId;
   }
 
+  hasAbility(slot: AbilitySlot): boolean {
+    return this.slots[slot].abilityId !== null;
+  }
+
+  getAbilityId(slot: AbilitySlot): AbilityId | null {
+    return this.slots[slot].abilityId;
+  }
+
+  setAbility(slot: AbilitySlot, abilityId: AbilityId | null): void {
+    this.slots[slot].abilityId = abilityId;
+    this.slots[slot].nextReadyAtMs = 0;
+  }
+
   getAbility(slot: AbilitySlot): AbilityDefinition | null {
     const abilityId = this.slots[slot].abilityId;
     return abilityId ? getAbilityDefinition(abilityId) : null;
