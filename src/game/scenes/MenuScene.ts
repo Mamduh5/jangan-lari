@@ -50,7 +50,7 @@ export class MenuScene extends Phaser.Scene {
     this.metaButton = this.createMenuButton(726, 82, 'Meta', () => this.scene.start('MetaScene'));
 
     this.add
-      .text(centerX, 168, 'Pick a chassis. Iron Warden should feel durable and close. Raptor Frame should feel surgical and target-driven. Ash Weaver should build pressure, then detonate it.', {
+      .text(centerX, 168, 'Pick a Hero to play.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#cbd5e1',
@@ -166,7 +166,7 @@ export class MenuScene extends Phaser.Scene {
     });
 
     const selectedHero = HERO_LIST.find((hero) => hero.id === this.saveData.selectedHero);
-    this.startButton.setText(`Start ${selectedHero?.name ?? 'Run'}`);
+    this.startButton.setText(`Start Run`);
     this.statusText.setText(
       `${selectedHero?.name ?? 'Hero'} selected • ${this.getAffinityLabel(selectedHero ?? HERO_LIST[0])} • Enter / Space to launch`,
     );
