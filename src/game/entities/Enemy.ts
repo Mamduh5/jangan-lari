@@ -37,7 +37,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   readonly contactDamage: number;
   private readonly speed: number;
   private readonly xpValue: number;
+  private readonly maxHealth: number;
   private health: number;
+  private damageTakenMultiplier = 1;
   private readonly strafeDirection: number;
   private dashUntil = 0;
   private nextDashAt = 0;
@@ -76,6 +78,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.archetype = archetype;
     this.speed = archetype.speed;
     this.contactDamage = archetype.contactDamage;
+    this.maxHealth = archetype.maxHealth;
     this.health = archetype.maxHealth;
     this.xpValue = archetype.xpValue;
     this.responseProfile = getEnemyCombatResponseProfile(archetype.id);
@@ -149,6 +152,10 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   getCurrentHealth(): number {
     return this.health;
+  }
+
+  getMaxHealth(): number {
+    return this.maxHealth;
   }
 
   isBoss(): boolean {
@@ -239,6 +246,10 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   setEventMarker(color: number | null): void {
     this.eventMarkerColor = color;
+  }
+
+  setDamageTakenMultiplier(multiplier: number): void {
+    this.damageTakenMultiplier = Phaser.Math.Clamp(multiplier, 0, 2);
   }
 
   despawnSilently(): void {
@@ -422,7 +433,12 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return false;
     }
 
-    this.health = Math.max(0, this.health - amount);
+    const adjustedDamage = Math.max(0, Math.round(amount * this.damageTakenMultiplier));
+    if (adjustedDamage <= 0) {
+      return false;
+    }
+
+    this.health = Math.max(0, this.health - adjustedDamage);
 
     if (this.health === 0) {
       this.deathRewardPending = true;

@@ -1,11 +1,13 @@
 import type { AbilityId } from './abilities';
+import type { EvolutionId } from './evolutions';
 import type { HeroId } from './heroes';
 import type { TraitId } from './traits';
 
-export type RewardCategory = 'trait' | 'stabilizer' | 'support';
+export type RewardCategory = 'trait' | 'stabilizer' | 'support' | 'evolution';
 
 export type RewardId =
   | TraitId
+  | EvolutionId
   | 'shock-lattice'
   | 'spotter-drone'
   | 'contagion-node'
@@ -22,6 +24,7 @@ export type RewardDefinition = {
   description: string;
   traitId?: TraitId;
   abilityId?: AbilityId;
+  evolutionId?: EvolutionId;
   heroBias?: HeroId | 'shared';
   repeatable?: boolean;
 };
@@ -142,6 +145,33 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     title: 'Volatile Bloom',
     description: 'Hex Detonation leaves a stronger follow-up burst when it consumes Ailment.',
     traitId: 'volatile-bloom',
+    heroBias: 'weaver',
+  },
+  'citadel-core': {
+    id: 'citadel-core',
+    category: 'evolution',
+    lane: 'deepen',
+    title: 'Citadel Core',
+    description: 'Bulwark Slam spends Guard in chunks and emits follow-up fortress pulses while Guard lasts.',
+    evolutionId: 'citadel-core',
+    heroBias: 'runner',
+  },
+  'kill-chain-protocol': {
+    id: 'kill-chain-protocol',
+    category: 'evolution',
+    lane: 'deepen',
+    title: 'Kill Chain Protocol',
+    description: 'Hunter Sweep killing a Marked target immediately chains an empowered strike into the next priority enemy.',
+    evolutionId: 'kill-chain-protocol',
+    heroBias: 'shade',
+  },
+  'pyre-constellation': {
+    id: 'pyre-constellation',
+    category: 'evolution',
+    lane: 'deepen',
+    title: 'Pyre Constellation',
+    description: 'Hex Detonation chains across nearby Ailmented enemies and consumes them in sequence.',
+    evolutionId: 'pyre-constellation',
     heroBias: 'weaver',
   },
   'field-repairs': {

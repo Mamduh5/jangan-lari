@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { getCombatResponseTuningSnapshot, type CombatResponseTuningSnapshot } from '../combat/combatResponse';
 import type { AbilityId } from '../data/abilities';
 import type { EnemyArchetypeId } from '../data/enemies';
+import type { EvolutionId } from '../data/evolutions';
 import type { RewardId, RewardLane } from '../data/rewards';
 import type { WeaponId } from '../data/weapons';
 
@@ -88,8 +89,17 @@ export type GameplayBotRunSnapshot = {
   ailmentConsumeCount: number;
   supportAbilityId: AbilityId | null;
   supportUseCount: number;
+  evolutionId: EvolutionId | null;
+  evolutionTitle: string;
   xpGemSpawnCount: number;
   xpGemCollectCount: number;
+  bossActive: boolean;
+  bossHp: number;
+  bossMaxHp: number;
+  bossProtectors: number;
+  bossProtected: boolean;
+  bossName: string;
+  bossObjective: string;
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];

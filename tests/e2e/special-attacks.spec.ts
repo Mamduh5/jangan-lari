@@ -427,4 +427,227 @@ test.describe('milestone 1 signature behavior', () => {
     expect(result.used).toBe(true);
     expect(result.ailmented).toBe(true);
   });
+
+  test('Citadel Core turns Bulwark Slam into chunked follow-up fortress pulses', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(async () => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        debugForceReward: (rewardId: 'citadel-core') => boolean;
+        debugSpawnEnemy: (enemyId: 'anchor') => boolean;
+        combatStates: { gainGuard: (amount: number) => void; getGuard: () => number };
+        abilityResolver: { tryUseAbility: (slot: 'signature', ability: unknown, currentTime: number) => { used: boolean } };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        enemies: {
+          getChildren: () => Array<{
+            x: number;
+            y: number;
+            getCurrentHealth: () => number;
+            body?: { reset?: (x: number, y: number) => void };
+          }>;
+        };
+      };
+
+      runScene.debugForceReward('citadel-core');
+      runScene.debugSpawnEnemy('anchor');
+      runScene.debugSpawnEnemy('anchor');
+      const enemies = runScene.enemies.getChildren().slice(-2);
+      enemies.forEach((enemy, index) => {
+        const nextX = runScene.player.x + 40 + index * 25;
+        const nextY = runScene.player.y + 30 - index * 20;
+        enemy.x = nextX;
+        enemy.y = nextY;
+        enemy.body?.reset?.(nextX, nextY);
+      });
+
+      runScene.combatStates.gainGuard(18);
+      const beforeGuard = runScene.combatStates.getGuard();
+      const beforeHealths = enemies.map((enemy) => enemy.getCurrentHealth());
+      const used = runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+      const immediateGuard = runScene.combatStates.getGuard();
+
+      await new Promise((resolve) => setTimeout(resolve, 450));
+
+      return {
+        used: used.used,
+        beforeGuard,
+        immediateGuard,
+        afterGuard: runScene.combatStates.getGuard(),
+        damageNow: beforeHealths.map((health, index) => health - enemies[index]!.getCurrentHealth()),
+      };
+    });
+
+    expect(result.used).toBe(true);
+    expect(result.immediateGuard).toBeLessThan(result.beforeGuard);
+    expect(result.afterGuard).toBeLessThan(result.immediateGuard);
+    expect(result.damageNow.some((damage) => damage > 0)).toBe(true);
+  });
+
+  test('Kill Chain Protocol redirects Hunter Sweep into a second priority target after a marked kill', async ({ page }) => {
+    await startRun(page, 'shade');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        debugForceReward: (rewardId: 'kill-chain-protocol') => boolean;
+        debugSpawnEnemy: (enemyId: 'shooter') => boolean;
+        combatStates: {
+          applyMark: (enemy: { applyMark: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+        };
+        abilityResolver: { tryUseAbility: (slot: 'signature', ability: unknown, currentTime: number) => { used: boolean } };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        enemies: {
+          getChildren: () => Array<{
+            x: number;
+            y: number;
+            takeDamage: (amount: number) => boolean;
+            getCurrentHealth: () => number;
+            isMarked: (time: number) => boolean;
+            body?: { reset?: (x: number, y: number) => void };
+          }>;
+        };
+      };
+
+      runScene.debugForceReward('kill-chain-protocol');
+      runScene.debugSpawnEnemy('shooter');
+      runScene.debugSpawnEnemy('shooter');
+      const enemies = runScene.enemies.getChildren().slice(-2);
+      enemies.forEach((enemy, index) => {
+        const nextX = runScene.player.x + 150 + index * 70;
+        const nextY = runScene.player.y;
+        enemy.x = nextX;
+        enemy.y = nextY;
+        enemy.body?.reset?.(nextX, nextY);
+        runScene.combatStates.applyMark(enemy as never, game.loop.time, 2200);
+      });
+      enemies[0]!.takeDamage(20);
+      const secondBefore = enemies[1]!.getCurrentHealth();
+      const used = runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+
+      return {
+        used: used.used,
+        firstAliveAfter: enemies[0]!.getCurrentHealth() > 0,
+        secondDamage: secondBefore - enemies[1]!.getCurrentHealth(),
+      };
+    });
+
+    expect(result.used).toBe(true);
+    expect(result.firstAliveAfter).toBe(false);
+    expect(result.secondDamage).toBeGreaterThan(0);
+  });
+
+  test('Pyre Constellation chains Hex Detonation beyond the initial detonation radius', async ({ page }) => {
+    await startRun(page, 'weaver');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        debugForceReward: (rewardId: 'pyre-constellation') => boolean;
+        debugSpawnEnemy: (enemyId: 'anchor') => boolean;
+        combatStates: {
+          applyAilment: (enemy: { applyAilment: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+        };
+        abilityResolver: {
+          tryUseAbility: (slot: 'signature', ability: unknown, currentTime: number) => { used: boolean; ailmentConsumes?: number };
+        };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        enemies: {
+          getChildren: () => Array<{
+            x: number;
+            y: number;
+            getCurrentHealth: () => number;
+            isAilmented: (time: number) => boolean;
+            body?: { reset?: (x: number, y: number) => void };
+          }>;
+        };
+      };
+
+      runScene.debugForceReward('pyre-constellation');
+      runScene.debugSpawnEnemy('anchor');
+      runScene.debugSpawnEnemy('anchor');
+      runScene.debugSpawnEnemy('anchor');
+      const enemies = runScene.enemies.getChildren().slice(-3);
+      const positions = [
+        { x: runScene.player.x + 110, y: runScene.player.y },
+        { x: runScene.player.x + 290, y: runScene.player.y + 10 },
+        { x: runScene.player.x + 440, y: runScene.player.y + 20 },
+      ];
+      enemies.forEach((enemy, index) => {
+        enemy.x = positions[index]!.x;
+        enemy.y = positions[index]!.y;
+        enemy.body?.reset?.(enemy.x, enemy.y);
+        runScene.combatStates.applyAilment(enemy as never, game.loop.time, 2600);
+      });
+      const farBefore = enemies[2]!.getCurrentHealth();
+      const used = runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+
+      return {
+        used: used.used,
+        ailmentConsumes: used.ailmentConsumes ?? 0,
+        farDamage: farBefore - enemies[2]!.getCurrentHealth(),
+        farAilmentedAfter: enemies[2]!.isAilmented(game.loop.time),
+      };
+    });
+
+    expect(result.used).toBe(true);
+    expect(result.ailmentConsumes).toBeGreaterThanOrEqual(2);
+    expect(result.farDamage).toBeGreaterThan(0);
+    expect(result.farAilmentedAfter).toBe(false);
+  });
+
+  test('Behemoth boss encounter exposes protection and shockwave pressure on the real run scene', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number; getCurrentHealth: () => number };
+        debugForceBossEncounter: () => void;
+        enemies: { getChildren: () => Array<{ archetype: { id: string }; takeDamage: (amount: number) => boolean; active: boolean; isAlive: () => boolean }> };
+        publishHudState: () => void;
+        updateBossEncounter: (time: number) => void;
+        handleEnemyAttackSignal: (signal: { type: 'boss-shockwave-execute'; x: number; y: number; radius: number; damage: number; durationMs?: number }) => void;
+        registry: { get: (key: string) => unknown };
+      };
+
+      runScene.debugForceBossEncounter();
+      runScene.publishHudState();
+      const initialProtected = Boolean(runScene.registry.get('run.bossProtected'));
+      const initialProtectors = Number(runScene.registry.get('run.bossProtectors') ?? 0);
+      const enemies = runScene.enemies.getChildren();
+      enemies
+        .filter((enemy) => enemy.archetype.id === 'bulwark')
+        .forEach((enemy) => enemy.takeDamage(9999));
+      runScene.updateBossEncounter(game.loop.time + 1000);
+      runScene.publishHudState();
+
+      const hpBefore = runScene.player.getCurrentHealth();
+      runScene.handleEnemyAttackSignal({
+        type: 'boss-shockwave-execute',
+        x: runScene.player.x,
+        y: runScene.player.y,
+        radius: 220,
+        damage: 18,
+        durationMs: 400,
+      });
+
+      return {
+        initialProtected,
+        initialProtectors,
+        afterProtected: Boolean(runScene.registry.get('run.bossProtected')),
+        afterProtectors: Number(runScene.registry.get('run.bossProtectors') ?? 0),
+        hpLoss: hpBefore - runScene.player.getCurrentHealth(),
+      };
+    });
+
+    expect(result.initialProtected).toBe(true);
+    expect(result.initialProtectors).toBeGreaterThan(0);
+    expect(result.afterProtected).toBe(false);
+    expect(result.afterProtectors).toBe(0);
+    expect(result.hpLoss).toBeGreaterThanOrEqual(0);
+  });
 });

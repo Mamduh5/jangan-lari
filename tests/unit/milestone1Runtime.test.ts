@@ -178,4 +178,54 @@ describe('milestone 1 runtime helpers', () => {
     expect(traits.getHexConsumeBonusDamage()).toBe(18);
     expect(traits.getHexSecondaryBurstDamage()).toBe(12);
   });
+
+  test('evolution offers stay locked until hero commitment and late-run timing are satisfied', () => {
+    const director = new LevelUpDirector();
+    const runnerTraits = new TraitRuntime();
+
+    let choices = director.buildChoices('runner', runnerTraits, {
+      hasSupportAbility: true,
+      level: 7,
+      elapsedMs: 260_000,
+      selectedEvolutionId: null,
+      shuffle: <T>(items: T[]) => [...items],
+    });
+    expect(choices.some((choice) => choice.category === 'evolution')).toBe(false);
+
+    runnerTraits.addTrait('close-guard');
+    runnerTraits.addTrait('steadfast-posture');
+    choices = director.buildChoices('runner', runnerTraits, {
+      hasSupportAbility: true,
+      level: 7,
+      elapsedMs: 260_000,
+      selectedEvolutionId: null,
+      shuffle: <T>(items: T[]) => [...items],
+    });
+    expect(choices.find((choice) => choice.category === 'evolution')?.id).toBe('citadel-core');
+  });
+
+  test('only the matching hero can receive its evolution and only before one is chosen', () => {
+    const director = new LevelUpDirector();
+    const shadeTraits = new TraitRuntime();
+    shadeTraits.addTrait('target-painter');
+    shadeTraits.addTrait('focused-breach');
+
+    const shadeChoices = director.buildChoices('shade', shadeTraits, {
+      hasSupportAbility: true,
+      level: 8,
+      elapsedMs: 300_000,
+      selectedEvolutionId: null,
+      shuffle: <T>(items: T[]) => [...items],
+    });
+    expect(shadeChoices.find((choice) => choice.category === 'evolution')?.id).toBe('kill-chain-protocol');
+
+    const afterEvolution = director.buildChoices('shade', shadeTraits, {
+      hasSupportAbility: true,
+      level: 8,
+      elapsedMs: 300_000,
+      selectedEvolutionId: 'kill-chain-protocol',
+      shuffle: <T>(items: T[]) => [...items],
+    });
+    expect(afterEvolution.some((choice) => choice.category === 'evolution')).toBe(false);
+  });
 });

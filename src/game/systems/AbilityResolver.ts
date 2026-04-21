@@ -5,6 +5,7 @@ import type { Player } from '../entities/Player';
 import { AbilityProjectile, type AbilityProjectilePayload } from '../entities/AbilityProjectile';
 import type { CombatStateRuntime } from './CombatStateRuntime';
 import type { TraitRuntime } from './TraitRuntime';
+import type { EvolutionId } from '../data/evolutions';
 import type { HeroId } from '../data/heroes';
 
 export type SignatureHitResult = {
@@ -37,7 +38,13 @@ type AbilityResolverOptions = {
 };
 
 export class AbilityResolver {
+  private evolutionId: EvolutionId | null = null;
+
   constructor(private readonly options: AbilityResolverOptions) {}
+
+  setEvolutionId(evolutionId: EvolutionId | null): void {
+    this.evolutionId = evolutionId;
+  }
 
   tryUseAbility(slot: AbilitySlot, ability: AbilityDefinition, currentTime: number): AbilityUseResult {
     switch (ability.behaviorId) {
@@ -122,37 +129,22 @@ export class AbilityResolver {
       return { used: false };
     }
 
-    const spentGuard = Math.max(6, this.options.combatStates.spendGuard(Math.min(12, guard)));
-    const damageBonus = Math.round(spentGuard * 1.2);
-    let disruptedTargetsHit = 0;
+    if (this.evolutionId === 'citadel-core') {
+      let disruptedTargetsHit = this.applyBulwarkPulse(ability, radius, Math.min(6, guard), currentTime, 1);
 
-    for (const enemy of targets) {
-      const targetWasDisrupted = this.options.combatStates.isDisrupted(enemy, currentTime);
-      let damage = ability.damage + damageBonus;
-      if (targetWasDisrupted) {
-        damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());
-        disruptedTargetsHit += 1;
-      }
+      [170, 340].forEach((delayMs) => {
+        this.options.scene.time.delayedCall(delayMs, () => {
+          if (!this.options.player.active || this.options.combatStates.getGuard() < 3) {
+            return;
+          }
+          this.applyBulwarkPulse(ability, radius, 3, this.options.scene.time.now, 0.72);
+        });
+      });
 
-      const killed = enemy.takeDamage(damage, { x: this.options.player.x, y: this.options.player.y });
-      const knockback = new Phaser.Math.Vector2(enemy.x - this.options.player.x, enemy.y - this.options.player.y);
-      if (!killed && enemy.active && enemy.body && knockback.lengthSq() > 0) {
-        knockback.normalize().scale(180 + spentGuard * 5);
-        enemy.body.setVelocity(knockback.x, knockback.y);
-      }
+      return { used: true, slot, disruptedTargetsHit };
     }
 
-    const ring = this.options.scene.add.circle(this.options.player.x, this.options.player.y, 24, ability.color, 0.16).setDepth(8);
-    ring.setStrokeStyle(4, ability.strokeColor, 0.95);
-    this.options.scene.tweens.add({
-      targets: ring,
-      radius,
-      alpha: 0,
-      duration: 220,
-      ease: 'Quad.Out',
-      onComplete: () => ring.destroy(),
-    });
-
+    const disruptedTargetsHit = this.applyBulwarkPulse(ability, radius, Math.min(12, guard), currentTime, 1);
     return { used: true, slot, disruptedTargetsHit };
   }
 
@@ -283,6 +275,38 @@ export class AbilityResolver {
       this.options.scene.cameras.main.shake(70, 0.0022);
     }
 
+    if (this.evolutionId === 'kill-chain-protocol' && consumedMark && killed) {
+      const nextTarget = this.findMarkedEnemyExcluding(currentTime, ability.range, target) ?? this.findNearestEnemyExcluding(ability.range, target);
+      if (nextTarget) {
+        const redirectedConsumedMark = this.options.combatStates.consumeMark(nextTarget, currentTime);
+        let redirectedDamage = Math.round(damage * 0.85);
+        if (redirectedConsumedMark) {
+          redirectedDamage = Math.round(redirectedDamage * 1.15);
+        }
+        nextTarget.takeDamage(redirectedDamage, { x: target.x, y: target.y });
+
+        const chainLine = this.options.scene.add.line(
+          0,
+          0,
+          target.x,
+          target.y,
+          nextTarget.x,
+          nextTarget.y,
+          0xfef08a,
+          0.95,
+        );
+        chainLine.setLineWidth(5, 5);
+        chainLine.setDepth(8.5);
+        this.options.scene.tweens.add({
+          targets: chainLine,
+          alpha: 0,
+          duration: 170,
+          ease: 'Quad.Out',
+          onComplete: () => chainLine.destroy(),
+        });
+      }
+    }
+
     return {
       used: true,
       slot,
@@ -312,8 +336,10 @@ export class AbilityResolver {
     const targets = this.getActiveEnemies().filter(
       (enemy) => Phaser.Math.Distance.Between(target.x, target.y, enemy.x, enemy.y) <= radius,
     );
+    const chainedTargets = new Set<Enemy>();
 
     for (const enemy of targets) {
+      chainedTargets.add(enemy);
       const consumedAilment = this.options.combatStates.consumeAilment(enemy, currentTime);
       let damage = consumedAilment ? ability.damage + consumeBonusDamage : Math.round(ability.damage * 0.6);
       if (this.options.combatStates.isDisrupted(enemy, currentTime)) {
@@ -351,6 +377,51 @@ export class AbilityResolver {
           continue;
         }
         splashTarget.takeDamage(volatileBurstDamage, { x: enemy.x, y: enemy.y });
+      }
+    }
+
+    if (this.evolutionId === 'pyre-constellation' && ailmentConsumes > 0) {
+      let chainOrigin = target;
+      for (let index = 0; index < 2; index += 1) {
+        const chainedTarget = this.findNearbyAilmentedEnemy(currentTime, chainOrigin, 240, chainedTargets);
+        if (!chainedTarget) {
+          break;
+        }
+
+        chainedTargets.add(chainedTarget);
+        if (!this.options.combatStates.consumeAilment(chainedTarget, currentTime)) {
+          break;
+        }
+
+        ailmentConsumes += 1;
+        let chainDamage = ability.damage + consumeBonusDamage;
+        if (this.options.combatStates.isDisrupted(chainedTarget, currentTime)) {
+          chainDamage = Math.round(chainDamage * this.options.traits.getSignatureDisruptedDamageMultiplier());
+          disruptedTargetsHit += 1;
+        }
+        chainedTarget.takeDamage(chainDamage, { x: chainOrigin.x, y: chainOrigin.y });
+
+        const chainLine = this.options.scene.add.line(
+          0,
+          0,
+          chainOrigin.x,
+          chainOrigin.y,
+          chainedTarget.x,
+          chainedTarget.y,
+          0xfb923c,
+          0.9,
+        );
+        chainLine.setLineWidth(4, 4);
+        chainLine.setDepth(8.5);
+        this.options.scene.tweens.add({
+          targets: chainLine,
+          alpha: 0,
+          duration: 180,
+          ease: 'Quad.Out',
+          onComplete: () => chainLine.destroy(),
+        });
+
+        chainOrigin = chainedTarget;
       }
     }
 
@@ -615,5 +686,106 @@ export class AbilityResolver {
       this.findDisruptedEnemy(currentTime, range) ??
       this.findNearestEnemy(range)
     );
+  }
+
+  private applyBulwarkPulse(
+    ability: AbilityDefinition,
+    radius: number,
+    maxSpend: number,
+    currentTime: number,
+    damageScale: number,
+  ): number {
+    const guardBefore = this.options.combatStates.getGuard();
+    if (guardBefore <= 0) {
+      return 0;
+    }
+
+    const spentGuard = this.options.combatStates.spendGuard(Math.min(maxSpend, guardBefore));
+    if (spentGuard <= 0) {
+      return 0;
+    }
+
+    let disruptedTargetsHit = 0;
+    const targets = this.getActiveEnemies().filter(
+      (enemy) => Phaser.Math.Distance.Between(this.options.player.x, this.options.player.y, enemy.x, enemy.y) <= radius,
+    );
+
+    for (const enemy of targets) {
+      const targetWasDisrupted = this.options.combatStates.isDisrupted(enemy, currentTime);
+      let damage = Math.round((ability.damage + spentGuard * 1.2) * damageScale);
+      if (targetWasDisrupted) {
+        damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());
+        disruptedTargetsHit += 1;
+      }
+
+      const killed = enemy.takeDamage(damage, { x: this.options.player.x, y: this.options.player.y });
+      const knockback = new Phaser.Math.Vector2(enemy.x - this.options.player.x, enemy.y - this.options.player.y);
+      if (!killed && enemy.active && enemy.body && knockback.lengthSq() > 0) {
+        knockback.normalize().scale(160 + spentGuard * 5);
+        enemy.body.setVelocity(knockback.x, knockback.y);
+      }
+    }
+
+    const ring = this.options.scene.add.circle(this.options.player.x, this.options.player.y, 24, ability.color, 0.16).setDepth(8);
+    ring.setStrokeStyle(4, ability.strokeColor, 0.95);
+    this.options.scene.tweens.add({
+      targets: ring,
+      radius,
+      alpha: 0,
+      duration: 220,
+      ease: 'Quad.Out',
+      onComplete: () => ring.destroy(),
+    });
+
+    return disruptedTargetsHit;
+  }
+
+  private findMarkedEnemyExcluding(currentTime: number, range: number, excluded: Enemy): Enemy | null {
+    const markedEnemies = this.getActiveEnemies().filter((enemy) => enemy !== excluded && enemy.isMarked(currentTime));
+    return this.findNearestFromList(markedEnemies, range);
+  }
+
+  private findNearestEnemyExcluding(range: number, excluded: Enemy): Enemy | null {
+    const enemies = this.getActiveEnemies().filter((enemy) => enemy !== excluded);
+    return this.findNearestFromList(enemies, range);
+  }
+
+  private findNearbyAilmentedEnemy(currentTime: number, origin: Enemy, range: number, excluded: Set<Enemy>): Enemy | null {
+    const ailmentedEnemies = this.getActiveEnemies().filter(
+      (enemy) => !excluded.has(enemy) && enemy.isAilmented(currentTime),
+    );
+    if (ailmentedEnemies.length === 0) {
+      return null;
+    }
+
+    let nearest: Enemy | null = null;
+    let nearestDistanceSq = range * range;
+    for (const enemy of ailmentedEnemies) {
+      const distanceSq = Phaser.Math.Distance.Squared(origin.x, origin.y, enemy.x, enemy.y);
+      if (distanceSq > nearestDistanceSq) {
+        continue;
+      }
+      nearest = enemy;
+      nearestDistanceSq = distanceSq;
+    }
+
+    return nearest;
+  }
+
+  private findNearestFromList(enemies: Enemy[], range: number): Enemy | null {
+    const maxDistanceSq = range * range;
+    let nearest: Enemy | null = null;
+    let nearestDistanceSq = maxDistanceSq;
+
+    for (const enemy of enemies) {
+      const distanceSq = Phaser.Math.Distance.Squared(this.options.player.x, this.options.player.y, enemy.x, enemy.y);
+      if (distanceSq > nearestDistanceSq) {
+        continue;
+      }
+      nearest = enemy;
+      nearestDistanceSq = distanceSq;
+    }
+
+    return nearest;
   }
 }

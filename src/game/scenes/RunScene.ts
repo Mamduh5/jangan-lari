@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {
+  BOSS_TRIGGER_TIME_MS,
   ENEMY_SPAWN_INTERVAL_MS,
   GAME_WIDTH,
   RUN_TARGET_DURATION_MS,
@@ -8,6 +9,7 @@ import {
 } from '../config/constants';
 import { getAbilityDefinition } from '../data/abilities';
 import { ENEMY_ARCHETYPES, type EnemyArchetype, type EnemyArchetypeId } from '../data/enemies';
+import { getEvolutionDefinition, type EvolutionId } from '../data/evolutions';
 import { HEROES, type HeroDefinition, type HeroId } from '../data/heroes';
 import { getRewardDefinition, type RewardDefinition, type RewardId } from '../data/rewards';
 import { getTraitDefinition, type TraitId } from '../data/traits';
@@ -76,9 +78,17 @@ export class RunScene extends Phaser.Scene {
   private ailmentApplyCount = 0;
   private ailmentConsumeCount = 0;
   private supportUseCount = 0;
+  private selectedEvolutionId: EvolutionId | null = null;
   private goldEarned = 0;
   private xpGemSpawnCount = 0;
   private xpGemCollectCount = 0;
+  private bossEnemy: Enemy | null = null;
+  private bossEncounterActive = false;
+  private bossProtectors: Enemy[] = [];
+  private bossProtected = false;
+  private bossObjectiveText = '';
+  private nextBossAddSpawnAtMs = 0;
+  private bossTelegraphs: Phaser.GameObjects.Shape[] = [];
 
   private readonly handlePageVisibilityChange = (): void => {
     if (document.hidden && !this.isEnded && !this.isLevelingUp) {
@@ -113,9 +123,17 @@ export class RunScene extends Phaser.Scene {
     this.ailmentApplyCount = 0;
     this.ailmentConsumeCount = 0;
     this.supportUseCount = 0;
+    this.selectedEvolutionId = null;
     this.goldEarned = 0;
     this.xpGemSpawnCount = 0;
     this.xpGemCollectCount = 0;
+    this.bossEnemy = null;
+    this.bossEncounterActive = false;
+    this.bossProtectors = [];
+    this.bossProtected = false;
+    this.bossObjectiveText = '';
+    this.nextBossAddSpawnAtMs = 0;
+    this.bossTelegraphs = [];
 
     this.cameras.main.setBackgroundColor('#111827');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -146,6 +164,7 @@ export class RunScene extends Phaser.Scene {
       traits: this.traitRuntime,
       heroId: this.selectedHero.id,
     });
+    this.abilityResolver.setEvolutionId(null);
     this.spawnDirector = new SpawnDirector();
 
     this.physics.add.overlap(
@@ -186,7 +205,7 @@ export class RunScene extends Phaser.Scene {
 
     if (!this.isEnded && !this.isLevelingUp && !document.hidden) {
       this.runElapsedMs = accumulateRunElapsedMs(this.runElapsedMs, activeDelta, true, 100, RUN_TARGET_DURATION_MS);
-      if (this.runElapsedMs >= RUN_TARGET_DURATION_MS) {
+      if (this.runElapsedMs >= RUN_TARGET_DURATION_MS && !this.isBossAlive()) {
         this.endRun(true);
       }
     }
@@ -212,6 +231,7 @@ export class RunScene extends Phaser.Scene {
 
     this.player.move(this.readMovementInput());
     this.attemptAbilityUse(time);
+    this.updateBossEncounter(time);
     this.updateEnemies(time);
     this.spawnIfDue(time);
 
@@ -281,6 +301,14 @@ export class RunScene extends Phaser.Scene {
     this.endRun(victory);
   }
 
+  debugForceBossEncounter(): void {
+    if (this.isEnded) {
+      return;
+    }
+    this.spawnBossEncounter();
+    this.publishHudState();
+  }
+
   debugForceReward(rewardId: RewardId): boolean {
     const reward = getRewardDefinition(rewardId);
     if (!reward) {
@@ -318,6 +346,11 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.targetMs', RUN_TARGET_DURATION_MS);
     this.registry.set('run.goldEarned', this.goldEarned);
     this.registry.set('run.totalGold', this.saveData.totalGold);
+    this.registry.set('run.evolutionId', this.selectedEvolutionId);
+    this.registry.set(
+      'run.evolutionTitle',
+      this.selectedEvolutionId ? getEvolutionDefinition(this.selectedEvolutionId).title : '',
+    );
     this.registry.set('run.levelUpActive', this.isLevelingUp);
     this.registry.set('run.levelUpChoices', this.currentRewardChoices);
     this.registry.set('run.traits', this.traitRuntime.getSelectedTraitIds().map((id) => getTraitDefinition(id)?.title ?? id));
@@ -325,6 +358,13 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.disruptedEnemies', this.disruptedEnemyCount);
     this.registry.set('run.ailmentedEnemies', this.ailmentedEnemyCount);
     this.registry.set('run.stateLabel', this.buildStateLabel());
+    this.registry.set('run.bossActive', this.isBossAlive());
+    this.registry.set('run.bossHp', this.bossEnemy?.getCurrentHealth() ?? 0);
+    this.registry.set('run.bossMaxHp', this.bossEnemy?.getMaxHealth() ?? 0);
+    this.registry.set('run.bossProtectors', this.getActiveBossProtectors().length);
+    this.registry.set('run.bossProtected', this.bossProtected);
+    this.registry.set('run.bossName', this.bossEnemy?.archetype.name ?? '');
+    this.registry.set('run.bossObjective', this.bossObjectiveText);
     this.registry.set('run.weaponNames', [primary.name, signature.name]);
     this.registry.set('run.abilityLabels', [
       `Primary: ${primary.shortLabel} ${primary.name} (${Math.ceil(this.abilityLoadout.getRemainingCooldownMs('primary', this.time.now) / 100) / 10}s)`,
@@ -408,8 +448,17 @@ export class RunScene extends Phaser.Scene {
       ailmentConsumeCount: this.ailmentConsumeCount,
       supportAbilityId: this.abilityLoadout.getAbilityId('support'),
       supportUseCount: this.supportUseCount,
+      evolutionId: this.selectedEvolutionId,
+      evolutionTitle: this.selectedEvolutionId ? getEvolutionDefinition(this.selectedEvolutionId).title : '',
       xpGemSpawnCount: this.xpGemSpawnCount,
       xpGemCollectCount: this.xpGemCollectCount,
+      bossActive: this.isBossAlive(),
+      bossHp: this.bossEnemy?.getCurrentHealth() ?? 0,
+      bossMaxHp: this.bossEnemy?.getMaxHealth() ?? 0,
+      bossProtectors: this.getActiveBossProtectors().length,
+      bossProtected: this.bossProtected,
+      bossName: this.bossEnemy?.archetype.name ?? '',
+      bossObjective: this.bossObjectiveText,
       enemies,
       xpGems,
       upgradeChoices: this.currentRewardChoices.map((reward) => ({
@@ -563,24 +612,62 @@ export class RunScene extends Phaser.Scene {
   }
 
   private handleEnemyAttackSignal(signal: EnemyAttackSignal): void {
-    if (signal.type !== 'ranged-shot') {
+    if (signal.type === 'ranged-shot') {
+      const orb = this.add.circle(signal.x, signal.y, signal.radius, signal.color, 0.92).setDepth(6);
+      const halo = this.add.circle(signal.x, signal.y, signal.radius + 4, signal.color, 0.18).setDepth(5);
+      halo.setStrokeStyle(2, 0xe0f2fe, 0.65);
+      this.enemyBolts.push({
+        orb,
+        halo,
+        vx: signal.direction.x * signal.speed,
+        vy: signal.direction.y * signal.speed,
+        radius: signal.radius,
+        damage: signal.damage,
+        elapsedMs: 0,
+        lifetimeMs: 2200,
+        hasHitPlayer: false,
+      });
       return;
     }
 
-    const orb = this.add.circle(signal.x, signal.y, signal.radius, signal.color, 0.92).setDepth(6);
-    const halo = this.add.circle(signal.x, signal.y, signal.radius + 4, signal.color, 0.18).setDepth(5);
-    halo.setStrokeStyle(2, 0xe0f2fe, 0.65);
-    this.enemyBolts.push({
-      orb,
-      halo,
-      vx: signal.direction.x * signal.speed,
-      vy: signal.direction.y * signal.speed,
-      radius: signal.radius,
-      damage: signal.damage,
-      elapsedMs: 0,
-      lifetimeMs: 2200,
-      hasHitPlayer: false,
-    });
+    if (signal.type === 'boss-shockwave-telegraph') {
+      const telegraph = this.add.circle(signal.x, signal.y, 40, 0xfca5a5, 0.08).setDepth(3);
+      telegraph.setStrokeStyle(4, 0xfca5a5, 0.9);
+      this.bossTelegraphs.push(telegraph);
+      this.tweens.add({
+        targets: telegraph,
+        radius: signal.radius,
+        alpha: 0.3,
+        duration: 760,
+        ease: 'Quad.Out',
+        onComplete: () => {
+          Phaser.Utils.Array.Remove(this.bossTelegraphs, telegraph);
+          telegraph.destroy();
+        },
+      });
+      return;
+    }
+
+    if (signal.type === 'boss-shockwave-execute') {
+      const shockwave = this.add.circle(signal.x, signal.y, Math.max(28, signal.radius * 0.25), 0xf97316, 0.12).setDepth(7);
+      shockwave.setStrokeStyle(5, 0xffedd5, 0.95);
+      this.bossTelegraphs.push(shockwave);
+      this.tweens.add({
+        targets: shockwave,
+        radius: signal.radius,
+        alpha: 0,
+        duration: signal.durationMs ?? 980,
+        ease: 'Quad.Out',
+        onComplete: () => {
+          Phaser.Utils.Array.Remove(this.bossTelegraphs, shockwave);
+          shockwave.destroy();
+        },
+      });
+
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, signal.x, signal.y) <= signal.radius) {
+        this.applyDamageToPlayer(signal.damage);
+      }
+    }
   }
 
   private updateProjectiles(deltaMs: number): void {
@@ -748,6 +835,15 @@ export class RunScene extends Phaser.Scene {
     const gem = new XPGem(this, enemy.x, enemy.y, enemy.getXpValue());
     this.xpGems.add(gem);
     this.xpGemSpawnCount += 1;
+
+    if (enemy === this.bossEnemy) {
+      this.bossEnemy = null;
+      this.bossEncounterActive = false;
+      this.bossProtected = false;
+      this.bossObjectiveText = 'Boss broken.';
+      this.bossProtectors = [];
+      this.endRun(true);
+    }
   }
 
   private refreshCombatStateCounts(currentTime: number): void {
@@ -768,6 +864,10 @@ export class RunScene extends Phaser.Scene {
 
     this.currentRewardChoices = this.levelUpDirector.buildChoices(this.selectedHero.id, this.traitRuntime, {
       hasSupportAbility: this.abilityLoadout.hasAbility('support'),
+      supportAbilityId: this.abilityLoadout.getAbilityId('support'),
+      level: this.player.getLevel(),
+      elapsedMs: this.runElapsedMs,
+      selectedEvolutionId: this.selectedEvolutionId,
     });
 
     const validChoices = this.currentRewardChoices.filter(
@@ -798,6 +898,12 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    if (reward.category === 'evolution' && reward.evolutionId) {
+      this.selectedEvolutionId = reward.evolutionId;
+      this.abilityResolver.setEvolutionId(reward.evolutionId);
+      return;
+    }
+
     switch (reward.id) {
       case 'field-repairs':
         this.player.addMaxHealth(24);
@@ -812,6 +918,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   private spawnIfDue(currentTime: number): void {
+    if (this.bossEncounterActive) {
+      return;
+    }
+
     if (currentTime < this.nextSpawnAtMs) {
       return;
     }
@@ -893,6 +1003,8 @@ export class RunScene extends Phaser.Scene {
       bolt.halo.destroy();
     });
     this.enemyBolts = [];
+    this.bossTelegraphs.forEach((shape) => shape.destroy());
+    this.bossTelegraphs = [];
   }
 
   private buildStateLabel(): string {
@@ -905,5 +1017,108 @@ export class RunScene extends Phaser.Scene {
       default:
         return `Ailment ${this.ailmentedEnemyCount}  |  Disrupted ${this.disruptedEnemyCount}`;
     }
+  }
+
+  private updateBossEncounter(currentTime: number): void {
+    if (!this.bossEncounterActive && !this.isEnded && this.runElapsedMs >= BOSS_TRIGGER_TIME_MS) {
+      this.spawnBossEncounter();
+    }
+
+    if (!this.isBossAlive()) {
+      this.bossProtected = false;
+      if (!this.bossEncounterActive) {
+        this.bossObjectiveText = this.selectedEvolutionId
+          ? `Evolution ${getEvolutionDefinition(this.selectedEvolutionId).title} online`
+          : '';
+      }
+      return;
+    }
+
+    const activeProtectors = this.getActiveBossProtectors();
+    this.bossProtected = activeProtectors.length > 0;
+    this.bossEnemy?.setDamageTakenMultiplier(this.bossProtected ? 0.18 : 1);
+    this.bossEnemy?.setEventMarker(this.bossProtected ? 0x60a5fa : null);
+    this.bossObjectiveText = this.bossProtected
+      ? `Break Escorts ${activeProtectors.length}`
+      : 'Boss Vulnerable';
+
+    if (currentTime >= this.nextBossAddSpawnAtMs) {
+      this.spawnBossAddWave();
+      this.nextBossAddSpawnAtMs = currentTime + 9000;
+    }
+  }
+
+  private spawnBossEncounter(): void {
+    if (this.bossEncounterActive || this.isEnded) {
+      return;
+    }
+
+    (this.enemies.getChildren() as Enemy[]).forEach((enemy) => {
+      if (enemy.active) {
+        enemy.despawnSilently();
+      }
+    });
+    this.enemyBolts.forEach((bolt) => {
+      bolt.orb.destroy();
+      bolt.halo.destroy();
+    });
+    this.enemyBolts = [];
+
+    const bossPosition = new Phaser.Math.Vector2(
+      Phaser.Math.Clamp(this.player.x + Phaser.Math.Between(-80, 80), 180, WORLD_WIDTH - 180),
+      Phaser.Math.Clamp(this.player.y - 220, 180, WORLD_HEIGHT - 180),
+    );
+    const boss = new Enemy(this, bossPosition.x, bossPosition.y, ENEMY_ARCHETYPES.behemoth);
+    this.enemies.add(boss);
+    this.bossEnemy = boss;
+    this.bossEncounterActive = true;
+    this.bossProtectors = [];
+    this.spawnBossProtectors();
+    this.bossProtected = true;
+    this.bossEnemy.setDamageTakenMultiplier(0.18);
+    this.bossEnemy.setEventMarker(0x60a5fa);
+    this.nextBossAddSpawnAtMs = this.time.now + 7000;
+    this.bossObjectiveText = 'Break Escorts 2';
+    this.publishHudState();
+  }
+
+  private spawnBossProtectors(): void {
+    if (!this.bossEnemy || !this.bossEnemy.active) {
+      return;
+    }
+
+    const offsets = [
+      new Phaser.Math.Vector2(-150, 84),
+      new Phaser.Math.Vector2(150, 84),
+    ];
+
+    this.bossProtectors = offsets.map((offset) => {
+      const protector = new Enemy(this, this.bossEnemy!.x + offset.x, this.bossEnemy!.y + offset.y, ENEMY_ARCHETYPES.bulwark);
+      this.enemies.add(protector);
+      return protector;
+    });
+  }
+
+  private spawnBossAddWave(): void {
+    if (!this.bossEnemy || !this.bossEnemy.active) {
+      return;
+    }
+
+    const addArchetypes = [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.shooter];
+    addArchetypes.forEach((archetype, index) => {
+      const angle = (Math.PI * 2 * index) / addArchetypes.length;
+      const x = this.bossEnemy!.x + Math.cos(angle) * 180;
+      const y = this.bossEnemy!.y + Math.sin(angle) * 180;
+      const enemy = new Enemy(this, x, y, archetype);
+      this.enemies.add(enemy);
+    });
+  }
+
+  private getActiveBossProtectors(): Enemy[] {
+    return this.bossProtectors.filter((enemy) => enemy.active && enemy.isAlive());
+  }
+
+  private isBossAlive(): boolean {
+    return Boolean(this.bossEnemy && this.bossEnemy.active && this.bossEnemy.isAlive());
   }
 }

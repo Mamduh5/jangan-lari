@@ -31,8 +31,17 @@ type Snapshot = {
     ailmentConsumeCount: number;
     supportAbilityId: 'shock-lattice' | 'spotter-drone' | 'contagion-node' | null;
     supportUseCount: number;
+    evolutionId: string | null;
+    evolutionTitle: string;
     xpGemSpawnCount: number;
     xpGemCollectCount: number;
+    bossActive: boolean;
+    bossHp: number;
+    bossMaxHp: number;
+    bossProtectors: number;
+    bossProtected: boolean;
+    bossName: string;
+    bossObjective: string;
     enemies: Array<{ id?: string; distance: number; x: number; y: number; isMarked?: boolean; isDisrupted?: boolean; isAilmented?: boolean }>;
     xpGems: Array<{ distance: number; x: number; y: number }>;
     rewardChoices: Array<{ id: string; title: string; lane: 'deepen' | 'bridge' | 'stabilize' }>;
@@ -458,7 +467,7 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
 
       runScene.runElapsedMs = 330_000;
       const ids = new Set<string>();
-      for (let index = 0; index < 8; index += 1) {
+      for (let index = 0; index < 20; index += 1) {
         runScene.spawnEnemyWave();
         for (const enemy of runScene.enemies.getChildren()) {
           ids.add(enemy.archetype.id);
@@ -470,5 +479,34 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
 
     expect(seen).toContain('harrier');
     expect(seen).toContain('bulwark');
+  });
+
+  test('forced late-run evolution and Behemoth encounter appear together on the live snapshot path', async ({ page }) => {
+    test.setTimeout(30_000);
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+    await clickCanvasPosition(page, getHeroCardX('runner'), 382);
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+    await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        debugForceReward: (rewardId: 'close-guard' | 'steadfast-posture' | 'citadel-core') => boolean;
+        debugForceBossEncounter: () => void;
+      };
+
+      runScene.debugForceReward('close-guard');
+      runScene.debugForceReward('steadfast-posture');
+      runScene.debugForceReward('citadel-core');
+      runScene.debugForceBossEncounter();
+    });
+
+    const snapshot = await getSnapshot(page);
+    expect(snapshot.run?.evolutionId).toBe('citadel-core');
+    expect(snapshot.run?.bossActive).toBe(true);
+    expect(snapshot.run?.bossName).toBe('Behemoth');
+    expect(snapshot.run?.bossProtectors).toBeGreaterThan(0);
+    expect(snapshot.run?.bossProtected).toBe(true);
   });
 });

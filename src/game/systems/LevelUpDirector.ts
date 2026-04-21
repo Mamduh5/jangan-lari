@@ -1,6 +1,8 @@
+import { getEvolutionDefinition } from '../data/evolutions';
 import type { RewardDefinition, RewardId } from '../data/rewards';
 import { REWARD_DEFINITIONS } from '../data/rewards';
 import type { HeroId } from '../data/heroes';
+import type { AbilityId } from '../data/abilities';
 import type { TraitRuntime } from './TraitRuntime';
 
 export class LevelUpDirector {
@@ -9,11 +11,16 @@ export class LevelUpDirector {
     traitRuntime: TraitRuntime,
     options?: {
       hasSupportAbility?: boolean;
+      supportAbilityId?: AbilityId | null;
+      level?: number;
+      elapsedMs?: number;
+      selectedEvolutionId?: string | null;
       shuffle?: <T>(items: T[]) => T[];
     },
   ): RewardDefinition[] {
     const selectedTraits = new Set(traitRuntime.getSelectedTraitIds());
     const hasSupportAbility = Boolean(options?.hasSupportAbility);
+    const selectedEvolutionId = options?.selectedEvolutionId ?? null;
     const applyShuffle =
       options?.shuffle ??
       ((items) => {
@@ -94,6 +101,32 @@ export class LevelUpDirector {
       ]);
 
     const supportChoice = supportPool[0];
+    const eligibleEvolution = !selectedEvolutionId
+      ? Object.values(REWARD_DEFINITIONS).find((reward) => {
+          if (reward.category !== 'evolution' || reward.heroBias !== heroId || !reward.evolutionId) {
+            return false;
+          }
+
+          const evolution = getEvolutionDefinition(reward.evolutionId);
+          if ((options?.level ?? 1) < evolution.minLevel) {
+            return false;
+          }
+          if ((options?.elapsedMs ?? 0) < evolution.minElapsedMs) {
+            return false;
+          }
+          if (evolution.requiredSupportAbilityId && options?.supportAbilityId !== evolution.requiredSupportAbilityId) {
+            return false;
+          }
+          if (!evolution.requiredTraitIds.every((traitId) => selectedTraits.has(traitId))) {
+            return false;
+          }
+          if (evolution.oneOfTraitIds && !evolution.oneOfTraitIds.some((traitId) => selectedTraits.has(traitId))) {
+            return false;
+          }
+
+          return true;
+        })
+      : undefined;
 
     const stabilizers = applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter((reward) => reward.category === 'stabilizer'),
@@ -110,7 +143,7 @@ export class LevelUpDirector {
       picks.push(reward);
     };
 
-    addIfUnique(alignedTraits[0]);
+    addIfUnique(eligibleEvolution ?? alignedTraits[0]);
 
     if (!hasSupportAbility) {
       addIfUnique(supportChoice ?? bridgeTraits[0]);

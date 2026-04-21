@@ -22,6 +22,8 @@ export class UIScene extends Phaser.Scene {
   private xpBarRatio = 0;
   private traitText!: Phaser.GameObjects.Text;
   private stateText!: Phaser.GameObjects.Text;
+  private evolutionText!: Phaser.GameObjects.Text;
+  private objectiveText!: Phaser.GameObjects.Text;
   private abilityTexts: Phaser.GameObjects.Text[] = [];
   private levelUpContainer!: Phaser.GameObjects.Container;
   private levelUpCards: Phaser.GameObjects.Rectangle[] = [];
@@ -114,6 +116,14 @@ export class UIScene extends Phaser.Scene {
       padding: { left: 12, right: 12, top: 6, bottom: 6 },
     }).setOrigin(0.5, 0).setScrollFactor(0);
 
+    this.objectiveText = this.add.text(GAME_WIDTH / 2, 104, '', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '14px',
+      color: '#fde68a',
+      backgroundColor: '#2a1a0f',
+      padding: { left: 12, right: 12, top: 6, bottom: 6 },
+    }).setOrigin(0.5, 0).setScrollFactor(0);
+
     this.traitText = this.add.text(38, GAME_HEIGHT - 74, 'Traits: --', {
       fontFamily: 'Trebuchet MS, sans-serif',
       fontSize: '14px',
@@ -121,6 +131,15 @@ export class UIScene extends Phaser.Scene {
       backgroundColor: '#0f172a',
       padding: { left: 12, right: 12, top: 8, bottom: 8 },
       wordWrap: { width: 700 },
+    }).setOrigin(0, 0).setScrollFactor(0);
+
+    this.evolutionText = this.add.text(760, GAME_HEIGHT - 74, 'Evolution: --', {
+      fontFamily: 'Trebuchet MS, sans-serif',
+      fontSize: '14px',
+      color: '#fde68a',
+      backgroundColor: '#0f172a',
+      padding: { left: 12, right: 12, top: 8, bottom: 8 },
+      wordWrap: { width: 470 },
     }).setOrigin(0, 0).setScrollFactor(0);
 
     const labels = ['Primary', 'Signature', 'Support'];
@@ -161,6 +180,14 @@ export class UIScene extends Phaser.Scene {
     const heroName = String(this.registry.get('run.heroName') ?? '--');
     const markedEnemies = Number(this.registry.get('run.markedEnemies') ?? 0);
     const stateLabel = String(this.registry.get('run.stateLabel') ?? '');
+    const evolutionTitle = String(this.registry.get('run.evolutionTitle') ?? '');
+    const bossActive = Boolean(this.registry.get('run.bossActive'));
+    const bossObjective = String(this.registry.get('run.bossObjective') ?? '');
+    const bossName = String(this.registry.get('run.bossName') ?? '');
+    const bossHp = Number(this.registry.get('run.bossHp') ?? 0);
+    const bossMaxHp = Number(this.registry.get('run.bossMaxHp') ?? 0);
+    const bossProtectors = Number(this.registry.get('run.bossProtectors') ?? 0);
+    const bossProtected = Boolean(this.registry.get('run.bossProtected'));
     const traits = (this.registry.get('run.traits') ?? []) as string[];
     const abilityLabels = (this.registry.get('run.abilityLabels') ?? []) as string[];
     const endActive = Boolean(this.registry.get('run.endActive'));
@@ -207,7 +234,13 @@ export class UIScene extends Phaser.Scene {
     this.killsText.setText(`Kills ${kills}`);
     this.levelText.setText(`LV ${level}`);
     this.stateText.setText(stateLabel || `Marked Enemies ${markedEnemies}`);
+    this.objectiveText.setText(
+      bossActive
+        ? `${bossName} ${Math.max(0, Math.round(bossHp))}/${Math.max(1, Math.round(bossMaxHp))} | Escorts ${bossProtectors} | ${bossProtected ? 'Protected' : 'Open'}`
+        : bossObjective || 'Build toward a late lock-in.',
+    );
     this.traitText.setText(`Traits: ${traits.length > 0 ? traits.join(' | ') : 'None yet'}`);
+    this.evolutionText.setText(`Evolution: ${evolutionTitle || 'Not chosen'}`);
     this.abilityTexts.forEach((text, index) => {
       text.setText(abilityLabels[index] ?? '--');
     });
