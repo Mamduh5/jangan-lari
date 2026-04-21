@@ -56,6 +56,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private hitReactionUntil = 0;
   private readonly responseProfile: EnemyCombatResponseProfile | null;
   private readonly responseScale = { x: 1, y: 1 };
+  private readonly eventRing: Phaser.GameObjects.Arc;
   private readonly markRing: Phaser.GameObjects.Arc;
   private readonly markPip: Phaser.GameObjects.Arc;
   private readonly disruptedRing: Phaser.GameObjects.Arc;
@@ -98,6 +99,11 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
+
+    this.eventRing = scene.add.circle(x, y, Math.round(archetype.size * 1.18), 0x60a5fa, 0.04);
+    this.eventRing.setDepth(this.depth - 0.4);
+    this.eventRing.setStrokeStyle(3, 0x93c5fd, 0.95);
+    this.eventRing.setVisible(false);
 
     this.markRing = scene.add.circle(x, y, Math.round(archetype.size * 0.76), 0xfef08a, 0.08);
     this.markRing.setDepth(this.depth - 0.2);
@@ -309,6 +315,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   }
 
   updatePresentation(currentTime: number): void {
+    this.syncEventMarkerPresentation(currentTime);
     this.syncMarkPresentation(currentTime);
     this.syncDisruptedPresentation(currentTime);
     this.syncAilmentPresentation(currentTime);
@@ -379,7 +386,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     if (this.isBoss()) {
       this.setResponseScale((1 + Math.sin((currentTime + this.x) * 0.008) * 0.07) * (hitReactionActive ? 0.94 : 1));
-      this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.96);
+      this.setStrokeStyle(this.baseStrokeWidth + (this.eventMarkerColor !== null ? 1 : 0), this.eventMarkerColor ?? this.archetype.strokeColor, 0.98);
       this.setAlpha(hitReactionActive ? 0.82 : 1);
       return;
     }
@@ -743,6 +750,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   destroy(fromScene?: boolean): void {
     this.scene.tweens.killTweensOf(this);
     this.scene.tweens.killTweensOf(this.responseScale);
+    this.scene.tweens.killTweensOf(this.eventRing);
     this.scene.tweens.killTweensOf(this.markRing);
     this.scene.tweens.killTweensOf(this.markPip);
     this.scene.tweens.killTweensOf(this.disruptedRing);
@@ -755,6 +763,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.responseScale.y = 1;
     this.deathPresentationActive = false;
     this.hitReactionUntil = 0;
+    this.eventRing.destroy();
     this.markRing.destroy();
     this.markPip.destroy();
     this.disruptedRing.destroy();
@@ -778,9 +787,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const pulse = 1 + Math.sin((currentTime + this.x) * 0.022) * 0.08;
     this.markRing.setPosition(this.x, this.y);
     this.markRing.setRadius(Math.round(this.archetype.size * 0.82 * pulse));
-    this.markRing.setAlpha(this.deathPresentationActive ? 0.28 : 0.5);
+    this.markRing.setAlpha(this.deathPresentationActive ? 0.32 : 0.62);
     this.markPip.setPosition(this.x, this.y - this.archetype.size * 0.74);
-    this.markPip.setScale(1 + Math.sin((currentTime + this.y) * 0.026) * 0.12);
+    this.markPip.setScale(1.06 + Math.sin((currentTime + this.y) * 0.026) * 0.16);
     this.markPip.setAlpha(this.deathPresentationActive ? 0.45 : 1);
   }
 
@@ -798,13 +807,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const lateralOffset = this.archetype.size * 0.56;
     const verticalOffset = this.archetype.size * 0.16;
     this.disruptedRing.setPosition(this.x, this.y);
-    this.disruptedRing.setRadius(Math.round(this.archetype.size * 0.96 * pulse));
-    this.disruptedRing.setAlpha(this.deathPresentationActive ? 0.2 : 0.34);
+    this.disruptedRing.setRadius(Math.round(this.archetype.size * 1.02 * pulse));
+    this.disruptedRing.setAlpha(this.deathPresentationActive ? 0.22 : 0.44);
 
     this.disruptedPipLeft.setPosition(this.x - lateralOffset, this.y + Math.sin(currentTime * 0.018) * verticalOffset);
     this.disruptedPipRight.setPosition(this.x + lateralOffset, this.y - Math.sin(currentTime * 0.018) * verticalOffset);
-    this.disruptedPipLeft.setAlpha(this.deathPresentationActive ? 0.34 : 0.92);
-    this.disruptedPipRight.setAlpha(this.deathPresentationActive ? 0.34 : 0.92);
+    this.disruptedPipLeft.setAlpha(this.deathPresentationActive ? 0.38 : 1);
+    this.disruptedPipRight.setAlpha(this.deathPresentationActive ? 0.38 : 1);
   }
 
   private syncAilmentPresentation(currentTime: number): void {
@@ -821,12 +830,27 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const lateralOffset = this.archetype.size * 0.28;
     const verticalOffset = this.archetype.size * 0.64;
     this.ailmentRing.setPosition(this.x, this.y);
-    this.ailmentRing.setRadius(Math.round(this.archetype.size * 0.72 * pulse));
-    this.ailmentRing.setAlpha(this.deathPresentationActive ? 0.18 : 0.4);
+    this.ailmentRing.setRadius(Math.round(this.archetype.size * 0.76 * pulse));
+    this.ailmentRing.setAlpha(this.deathPresentationActive ? 0.2 : 0.5);
 
     this.ailmentPipLeft.setPosition(this.x - lateralOffset, this.y + verticalOffset + Math.sin(currentTime * 0.021) * 4);
     this.ailmentPipRight.setPosition(this.x + lateralOffset, this.y + verticalOffset - Math.sin(currentTime * 0.021) * 4);
-    this.ailmentPipLeft.setAlpha(this.deathPresentationActive ? 0.3 : 0.92);
-    this.ailmentPipRight.setAlpha(this.deathPresentationActive ? 0.3 : 0.92);
+    this.ailmentPipLeft.setAlpha(this.deathPresentationActive ? 0.34 : 1);
+    this.ailmentPipRight.setAlpha(this.deathPresentationActive ? 0.34 : 1);
+  }
+
+  private syncEventMarkerPresentation(currentTime: number): void {
+    const highlighted = this.active && this.eventMarkerColor !== null;
+    this.eventRing.setVisible(highlighted);
+
+    if (!highlighted) {
+      return;
+    }
+
+    const pulse = 1 + Math.sin((currentTime + this.x) * 0.016) * 0.08;
+    this.eventRing.setPosition(this.x, this.y);
+    this.eventRing.setRadius(Math.round(this.archetype.size * 1.16 * pulse));
+    this.eventRing.setStrokeStyle(3, this.eventMarkerColor ?? 0x93c5fd, 0.96);
+    this.eventRing.setAlpha(this.deathPresentationActive ? 0.2 : 0.56);
   }
 }

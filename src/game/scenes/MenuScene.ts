@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import { getAbilityDefinition } from '../data/abilities';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
 import { loadGameSave, type GameSaveData } from '../save/saveData';
 import { selectHero } from '../save/saveHeroes';
@@ -38,7 +39,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
 
     this.add
-      .text(100, 84, 'Milestone 3: Guard, Mark, and Ailment.', {
+      .text(100, 84, 'Stable V1: three heroes, six evolutions, one boss, directed reward runs.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '17px',
         color: '#9fb8d3',
@@ -57,6 +58,15 @@ export class MenuScene extends Phaser.Scene {
         align: 'center',
       })
       .setOrigin(0.5, 0.5);
+
+    this.add
+      .text(centerX, GAME_HEIGHT - 68, 'Click a hero card to switch. Press Enter or Space to launch the selected chassis.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#94a3b8',
+        align: 'center',
+      })
+      .setOrigin(0.5);
 
     const cardY = 382;
     const cardSpacing = 332;
@@ -146,14 +156,20 @@ export class MenuScene extends Phaser.Scene {
       const selected = this.saveData.selectedHero === hero.id;
       this.heroFrames[index].setStrokeStyle(3, selected ? 0xfde68a : hero.appearance.strokeColor, selected ? 1 : 0.9);
       this.heroFrames[index].setFillStyle(selected ? 0x1b2a3e : 0x182233, 0.98);
+      const primary = getAbilityDefinition(hero.primaryAbilityId);
+      const signature = getAbilityDefinition(hero.signatureAbilityId);
       this.heroBodies[index].setText(
-        `${hero.description}\n\nPrimary  ${hero.primaryAbilityId}\nSignature  ${hero.signatureAbilityId}\n\n${hero.chassisRule}${
-          selected ? '\n\nSelected for next run.' : ''
+        `${hero.description}\n\nPrimary  ${primary.name}\nSignature  ${signature.name}\n\n${hero.passiveLabel}\n\n${hero.chassisRule}${
+          selected ? '\n\nReady for the next run.' : ''
         }`,
       );
     });
 
-    this.statusText.setText(`${HERO_LIST.find((hero) => hero.id === this.saveData.selectedHero)?.name ?? 'Hero'} selected.`);
+    const selectedHero = HERO_LIST.find((hero) => hero.id === this.saveData.selectedHero);
+    this.startButton.setText(`Start ${selectedHero?.name ?? 'Run'}`);
+    this.statusText.setText(
+      `${selectedHero?.name ?? 'Hero'} selected • ${this.getAffinityLabel(selectedHero ?? HERO_LIST[0])} • Enter / Space to launch`,
+    );
   }
 
   private createHeroPreview(hero: HeroDefinition, x: number, y: number): void {

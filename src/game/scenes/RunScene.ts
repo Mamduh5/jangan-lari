@@ -343,6 +343,7 @@ export class RunScene extends Phaser.Scene {
     const support = this.abilityLoadout.getAbility('support');
     const pressureBeat = this.spawnDirector.getPressureBeat(this.runElapsedMs);
     this.registry.set('run.heroName', this.selectedHero.name);
+    this.registry.set('run.heroAffinity', this.selectedHero.stateAffinity);
     this.registry.set('run.hp', this.player.getCurrentHealth());
     this.registry.set('run.maxHp', this.player.getMaxHealth());
     this.registry.set('run.guard', this.combatStates.getGuard());
@@ -379,6 +380,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.pressureBeatLabel', pressureBeat.label);
     this.registry.set('run.pressureBeatObjective', pressureBeat.objective);
     this.registry.set('run.pressureBeatRemainingMs', pressureBeat.remainingMs);
+    this.registry.set('run.supportName', support?.name ?? 'Locked');
     this.registry.set('run.weaponNames', [primary.name, signature.name]);
     this.registry.set('run.abilityLabels', [
       `Primary: ${primary.shortLabel} ${primary.name} (${Math.ceil(this.abilityLoadout.getRemainingCooldownMs('primary', this.time.now) / 100) / 10}s)`,
