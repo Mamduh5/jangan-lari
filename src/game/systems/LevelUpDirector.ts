@@ -21,6 +21,7 @@ export class LevelUpDirector {
     const selectedTraits = new Set(traitRuntime.getSelectedTraitIds());
     const hasSupportAbility = Boolean(options?.hasSupportAbility);
     const selectedEvolutionId = options?.selectedEvolutionId ?? null;
+    const preferredRewardIds = this.getPreferredRewardIds(heroId, selectedTraits, options?.supportAbilityId ?? null);
     const applyShuffle =
       options?.shuffle ??
       ((items) => {
@@ -31,8 +32,14 @@ export class LevelUpDirector {
         }
         return copy;
       });
+    const sortByPreference = <T extends RewardDefinition>(items: T[]): T[] =>
+      [...items].sort((left, right) => {
+        const leftPreferred = preferredRewardIds.has(left.id) ? 1 : 0;
+        const rightPreferred = preferredRewardIds.has(right.id) ? 1 : 0;
+        return rightPreferred - leftPreferred;
+      });
 
-    const heroAlignedTraits = applyShuffle(
+    const heroAlignedTraits = sortByPreference(applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter(
         (reward) =>
           reward.category === 'trait' &&
@@ -41,8 +48,8 @@ export class LevelUpDirector {
           reward.traitId &&
           !selectedTraits.has(reward.traitId),
       ),
-    );
-    const sharedAlignedTraits = applyShuffle(
+    ));
+    const sharedAlignedTraits = sortByPreference(applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter(
         (reward) =>
           reward.category === 'trait' &&
@@ -51,10 +58,10 @@ export class LevelUpDirector {
           reward.traitId &&
           !selectedTraits.has(reward.traitId),
       ),
-    );
+    ));
     const alignedTraits = [...heroAlignedTraits, ...sharedAlignedTraits];
 
-    const heroBridgeTraits = applyShuffle(
+    const heroBridgeTraits = sortByPreference(applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter(
         (reward) =>
           reward.category === 'trait' &&
@@ -63,8 +70,8 @@ export class LevelUpDirector {
           reward.traitId &&
           !selectedTraits.has(reward.traitId),
       ),
-    );
-    const sharedBridgeTraits = applyShuffle(
+    ));
+    const sharedBridgeTraits = sortByPreference(applyShuffle(
       Object.values(REWARD_DEFINITIONS).filter(
         (reward) =>
           reward.category === 'trait' &&
@@ -73,7 +80,7 @@ export class LevelUpDirector {
           reward.traitId &&
           !selectedTraits.has(reward.traitId),
       ),
-    );
+    ));
     const bridgeTraits = [...heroBridgeTraits, ...sharedBridgeTraits];
 
     const heroSpecificSupportRewards = Object.values(REWARD_DEFINITIONS).filter(
@@ -100,14 +107,13 @@ export class LevelUpDirector {
 
     const supportPool = hasSupportAbility
       ? []
-      : applyShuffle([
+      : sortByPreference(applyShuffle([
         ...heroSpecificSupportRewards,
         ...heroSpecificSupportRewards,
         ...heroSpecificSupportRewards,
-        ...sharedSupportRewards,
         ...sharedSupportRewards,
         ...otherSupportRewards,
-      ]);
+      ]));
 
     const supportChoice = supportPool[0];
     const eligibleEvolution = !selectedEvolutionId
@@ -143,7 +149,9 @@ export class LevelUpDirector {
             const rightSupportMatch = rightEvolution.requiredSupportAbilityId && rightEvolution.requiredSupportAbilityId === options?.supportAbilityId ? 2 : 0;
             const leftSpecificity = leftEvolution.requiredTraitIds.length + (leftEvolution.oneOfTraitIds ? 1 : 0);
             const rightSpecificity = rightEvolution.requiredTraitIds.length + (rightEvolution.oneOfTraitIds ? 1 : 0);
-            return rightSupportMatch + rightSpecificity - (leftSupportMatch + leftSpecificity);
+            const leftPreferred = preferredRewardIds.has(left.id) ? 1 : 0;
+            const rightPreferred = preferredRewardIds.has(right.id) ? 1 : 0;
+            return rightSupportMatch + rightSpecificity + rightPreferred - (leftSupportMatch + leftSpecificity + leftPreferred);
           })[0]
       : undefined;
 
@@ -186,5 +194,50 @@ export class LevelUpDirector {
 
   getRewardDefinition(id: RewardId): RewardDefinition {
     return REWARD_DEFINITIONS[id];
+  }
+
+  private getPreferredRewardIds(
+    heroId: HeroId,
+    selectedTraits: Set<string>,
+    supportAbilityId: AbilityId | null,
+  ): Set<RewardId> {
+    const preferred = new Set<RewardId>();
+
+    if (heroId === 'runner') {
+      if (selectedTraits.has('iron-reserve')) {
+        preferred.add('echo-turret');
+        preferred.add('predator-relay');
+        preferred.add('pressure-lenses');
+        preferred.add('reckoner-drive');
+      }
+      if (supportAbilityId === 'echo-turret') {
+        preferred.add('predator-relay');
+        preferred.add('pressure-lenses');
+      }
+    }
+
+    if (heroId === 'shade') {
+      if (selectedTraits.has('target-painter')) {
+        preferred.add('recovery-field');
+      }
+      if (supportAbilityId === 'recovery-field' || selectedTraits.has('predator-relay')) {
+        preferred.add('predator-relay');
+        preferred.add('siege-lock-array');
+      }
+    }
+
+    if (heroId === 'weaver') {
+      if (selectedTraits.has('infectious-volley')) {
+        preferred.add('catalytic-exposure');
+      }
+      if (selectedTraits.has('catalytic-exposure')) {
+        preferred.add('echo-turret');
+        preferred.add('pressure-lenses');
+        preferred.add('volatile-bloom');
+        preferred.add('cinder-crown');
+      }
+    }
+
+    return preferred;
   }
 }

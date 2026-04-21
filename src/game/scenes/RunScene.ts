@@ -1132,7 +1132,7 @@ export class RunScene extends Phaser.Scene {
     const addWaves = [
       [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.shooter],
       [ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.hexcaster, ENEMY_ARCHETYPES.shooter],
-      [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.skimmer, ENEMY_ARCHETYPES.crusher],
+      [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.skimmer, ENEMY_ARCHETYPES.anchor],
     ];
     const addArchetypes = addWaves[this.bossAddWaveIndex % addWaves.length]!;
     this.bossAddWaveIndex += 1;

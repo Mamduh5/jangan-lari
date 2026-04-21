@@ -483,7 +483,7 @@ test.describe('milestone 1 signature behavior', () => {
     expect(result.farDot).toBeGreaterThan(result.nearDot);
   });
 
-  test('Recovery Field equips into the support slot and stabilizes under close pressure', async ({ page }) => {
+  test('Recovery Field equips into the support slot and stabilizes under heavier close pressure', async ({ page }) => {
     await startRun(page, 'runner');
 
     const result = await page.evaluate(() => {
@@ -501,7 +501,8 @@ test.describe('milestone 1 signature behavior', () => {
       runScene.debugForceReward('recovery-field');
       runScene.debugSpawnEnemy('swarmer');
       runScene.debugSpawnEnemy('swarmer');
-      const enemies = runScene.enemies.getChildren().slice(-2);
+      runScene.debugSpawnEnemy('swarmer');
+      const enemies = runScene.enemies.getChildren().slice(-3);
       enemies.forEach((enemy, index) => {
         enemy.x = runScene.player.x + 55 + index * 24;
         enemy.y = runScene.player.y + 10 - index * 18;

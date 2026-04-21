@@ -81,11 +81,11 @@ export class TraitRuntime {
 
     if (this.hasTrait('pressure-lenses')) {
       if (options.heroId === 'runner' && options.abilityId === 'brace-shot' && options.guardActive && options.isCloseRange) {
-        totalBonus += 3;
+        totalBonus += 2;
       } else if (options.heroId === 'shade' && options.abilityId === 'seeker-burst' && options.targetWasMarked) {
-        totalBonus += 3;
+        totalBonus += 2;
       } else if (options.heroId === 'weaver' && options.abilityId === 'cinder-needles' && options.targetWasAilmented) {
-        totalBonus += 3;
+        totalBonus += 2;
       }
     }
 
@@ -164,11 +164,11 @@ export class TraitRuntime {
   }
 
   notifyGuardGain(currentTime: number, amount: number): void {
-    if (amount <= 0 || !this.hasTrait('predator-relay')) {
+    if (amount < 2 || !this.hasTrait('predator-relay')) {
       return;
     }
 
-    this.predatorRelayUntilMs = Math.max(this.predatorRelayUntilMs, currentTime + 1600);
+    this.predatorRelayUntilMs = Math.max(this.predatorRelayUntilMs, currentTime + 1250);
   }
 
   consumePredatorRelaySignatureBonus(options: {
@@ -185,7 +185,7 @@ export class TraitRuntime {
     }
 
     this.predatorRelayUntilMs = 0;
-    return 1.25;
+    return 1.18;
   }
 
   getCatalyticExposureMarkDurationMs(): number {

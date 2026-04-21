@@ -39,7 +39,7 @@ export type PressureBeatSnapshot = {
 const MID_PRESSURE_TEMPLATE: WaveTemplate = {
   id: 'mid-siege-crossfire',
   label: 'Siege Crossfire',
-  wave: [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.crusher],
+  wave: [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.skimmer],
   pressureBeat: {
     id: 'mid-siege-crossfire',
     label: 'Siege Crossfire',

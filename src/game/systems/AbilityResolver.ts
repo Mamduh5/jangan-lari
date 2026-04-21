@@ -428,7 +428,7 @@ export class AbilityResolver {
       const targetWasMarked = this.options.combatStates.isMarked(enemy, currentTime);
       let damage = consumedAilment ? ability.damage + consumeBonusDamage : Math.round(ability.damage * 0.6);
       if (this.evolutionId === 'cinder-crown' && enemy === target && consumedAilment && targetWasMarked) {
-        damage = Math.round(damage * 1.85);
+        damage = Math.round(damage * 1.95);
       }
       if (this.options.combatStates.isDisrupted(enemy, currentTime)) {
         damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());
@@ -614,7 +614,7 @@ export class AbilityResolver {
     const stateAligned = this.isEnemyStateAffected(target, currentTime);
     this.spawnProjectile(direction.normalize(), {
       sourceAbilityId: ability.id,
-      damage: ability.damage + (stateAligned ? 2 : 0),
+      damage: ability.damage + (stateAligned ? 1 : 0),
       maxDistance: ability.range,
       speed: ability.projectileSpeed ?? 720,
       radius: ability.projectileRadius ?? 4,
@@ -639,9 +639,9 @@ export class AbilityResolver {
       enemy.takeDamage(ability.damage, { x: this.options.player.x, y: this.options.player.y });
     }
 
-    if (targets.length >= 2) {
-      this.options.player.heal(6);
-      const gained = this.options.combatStates.gainGuard(3);
+    if (targets.length >= 3) {
+      this.options.player.heal(4);
+      const gained = this.options.combatStates.gainGuard(2);
       this.options.traits.notifyGuardGain(currentTime, gained);
     }
 
@@ -867,7 +867,7 @@ export class AbilityResolver {
     currentTime: number,
     guard: number,
   ): AbilityUseResult {
-    const target = this.findStateAffectedEnemy(currentTime, 360) ?? this.findNearestEnemy(360);
+    const target = this.findStateAffectedEnemy(currentTime, 400) ?? this.findNearestEnemy(400);
     if (!target) {
       return { used: false };
     }
@@ -884,8 +884,8 @@ export class AbilityResolver {
     }
 
     const normalized = direction.normalize();
-    const endX = this.options.player.x + normalized.x * 340;
-    const endY = this.options.player.y + normalized.y * 340;
+    const endX = this.options.player.x + normalized.x * 370;
+    const endY = this.options.player.y + normalized.y * 370;
     const relayMultiplier = this.options.traits.consumePredatorRelaySignatureBonus({
       currentTime,
       targetWasMarked: target.isMarked(currentTime),
@@ -897,14 +897,14 @@ export class AbilityResolver {
     for (const enemy of this.getActiveEnemies()) {
       const distanceToLine = this.getDistanceToSegment(this.options.player.x, this.options.player.y, endX, endY, enemy.x, enemy.y);
       const alongStart = Phaser.Math.Distance.Between(this.options.player.x, this.options.player.y, enemy.x, enemy.y);
-      if (distanceToLine > 58 || alongStart > 360) {
+      if (distanceToLine > 64 || alongStart > 390) {
         continue;
       }
 
       let damage = Math.round((ability.damage + spentGuard * 1.35) * relayMultiplier * this.options.traits.getIronReserveDamageMultiplier());
       const stateAffected = this.isEnemyStateAffected(enemy, currentTime);
       if (stateAffected) {
-        damage = Math.round(damage * 1.35);
+        damage = Math.round(damage * 1.42);
       }
       if (this.options.combatStates.isDisrupted(enemy, currentTime)) {
         damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());

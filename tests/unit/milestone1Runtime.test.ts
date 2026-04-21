@@ -153,6 +153,28 @@ describe('milestone 1 runtime helpers', () => {
     expect(shadeChoices.find((choice) => choice.category === 'support')?.id).toBe('shock-lattice');
   });
 
+  test('alternate branch commitment can bias the shared support offer without making it mandatory', () => {
+    const director = new LevelUpDirector();
+
+    const runnerTraits = new TraitRuntime();
+    runnerTraits.addTrait('iron-reserve');
+    const runnerChoices = director.buildChoices('runner', runnerTraits, {
+      hasSupportAbility: false,
+      shuffle: <T>(items: T[]) => [...items],
+    });
+
+    const weaverTraits = new TraitRuntime();
+    weaverTraits.addTrait('infectious-volley');
+    weaverTraits.addTrait('catalytic-exposure');
+    const weaverChoices = director.buildChoices('weaver', weaverTraits, {
+      hasSupportAbility: false,
+      shuffle: <T>(items: T[]) => [...items],
+    });
+
+    expect(runnerChoices.find((choice) => choice.category === 'support')?.id).toBe('echo-turret');
+    expect(weaverChoices.find((choice) => choice.category === 'support')?.id).toBe('echo-turret');
+  });
+
   test('trait runtime extends disrupted setup and signature payoff when the new traits are owned', () => {
     const traits = new TraitRuntime();
 
@@ -210,7 +232,7 @@ describe('milestone 1 runtime helpers', () => {
     expect(choices.find((choice) => choice.category === 'evolution')?.id).toBe('citadel-core');
   });
 
-  test('support-bound second evolutions appear when the alternate branch is actually built', () => {
+  test('second evolutions stay reachable when the alternate branch is actually built', () => {
     const director = new LevelUpDirector();
 
     const runnerTraits = new TraitRuntime();
@@ -218,7 +240,6 @@ describe('milestone 1 runtime helpers', () => {
     runnerTraits.addTrait('pressure-lenses');
     const runnerChoices = director.buildChoices('runner', runnerTraits, {
       hasSupportAbility: true,
-      supportAbilityId: 'echo-turret',
       level: 8,
       elapsedMs: 300_000,
       selectedEvolutionId: null,
@@ -245,7 +266,6 @@ describe('milestone 1 runtime helpers', () => {
     weaverTraits.addTrait('pressure-lenses');
     const weaverChoices = director.buildChoices('weaver', weaverTraits, {
       hasSupportAbility: true,
-      supportAbilityId: 'echo-turret',
       level: 8,
       elapsedMs: 300_000,
       selectedEvolutionId: null,
@@ -285,7 +305,7 @@ describe('milestone 1 runtime helpers', () => {
         targetWasDisrupted: false,
         targetWasAilmented: false,
       }),
-    ).toBe(3);
+    ).toBe(2);
 
     traits.notifyGuardGain(1_000, 3);
     expect(
@@ -295,7 +315,7 @@ describe('milestone 1 runtime helpers', () => {
         targetWasDisrupted: true,
         targetWasAilmented: false,
       }),
-    ).toBeCloseTo(1.25);
+    ).toBeCloseTo(1.18);
     expect(traits.getCatalyticExposureMarkDurationMs()).toBe(0);
 
     traits.addTrait('catalytic-exposure');
