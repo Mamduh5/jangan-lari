@@ -165,6 +165,7 @@ describe('trigger seam', () => {
   test('consume-triggered catalytic exposure mark conversion remains unchanged', () => {
     const traits = new TraitRuntime();
     const states = new CombatStateRuntime();
+    states.setMaxGuard(12);
     const seam = new TriggerSeam({
       heroId: 'weaver',
       traits,
@@ -172,13 +173,51 @@ describe('trigger seam', () => {
     });
     const enemy = createMockStateEnemy();
 
-    expect(seam.applyCatalyticExposureMark(enemy, 1_000)).toBe(false);
+    expect(seam.applyCatalyticExposureMark(enemy, 1_000)).toEqual({
+      applied: false,
+      guardGain: 0,
+    });
     expect(states.isMarked(enemy, 1_100)).toBe(false);
 
     traits.addTrait('catalytic-exposure');
-    expect(seam.applyCatalyticExposureMark(enemy, 1_000)).toBe(true);
+    expect(seam.applyCatalyticExposureMark(enemy, 1_000)).toEqual({
+      applied: true,
+      guardGain: 2,
+    });
     expect(states.isMarked(enemy, 2_700)).toBe(true);
     expect(states.isMarked(enemy, 2_900)).toBe(false);
+  });
+
+  test('catalytic conversion can arm predator relay through guard gain payload', () => {
+    const traits = new TraitRuntime();
+    traits.addTrait('catalytic-exposure');
+    traits.addTrait('predator-relay');
+    const states = new CombatStateRuntime();
+    states.setMaxGuard(12);
+    const seam = new TriggerSeam({
+      heroId: 'weaver',
+      traits,
+      combatStates: states,
+    });
+    const enemy = createMockStateEnemy();
+
+    const conversion = seam.applyCatalyticExposureMark(enemy, 1_000);
+    expect(conversion).toEqual({
+      applied: true,
+      guardGain: 2,
+    });
+
+    const gained = states.gainGuardTx(conversion.guardGain).value;
+    traits.notifyGuardGain(1_000, gained);
+
+    expect(
+      seam.resolveSignaturePayoff({
+        currentTime: 1_120,
+        targetWasMarked: true,
+        targetWasDisrupted: false,
+        targetWasAilmented: true,
+      }),
+    ).toBeCloseTo(1.18);
   });
 
   test('representative trait-support-evolution route remains reachable', () => {

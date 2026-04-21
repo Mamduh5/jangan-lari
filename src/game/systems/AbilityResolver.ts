@@ -616,7 +616,10 @@ export class AbilityResolver {
     const stateAligned = this.isEnemyStateAffected(target, currentTime);
     this.spawnProjectile(direction.normalize(), {
       sourceAbilityId: ability.id,
-      damage: ability.damage + (stateAligned ? 1 : 0),
+      damage:
+        ability.damage +
+        (stateAligned ? 1 : 0) +
+        (stateAligned ? this.options.traits.getEchoTurretStateAlignedBonusDamage() : 0),
       maxDistance: ability.range,
       speed: ability.projectileSpeed ?? 720,
       radius: ability.projectileRadius ?? 4,
@@ -1073,6 +1076,16 @@ export class AbilityResolver {
       return false;
     }
 
-    return this.triggerSeam.applyCatalyticExposureMark(candidate, currentTime);
+    const conversion = this.triggerSeam.applyCatalyticExposureMark(candidate, currentTime);
+    if (!conversion.applied) {
+      return false;
+    }
+
+    if (conversion.guardGain > 0) {
+      const gained = this.options.combatStates.gainGuardTx(conversion.guardGain).value;
+      this.options.traits.notifyGuardGain(currentTime, gained);
+    }
+
+    return true;
   }
 }

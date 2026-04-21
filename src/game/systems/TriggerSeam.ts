@@ -54,6 +54,11 @@ export type OnConsumeSignatureResult = {
   cooldownRefundMs: number;
 };
 
+export type CatalyticExposureResult = {
+  applied: boolean;
+  guardGain: number;
+};
+
 export type PrimaryPatternResult = {
   burstCount: number;
   spreadDegrees: number;
@@ -149,14 +154,21 @@ export class TriggerSeam {
     };
   }
 
-  applyCatalyticExposureMark(enemy: Enemy, currentTime: number): boolean {
+  applyCatalyticExposureMark(enemy: Enemy, currentTime: number): CatalyticExposureResult {
     const markDuration = this.options.traits.getCatalyticExposureMarkDurationMs();
     if (markDuration <= 0) {
-      return false;
+      return { applied: false, guardGain: 0 };
     }
 
     const transaction = this.options.combatStates.applyMarkTx(enemy, currentTime, markDuration);
-    return transaction.status !== 'no-op';
+    if (transaction.status === 'no-op') {
+      return { applied: false, guardGain: 0 };
+    }
+
+    return {
+      applied: true,
+      guardGain: this.options.traits.getCatalyticExposureGuardGain(),
+    };
   }
 
   resolveSignaturePayoff(context: SignaturePayoffContext): number {

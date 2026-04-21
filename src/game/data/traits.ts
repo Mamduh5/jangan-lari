@@ -80,7 +80,7 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     id: 'pressure-lenses',
     category: 'amplifier',
     title: 'Pressure Lenses',
-    description: 'Primary fire gains a light bonus only when your lane condition is already online.',
+    description: 'State-aligned fire gains a light bonus, and Echo Turret hits harder on enemies already carrying a state.',
     heroBias: 'shared',
   },
   'lingering-static': {
@@ -122,7 +122,7 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     id: 'catalytic-exposure',
     category: 'converter',
     title: 'Catalytic Exposure',
-    description: 'Consuming Ailment Marks the healthiest nearby enemy for a short execution window.',
+    description: 'Consuming Ailment Marks the healthiest nearby enemy and grants a small Guard pulse for follow-up chaining.',
     heroBias: 'weaver',
   },
 };

@@ -131,6 +131,10 @@ export class TraitRuntime {
     return this.hasTrait('volatile-bloom') ? 12 : 0;
   }
 
+  getEchoTurretStateAlignedBonusDamage(): number {
+    return this.hasTrait('pressure-lenses') ? 1 : 0;
+  }
+
   getGuardGainOnPrimaryHit(options: PrimaryHitContext): number {
     if (options.heroId !== 'runner' || options.abilityId !== 'brace-shot') {
       return 0;
@@ -190,5 +194,9 @@ export class TraitRuntime {
 
   getCatalyticExposureMarkDurationMs(): number {
     return this.hasTrait('catalytic-exposure') ? 1800 : 0;
+  }
+
+  getCatalyticExposureGuardGain(): number {
+    return this.hasTrait('catalytic-exposure') ? 2 : 0;
   }
 }

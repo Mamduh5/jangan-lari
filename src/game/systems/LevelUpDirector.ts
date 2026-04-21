@@ -76,7 +76,7 @@ export class LevelUpDirector {
         (reward) =>
           reward.category === 'trait' &&
           reward.lane === 'bridge' &&
-          reward.heroBias !== `shared` &&
+          reward.heroBias === 'shared' &&
           reward.traitId &&
           !selectedTraits.has(reward.traitId),
       ),
