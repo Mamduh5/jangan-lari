@@ -147,6 +147,40 @@ describe('trigger seam', () => {
     ).toBe(1);
   });
 
+  test('consume-triggered signature cooldown refund remains trait-gated', () => {
+    const traits = new TraitRuntime();
+    const seam = new TriggerSeam({
+      heroId: 'shade',
+      traits,
+      combatStates: new CombatStateRuntime(),
+    });
+
+    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: false }).cooldownRefundMs).toBe(0);
+    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).cooldownRefundMs).toBe(0);
+
+    traits.addTrait('focused-breach');
+    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).cooldownRefundMs).toBe(220);
+  });
+
+  test('consume-triggered catalytic exposure mark conversion remains unchanged', () => {
+    const traits = new TraitRuntime();
+    const states = new CombatStateRuntime();
+    const seam = new TriggerSeam({
+      heroId: 'weaver',
+      traits,
+      combatStates: states,
+    });
+    const enemy = createMockStateEnemy();
+
+    expect(seam.applyCatalyticExposureMark(enemy, 1_000)).toBe(false);
+    expect(states.isMarked(enemy, 1_100)).toBe(false);
+
+    traits.addTrait('catalytic-exposure');
+    expect(seam.applyCatalyticExposureMark(enemy, 1_000)).toBe(true);
+    expect(states.isMarked(enemy, 2_700)).toBe(true);
+    expect(states.isMarked(enemy, 2_900)).toBe(false);
+  });
+
   test('representative trait-support-evolution route remains reachable', () => {
     const director = new LevelUpDirector();
     const traits = new TraitRuntime();

@@ -1058,11 +1058,6 @@ export class AbilityResolver {
   }
 
   private tryApplyCatalyticExposure(currentTime: number, origin: Enemy, excluded: Set<Enemy>): boolean {
-    const markDuration = this.options.traits.getCatalyticExposureMarkDurationMs();
-    if (markDuration <= 0) {
-      return false;
-    }
-
     const candidate = this.getActiveEnemies()
       .filter(
         (enemy) =>
@@ -1076,7 +1071,6 @@ export class AbilityResolver {
       return false;
     }
 
-    this.options.combatStates.applyMark(candidate, currentTime, markDuration);
-    return true;
+    return this.triggerSeam.applyCatalyticExposureMark(candidate, currentTime);
   }
 }

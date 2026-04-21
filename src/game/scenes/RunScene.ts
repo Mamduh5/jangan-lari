@@ -613,9 +613,12 @@ export class RunScene extends Phaser.Scene {
         }
         if (result.signatureHit?.consumedMark) {
           this.markConsumeCount += 1;
+          const consumePayoff = this.triggerSeam.resolveOnConsumeSignaturePayoff({
+            consumedMark: true,
+          });
           this.abilityLoadout.reduceCooldown(
             'signature',
-            this.traitRuntime.getSignatureMarkedCooldownRefundMs(),
+            consumePayoff.cooldownRefundMs,
             currentTime,
           );
         }

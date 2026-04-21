@@ -46,6 +46,14 @@ export type SignaturePayoffContext = {
   targetWasAilmented: boolean;
 };
 
+export type OnConsumeSignatureContext = {
+  consumedMark: boolean;
+};
+
+export type OnConsumeSignatureResult = {
+  cooldownRefundMs: number;
+};
+
 export type PrimaryPatternResult = {
   burstCount: number;
   spreadDegrees: number;
@@ -129,6 +137,26 @@ export class TriggerSeam {
         enemyWasMarked: context.enemyWasMarked,
       }),
     };
+  }
+
+  resolveOnConsumeSignaturePayoff(context: OnConsumeSignatureContext): OnConsumeSignatureResult {
+    if (!context.consumedMark) {
+      return { cooldownRefundMs: 0 };
+    }
+
+    return {
+      cooldownRefundMs: this.options.traits.getSignatureMarkedCooldownRefundMs(),
+    };
+  }
+
+  applyCatalyticExposureMark(enemy: Enemy, currentTime: number): boolean {
+    const markDuration = this.options.traits.getCatalyticExposureMarkDurationMs();
+    if (markDuration <= 0) {
+      return false;
+    }
+
+    this.options.combatStates.applyMark(enemy, currentTime, markDuration);
+    return true;
   }
 
   resolveSignaturePayoff(context: SignaturePayoffContext): number {
