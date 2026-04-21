@@ -107,7 +107,7 @@ export class TriggerSeam {
   ): OnHitStateApplicationResult {
     if (sourceAbilityId === 'seeker-burst') {
       const markDuration = this.options.traits.getMarkDurationMs(getAbilityDefinition('seeker-burst').markDurationMs ?? 1600);
-      this.options.combatStates.applyMark(enemy, currentTime, markDuration);
+      this.options.combatStates.applyMarkTx(enemy, currentTime, markDuration);
       return { markApplications: 1, disruptedApplications: 0, ailmentApplications: 0 };
     }
 
@@ -115,7 +115,7 @@ export class TriggerSeam {
       const disruptedDuration = this.options.traits.getDisruptedDurationMs(
         getAbilityDefinition('spotter-drone').disruptedDurationMs ?? 1500,
       );
-      this.options.combatStates.applyDisrupted(enemy, currentTime, disruptedDuration);
+      this.options.combatStates.applyDisruptedTx(enemy, currentTime, disruptedDuration);
       return { markApplications: 0, disruptedApplications: 1, ailmentApplications: 0 };
     }
 
@@ -123,7 +123,7 @@ export class TriggerSeam {
       const ailmentDuration = this.options.traits.getAilmentDurationMs(
         getAbilityDefinition(sourceAbilityId).ailmentDurationMs ?? 2100,
       );
-      this.options.combatStates.applyAilment(enemy, currentTime, ailmentDuration);
+      this.options.combatStates.applyAilmentTx(enemy, currentTime, ailmentDuration);
       return { markApplications: 0, disruptedApplications: 0, ailmentApplications: 1 };
     }
 
@@ -155,8 +155,8 @@ export class TriggerSeam {
       return false;
     }
 
-    this.options.combatStates.applyMark(enemy, currentTime, markDuration);
-    return true;
+    const transaction = this.options.combatStates.applyMarkTx(enemy, currentTime, markDuration);
+    return transaction.status !== 'no-op';
   }
 
   resolveSignaturePayoff(context: SignaturePayoffContext): number {

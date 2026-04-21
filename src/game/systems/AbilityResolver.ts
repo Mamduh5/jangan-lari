@@ -254,7 +254,8 @@ export class AbilityResolver {
       return { used: false };
     }
 
-    const consumedMark = this.options.combatStates.consumeMark(target, currentTime);
+    const consumedMarkTx = this.options.combatStates.consumeMarkTx(target, currentTime);
+    const consumedMark = consumedMarkTx.consumed;
     const targetWasDisrupted = this.options.combatStates.isDisrupted(target, currentTime);
     const targetWasAilmented = this.options.combatStates.isAilmented(target, currentTime);
     let damage = ability.damage;
@@ -315,7 +316,7 @@ export class AbilityResolver {
     if (this.evolutionId === 'kill-chain-protocol' && consumedMark && killed) {
       const nextTarget = this.findMarkedEnemyExcluding(currentTime, ability.range, target) ?? this.findNearestEnemyExcluding(ability.range, target);
       if (nextTarget) {
-        const redirectedConsumedMark = this.options.combatStates.consumeMark(nextTarget, currentTime);
+        const redirectedConsumedMark = this.options.combatStates.consumeMarkTx(nextTarget, currentTime).consumed;
         let redirectedDamage = Math.round(damage * 0.85);
         if (redirectedConsumedMark) {
           redirectedDamage = Math.round(redirectedDamage * 1.15);
@@ -345,7 +346,7 @@ export class AbilityResolver {
     }
 
     if (this.evolutionId === 'siege-lock-array' && target.active && target.isAlive() && (consumedMark || target.isMarked(currentTime))) {
-      const immediateGain = this.options.combatStates.gainGuard(2);
+      const immediateGain = this.options.combatStates.gainGuardTx(2).value;
       this.options.traits.notifyGuardGain(currentTime, immediateGain);
 
       [150, 310].forEach((delayMs) => {
@@ -360,7 +361,7 @@ export class AbilityResolver {
           }
           target.takeDamage(repeatedDamage, { x: this.options.player.x, y: this.options.player.y });
 
-          const gained = this.options.combatStates.gainGuard(3);
+          const gained = this.options.combatStates.gainGuardTx(3).value;
           this.options.traits.notifyGuardGain(this.options.scene.time.now, gained);
 
           const lockLine = this.options.scene.add.line(
@@ -424,7 +425,8 @@ export class AbilityResolver {
 
     for (const enemy of targets) {
       chainedTargets.add(enemy);
-      const consumedAilment = this.options.combatStates.consumeAilment(enemy, currentTime);
+      const consumedAilmentTx = this.options.combatStates.consumeAilmentTx(enemy, currentTime);
+      const consumedAilment = consumedAilmentTx.consumed;
       const targetWasMarked = this.options.combatStates.isMarked(enemy, currentTime);
       let damage = consumedAilment ? ability.damage + consumeBonusDamage : Math.round(ability.damage * 0.6);
       if (this.evolutionId === 'cinder-crown' && enemy === target && consumedAilment && targetWasMarked) {
@@ -491,7 +493,7 @@ export class AbilityResolver {
         }
 
         chainedTargets.add(chainedTarget);
-        if (!this.options.combatStates.consumeAilment(chainedTarget, currentTime)) {
+        if (!this.options.combatStates.consumeAilmentTx(chainedTarget, currentTime).consumed) {
           break;
         }
 
@@ -559,7 +561,7 @@ export class AbilityResolver {
     const disruptedDuration = this.options.traits.getDisruptedDurationMs(ability.disruptedDurationMs ?? 2400);
     for (const enemy of targets) {
       enemy.takeDamage(ability.damage, { x: this.options.player.x, y: this.options.player.y });
-      this.options.combatStates.applyDisrupted(enemy, currentTime, disruptedDuration);
+      this.options.combatStates.applyDisruptedTx(enemy, currentTime, disruptedDuration);
     }
 
     const ring = this.options.scene.add.circle(this.options.player.x, this.options.player.y, 22, ability.color, 0.18).setDepth(8);
@@ -641,7 +643,7 @@ export class AbilityResolver {
 
     if (targets.length >= 3) {
       this.options.player.heal(4);
-      const gained = this.options.combatStates.gainGuard(2);
+      const gained = this.options.combatStates.gainGuardTx(2).value;
       this.options.traits.notifyGuardGain(currentTime, gained);
     }
 
@@ -878,7 +880,7 @@ export class AbilityResolver {
     }
 
     const spendCap = Math.min(guard, 10 + this.options.traits.getIronReserveSpendBonus());
-    const spentGuard = this.options.combatStates.spendGuard(spendCap);
+    const spentGuard = this.options.combatStates.spendGuardTx(spendCap).value;
     if (spentGuard <= 0) {
       return { used: false };
     }
@@ -949,7 +951,7 @@ export class AbilityResolver {
       return 0;
     }
 
-    const spentGuard = this.options.combatStates.spendGuard(Math.min(maxSpend, guardBefore));
+    const spentGuard = this.options.combatStates.spendGuardTx(Math.min(maxSpend, guardBefore)).value;
     if (spentGuard <= 0) {
       return 0;
     }

@@ -765,7 +765,7 @@ export class RunScene extends Phaser.Scene {
     enemy.takeDamage(projectile.getDamage() + onHitPayoff.damageBonus + metaDamageBonus, { x: projectile.x, y: projectile.y });
 
     if (onHitPayoff.guardGain > 0) {
-      const actualGain = this.combatStates.gainGuard(onHitPayoff.guardGain);
+      const actualGain = this.combatStates.gainGuardTx(onHitPayoff.guardGain).value;
       this.traitRuntime.notifyGuardGain(currentTime, actualGain);
     }
 
@@ -789,7 +789,7 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    const guarded = this.combatStates.absorbDamage(amount);
+    const guarded = this.combatStates.absorbDamageTx(amount);
     const tookHit = guarded.remaining > 0 ? this.player.takeDamage(guarded.remaining, this.time.now) : false;
     if (guarded.absorbed > 0 && guarded.remaining === 0) {
       this.cameras.main.shake(40, 0.0016);
@@ -845,7 +845,7 @@ export class RunScene extends Phaser.Scene {
       enemyWasMarked,
     });
     if (onKillPayoff.guardGain > 0) {
-      const actualGain = this.combatStates.gainGuard(onKillPayoff.guardGain);
+      const actualGain = this.combatStates.gainGuardTx(onKillPayoff.guardGain).value;
       this.traitRuntime.notifyGuardGain(this.time.now, actualGain);
     }
     const gem = new XPGem(this, enemy.x, enemy.y, enemy.getXpValue());
