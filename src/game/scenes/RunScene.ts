@@ -103,6 +103,10 @@ export class RunScene extends Phaser.Scene {
     super('RunScene');
   }
 
+  private isRunFrozen(): boolean {
+    return this.isEnded || this.isLevelingUp || this.isTransitioningToMenu || document.hidden;
+  }
+
   create(): void {
     this.saveData = loadGameSave();
     this.selectedHero = HEROES[this.saveData.selectedHero];
@@ -205,7 +209,7 @@ export class RunScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     const activeDelta = Math.max(0, delta);
 
-    if (!this.isEnded && !this.isLevelingUp && !document.hidden) {
+    if (!this.isRunFrozen()) {
       this.runElapsedMs = accumulateRunElapsedMs(this.runElapsedMs, activeDelta, true, 100, RUN_TARGET_DURATION_MS);
       if (this.runElapsedMs >= RUN_TARGET_DURATION_MS && !this.isBossAlive()) {
         this.endRun(true);
@@ -214,16 +218,8 @@ export class RunScene extends Phaser.Scene {
 
     this.player.updateVisualState(time);
 
-    if (this.isEnded) {
+    if (this.isRunFrozen()) {
       this.player.move(new Phaser.Math.Vector2(0, 0));
-      this.refreshCombatStateCounts(time);
-      this.publishHudState();
-      return;
-    }
-
-    if (this.isLevelingUp) {
-      this.player.move(new Phaser.Math.Vector2(0, 0));
-      this.refreshCombatStateCounts(time);
       this.publishHudState();
       return;
     }
@@ -248,7 +244,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   selectReward(index: number): void {
-    if (!this.isLevelingUp) {
+    if (!this.isLevelingUp || this.isEnded || this.isTransitioningToMenu) {
       return;
     }
 
@@ -271,6 +267,10 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.isTransitioningToMenu = true;
+    this.isLevelingUp = false;
+    this.currentRewardChoices = [];
+    this.physics.world.pause();
+    this.clearTransientHazards();
     clearRunRegistryState(this.registry, this.saveData.totalGold);
     if (this.scene.isActive('UIScene')) {
       this.scene.stop('UIScene');
@@ -280,6 +280,9 @@ export class RunScene extends Phaser.Scene {
   }
 
   spawnEnemyWave(): void {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
     const result = this.spawnDirector.nextWave(this.runElapsedMs);
     result.wave.forEach((archetype, index) => this.spawnEnemy(archetype, index, result.wave.length));
     this.nextSpawnAtMs = this.time.now + this.getSpawnIntervalMs();
@@ -307,7 +310,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   debugForceBossEncounter(): void {
-    if (this.isEnded) {
+    if (this.isEnded || this.isLevelingUp || this.isTransitioningToMenu) {
       return;
     }
     this.spawnBossEncounter();
@@ -798,7 +801,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private applyDamageToPlayer(amount: number): void {
-    if (this.isEnded || this.isLevelingUp) {
+    if (this.isRunFrozen()) {
       return;
     }
 
@@ -816,7 +819,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private collectXpGem(gem: XPGem): void {
-    if (!gem.active || this.isEnded) {
+    if (!gem.active || this.isEnded || this.isLevelingUp || this.isTransitioningToMenu) {
       return;
     }
 
@@ -836,6 +839,9 @@ export class RunScene extends Phaser.Scene {
 
   private harvestPendingDeaths(): void {
     (this.enemies.getChildren() as Enemy[]).forEach((enemy) => {
+      if (this.isEnded) {
+        return;
+      }
       if (!enemy.active || !enemy.consumeDeathRewardPending()) {
         return;
       }
@@ -844,6 +850,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   private handleEnemyDeath(enemy: Enemy): void {
+    if (this.isEnded) {
+      return;
+    }
+
     this.killCount += 1;
     this.handleExperienceGain(enemy.getXpValue());
     const enemyWasMarked = enemy.isMarked(this.time.now);
@@ -882,6 +892,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   private beginLevelUp(): void {
+    if (this.isEnded || this.isLevelingUp || this.isTransitioningToMenu) {
+      return;
+    }
+
     this.isLevelingUp = true;
     this.physics.world.pause();
 
@@ -995,6 +1009,7 @@ export class RunScene extends Phaser.Scene {
     this.isEnded = true;
     this.isLevelingUp = false;
     this.physics.world.pause();
+    this.clearTransientHazards();
 
     const reward = calculateRunGoldReward(this.player.getLevel(), this.killCount, victory);
     this.goldEarned = reward;
@@ -1024,13 +1039,7 @@ export class RunScene extends Phaser.Scene {
   private handleShutdown(): void {
     this.input.keyboard?.off('keydown-ESC', this.returnToMenu, this);
     document.removeEventListener('visibilitychange', this.handlePageVisibilityChange);
-    this.enemyBolts.forEach((bolt) => {
-      bolt.orb.destroy();
-      bolt.halo.destroy();
-    });
-    this.enemyBolts = [];
-    this.bossTelegraphs.forEach((shape) => shape.destroy());
-    this.bossTelegraphs = [];
+    this.clearTransientHazards();
   }
 
   private buildStateLabel(): string {
@@ -1046,7 +1055,13 @@ export class RunScene extends Phaser.Scene {
   }
 
   private updateBossEncounter(currentTime: number): void {
-    if (!this.bossEncounterActive && !this.isEnded && this.runElapsedMs >= BOSS_TRIGGER_TIME_MS) {
+    if (
+      !this.bossEncounterActive &&
+      !this.isEnded &&
+      !this.isTransitioningToMenu &&
+      this.pendingLevelUps === 0 &&
+      this.runElapsedMs >= BOSS_TRIGGER_TIME_MS
+    ) {
       this.spawnBossEncounter();
     }
 
@@ -1068,6 +1083,10 @@ export class RunScene extends Phaser.Scene {
       ? `Break Escorts ${activeProtectors.length}`
       : 'Boss Vulnerable';
 
+    if (this.pendingLevelUps > 0) {
+      return;
+    }
+
     if (currentTime >= this.nextBossAddSpawnAtMs) {
       this.spawnBossAddWave();
       this.nextBossAddSpawnAtMs = currentTime + 9000;
@@ -1075,7 +1094,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private spawnBossEncounter(): void {
-    if (this.bossEncounterActive || this.isEnded) {
+    if (this.bossEncounterActive || this.isEnded || this.isLevelingUp || this.isTransitioningToMenu) {
       return;
     }
 
@@ -1084,11 +1103,7 @@ export class RunScene extends Phaser.Scene {
         enemy.despawnSilently();
       }
     });
-    this.enemyBolts.forEach((bolt) => {
-      bolt.orb.destroy();
-      bolt.halo.destroy();
-    });
-    this.enemyBolts = [];
+    this.clearTransientHazards();
     this.spawnDirector.clearPressureBeat();
 
     const bossPosition = new Phaser.Math.Vector2(
@@ -1128,7 +1143,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private spawnBossAddWave(): void {
-    if (!this.bossEnemy || !this.bossEnemy.active) {
+    if (!this.bossEnemy || !this.bossEnemy.active || this.isEnded || this.isLevelingUp || this.isTransitioningToMenu) {
       return;
     }
 
@@ -1154,5 +1169,15 @@ export class RunScene extends Phaser.Scene {
 
   private isBossAlive(): boolean {
     return Boolean(this.bossEnemy && this.bossEnemy.active && this.bossEnemy.isAlive());
+  }
+
+  private clearTransientHazards(): void {
+    this.enemyBolts.forEach((bolt) => {
+      bolt.orb.destroy();
+      bolt.halo.destroy();
+    });
+    this.enemyBolts = [];
+    this.bossTelegraphs.forEach((shape) => shape.destroy());
+    this.bossTelegraphs = [];
   }
 }

@@ -972,4 +972,163 @@ test.describe('milestone 1 signature behavior', () => {
     expect(result.levelUpActiveAfterChoice).toBe(false);
     expect(result.resumedDeltaX).toBeGreaterThan(5);
   });
+
+  test('browser visibility pause freezes hostile bolts and resumes cleanly on return', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(async () => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number; getCurrentHealth: () => number };
+        handleEnemyAttackSignal: (signal: {
+          type: 'ranged-shot';
+          x: number;
+          y: number;
+          direction: { x: number; y: number };
+          speed: number;
+          damage: number;
+          color: number;
+          radius: number;
+        }) => void;
+        enemyBolts: Array<{ orb: { x: number } }>;
+      };
+
+      runScene.handleEnemyAttackSignal({
+        type: 'ranged-shot',
+        x: runScene.player.x + 240,
+        y: runScene.player.y,
+        direction: { x: -1, y: 0 },
+        speed: 320,
+        damage: 18,
+        color: 0x60a5fa,
+        radius: 6,
+      });
+
+      const bolt = runScene.enemyBolts[0]!;
+      const hpBefore = runScene.player.getCurrentHealth();
+      const startX = bolt.orb.x;
+
+      Object.defineProperty(document, 'hidden', {
+        configurable: true,
+        get: () => true,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const hiddenX = bolt.orb.x;
+      const hpWhileHidden = runScene.player.getCurrentHealth();
+
+      Object.defineProperty(document, 'hidden', {
+        configurable: true,
+        get: () => false,
+      });
+      document.dispatchEvent(new Event('visibilitychange'));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const resumedX = bolt.orb.x;
+
+      return {
+        hpBefore,
+        hpWhileHidden,
+        hiddenDeltaX: Math.abs(hiddenX - startX),
+        resumedDeltaX: Math.abs(resumedX - hiddenX),
+      };
+    });
+
+    expect(result.hpWhileHidden).toBe(result.hpBefore);
+    expect(result.hiddenDeltaX).toBeLessThan(0.01);
+    expect(result.resumedDeltaX).toBeGreaterThan(5);
+  });
+
+  test('boss spawn is deferred while a reward choice is unresolved and resumes after selection', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(async () => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        runElapsedMs: number;
+        debugForceLevelUp: () => void;
+        selectReward: (index: number) => void;
+        getGameplayBotSnapshot: () => { levelUpActive: boolean; bossActive: boolean; bossProtectors: number };
+      };
+
+      runScene.runElapsedMs = 305_000;
+      runScene.debugForceLevelUp();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const duringPause = runScene.getGameplayBotSnapshot();
+
+      runScene.selectReward(0);
+      let afterChoice = runScene.getGameplayBotSnapshot();
+      const startedAt = Date.now();
+      while (!afterChoice.bossActive && Date.now() - startedAt < 2_000) {
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        afterChoice = runScene.getGameplayBotSnapshot();
+      }
+
+      return {
+        levelUpActiveDuringPause: duringPause.levelUpActive,
+        bossActiveDuringPause: duringPause.bossActive,
+        levelUpActiveAfterChoice: afterChoice.levelUpActive,
+        bossActiveAfterChoice: afterChoice.bossActive,
+        bossProtectorsAfterChoice: afterChoice.bossProtectors,
+      };
+    });
+
+    expect(result.levelUpActiveDuringPause).toBe(true);
+    expect(result.bossActiveDuringPause).toBe(false);
+    expect(result.levelUpActiveAfterChoice).toBe(false);
+    expect(result.bossActiveAfterChoice).toBe(true);
+    expect(result.bossProtectorsAfterChoice).toBeGreaterThan(0);
+  });
+
+  test('returning to menu after an ended boss run clears run state and starts the next run cleanly', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        debugForceReward: (rewardId: 'shock-lattice' | 'citadel-core') => boolean;
+        debugForceBossEncounter: () => void;
+        debugForceEndRun: (victory?: boolean) => void;
+      };
+
+      runScene.debugForceReward('shock-lattice');
+      runScene.debugForceReward('citadel-core');
+      runScene.debugForceBossEncounter();
+      runScene.debugForceEndRun(true);
+    });
+
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('MenuScene') && !game.scene.isActive('RunScene') && !game.scene.isActive('UIScene'));
+    });
+
+    await clickCanvasPosition(page, getHeroCardX('runner'), 382);
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+    const snapshot = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        getGameplayBotSnapshot: () => {
+          endActive: boolean;
+          levelUpActive: boolean;
+          bossActive: boolean;
+          supportAbilityId: string | null;
+          evolutionId: string | null;
+          rewardChoices: Array<{ id: string }>;
+        };
+      };
+
+      return runScene.getGameplayBotSnapshot();
+    });
+
+    expect(snapshot.endActive).toBe(false);
+    expect(snapshot.levelUpActive).toBe(false);
+    expect(snapshot.bossActive).toBe(false);
+    expect(snapshot.supportAbilityId).toBeNull();
+    expect(snapshot.evolutionId).toBeNull();
+    expect(snapshot.rewardChoices).toHaveLength(0);
+  });
 });
