@@ -905,4 +905,71 @@ test.describe('milestone 1 signature behavior', () => {
     expect(result.afterProtectors).toBe(0);
     expect(result.hpLoss).toBeGreaterThanOrEqual(0);
   });
+
+  test('reward choice freezes hostile bolts and blocks player damage until a choice is made', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(async () => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number; getCurrentHealth: () => number };
+        debugForceLevelUp: () => void;
+        selectReward: (index: number) => void;
+        handleEnemyAttackSignal: (signal: {
+          type: 'ranged-shot';
+          x: number;
+          y: number;
+          direction: { x: number; y: number };
+          speed: number;
+          damage: number;
+          color: number;
+          radius: number;
+        }) => void;
+        enemyBolts: Array<{ orb: { x: number } }>;
+        getGameplayBotSnapshot: () => { levelUpActive: boolean; hp: number };
+      };
+
+      const hpBefore = runScene.player.getCurrentHealth();
+      runScene.handleEnemyAttackSignal({
+        type: 'ranged-shot',
+        x: runScene.player.x + 240,
+        y: runScene.player.y,
+        direction: { x: -1, y: 0 },
+        speed: 320,
+        damage: 18,
+        color: 0x60a5fa,
+        radius: 6,
+      });
+
+      const bolt = runScene.enemyBolts[0]!;
+      const pausedX = bolt.orb.x;
+      runScene.debugForceLevelUp();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const pausedSnapshot = runScene.getGameplayBotSnapshot();
+      const pausedBoltX = bolt.orb.x;
+      const hpDuringPause = runScene.player.getCurrentHealth();
+
+      runScene.selectReward(0);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      const resumedSnapshot = runScene.getGameplayBotSnapshot();
+      const resumedBoltX = bolt.orb.x;
+
+      return {
+        hpBefore,
+        hpDuringPause,
+        levelUpActiveDuringPause: pausedSnapshot.levelUpActive,
+        levelUpActiveAfterChoice: resumedSnapshot.levelUpActive,
+        pausedDeltaX: Math.abs(pausedBoltX - pausedX),
+        resumedDeltaX: Math.abs(resumedBoltX - pausedBoltX),
+      };
+    });
+
+    expect(result.levelUpActiveDuringPause).toBe(true);
+    expect(result.hpDuringPause).toBe(result.hpBefore);
+    expect(result.pausedDeltaX).toBeLessThan(0.01);
+    expect(result.levelUpActiveAfterChoice).toBe(false);
+    expect(result.resumedDeltaX).toBeGreaterThan(5);
+  });
 });

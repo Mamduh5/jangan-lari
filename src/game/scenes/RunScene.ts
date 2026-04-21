@@ -213,23 +213,26 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.player.updateVisualState(time);
-    this.updateXPGems();
-    this.updateProjectiles(activeDelta);
-    this.updateEnemyBolts(activeDelta);
-    this.harvestPendingDeaths();
-    this.refreshCombatStateCounts(time);
 
     if (this.isEnded) {
       this.player.move(new Phaser.Math.Vector2(0, 0));
+      this.refreshCombatStateCounts(time);
       this.publishHudState();
       return;
     }
 
     if (this.isLevelingUp) {
       this.player.move(new Phaser.Math.Vector2(0, 0));
+      this.refreshCombatStateCounts(time);
       this.publishHudState();
       return;
     }
+
+    this.updateXPGems();
+    this.updateProjectiles(activeDelta);
+    this.updateEnemyBolts(activeDelta);
+    this.harvestPendingDeaths();
+    this.refreshCombatStateCounts(time);
 
     this.player.move(this.readMovementInput());
     this.attemptAbilityUse(time);
@@ -795,7 +798,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private applyDamageToPlayer(amount: number): void {
-    if (this.isEnded) {
+    if (this.isEnded || this.isLevelingUp) {
       return;
     }
 
