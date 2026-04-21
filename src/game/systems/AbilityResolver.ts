@@ -7,6 +7,7 @@ import type { CombatStateRuntime } from './CombatStateRuntime';
 import type { TraitRuntime } from './TraitRuntime';
 import type { EvolutionId } from '../data/evolutions';
 import type { HeroId } from '../data/heroes';
+import { TriggerSeam } from './TriggerSeam';
 
 export type SignatureHitResult = {
   target: Enemy;
@@ -35,12 +36,22 @@ type AbilityResolverOptions = {
   combatStates: CombatStateRuntime;
   traits: TraitRuntime;
   heroId: HeroId;
+  triggers?: TriggerSeam;
 };
 
 export class AbilityResolver {
   private evolutionId: EvolutionId | null = null;
+  private readonly triggerSeam: TriggerSeam;
 
-  constructor(private readonly options: AbilityResolverOptions) {}
+  constructor(private readonly options: AbilityResolverOptions) {
+    this.triggerSeam =
+      options.triggers ??
+      new TriggerSeam({
+        heroId: options.heroId,
+        traits: options.traits,
+        combatStates: options.combatStates,
+      });
+  }
 
   setEvolutionId(evolutionId: EvolutionId | null): void {
     this.evolutionId = evolutionId;
@@ -87,16 +98,7 @@ export class AbilityResolver {
     }
 
     const guardActive = this.options.combatStates.hasGuard();
-    const burstCount = this.options.traits.getPrimaryBurstCount({
-      heroId: this.options.heroId,
-      ability,
-      guardActive,
-    });
-    const totalSpread = this.options.traits.getPrimarySpreadDegrees({
-      heroId: this.options.heroId,
-      ability,
-      guardActive,
-    });
+    const { burstCount, spreadDegrees: totalSpread } = this.triggerSeam.resolvePrimaryPattern(ability, guardActive);
     const baseDirection = direction.normalize();
 
     for (let index = 0; index < burstCount; index += 1) {
@@ -137,7 +139,7 @@ export class AbilityResolver {
       return { used: false };
     }
 
-    const relayMultiplier = this.options.traits.consumePredatorRelaySignatureBonus({
+    const relayMultiplier = this.triggerSeam.resolveSignaturePayoff({
       currentTime,
       targetWasMarked: targets.some((enemy) => enemy.isMarked(currentTime)),
       targetWasDisrupted: targets.some((enemy) => enemy.isDisrupted(currentTime)),
@@ -222,12 +224,10 @@ export class AbilityResolver {
       return { used: false };
     }
 
-    const burstCount = this.options.traits.getPrimaryBurstCount({
-      heroId: this.options.heroId,
+    const { burstCount, spreadDegrees: totalSpread } = this.triggerSeam.resolvePrimaryPattern(
       ability,
-      guardActive: this.options.combatStates.hasGuard(),
-    });
-    const totalSpread = ability.spreadDegrees ?? 0;
+      this.options.combatStates.hasGuard(),
+    );
     const baseDirection = direction.normalize();
 
     for (let index = 0; index < burstCount; index += 1) {
@@ -267,7 +267,7 @@ export class AbilityResolver {
     }
     damage = Math.round(
       damage *
-        this.options.traits.consumePredatorRelaySignatureBonus({
+        this.triggerSeam.resolveSignaturePayoff({
           currentTime,
           targetWasMarked: consumedMark || target.isMarked(currentTime),
           targetWasDisrupted,
@@ -437,7 +437,7 @@ export class AbilityResolver {
       if (consumedAilment) {
         damage = Math.round(
           damage *
-            this.options.traits.consumePredatorRelaySignatureBonus({
+            this.triggerSeam.resolveSignaturePayoff({
               currentTime,
               targetWasMarked,
               targetWasDisrupted: this.options.combatStates.isDisrupted(enemy, currentTime),
@@ -886,7 +886,7 @@ export class AbilityResolver {
     const normalized = direction.normalize();
     const endX = this.options.player.x + normalized.x * 370;
     const endY = this.options.player.y + normalized.y * 370;
-    const relayMultiplier = this.options.traits.consumePredatorRelaySignatureBonus({
+    const relayMultiplier = this.triggerSeam.resolveSignaturePayoff({
       currentTime,
       targetWasMarked: target.isMarked(currentTime),
       targetWasDisrupted: target.isDisrupted(currentTime),

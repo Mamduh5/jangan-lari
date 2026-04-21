@@ -29,6 +29,7 @@ import { CombatStateRuntime } from '../systems/CombatStateRuntime';
 import { LevelUpDirector } from '../systems/LevelUpDirector';
 import { SpawnDirector } from '../systems/SpawnDirector';
 import { TraitRuntime } from '../systems/TraitRuntime';
+import { TriggerSeam } from '../systems/TriggerSeam';
 import { accumulateRunElapsedMs, calculateRunGoldReward, clearRunRegistryState, writeFreshRunRegistryState } from '../utils/runSession';
 
 type EnemyBolt = {
@@ -57,6 +58,7 @@ export class RunScene extends Phaser.Scene {
   private levelUpDirector!: LevelUpDirector;
   private abilityLoadout!: AbilityLoadout;
   private abilityResolver!: AbilityResolver;
+  private triggerSeam!: TriggerSeam;
   private spawnDirector!: SpawnDirector;
   private enemyBolts: EnemyBolt[] = [];
 
@@ -156,6 +158,11 @@ export class RunScene extends Phaser.Scene {
     this.combatStates = new CombatStateRuntime();
     this.combatStates.setMaxGuard(this.selectedHero.baseGuardMax);
     this.traitRuntime = new TraitRuntime();
+    this.triggerSeam = new TriggerSeam({
+      heroId: this.selectedHero.id,
+      traits: this.traitRuntime,
+      combatStates: this.combatStates,
+    });
     this.levelUpDirector = new LevelUpDirector();
     this.abilityLoadout = new AbilityLoadout(
       this.selectedHero.primaryAbilityId,
@@ -169,6 +176,7 @@ export class RunScene extends Phaser.Scene {
       combatStates: this.combatStates,
       traits: this.traitRuntime,
       heroId: this.selectedHero.id,
+      triggers: this.triggerSeam,
     });
     this.abilityResolver.setEvolutionId(null);
     this.spawnDirector = new SpawnDirector();
@@ -742,8 +750,7 @@ export class RunScene extends Phaser.Scene {
     const targetWasMarked = enemy.isMarked(currentTime);
     const targetWasDisrupted = enemy.isDisrupted(currentTime);
     const targetWasAilmented = enemy.isAilmented(currentTime);
-    const damageBonus = this.traitRuntime.getPrimaryDamageBonus({
-      heroId: this.selectedHero.id,
+    const onHitPayoff = this.triggerSeam.resolveOnHitPayoffs({
       abilityId: sourceAbilityId,
       isCloseRange,
       guardActive,
@@ -752,45 +759,17 @@ export class RunScene extends Phaser.Scene {
       targetWasAilmented,
     });
     const metaDamageBonus = getPermanentUpgradeLevel(this.saveData, 'starting-damage') * 2;
-    enemy.takeDamage(projectile.getDamage() + damageBonus + metaDamageBonus, { x: projectile.x, y: projectile.y });
+    enemy.takeDamage(projectile.getDamage() + onHitPayoff.damageBonus + metaDamageBonus, { x: projectile.x, y: projectile.y });
 
-    if (sourceAbilityId === 'brace-shot') {
-      const gained = this.traitRuntime.getGuardGainOnPrimaryHit({
-        heroId: this.selectedHero.id,
-        abilityId: sourceAbilityId,
-        isCloseRange,
-        guardActive,
-        targetWasMarked,
-        targetWasDisrupted,
-        targetWasAilmented,
-      });
-      if (gained > 0) {
-        const actualGain = this.combatStates.gainGuard(gained);
-        this.traitRuntime.notifyGuardGain(currentTime, actualGain);
-      }
+    if (onHitPayoff.guardGain > 0) {
+      const actualGain = this.combatStates.gainGuard(onHitPayoff.guardGain);
+      this.traitRuntime.notifyGuardGain(currentTime, actualGain);
     }
 
-    if (sourceAbilityId === 'seeker-burst') {
-      const markDuration = this.traitRuntime.getMarkDurationMs(getAbilityDefinition('seeker-burst').markDurationMs ?? 1600);
-      this.combatStates.applyMark(enemy, currentTime, markDuration);
-      this.markApplyCount += 1;
-    }
-
-    if (sourceAbilityId === 'spotter-drone') {
-      const disruptedDuration = this.traitRuntime.getDisruptedDurationMs(
-        getAbilityDefinition('spotter-drone').disruptedDurationMs ?? 1500,
-      );
-      this.combatStates.applyDisrupted(enemy, currentTime, disruptedDuration);
-      this.disruptedApplyCount += 1;
-    }
-
-    if (sourceAbilityId === 'cinder-needles' || sourceAbilityId === 'contagion-node') {
-      const ailmentDuration = this.traitRuntime.getAilmentDurationMs(
-        getAbilityDefinition(sourceAbilityId).ailmentDurationMs ?? 2100,
-      );
-      this.combatStates.applyAilment(enemy, currentTime, ailmentDuration);
-      this.ailmentApplyCount += 1;
-    }
+    const stateApplications = this.triggerSeam.applyOnHitStateApplications(sourceAbilityId, enemy, currentTime);
+    this.markApplyCount += stateApplications.markApplications;
+    this.disruptedApplyCount += stateApplications.disruptedApplications;
+    this.ailmentApplyCount += stateApplications.ailmentApplications;
 
     projectile.deactivate();
   }
@@ -859,12 +838,11 @@ export class RunScene extends Phaser.Scene {
     this.killCount += 1;
     this.handleExperienceGain(enemy.getXpValue());
     const enemyWasMarked = enemy.isMarked(this.time.now);
-    const guardGain = this.traitRuntime.getGuardGainOnKill({
-      heroId: this.selectedHero.id,
+    const onKillPayoff = this.triggerSeam.resolveOnKillPayoffs({
       enemyWasMarked,
     });
-    if (guardGain > 0) {
-      const actualGain = this.combatStates.gainGuard(guardGain);
+    if (onKillPayoff.guardGain > 0) {
+      const actualGain = this.combatStates.gainGuard(onKillPayoff.guardGain);
       this.traitRuntime.notifyGuardGain(this.time.now, actualGain);
     }
     const gem = new XPGem(this, enemy.x, enemy.y, enemy.getXpValue());
