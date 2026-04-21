@@ -52,6 +52,7 @@ export type OnConsumeSignatureContext = {
 
 export type OnConsumeSignatureResult = {
   cooldownRefundMs: number;
+  guardGain: number;
 };
 
 export type CatalyticExposureResult = {
@@ -146,11 +147,15 @@ export class TriggerSeam {
 
   resolveOnConsumeSignaturePayoff(context: OnConsumeSignatureContext): OnConsumeSignatureResult {
     if (!context.consumedMark) {
-      return { cooldownRefundMs: 0 };
+      return { cooldownRefundMs: 0, guardGain: 0 };
     }
 
     return {
       cooldownRefundMs: this.options.traits.getSignatureMarkedCooldownRefundMs(),
+      guardGain: this.options.traits.getGuardGainOnSignatureConsume({
+        heroId: this.options.heroId,
+        consumedMark: context.consumedMark,
+      }),
     };
   }
 

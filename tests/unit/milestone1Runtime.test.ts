@@ -316,10 +316,23 @@ describe('milestone 1 runtime helpers', () => {
         targetWasAilmented: false,
       }),
     ).toBeCloseTo(1.18);
+    expect(
+      traits.getGuardGainOnSignatureConsume({
+        heroId: 'shade',
+        consumedMark: true,
+      }),
+    ).toBe(0);
     expect(traits.getEchoTurretStateAlignedBonusDamage()).toBe(1);
     expect(traits.getCatalyticExposureMarkDurationMs()).toBe(0);
     expect(traits.getCatalyticExposureGuardGain()).toBe(0);
 
+    traits.addTrait('scavenger-shield');
+    expect(
+      traits.getGuardGainOnSignatureConsume({
+        heroId: 'shade',
+        consumedMark: true,
+      }),
+    ).toBe(2);
     traits.addTrait('catalytic-exposure');
     expect(traits.getCatalyticExposureMarkDurationMs()).toBe(1800);
     expect(traits.getCatalyticExposureGuardGain()).toBe(2);

@@ -616,6 +616,10 @@ export class RunScene extends Phaser.Scene {
           const consumePayoff = this.triggerSeam.resolveOnConsumeSignaturePayoff({
             consumedMark: true,
           });
+          if (consumePayoff.guardGain > 0) {
+            const actualGain = this.combatStates.gainGuardTx(consumePayoff.guardGain).value;
+            this.traitRuntime.notifyGuardGain(currentTime, actualGain);
+          }
           this.abilityLoadout.reduceCooldown(
             'signature',
             consumePayoff.cooldownRefundMs,

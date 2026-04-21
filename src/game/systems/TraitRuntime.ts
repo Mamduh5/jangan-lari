@@ -17,6 +17,11 @@ type KillContext = {
   enemyWasMarked: boolean;
 };
 
+type SignatureConsumeContext = {
+  heroId: HeroId;
+  consumedMark: boolean;
+};
+
 export class TraitRuntime {
   private readonly selectedTraits = new Set<TraitId>();
   private predatorRelayUntilMs = 0;
@@ -153,6 +158,14 @@ export class TraitRuntime {
     }
 
     return 0;
+  }
+
+  getGuardGainOnSignatureConsume(options: SignatureConsumeContext): number {
+    if (!options.consumedMark || !this.hasTrait('scavenger-shield')) {
+      return 0;
+    }
+
+    return 2;
   }
 
   getBonusGuardMax(): number {

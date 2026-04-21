@@ -82,7 +82,7 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     category: 'trait',
     lane: 'bridge',
     title: 'Scavenger Shield',
-    description: 'Killing a Marked enemy grants a small burst of Guard.',
+    description: 'Marked kills grant Guard, and Mark consumed by Signature grants a smaller Guard burst.',
     traitId: 'scavenger-shield',
     heroBias: 'shared',
   },

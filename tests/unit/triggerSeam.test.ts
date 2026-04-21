@@ -157,9 +157,14 @@ describe('trigger seam', () => {
 
     expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: false }).cooldownRefundMs).toBe(0);
     expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).cooldownRefundMs).toBe(0);
+    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).guardGain).toBe(0);
 
     traits.addTrait('focused-breach');
     expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).cooldownRefundMs).toBe(220);
+    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).guardGain).toBe(0);
+
+    traits.addTrait('scavenger-shield');
+    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).guardGain).toBe(2);
   });
 
   test('consume-triggered catalytic exposure mark conversion remains unchanged', () => {
@@ -186,6 +191,36 @@ describe('trigger seam', () => {
     });
     expect(states.isMarked(enemy, 2_700)).toBe(true);
     expect(states.isMarked(enemy, 2_900)).toBe(false);
+  });
+
+  test('shade mark-consume conversion can feed Guard and arm predator relay', () => {
+    const traits = new TraitRuntime();
+    traits.addTrait('scavenger-shield');
+    traits.addTrait('predator-relay');
+    const states = new CombatStateRuntime();
+    states.setMaxGuard(12);
+    const seam = new TriggerSeam({
+      heroId: 'shade',
+      traits,
+      combatStates: states,
+    });
+
+    const consumePayoff = seam.resolveOnConsumeSignaturePayoff({ consumedMark: true });
+    expect(consumePayoff).toEqual({
+      cooldownRefundMs: 0,
+      guardGain: 2,
+    });
+
+    const gained = states.gainGuardTx(consumePayoff.guardGain).value;
+    traits.notifyGuardGain(1_000, gained);
+    expect(
+      seam.resolveSignaturePayoff({
+        currentTime: 1_120,
+        targetWasMarked: true,
+        targetWasDisrupted: false,
+        targetWasAilmented: false,
+      }),
+    ).toBeCloseTo(1.18);
   });
 
   test('catalytic conversion can arm predator relay through guard gain payload', () => {

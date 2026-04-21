@@ -66,7 +66,7 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     id: 'scavenger-shield',
     category: 'converter',
     title: 'Scavenger Shield',
-    description: 'Killing a Marked enemy grants a small burst of Guard.',
+    description: 'Killing a Marked enemy grants Guard, and consuming Mark with Signature grants a smaller Guard burst.',
     heroBias: 'shared',
   },
   'predator-relay': {
