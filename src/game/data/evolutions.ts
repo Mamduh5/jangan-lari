@@ -1,3 +1,4 @@
+import { EVOLUTION_MIN_ELAPSED_MS, EVOLUTION_MIN_LEVEL } from '../config/constants';
 import type { AbilityId } from './abilities';
 import type { HeroId } from './heroes';
 import type { TraitId } from './traits';
@@ -22,8 +23,8 @@ export const EVOLUTION_DEFINITIONS: Record<EvolutionId, EvolutionDefinition> = {
     heroId: 'runner',
     title: 'Citadel Core',
     description: 'Bulwark Slam spends Guard in chunks and releases follow-up fortress pulses while Guard holds.',
-    minLevel: 7,
-    minElapsedMs: 250_000,
+    minLevel: EVOLUTION_MIN_LEVEL,
+    minElapsedMs: EVOLUTION_MIN_ELAPSED_MS,
     requiredTraitIds: ['close-guard', 'steadfast-posture'],
   },
   'kill-chain-protocol': {
@@ -31,8 +32,8 @@ export const EVOLUTION_DEFINITIONS: Record<EvolutionId, EvolutionDefinition> = {
     heroId: 'shade',
     title: 'Kill Chain Protocol',
     description: 'Marked kills from Hunter Sweep immediately redirect an empowered follow-up strike into the next priority target.',
-    minLevel: 7,
-    minElapsedMs: 250_000,
+    minLevel: EVOLUTION_MIN_LEVEL,
+    minElapsedMs: EVOLUTION_MIN_ELAPSED_MS,
     requiredTraitIds: ['target-painter', 'focused-breach'],
   },
   'pyre-constellation': {
@@ -40,8 +41,8 @@ export const EVOLUTION_DEFINITIONS: Record<EvolutionId, EvolutionDefinition> = {
     heroId: 'weaver',
     title: 'Pyre Constellation',
     description: 'Hex Detonation chains across nearby Ailmented enemies, consuming them in sequence.',
-    minLevel: 7,
-    minElapsedMs: 250_000,
+    minLevel: EVOLUTION_MIN_LEVEL,
+    minElapsedMs: EVOLUTION_MIN_ELAPSED_MS,
     requiredTraitIds: ['infectious-volley'],
     oneOfTraitIds: ['lingering-fever', 'volatile-bloom'],
   },
