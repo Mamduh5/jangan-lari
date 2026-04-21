@@ -5,14 +5,18 @@ export type TraitCategory = 'enabler' | 'amplifier' | 'converter';
 export type TraitId =
   | 'close-guard'
   | 'steadfast-posture'
+  | 'iron-reserve'
   | 'target-painter'
   | 'focused-breach'
   | 'scavenger-shield'
+  | 'predator-relay'
+  | 'pressure-lenses'
   | 'lingering-static'
   | 'breach-capacitor'
   | 'infectious-volley'
   | 'lingering-fever'
-  | 'volatile-bloom';
+  | 'volatile-bloom'
+  | 'catalytic-exposure';
 
 export type TraitDefinition = {
   id: TraitId;
@@ -37,6 +41,13 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     description: 'While Guard is active, Brace Shot throws a broader, denser burst.',
     heroBias: 'runner',
   },
+  'iron-reserve': {
+    id: 'iron-reserve',
+    category: 'amplifier',
+    title: 'Iron Reserve',
+    description: 'Guard cap rises and Bulwark Slam can cash in a deeper reserve for stronger impact.',
+    heroBias: 'runner',
+  },
   'target-painter': {
     id: 'target-painter',
     category: 'enabler',
@@ -56,6 +67,20 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     category: 'converter',
     title: 'Scavenger Shield',
     description: 'Killing a Marked enemy grants a small burst of Guard.',
+    heroBias: 'shared',
+  },
+  'predator-relay': {
+    id: 'predator-relay',
+    category: 'converter',
+    title: 'Predator Relay',
+    description: 'Gaining Guard briefly empowers your next Signature against a state-affected enemy.',
+    heroBias: 'shared',
+  },
+  'pressure-lenses': {
+    id: 'pressure-lenses',
+    category: 'amplifier',
+    title: 'Pressure Lenses',
+    description: 'Primary fire gains a light bonus only when your lane condition is already online.',
     heroBias: 'shared',
   },
   'lingering-static': {
@@ -91,6 +116,13 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     category: 'converter',
     title: 'Volatile Bloom',
     description: 'Hex Detonation creates a stronger follow-up burst when it consumes Ailment.',
+    heroBias: 'weaver',
+  },
+  'catalytic-exposure': {
+    id: 'catalytic-exposure',
+    category: 'converter',
+    title: 'Catalytic Exposure',
+    description: 'Consuming Ailment Marks the healthiest nearby enemy for a short execution window.',
     heroBias: 'weaver',
   },
 };

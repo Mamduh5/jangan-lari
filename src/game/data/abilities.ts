@@ -7,6 +7,8 @@ export type AbilityId =
   | 'hunter-sweep'
   | 'shock-lattice'
   | 'spotter-drone'
+  | 'echo-turret'
+  | 'recovery-field'
   | 'cinder-needles'
   | 'hex-detonation'
   | 'contagion-node';
@@ -18,6 +20,8 @@ export type AbilityBehaviorId =
   | 'hunter-sweep'
   | 'shock-lattice'
   | 'spotter-drone'
+  | 'echo-turret'
+  | 'recovery-field'
   | 'cinder-needles'
   | 'hex-detonation'
   | 'contagion-node';
@@ -139,6 +143,35 @@ export const ABILITY_DEFINITIONS: Record<AbilityId, AbilityDefinition> = {
     projectileSpeed: 660,
     projectileRadius: 4,
     disruptedDurationMs: 1500,
+  },
+  'echo-turret': {
+    id: 'echo-turret',
+    name: 'Echo Turret',
+    shortLabel: 'ET',
+    slot: 'support',
+    description: 'A low-rate turret shot that prefers enemies already carrying a live state and helps hybrid branches stay online.',
+    behaviorId: 'echo-turret',
+    cooldownMs: 3400,
+    damage: 6,
+    range: 620,
+    color: 0xc084fc,
+    strokeColor: 0xf3e8ff,
+    projectileSpeed: 720,
+    projectileRadius: 4,
+  },
+  'recovery-field': {
+    id: 'recovery-field',
+    name: 'Recovery Field',
+    shortLabel: 'RF',
+    slot: 'support',
+    description: 'A short-radius field pulse that lightly damages nearby enemies and grants a small heal or Guard tick under pressure.',
+    behaviorId: 'recovery-field',
+    cooldownMs: 4400,
+    damage: 5,
+    range: 150,
+    radius: 150,
+    color: 0x4ade80,
+    strokeColor: 0xdcfce7,
   },
   'cinder-needles': {
     id: 'cinder-needles',

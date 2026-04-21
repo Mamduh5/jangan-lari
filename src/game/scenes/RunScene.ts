@@ -89,6 +89,7 @@ export class RunScene extends Phaser.Scene {
   private bossObjectiveText = '';
   private nextBossAddSpawnAtMs = 0;
   private bossTelegraphs: Phaser.GameObjects.Shape[] = [];
+  private bossAddWaveIndex = 0;
 
   private readonly handlePageVisibilityChange = (): void => {
     if (document.hidden && !this.isEnded && !this.isLevelingUp) {
@@ -134,6 +135,7 @@ export class RunScene extends Phaser.Scene {
     this.bossObjectiveText = '';
     this.nextBossAddSpawnAtMs = 0;
     this.bossTelegraphs = [];
+    this.bossAddWaveIndex = 0;
 
     this.cameras.main.setBackgroundColor('#111827');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -333,6 +335,7 @@ export class RunScene extends Phaser.Scene {
     const primary = getAbilityDefinition(this.selectedHero.primaryAbilityId);
     const signature = getAbilityDefinition(this.selectedHero.signatureAbilityId);
     const support = this.abilityLoadout.getAbility('support');
+    const pressureBeat = this.spawnDirector.getPressureBeat(this.runElapsedMs);
     this.registry.set('run.heroName', this.selectedHero.name);
     this.registry.set('run.hp', this.player.getCurrentHealth());
     this.registry.set('run.maxHp', this.player.getMaxHealth());
@@ -365,6 +368,11 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.bossProtected', this.bossProtected);
     this.registry.set('run.bossName', this.bossEnemy?.archetype.name ?? '');
     this.registry.set('run.bossObjective', this.bossObjectiveText);
+    this.registry.set('run.pressureBeatActive', pressureBeat.active);
+    this.registry.set('run.pressureBeatId', pressureBeat.id);
+    this.registry.set('run.pressureBeatLabel', pressureBeat.label);
+    this.registry.set('run.pressureBeatObjective', pressureBeat.objective);
+    this.registry.set('run.pressureBeatRemainingMs', pressureBeat.remainingMs);
     this.registry.set('run.weaponNames', [primary.name, signature.name]);
     this.registry.set('run.abilityLabels', [
       `Primary: ${primary.shortLabel} ${primary.name} (${Math.ceil(this.abilityLoadout.getRemainingCooldownMs('primary', this.time.now) / 100) / 10}s)`,
@@ -459,6 +467,7 @@ export class RunScene extends Phaser.Scene {
       bossProtected: this.bossProtected,
       bossName: this.bossEnemy?.archetype.name ?? '',
       bossObjective: this.bossObjectiveText,
+      pressureBeat: this.spawnDirector.getPressureBeat(this.runElapsedMs),
       enemies,
       xpGems,
       upgradeChoices: this.currentRewardChoices.map((reward) => ({
@@ -468,7 +477,7 @@ export class RunScene extends Phaser.Scene {
       waveTemplate: {
         id: this.spawnDirector.getLastWaveTemplateId(),
         label: this.spawnDirector.getLastWaveTemplateLabel(),
-        highlight: false,
+        highlight: this.spawnDirector.getLastWaveTemplateHighlight(),
       },
       event: {
         active: false,
@@ -721,12 +730,18 @@ export class RunScene extends Phaser.Scene {
     const currentTime = this.time.now;
     const sourceAbilityId = projectile.getSourceAbilityId();
     const isCloseRange = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= 160;
+    const guardActive = this.combatStates.hasGuard();
     const targetWasMarked = enemy.isMarked(currentTime);
+    const targetWasDisrupted = enemy.isDisrupted(currentTime);
+    const targetWasAilmented = enemy.isAilmented(currentTime);
     const damageBonus = this.traitRuntime.getPrimaryDamageBonus({
       heroId: this.selectedHero.id,
       abilityId: sourceAbilityId,
       isCloseRange,
+      guardActive,
       targetWasMarked,
+      targetWasDisrupted,
+      targetWasAilmented,
     });
     const metaDamageBonus = getPermanentUpgradeLevel(this.saveData, 'starting-damage') * 2;
     enemy.takeDamage(projectile.getDamage() + damageBonus + metaDamageBonus, { x: projectile.x, y: projectile.y });
@@ -736,10 +751,14 @@ export class RunScene extends Phaser.Scene {
         heroId: this.selectedHero.id,
         abilityId: sourceAbilityId,
         isCloseRange,
+        guardActive,
         targetWasMarked,
+        targetWasDisrupted,
+        targetWasAilmented,
       });
       if (gained > 0) {
-        this.combatStates.gainGuard(gained);
+        const actualGain = this.combatStates.gainGuard(gained);
+        this.traitRuntime.notifyGuardGain(currentTime, actualGain);
       }
     }
 
@@ -830,7 +849,8 @@ export class RunScene extends Phaser.Scene {
       enemyWasMarked,
     });
     if (guardGain > 0) {
-      this.combatStates.gainGuard(guardGain);
+      const actualGain = this.combatStates.gainGuard(guardGain);
+      this.traitRuntime.notifyGuardGain(this.time.now, actualGain);
     }
     const gem = new XPGem(this, enemy.x, enemy.y, enemy.getXpValue());
     this.xpGems.add(gem);
@@ -889,7 +909,10 @@ export class RunScene extends Phaser.Scene {
 
   private applyReward(reward: RewardDefinition): void {
     if (reward.category === 'trait' && reward.traitId) {
-      this.traitRuntime.addTrait(reward.traitId);
+      const added = this.traitRuntime.addTrait(reward.traitId);
+      if (added && reward.traitId === 'iron-reserve') {
+        this.combatStates.setMaxGuard(this.selectedHero.baseGuardMax + this.traitRuntime.getBonusGuardMax());
+      }
       return;
     }
 
@@ -1063,6 +1086,7 @@ export class RunScene extends Phaser.Scene {
       bolt.halo.destroy();
     });
     this.enemyBolts = [];
+    this.spawnDirector.clearPressureBeat();
 
     const bossPosition = new Phaser.Math.Vector2(
       Phaser.Math.Clamp(this.player.x + Phaser.Math.Between(-80, 80), 180, WORLD_WIDTH - 180),
@@ -1075,6 +1099,7 @@ export class RunScene extends Phaser.Scene {
     this.bossProtectors = [];
     this.spawnBossProtectors();
     this.bossProtected = true;
+    this.bossAddWaveIndex = 0;
     this.bossEnemy.setDamageTakenMultiplier(0.18);
     this.bossEnemy.setEventMarker(0x60a5fa);
     this.nextBossAddSpawnAtMs = this.time.now + 7000;
@@ -1104,7 +1129,13 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    const addArchetypes = [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.shooter];
+    const addWaves = [
+      [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.shooter],
+      [ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.hexcaster, ENEMY_ARCHETYPES.shooter],
+      [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.skimmer, ENEMY_ARCHETYPES.crusher],
+    ];
+    const addArchetypes = addWaves[this.bossAddWaveIndex % addWaves.length]!;
+    this.bossAddWaveIndex += 1;
     addArchetypes.forEach((archetype, index) => {
       const angle = (Math.PI * 2 * index) / addArchetypes.length;
       const x = this.bossEnemy!.x + Math.cos(angle) * 180;

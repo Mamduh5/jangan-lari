@@ -76,11 +76,18 @@ export class LevelUpDirector {
     );
     const bridgeTraits = [...heroBridgeTraits, ...sharedBridgeTraits];
 
-    const preferredSupportRewards = Object.values(REWARD_DEFINITIONS).filter(
+    const heroSpecificSupportRewards = Object.values(REWARD_DEFINITIONS).filter(
       (reward) =>
         reward.category === 'support' &&
         reward.abilityId &&
-        (reward.heroBias === heroId || reward.heroBias === 'shared'),
+        reward.heroBias === heroId,
+    );
+
+    const sharedSupportRewards = Object.values(REWARD_DEFINITIONS).filter(
+      (reward) =>
+        reward.category === 'support' &&
+        reward.abilityId &&
+        reward.heroBias === 'shared',
     );
 
     const otherSupportRewards = Object.values(REWARD_DEFINITIONS).filter(
@@ -94,15 +101,18 @@ export class LevelUpDirector {
     const supportPool = hasSupportAbility
       ? []
       : applyShuffle([
-        ...preferredSupportRewards,
-        ...preferredSupportRewards, // explicit extra weight
-        ...preferredSupportRewards, // explicit extra weight
+        ...heroSpecificSupportRewards,
+        ...heroSpecificSupportRewards,
+        ...heroSpecificSupportRewards,
+        ...sharedSupportRewards,
+        ...sharedSupportRewards,
         ...otherSupportRewards,
       ]);
 
     const supportChoice = supportPool[0];
     const eligibleEvolution = !selectedEvolutionId
-      ? Object.values(REWARD_DEFINITIONS).find((reward) => {
+      ? Object.values(REWARD_DEFINITIONS)
+          .filter((reward) => {
           if (reward.category !== 'evolution' || reward.heroBias !== heroId || !reward.evolutionId) {
             return false;
           }
@@ -125,7 +135,16 @@ export class LevelUpDirector {
           }
 
           return true;
-        })
+          })
+          .sort((left, right) => {
+            const leftEvolution = getEvolutionDefinition(left.evolutionId!);
+            const rightEvolution = getEvolutionDefinition(right.evolutionId!);
+            const leftSupportMatch = leftEvolution.requiredSupportAbilityId && leftEvolution.requiredSupportAbilityId === options?.supportAbilityId ? 2 : 0;
+            const rightSupportMatch = rightEvolution.requiredSupportAbilityId && rightEvolution.requiredSupportAbilityId === options?.supportAbilityId ? 2 : 0;
+            const leftSpecificity = leftEvolution.requiredTraitIds.length + (leftEvolution.oneOfTraitIds ? 1 : 0);
+            const rightSpecificity = rightEvolution.requiredTraitIds.length + (rightEvolution.oneOfTraitIds ? 1 : 0);
+            return rightSupportMatch + rightSpecificity - (leftSupportMatch + leftSpecificity);
+          })[0]
       : undefined;
 
     const stabilizers = applyShuffle(

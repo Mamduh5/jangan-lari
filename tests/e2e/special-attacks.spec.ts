@@ -428,6 +428,104 @@ test.describe('milestone 1 signature behavior', () => {
     expect(result.ailmented).toBe(true);
   });
 
+  test('Echo Turret equips into the support slot and prefers a farther state-affected target over the nearest neutral enemy', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        debugForceReward: (rewardId: 'echo-turret') => boolean;
+        debugSpawnEnemy: (enemyId: 'shooter') => boolean;
+        combatStates: {
+          applyDisrupted: (enemy: { applyDisrupted: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+        };
+        abilityResolver: { tryUseAbility: (slot: 'support', ability: unknown, currentTime: number) => { used: boolean } };
+        abilityLoadout: { getAbility: (slot: 'support') => unknown; getAbilityId: (slot: 'support') => string | null };
+        enemies: {
+          getChildren: () => Array<{ x: number; y: number; body?: { reset?: (x: number, y: number) => void } }>;
+        };
+        projectiles: {
+          getChildren: () => Array<{ active: boolean; body?: { velocity: { x: number; y: number } } }>;
+        };
+      };
+
+      runScene.debugForceReward('echo-turret');
+      runScene.debugSpawnEnemy('shooter');
+      runScene.debugSpawnEnemy('shooter');
+      const [nearEnemy, farEnemy] = runScene.enemies.getChildren().slice(-2);
+      nearEnemy!.x = runScene.player.x + 90;
+      nearEnemy!.y = runScene.player.y;
+      nearEnemy!.body?.reset?.(nearEnemy!.x, nearEnemy!.y);
+      farEnemy!.x = runScene.player.x + 220;
+      farEnemy!.y = runScene.player.y - 50;
+      farEnemy!.body?.reset?.(farEnemy!.x, farEnemy!.y);
+      runScene.combatStates.applyDisrupted(farEnemy as never, game.loop.time, 2400);
+
+      const used = runScene.abilityResolver.tryUseAbility('support', runScene.abilityLoadout.getAbility('support'), game.loop.time);
+      const projectile = runScene.projectiles.getChildren().find((entry) => entry.active)!;
+      const velocity = projectile.body!.velocity;
+      const towardNear = { x: nearEnemy!.x - runScene.player.x, y: nearEnemy!.y - runScene.player.y };
+      const towardFar = { x: farEnemy!.x - runScene.player.x, y: farEnemy!.y - runScene.player.y };
+      const nearDot = velocity.x * towardNear.x + velocity.y * towardNear.y;
+      const farDot = velocity.x * towardFar.x + velocity.y * towardFar.y;
+
+      return {
+        supportAbilityId: runScene.abilityLoadout.getAbilityId('support'),
+        used: used.used,
+        nearDot,
+        farDot,
+      };
+    });
+
+    expect(result.supportAbilityId).toBe('echo-turret');
+    expect(result.used).toBe(true);
+    expect(result.farDot).toBeGreaterThan(result.nearDot);
+  });
+
+  test('Recovery Field equips into the support slot and stabilizes under close pressure', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number; takeDamage: (amount: number, currentTime: number) => boolean; getCurrentHealth: () => number };
+        combatStates: { getGuard: () => number };
+        debugForceReward: (rewardId: 'recovery-field') => boolean;
+        debugSpawnEnemy: (enemyId: 'swarmer') => boolean;
+        abilityResolver: { tryUseAbility: (slot: 'support', ability: unknown, currentTime: number) => { used: boolean } };
+        abilityLoadout: { getAbility: (slot: 'support') => unknown; getAbilityId: (slot: 'support') => string | null };
+        enemies: { getChildren: () => Array<{ x: number; y: number; body?: { reset?: (x: number, y: number) => void } }> };
+      };
+
+      runScene.debugForceReward('recovery-field');
+      runScene.debugSpawnEnemy('swarmer');
+      runScene.debugSpawnEnemy('swarmer');
+      const enemies = runScene.enemies.getChildren().slice(-2);
+      enemies.forEach((enemy, index) => {
+        enemy.x = runScene.player.x + 55 + index * 24;
+        enemy.y = runScene.player.y + 10 - index * 18;
+        enemy.body?.reset?.(enemy.x, enemy.y);
+      });
+      runScene.player.takeDamage(14, game.loop.time);
+      const beforeHp = runScene.player.getCurrentHealth();
+      const beforeGuard = runScene.combatStates.getGuard();
+      const used = runScene.abilityResolver.tryUseAbility('support', runScene.abilityLoadout.getAbility('support'), game.loop.time);
+
+      return {
+        supportAbilityId: runScene.abilityLoadout.getAbilityId('support'),
+        used: used.used,
+        hpGain: runScene.player.getCurrentHealth() - beforeHp,
+        guardGain: runScene.combatStates.getGuard() - beforeGuard,
+      };
+    });
+
+    expect(result.supportAbilityId).toBe('recovery-field');
+    expect(result.used).toBe(true);
+    expect(result.hpGain).toBeGreaterThan(0);
+    expect(result.guardGain).toBeGreaterThan(0);
+  });
+
   test('Citadel Core turns Bulwark Slam into chunked follow-up fortress pulses', async ({ page }) => {
     await startRun(page, 'runner');
 
@@ -597,6 +695,162 @@ test.describe('milestone 1 signature behavior', () => {
     expect(result.ailmentConsumes).toBeGreaterThanOrEqual(2);
     expect(result.farDamage).toBeGreaterThan(0);
     expect(result.farAilmentedAfter).toBe(false);
+  });
+
+  test('Reckoner Drive turns Bulwark Slam into a farther breach line against state-touched enemies', async ({ page }) => {
+    await startRun(page, 'runner');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        debugForceReward: (rewardId: 'reckoner-drive') => boolean;
+        debugSpawnEnemy: (enemyId: 'anchor') => boolean;
+        combatStates: {
+          gainGuard: (amount: number) => void;
+          getGuard: () => number;
+          applyDisrupted: (enemy: { applyDisrupted: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+        };
+        abilityResolver: { tryUseAbility: (slot: 'signature', ability: unknown, currentTime: number) => { used: boolean } };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        enemies: {
+          getChildren: () => Array<{
+            x: number;
+            y: number;
+            getCurrentHealth: () => number;
+            body?: { reset?: (x: number, y: number) => void };
+          }>;
+        };
+      };
+
+      runScene.debugForceReward('reckoner-drive');
+      runScene.debugSpawnEnemy('anchor');
+      const enemy = runScene.enemies.getChildren().slice(-1)[0]!;
+      enemy.x = runScene.player.x + 280;
+      enemy.y = runScene.player.y;
+      enemy.body?.reset?.(enemy.x, enemy.y);
+      runScene.combatStates.applyDisrupted(enemy as never, game.loop.time, 2400);
+      runScene.combatStates.gainGuard(18);
+      const beforeGuard = runScene.combatStates.getGuard();
+      const beforeHealth = enemy.getCurrentHealth();
+      const used = runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+
+      return {
+        used: used.used,
+        guardSpent: beforeGuard - runScene.combatStates.getGuard(),
+        damage: beforeHealth - enemy.getCurrentHealth(),
+      };
+    });
+
+    expect(result.used).toBe(true);
+    expect(result.guardSpent).toBeGreaterThan(0);
+    expect(result.damage).toBeGreaterThan(0);
+  });
+
+  test('Siege Lock Array adds follow-up passes that grant Guard after Hunter Sweep', async ({ page }) => {
+    await startRun(page, 'shade');
+
+    const result = await page.evaluate(async () => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        debugForceReward: (rewardId: 'siege-lock-array') => boolean;
+        combatStates: {
+          applyMark: (enemy: { applyMark: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+          getGuard: () => number;
+        };
+        abilityResolver: { tryUseAbility: (slot: 'signature', ability: unknown, currentTime: number) => { used: boolean } };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        debugSpawnEnemy: (enemyId: 'anchor') => boolean;
+        enemies: {
+          getChildren: () => Array<{
+            x: number;
+            y: number;
+            getCurrentHealth: () => number;
+            body?: { reset?: (x: number, y: number) => void };
+          }>;
+        };
+      };
+
+      runScene.debugForceReward('siege-lock-array');
+      runScene.debugSpawnEnemy('anchor');
+      const enemy = runScene.enemies.getChildren().slice(-1)[0]!;
+      enemy.x = runScene.player.x + 170;
+      enemy.y = runScene.player.y;
+      enemy.body?.reset?.(enemy.x, enemy.y);
+      runScene.combatStates.applyMark(enemy as never, game.loop.time, 2200);
+      const beforeGuard = runScene.combatStates.getGuard();
+      const beforeHealth = enemy.getCurrentHealth();
+      const used = runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+      await new Promise((resolve) => setTimeout(resolve, 380));
+
+      return {
+        used: used.used,
+        guardGain: runScene.combatStates.getGuard() - beforeGuard,
+        damage: beforeHealth - enemy.getCurrentHealth(),
+      };
+    });
+
+    expect(result.used).toBe(true);
+    expect(result.guardGain).toBeGreaterThan(0);
+    expect(result.damage).toBeGreaterThan(0);
+  });
+
+  test('Cinder Crown turns a Marked Ailmented target into the highest-value Hex Detonation payoff', async ({ page }) => {
+    await startRun(page, 'weaver');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        debugForceReward: (rewardId: 'cinder-crown') => boolean;
+        combatStates: {
+          applyAilment: (enemy: { applyAilment: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+          applyMark: (enemy: { applyMark: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+        };
+        abilityResolver: {
+          tryUseAbility: (slot: 'signature', ability: unknown, currentTime: number) => { used: boolean; ailmentConsumes?: number };
+        };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        debugSpawnEnemy: (enemyId: 'anchor') => boolean;
+        enemies: {
+          getChildren: () => Array<{
+            x: number;
+            y: number;
+            getCurrentHealth: () => number;
+            body?: { reset?: (x: number, y: number) => void };
+          }>;
+        };
+      };
+
+      runScene.debugForceReward('cinder-crown');
+      runScene.debugSpawnEnemy('anchor');
+      runScene.debugSpawnEnemy('anchor');
+      const [markedTarget, nearbyTarget] = runScene.enemies.getChildren().slice(-2);
+      markedTarget!.x = runScene.player.x + 120;
+      markedTarget!.y = runScene.player.y;
+      markedTarget!.body?.reset?.(markedTarget!.x, markedTarget!.y);
+      nearbyTarget!.x = runScene.player.x + 160;
+      nearbyTarget!.y = runScene.player.y + 20;
+      nearbyTarget!.body?.reset?.(nearbyTarget!.x, nearbyTarget!.y);
+      runScene.combatStates.applyAilment(markedTarget as never, game.loop.time, 2400);
+      runScene.combatStates.applyAilment(nearbyTarget as never, game.loop.time, 2400);
+      runScene.combatStates.applyMark(markedTarget as never, game.loop.time, 2200);
+      const markedBefore = markedTarget!.getCurrentHealth();
+      const nearbyBefore = nearbyTarget!.getCurrentHealth();
+      const used = runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+
+      return {
+        used: used.used,
+        ailmentConsumes: used.ailmentConsumes ?? 0,
+        markedDamage: markedBefore - markedTarget!.getCurrentHealth(),
+        nearbyDamage: nearbyBefore - nearbyTarget!.getCurrentHealth(),
+      };
+    });
+
+    expect(result.used).toBe(true);
+    expect(result.ailmentConsumes).toBeGreaterThan(0);
+    expect(result.markedDamage).toBeGreaterThan(result.nearbyDamage);
   });
 
   test('Behemoth boss encounter exposes protection and shockwave pressure on the real run scene', async ({ page }) => {

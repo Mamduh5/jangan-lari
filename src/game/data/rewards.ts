@@ -10,6 +10,8 @@ export type RewardId =
   | EvolutionId
   | 'shock-lattice'
   | 'spotter-drone'
+  | 'echo-turret'
+  | 'recovery-field'
   | 'contagion-node'
   | 'field-repairs'
   | 'reflex-boots';
@@ -48,6 +50,15 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     traitId: 'steadfast-posture',
     heroBias: 'runner',
   },
+  'iron-reserve': {
+    id: 'iron-reserve',
+    category: 'trait',
+    lane: 'deepen',
+    title: 'Iron Reserve',
+    description: 'Raise Guard cap and let Bulwark Slam cash in a deeper reserve.',
+    traitId: 'iron-reserve',
+    heroBias: 'runner',
+  },
   'target-painter': {
     id: 'target-painter',
     category: 'trait',
@@ -73,6 +84,24 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     title: 'Scavenger Shield',
     description: 'Killing a Marked enemy grants a small burst of Guard.',
     traitId: 'scavenger-shield',
+    heroBias: 'shared',
+  },
+  'predator-relay': {
+    id: 'predator-relay',
+    category: 'trait',
+    lane: 'bridge',
+    title: 'Predator Relay',
+    description: 'Gaining Guard briefly empowers your next Signature against a state-affected enemy.',
+    traitId: 'predator-relay',
+    heroBias: 'shared',
+  },
+  'pressure-lenses': {
+    id: 'pressure-lenses',
+    category: 'trait',
+    lane: 'deepen',
+    title: 'Pressure Lenses',
+    description: 'Primary fire gains a small bonus only while your lane condition is already active.',
+    traitId: 'pressure-lenses',
     heroBias: 'shared',
   },
   'lingering-static': {
@@ -111,6 +140,24 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     abilityId: 'spotter-drone',
     heroBias: 'shade',
   },
+  'echo-turret': {
+    id: 'echo-turret',
+    category: 'support',
+    lane: 'bridge',
+    title: 'Echo Turret',
+    description: 'Equip a support turret shot that prefers enemies already carrying a live state.',
+    abilityId: 'echo-turret',
+    heroBias: 'shared',
+  },
+  'recovery-field': {
+    id: 'recovery-field',
+    category: 'support',
+    lane: 'stabilize',
+    title: 'Recovery Field',
+    description: 'Equip a stabilizing support pulse that helps hold close pressure without replacing your engine.',
+    abilityId: 'recovery-field',
+    heroBias: 'runner',
+  },
   'contagion-node': {
     id: 'contagion-node',
     category: 'support',
@@ -147,6 +194,15 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     traitId: 'volatile-bloom',
     heroBias: 'weaver',
   },
+  'catalytic-exposure': {
+    id: 'catalytic-exposure',
+    category: 'trait',
+    lane: 'bridge',
+    title: 'Catalytic Exposure',
+    description: 'Ailment consumes Mark the healthiest nearby enemy for a short follow-up window.',
+    traitId: 'catalytic-exposure',
+    heroBias: 'weaver',
+  },
   'citadel-core': {
     id: 'citadel-core',
     category: 'evolution',
@@ -154,6 +210,15 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     title: 'Citadel Core',
     description: 'Bulwark Slam spends Guard in chunks and emits follow-up fortress pulses while Guard lasts.',
     evolutionId: 'citadel-core',
+    heroBias: 'runner',
+  },
+  'reckoner-drive': {
+    id: 'reckoner-drive',
+    category: 'evolution',
+    lane: 'deepen',
+    title: 'Reckoner Drive',
+    description: 'Bulwark Slam becomes a forward breach line that spikes state-affected enemies much harder.',
+    evolutionId: 'reckoner-drive',
     heroBias: 'runner',
   },
   'kill-chain-protocol': {
@@ -165,6 +230,15 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     evolutionId: 'kill-chain-protocol',
     heroBias: 'shade',
   },
+  'siege-lock-array': {
+    id: 'siege-lock-array',
+    category: 'evolution',
+    lane: 'deepen',
+    title: 'Siege Lock Array',
+    description: 'Hunter Sweep locks onto Marked targets with follow-up passes that grant Guard and safer sustain.',
+    evolutionId: 'siege-lock-array',
+    heroBias: 'shade',
+  },
   'pyre-constellation': {
     id: 'pyre-constellation',
     category: 'evolution',
@@ -172,6 +246,15 @@ export const REWARD_DEFINITIONS: Record<RewardId, RewardDefinition> = {
     title: 'Pyre Constellation',
     description: 'Hex Detonation chains across nearby Ailmented enemies and consumes them in sequence.',
     evolutionId: 'pyre-constellation',
+    heroBias: 'weaver',
+  },
+  'cinder-crown': {
+    id: 'cinder-crown',
+    category: 'evolution',
+    lane: 'deepen',
+    title: 'Cinder Crown',
+    description: 'Hex Detonation prioritizes Marked Ailmented targets and turns them into a focused boss-killer burst.',
+    evolutionId: 'cinder-crown',
     heroBias: 'weaver',
   },
   'field-repairs': {

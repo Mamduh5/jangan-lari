@@ -3,7 +3,13 @@ import type { AbilityId } from './abilities';
 import type { HeroId } from './heroes';
 import type { TraitId } from './traits';
 
-export type EvolutionId = 'citadel-core' | 'kill-chain-protocol' | 'pyre-constellation';
+export type EvolutionId =
+  | 'citadel-core'
+  | 'reckoner-drive'
+  | 'kill-chain-protocol'
+  | 'siege-lock-array'
+  | 'pyre-constellation'
+  | 'cinder-crown';
 
 export type EvolutionDefinition = {
   id: EvolutionId;
@@ -27,6 +33,17 @@ export const EVOLUTION_DEFINITIONS: Record<EvolutionId, EvolutionDefinition> = {
     minElapsedMs: EVOLUTION_MIN_ELAPSED_MS,
     requiredTraitIds: ['close-guard', 'steadfast-posture'],
   },
+  'reckoner-drive': {
+    id: 'reckoner-drive',
+    heroId: 'runner',
+    title: 'Reckoner Drive',
+    description: 'Bulwark Slam becomes a forward breach line that punishes state-touched enemies much harder.',
+    minLevel: EVOLUTION_MIN_LEVEL,
+    minElapsedMs: EVOLUTION_MIN_ELAPSED_MS,
+    requiredTraitIds: ['iron-reserve'],
+    oneOfTraitIds: ['pressure-lenses', 'predator-relay'],
+    requiredSupportAbilityId: 'echo-turret',
+  },
   'kill-chain-protocol': {
     id: 'kill-chain-protocol',
     heroId: 'shade',
@@ -35,6 +52,17 @@ export const EVOLUTION_DEFINITIONS: Record<EvolutionId, EvolutionDefinition> = {
     minLevel: EVOLUTION_MIN_LEVEL,
     minElapsedMs: EVOLUTION_MIN_ELAPSED_MS,
     requiredTraitIds: ['target-painter', 'focused-breach'],
+  },
+  'siege-lock-array': {
+    id: 'siege-lock-array',
+    heroId: 'shade',
+    title: 'Siege Lock Array',
+    description: 'Hunter Sweep lingers on Marked targets with stabilizing follow-up passes that feed Guard.',
+    minLevel: EVOLUTION_MIN_LEVEL,
+    minElapsedMs: EVOLUTION_MIN_ELAPSED_MS,
+    requiredTraitIds: ['target-painter'],
+    oneOfTraitIds: ['focused-breach', 'predator-relay'],
+    requiredSupportAbilityId: 'recovery-field',
   },
   'pyre-constellation': {
     id: 'pyre-constellation',
@@ -45,6 +73,17 @@ export const EVOLUTION_DEFINITIONS: Record<EvolutionId, EvolutionDefinition> = {
     minElapsedMs: EVOLUTION_MIN_ELAPSED_MS,
     requiredTraitIds: ['infectious-volley'],
     oneOfTraitIds: ['lingering-fever', 'volatile-bloom'],
+  },
+  'cinder-crown': {
+    id: 'cinder-crown',
+    heroId: 'weaver',
+    title: 'Cinder Crown',
+    description: 'Hex Detonation prioritizes Marked Ailmented targets and cashes them out for a heavy focused burst.',
+    minLevel: EVOLUTION_MIN_LEVEL,
+    minElapsedMs: EVOLUTION_MIN_ELAPSED_MS,
+    requiredTraitIds: ['infectious-volley', 'catalytic-exposure'],
+    oneOfTraitIds: ['pressure-lenses', 'volatile-bloom'],
+    requiredSupportAbilityId: 'echo-turret',
   },
 };
 

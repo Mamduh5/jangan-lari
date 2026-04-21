@@ -100,6 +100,13 @@ export type GameplayBotRunSnapshot = {
   bossProtected: boolean;
   bossName: string;
   bossObjective: string;
+  pressureBeat: {
+    active: boolean;
+    id: string;
+    label: string;
+    objective: string;
+    remainingMs: number;
+  };
   enemies: GameplayBotEnemySummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];

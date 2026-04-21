@@ -60,6 +60,10 @@ export class AbilityResolver {
         return this.tryUseShockLattice(slot, ability, currentTime);
       case 'spotter-drone':
         return this.tryUseSpotterDrone(slot, ability, currentTime);
+      case 'echo-turret':
+        return this.tryUseEchoTurret(slot, ability, currentTime);
+      case 'recovery-field':
+        return this.tryUseRecoveryField(slot, ability, currentTime);
       case 'cinder-needles':
         return this.tryUseCinderNeedles(slot, ability, currentTime);
       case 'hex-detonation':
@@ -119,6 +123,10 @@ export class AbilityResolver {
       return { used: false };
     }
 
+    if (this.evolutionId === 'reckoner-drive') {
+      return this.tryUseReckonerDrive(slot, ability, currentTime, guard);
+    }
+
     const radius = ability.radius ?? ability.range;
     const enemies = this.getActiveEnemies();
     const targets = enemies.filter(
@@ -129,8 +137,21 @@ export class AbilityResolver {
       return { used: false };
     }
 
+    const relayMultiplier = this.options.traits.consumePredatorRelaySignatureBonus({
+      currentTime,
+      targetWasMarked: targets.some((enemy) => enemy.isMarked(currentTime)),
+      targetWasDisrupted: targets.some((enemy) => enemy.isDisrupted(currentTime)),
+      targetWasAilmented: targets.some((enemy) => enemy.isAilmented(currentTime)),
+    });
+
     if (this.evolutionId === 'citadel-core') {
-      let disruptedTargetsHit = this.applyBulwarkPulse(ability, radius, Math.min(6, guard), currentTime, 1);
+      const disruptedTargetsHit = this.applyBulwarkPulse(
+        ability,
+        radius,
+        Math.min(6 + this.options.traits.getIronReserveSpendBonus(), guard),
+        currentTime,
+        relayMultiplier,
+      );
 
       [170, 340].forEach((delayMs) => {
         this.options.scene.time.delayedCall(delayMs, () => {
@@ -144,7 +165,13 @@ export class AbilityResolver {
       return { used: true, slot, disruptedTargetsHit };
     }
 
-    const disruptedTargetsHit = this.applyBulwarkPulse(ability, radius, Math.min(12, guard), currentTime, 1);
+    const disruptedTargetsHit = this.applyBulwarkPulse(
+      ability,
+      radius,
+      Math.min(12 + this.options.traits.getIronReserveSpendBonus(), guard),
+      currentTime,
+      relayMultiplier,
+    );
     return { used: true, slot, disruptedTargetsHit };
   }
 
@@ -229,6 +256,7 @@ export class AbilityResolver {
 
     const consumedMark = this.options.combatStates.consumeMark(target, currentTime);
     const targetWasDisrupted = this.options.combatStates.isDisrupted(target, currentTime);
+    const targetWasAilmented = this.options.combatStates.isAilmented(target, currentTime);
     let damage = ability.damage;
 
     if (consumedMark) {
@@ -237,6 +265,15 @@ export class AbilityResolver {
     if (targetWasDisrupted) {
       damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());
     }
+    damage = Math.round(
+      damage *
+        this.options.traits.consumePredatorRelaySignatureBonus({
+          currentTime,
+          targetWasMarked: consumedMark || target.isMarked(currentTime),
+          targetWasDisrupted,
+          targetWasAilmented,
+        }),
+    );
 
     const killed = target.takeDamage(damage, { x: this.options.player.x, y: this.options.player.y });
 
@@ -307,6 +344,48 @@ export class AbilityResolver {
       }
     }
 
+    if (this.evolutionId === 'siege-lock-array' && target.active && target.isAlive() && (consumedMark || target.isMarked(currentTime))) {
+      const immediateGain = this.options.combatStates.gainGuard(2);
+      this.options.traits.notifyGuardGain(currentTime, immediateGain);
+
+      [150, 310].forEach((delayMs) => {
+        this.options.scene.time.delayedCall(delayMs, () => {
+          if (!target.active || !target.isAlive() || !this.options.player.active) {
+            return;
+          }
+
+          let repeatedDamage = Math.round(ability.damage * 0.58);
+          if (this.options.combatStates.isDisrupted(target, this.options.scene.time.now)) {
+            repeatedDamage = Math.round(repeatedDamage * this.options.traits.getSignatureDisruptedDamageMultiplier());
+          }
+          target.takeDamage(repeatedDamage, { x: this.options.player.x, y: this.options.player.y });
+
+          const gained = this.options.combatStates.gainGuard(3);
+          this.options.traits.notifyGuardGain(this.options.scene.time.now, gained);
+
+          const lockLine = this.options.scene.add.line(
+            0,
+            0,
+            this.options.player.x,
+            this.options.player.y,
+            target.x,
+            target.y,
+            0x93c5fd,
+            0.92,
+          );
+          lockLine.setLineWidth(3, 3);
+          lockLine.setDepth(8.4);
+          this.options.scene.tweens.add({
+            targets: lockLine,
+            alpha: 0,
+            duration: 150,
+            ease: 'Quad.Out',
+            onComplete: () => lockLine.destroy(),
+          });
+        });
+      });
+    }
+
     return {
       used: true,
       slot,
@@ -321,7 +400,11 @@ export class AbilityResolver {
   }
 
   private tryUseHexDetonation(slot: AbilitySlot, ability: AbilityDefinition, currentTime: number): AbilityUseResult {
-    const target = this.findAilmentedEnemy(currentTime, ability.range);
+    const target =
+      (this.evolutionId === 'cinder-crown'
+        ? this.findMarkedAndAilmentedEnemy(currentTime, ability.range)
+        : null) ??
+      this.findAilmentedEnemy(currentTime, ability.range);
     if (!target) {
       return { used: false };
     }
@@ -332,6 +415,7 @@ export class AbilityResolver {
     const volatileBurstRadius = this.options.traits.getHexSecondaryBurstRadius(48);
     let disruptedTargetsHit = 0;
     let ailmentConsumes = 0;
+    let catalyticMarked = false;
 
     const targets = this.getActiveEnemies().filter(
       (enemy) => Phaser.Math.Distance.Between(target.x, target.y, enemy.x, enemy.y) <= radius,
@@ -341,10 +425,25 @@ export class AbilityResolver {
     for (const enemy of targets) {
       chainedTargets.add(enemy);
       const consumedAilment = this.options.combatStates.consumeAilment(enemy, currentTime);
+      const targetWasMarked = this.options.combatStates.isMarked(enemy, currentTime);
       let damage = consumedAilment ? ability.damage + consumeBonusDamage : Math.round(ability.damage * 0.6);
+      if (this.evolutionId === 'cinder-crown' && enemy === target && consumedAilment && targetWasMarked) {
+        damage = Math.round(damage * 1.85);
+      }
       if (this.options.combatStates.isDisrupted(enemy, currentTime)) {
         damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());
         disruptedTargetsHit += 1;
+      }
+      if (consumedAilment) {
+        damage = Math.round(
+          damage *
+            this.options.traits.consumePredatorRelaySignatureBonus({
+              currentTime,
+              targetWasMarked,
+              targetWasDisrupted: this.options.combatStates.isDisrupted(enemy, currentTime),
+              targetWasAilmented: true,
+            }),
+        );
       }
 
       enemy.takeDamage(damage, { x: target.x, y: target.y });
@@ -354,6 +453,9 @@ export class AbilityResolver {
       }
 
       ailmentConsumes += 1;
+      if (!catalyticMarked) {
+        catalyticMarked = this.tryApplyCatalyticExposure(currentTime, enemy, chainedTargets);
+      }
       const consumeBurst = this.options.scene.add.circle(enemy.x, enemy.y, 14, 0xfb923c, 0.24).setDepth(9);
       consumeBurst.setStrokeStyle(3, 0xffedd5, 0.95);
       this.options.scene.tweens.add({
@@ -493,6 +595,65 @@ export class AbilityResolver {
       radius: ability.projectileRadius ?? 4,
       color: ability.color,
       strokeColor: ability.strokeColor,
+    });
+
+    return { used: true, slot };
+  }
+
+  private tryUseEchoTurret(slot: AbilitySlot, ability: AbilityDefinition, currentTime: number): AbilityUseResult {
+    const target = this.findStateAffectedEnemy(currentTime, ability.range) ?? this.findNearestEnemy(ability.range);
+    if (!target) {
+      return { used: false };
+    }
+
+    const direction = new Phaser.Math.Vector2(target.x - this.options.player.x, target.y - this.options.player.y);
+    if (direction.lengthSq() === 0) {
+      return { used: false };
+    }
+
+    const stateAligned = this.isEnemyStateAffected(target, currentTime);
+    this.spawnProjectile(direction.normalize(), {
+      sourceAbilityId: ability.id,
+      damage: ability.damage + (stateAligned ? 2 : 0),
+      maxDistance: ability.range,
+      speed: ability.projectileSpeed ?? 720,
+      radius: ability.projectileRadius ?? 4,
+      color: ability.color,
+      strokeColor: ability.strokeColor,
+    });
+
+    return { used: true, slot };
+  }
+
+  private tryUseRecoveryField(slot: AbilitySlot, ability: AbilityDefinition, currentTime: number): AbilityUseResult {
+    const radius = ability.radius ?? ability.range;
+    const targets = this.getActiveEnemies().filter(
+      (enemy) => Phaser.Math.Distance.Between(this.options.player.x, this.options.player.y, enemy.x, enemy.y) <= radius,
+    );
+
+    if (targets.length === 0) {
+      return { used: false };
+    }
+
+    for (const enemy of targets) {
+      enemy.takeDamage(ability.damage, { x: this.options.player.x, y: this.options.player.y });
+    }
+
+    if (targets.length >= 2) {
+      this.options.player.heal(6);
+      const gained = this.options.combatStates.gainGuard(3);
+      this.options.traits.notifyGuardGain(currentTime, gained);
+    }
+
+    const ring = this.options.scene.add.circle(this.options.player.x, this.options.player.y, 18, ability.color, 0.16).setDepth(8);
+    ring.setStrokeStyle(3, ability.strokeColor, 0.95);
+    this.options.scene.tweens.add({
+      targets: ring,
+      radius,
+      alpha: 0,
+      duration: 280,
+      ease: 'Quad.Out',
+      onComplete: () => ring.destroy(),
     });
 
     return { used: true, slot };
@@ -688,6 +849,94 @@ export class AbilityResolver {
     );
   }
 
+  private findMarkedAndAilmentedEnemy(currentTime: number, range: number): Enemy | null {
+    const candidates = this.getActiveEnemies().filter(
+      (enemy) => enemy.isMarked(currentTime) && enemy.isAilmented(currentTime),
+    );
+    return this.findNearestFromList(candidates, range);
+  }
+
+  private findStateAffectedEnemy(currentTime: number, range: number): Enemy | null {
+    const stateEnemies = this.getActiveEnemies().filter((enemy) => this.isEnemyStateAffected(enemy, currentTime));
+    return this.findNearestFromList(stateEnemies, range);
+  }
+
+  private tryUseReckonerDrive(
+    slot: AbilitySlot,
+    ability: AbilityDefinition,
+    currentTime: number,
+    guard: number,
+  ): AbilityUseResult {
+    const target = this.findStateAffectedEnemy(currentTime, 360) ?? this.findNearestEnemy(360);
+    if (!target) {
+      return { used: false };
+    }
+
+    const direction = new Phaser.Math.Vector2(target.x - this.options.player.x, target.y - this.options.player.y);
+    if (direction.lengthSq() === 0) {
+      return { used: false };
+    }
+
+    const spendCap = Math.min(guard, 10 + this.options.traits.getIronReserveSpendBonus());
+    const spentGuard = this.options.combatStates.spendGuard(spendCap);
+    if (spentGuard <= 0) {
+      return { used: false };
+    }
+
+    const normalized = direction.normalize();
+    const endX = this.options.player.x + normalized.x * 340;
+    const endY = this.options.player.y + normalized.y * 340;
+    const relayMultiplier = this.options.traits.consumePredatorRelaySignatureBonus({
+      currentTime,
+      targetWasMarked: target.isMarked(currentTime),
+      targetWasDisrupted: target.isDisrupted(currentTime),
+      targetWasAilmented: target.isAilmented(currentTime),
+    });
+
+    let disruptedTargetsHit = 0;
+    for (const enemy of this.getActiveEnemies()) {
+      const distanceToLine = this.getDistanceToSegment(this.options.player.x, this.options.player.y, endX, endY, enemy.x, enemy.y);
+      const alongStart = Phaser.Math.Distance.Between(this.options.player.x, this.options.player.y, enemy.x, enemy.y);
+      if (distanceToLine > 58 || alongStart > 360) {
+        continue;
+      }
+
+      let damage = Math.round((ability.damage + spentGuard * 1.35) * relayMultiplier * this.options.traits.getIronReserveDamageMultiplier());
+      const stateAffected = this.isEnemyStateAffected(enemy, currentTime);
+      if (stateAffected) {
+        damage = Math.round(damage * 1.35);
+      }
+      if (this.options.combatStates.isDisrupted(enemy, currentTime)) {
+        damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());
+        disruptedTargetsHit += 1;
+      }
+
+      enemy.takeDamage(damage, { x: this.options.player.x, y: this.options.player.y });
+    }
+
+    const breachLine = this.options.scene.add.line(
+      0,
+      0,
+      this.options.player.x,
+      this.options.player.y,
+      endX,
+      endY,
+      0xfb923c,
+      0.95,
+    );
+    breachLine.setLineWidth(10, 10);
+    breachLine.setDepth(8.5);
+    this.options.scene.tweens.add({
+      targets: breachLine,
+      alpha: 0,
+      duration: 220,
+      ease: 'Quad.Out',
+      onComplete: () => breachLine.destroy(),
+    });
+
+    return { used: true, slot, disruptedTargetsHit };
+  }
+
   private applyBulwarkPulse(
     ability: AbilityDefinition,
     radius: number,
@@ -712,7 +961,9 @@ export class AbilityResolver {
 
     for (const enemy of targets) {
       const targetWasDisrupted = this.options.combatStates.isDisrupted(enemy, currentTime);
-      let damage = Math.round((ability.damage + spentGuard * 1.2) * damageScale);
+      let damage = Math.round(
+        (ability.damage + spentGuard * 1.2) * damageScale * this.options.traits.getIronReserveDamageMultiplier(),
+      );
       if (targetWasDisrupted) {
         damage = Math.round(damage * this.options.traits.getSignatureDisruptedDamageMultiplier());
         disruptedTargetsHit += 1;
@@ -787,5 +1038,45 @@ export class AbilityResolver {
     }
 
     return nearest;
+  }
+
+  private isEnemyStateAffected(enemy: Enemy, currentTime: number): boolean {
+    return enemy.isMarked(currentTime) || enemy.isDisrupted(currentTime) || enemy.isAilmented(currentTime);
+  }
+
+  private getDistanceToSegment(x1: number, y1: number, x2: number, y2: number, px: number, py: number): number {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    if (dx === 0 && dy === 0) {
+      return Phaser.Math.Distance.Between(x1, y1, px, py);
+    }
+
+    const t = Phaser.Math.Clamp(((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy), 0, 1);
+    const nearestX = x1 + dx * t;
+    const nearestY = y1 + dy * t;
+    return Phaser.Math.Distance.Between(nearestX, nearestY, px, py);
+  }
+
+  private tryApplyCatalyticExposure(currentTime: number, origin: Enemy, excluded: Set<Enemy>): boolean {
+    const markDuration = this.options.traits.getCatalyticExposureMarkDurationMs();
+    if (markDuration <= 0) {
+      return false;
+    }
+
+    const candidate = this.getActiveEnemies()
+      .filter(
+        (enemy) =>
+          !excluded.has(enemy) &&
+          !enemy.isMarked(currentTime) &&
+          Phaser.Math.Distance.Between(origin.x, origin.y, enemy.x, enemy.y) <= 240,
+      )
+      .sort((left, right) => right.getCurrentHealth() - left.getCurrentHealth())[0];
+
+    if (!candidate) {
+      return false;
+    }
+
+    this.options.combatStates.applyMark(candidate, currentTime, markDuration);
+    return true;
   }
 }

@@ -184,6 +184,9 @@ export class UIScene extends Phaser.Scene {
     const bossActive = Boolean(this.registry.get('run.bossActive'));
     const bossObjective = String(this.registry.get('run.bossObjective') ?? '');
     const bossName = String(this.registry.get('run.bossName') ?? '');
+    const pressureBeatActive = Boolean(this.registry.get('run.pressureBeatActive'));
+    const pressureBeatLabel = String(this.registry.get('run.pressureBeatLabel') ?? '');
+    const pressureBeatObjective = String(this.registry.get('run.pressureBeatObjective') ?? '');
     const bossHp = Number(this.registry.get('run.bossHp') ?? 0);
     const bossMaxHp = Number(this.registry.get('run.bossMaxHp') ?? 0);
     const bossProtectors = Number(this.registry.get('run.bossProtectors') ?? 0);
@@ -237,7 +240,9 @@ export class UIScene extends Phaser.Scene {
     this.objectiveText.setText(
       bossActive
         ? `${bossName} ${Math.max(0, Math.round(bossHp))}/${Math.max(1, Math.round(bossMaxHp))} | Escorts ${bossProtectors} | ${bossProtected ? 'Protected' : 'Open'}`
-        : bossObjective || 'Build toward a late lock-in.',
+        : pressureBeatActive
+          ? `${pressureBeatLabel}: ${pressureBeatObjective}`
+          : bossObjective || 'Build toward a late lock-in.',
     );
     this.traitText.setText(`Traits: ${traits.length > 0 ? traits.join(' | ') : 'None yet'}`);
     this.evolutionText.setText(`Evolution: ${evolutionTitle || 'Not chosen'}`);

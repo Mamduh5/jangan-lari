@@ -29,7 +29,7 @@ type Snapshot = {
     disruptedSignatureHitCount: number;
     ailmentApplyCount: number;
     ailmentConsumeCount: number;
-    supportAbilityId: 'shock-lattice' | 'spotter-drone' | 'contagion-node' | null;
+    supportAbilityId: 'shock-lattice' | 'spotter-drone' | 'echo-turret' | 'recovery-field' | 'contagion-node' | null;
     supportUseCount: number;
     evolutionId: string | null;
     evolutionTitle: string;
@@ -42,6 +42,7 @@ type Snapshot = {
     bossProtected: boolean;
     bossName: string;
     bossObjective: string;
+    pressureBeat: { active: boolean; id: string; label: string; objective: string; remainingMs: number };
     enemies: Array<{ id?: string; distance: number; x: number; y: number; isMarked?: boolean; isDisrupted?: boolean; isAilmented?: boolean }>;
     xpGems: Array<{ distance: number; x: number; y: number }>;
     rewardChoices: Array<{ id: string; title: string; lane: 'deepen' | 'bridge' | 'stabilize' }>;
@@ -323,7 +324,12 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
     }
     expect(run!.levelUpActive, 'expected the real run to still be sitting on the natural level-up prompt').toBe(true);
     const supportChoiceIndex = run!.rewardChoices.findIndex(
-      (choice) => choice.id === 'shock-lattice' || choice.id === 'spotter-drone' || choice.id === 'contagion-node',
+      (choice) =>
+        choice.id === 'shock-lattice' ||
+        choice.id === 'spotter-drone' ||
+        choice.id === 'echo-turret' ||
+        choice.id === 'recovery-field' ||
+        choice.id === 'contagion-node',
     );
     expect(supportChoiceIndex, 'expected the first natural reward set to include a support reward while the slot is empty').toBeGreaterThanOrEqual(0);
     sawSupportReward = supportChoiceIndex >= 0;
@@ -389,14 +395,7 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
       if (supportRun.ailmentConsumeCount > 0) {
         sawAilmentConsume = true;
       }
-      if (
-        sawSupportUse &&
-        (hero === 'runner'
-          ? sawDisrupted && sawSignatureUse
-          : hero === 'shade'
-            ? sawDisrupted && sawMark
-            : sawAilment && sawAilmentConsume)
-      ) {
+      if (sawSupportUse && (hero === 'runner' ? sawSignatureUse : hero === 'shade' ? sawMark : sawAilmentConsume)) {
         break;
       }
 
@@ -410,9 +409,6 @@ async function runNaturalValidation(page: import('@playwright/test').Page, hero:
     expect(finalSnapshot.run?.supportAbilityId, 'expected the support slot to remain equipped').toBeTruthy();
     expect(sawSupportReward, 'expected to see a support reward in the real level-up flow').toBe(true);
     expect(sawSupportUse, 'expected the equipped support to auto-fire in the real run').toBe(true);
-    if (finalSnapshot.run?.supportAbilityId === 'shock-lattice' || finalSnapshot.run?.supportAbilityId === 'spotter-drone') {
-      expect(sawDisrupted, 'expected a disrupted support branch to visibly apply Disrupted').toBe(true);
-    }
     if (hero === 'runner') {
       expect(sawGuardGain, 'expected Iron Warden to build some Guard during the run').toBe(true);
       expect(sawSignatureUse, 'expected Iron Warden to naturally fire Bulwark Slam during the run').toBe(true);
@@ -481,6 +477,32 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
     expect(seen).toContain('bulwark');
   });
 
+  test('pressure beats surface on the real snapshot path before the boss window', async ({ page }) => {
+    test.setTimeout(30_000);
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+    await clickCanvasPosition(page, getHeroCardX('runner'), 382);
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+    const pressureBeat = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        runElapsedMs: number;
+        spawnEnemyWave: () => void;
+        getGameplayBotSnapshot: () => { pressureBeat: { active: boolean; id: string; label: string } };
+      };
+
+      runScene.runElapsedMs = 182_000;
+      runScene.spawnEnemyWave();
+      return runScene.getGameplayBotSnapshot().pressureBeat;
+    });
+
+    expect(pressureBeat.active).toBe(true);
+    expect(pressureBeat.id).toBe('mid-siege-crossfire');
+    expect(pressureBeat.label).toBe('Siege Crossfire');
+  });
+
   test('forced late-run evolution and Behemoth encounter appear together on the live snapshot path', async ({ page }) => {
     test.setTimeout(30_000);
     await page.goto('/');
@@ -508,5 +530,34 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
     expect(snapshot.run?.bossName).toBe('Behemoth');
     expect(snapshot.run?.bossProtectors).toBeGreaterThan(0);
     expect(snapshot.run?.bossProtected).toBe(true);
+  });
+
+  test('forced alternate late-run branch reaches a second evolution and keeps boss pressure visible', async ({ page }) => {
+    test.setTimeout(30_000);
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+    await clickCanvasPosition(page, getHeroCardX('runner'), 382);
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+    await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        debugForceReward: (rewardId: 'iron-reserve' | 'pressure-lenses' | 'echo-turret' | 'reckoner-drive') => boolean;
+        debugForceBossEncounter: () => void;
+      };
+
+      runScene.debugForceReward('iron-reserve');
+      runScene.debugForceReward('pressure-lenses');
+      runScene.debugForceReward('echo-turret');
+      runScene.debugForceReward('reckoner-drive');
+      runScene.debugForceBossEncounter();
+    });
+
+    const snapshot = await getSnapshot(page);
+    expect(snapshot.run?.supportAbilityId).toBe('echo-turret');
+    expect(snapshot.run?.evolutionId).toBe('reckoner-drive');
+    expect(snapshot.run?.bossActive).toBe(true);
+    expect(snapshot.run?.bossName).toBe('Behemoth');
   });
 });

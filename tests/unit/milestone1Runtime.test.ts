@@ -51,7 +51,10 @@ describe('milestone 1 runtime helpers', () => {
         heroId: 'runner',
         abilityId: 'brace-shot',
         isCloseRange: true,
+        guardActive: false,
         targetWasMarked: false,
+        targetWasDisrupted: false,
+        targetWasAilmented: false,
       }),
     ).toBe(2);
 
@@ -63,7 +66,10 @@ describe('milestone 1 runtime helpers', () => {
         heroId: 'runner',
         abilityId: 'brace-shot',
         isCloseRange: true,
+        guardActive: true,
         targetWasMarked: false,
+        targetWasDisrupted: false,
+        targetWasAilmented: false,
       }),
     ).toBe(3);
     expect(traits.getPrimaryBurstCount({ heroId: 'runner', ability, guardActive: true })).toBe(4);
@@ -202,6 +208,98 @@ describe('milestone 1 runtime helpers', () => {
       shuffle: <T>(items: T[]) => [...items],
     });
     expect(choices.find((choice) => choice.category === 'evolution')?.id).toBe('citadel-core');
+  });
+
+  test('support-bound second evolutions appear when the alternate branch is actually built', () => {
+    const director = new LevelUpDirector();
+
+    const runnerTraits = new TraitRuntime();
+    runnerTraits.addTrait('iron-reserve');
+    runnerTraits.addTrait('pressure-lenses');
+    const runnerChoices = director.buildChoices('runner', runnerTraits, {
+      hasSupportAbility: true,
+      supportAbilityId: 'echo-turret',
+      level: 8,
+      elapsedMs: 300_000,
+      selectedEvolutionId: null,
+      shuffle: <T>(items: T[]) => [...items],
+    });
+    expect(runnerChoices.find((choice) => choice.category === 'evolution')?.id).toBe('reckoner-drive');
+
+    const shadeTraits = new TraitRuntime();
+    shadeTraits.addTrait('target-painter');
+    shadeTraits.addTrait('predator-relay');
+    const shadeChoices = director.buildChoices('shade', shadeTraits, {
+      hasSupportAbility: true,
+      supportAbilityId: 'recovery-field',
+      level: 8,
+      elapsedMs: 300_000,
+      selectedEvolutionId: null,
+      shuffle: <T>(items: T[]) => [...items],
+    });
+    expect(shadeChoices.find((choice) => choice.category === 'evolution')?.id).toBe('siege-lock-array');
+
+    const weaverTraits = new TraitRuntime();
+    weaverTraits.addTrait('infectious-volley');
+    weaverTraits.addTrait('catalytic-exposure');
+    weaverTraits.addTrait('pressure-lenses');
+    const weaverChoices = director.buildChoices('weaver', weaverTraits, {
+      hasSupportAbility: true,
+      supportAbilityId: 'echo-turret',
+      level: 8,
+      elapsedMs: 300_000,
+      selectedEvolutionId: null,
+      shuffle: <T>(items: T[]) => [...items],
+    });
+    expect(weaverChoices.find((choice) => choice.category === 'evolution')?.id).toBe('cinder-crown');
+  });
+
+  test('trait runtime tracks the new branch hooks without needing a generic proc system', () => {
+    const traits = new TraitRuntime();
+
+    expect(traits.getBonusGuardMax()).toBe(0);
+    expect(
+      traits.getPrimaryDamageBonus({
+        heroId: 'runner',
+        abilityId: 'brace-shot',
+        isCloseRange: true,
+        guardActive: true,
+        targetWasMarked: false,
+        targetWasDisrupted: false,
+        targetWasAilmented: false,
+      }),
+    ).toBe(0);
+
+    traits.addTrait('iron-reserve');
+    traits.addTrait('pressure-lenses');
+    traits.addTrait('predator-relay');
+
+    expect(traits.getBonusGuardMax()).toBe(10);
+    expect(
+      traits.getPrimaryDamageBonus({
+        heroId: 'runner',
+        abilityId: 'brace-shot',
+        isCloseRange: true,
+        guardActive: true,
+        targetWasMarked: false,
+        targetWasDisrupted: false,
+        targetWasAilmented: false,
+      }),
+    ).toBe(3);
+
+    traits.notifyGuardGain(1_000, 3);
+    expect(
+      traits.consumePredatorRelaySignatureBonus({
+        currentTime: 1_100,
+        targetWasMarked: false,
+        targetWasDisrupted: true,
+        targetWasAilmented: false,
+      }),
+    ).toBeCloseTo(1.25);
+    expect(traits.getCatalyticExposureMarkDurationMs()).toBe(0);
+
+    traits.addTrait('catalytic-exposure');
+    expect(traits.getCatalyticExposureMarkDurationMs()).toBe(1800);
   });
 
   test('only the matching hero can receive its evolution and only before one is chosen', () => {
