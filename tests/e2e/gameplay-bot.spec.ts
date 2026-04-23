@@ -43,7 +43,16 @@ type Snapshot = {
     bossName: string;
     bossObjective: string;
     pressureBeat: { active: boolean; id: string; label: string; objective: string; remainingMs: number };
-    enemies: Array<{ id?: string; distance: number; x: number; y: number; isMarked?: boolean; isDisrupted?: boolean; isAilmented?: boolean }>;
+    enemies: Array<{
+      id?: string;
+      distance: number;
+      x: number;
+      y: number;
+      isEventTarget?: boolean;
+      isMarked?: boolean;
+      isDisrupted?: boolean;
+      isAilmented?: boolean;
+    }>;
     xpGems: Array<{ distance: number; x: number; y: number }>;
     rewardChoices: Array<{ id: string; title: string; lane: 'deepen' | 'bridge' | 'stabilize' }>;
     hud?: {
@@ -501,6 +510,80 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
     expect(pressureBeat.active).toBe(true);
     expect(pressureBeat.id).toBe('mid-siege-crossfire');
     expect(pressureBeat.label).toBe('Siege Crossfire');
+  });
+
+  test('authored encounter-response beats stay visible on the live run path and mark the execution target', async ({ page }) => {
+    test.setTimeout(30_000);
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+    await clickCanvasPosition(page, getHeroCardX('runner'), 382);
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+    const beats = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        runElapsedMs: number;
+        spawnEnemyWave: () => void;
+        getGameplayBotSnapshot: () => {
+          pressureBeat: { active: boolean; id: string; label: string };
+          waveTemplate: { id: string; label: string; highlight: boolean };
+          enemies: Array<{ id?: string; isEventTarget?: boolean }>;
+        };
+      };
+
+      const checkpoints = [102_000, 156_000, 180_000, 222_000, 264_000];
+      return checkpoints.map((elapsedMs) => {
+        runScene.runElapsedMs = elapsedMs;
+        runScene.spawnEnemyWave();
+        const snapshot = runScene.getGameplayBotSnapshot();
+        return {
+          elapsedMs,
+          pressureId: snapshot.pressureBeat.id,
+          templateId: snapshot.waveTemplate.id,
+          highlight: snapshot.waveTemplate.highlight,
+          eventTargetCount: snapshot.enemies.filter((enemy) => enemy.isEventTarget).length,
+        };
+      });
+    });
+
+    expect(beats).toEqual([
+      {
+        elapsedMs: 102_000,
+        pressureId: 'ramp-check',
+        templateId: 'ramp-check',
+        highlight: true,
+        eventTargetCount: 0,
+      },
+      {
+        elapsedMs: 156_000,
+        pressureId: 'stabilize-pocket',
+        templateId: 'stabilize-pocket',
+        highlight: true,
+        eventTargetCount: 0,
+      },
+      {
+        elapsedMs: 180_000,
+        pressureId: 'mid-siege-crossfire',
+        templateId: 'mid-siege-crossfire',
+        highlight: true,
+        eventTargetCount: 0,
+      },
+      {
+        elapsedMs: 222_000,
+        pressureId: 'bunker-break',
+        templateId: 'bunker-break',
+        highlight: true,
+        eventTargetCount: 0,
+      },
+      {
+        elapsedMs: 264_000,
+        pressureId: 'execution-window',
+        templateId: 'execution-window',
+        highlight: true,
+        eventTargetCount: 1,
+      },
+    ]);
   });
 
   test('forced late-run evolution and Behemoth encounter appear together on the live snapshot path', async ({ page }) => {

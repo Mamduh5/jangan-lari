@@ -1,4 +1,3 @@
-import Phaser from 'phaser';
 import { BOSS_TRIGGER_TIME_MS, RUN_TARGET_DURATION_MS } from '../config/constants';
 import { ENEMY_ARCHETYPES, type EnemyArchetype } from '../data/enemies';
 
@@ -14,6 +13,8 @@ type WaveTemplate = {
   label: string;
   wave: EnemyArchetype[];
   pressureBeat?: PressureBeatDefinition;
+  eventTargetIndex?: number;
+  eventTargetColor?: number;
 };
 
 type StageRule = {
@@ -26,6 +27,8 @@ export type SpawnWaveResult = {
   templateId: string;
   templateLabel: string;
   templateHighlight: boolean;
+  eventTargetIndex: number | null;
+  eventTargetColor: number | null;
 };
 
 export type PressureBeatSnapshot = {
@@ -35,6 +38,14 @@ export type PressureBeatSnapshot = {
   objective: string;
   remainingMs: number;
 };
+
+function pickRandomTemplate(templates: WaveTemplate[]): WaveTemplate {
+  if (templates.length === 0) {
+    throw new Error('SpawnDirector requires at least one wave template per stage.');
+  }
+
+  return templates[Math.floor(Math.random() * templates.length)]!;
+}
 
 const MID_PRESSURE_TEMPLATE: WaveTemplate = {
   id: 'mid-siege-crossfire',
@@ -46,6 +57,56 @@ const MID_PRESSURE_TEMPLATE: WaveTemplate = {
     objective: 'Break the layered push before it boxes in your lane.',
     durationMs: 18000,
   },
+};
+
+const ANTI_RAMP_TEMPLATE: WaveTemplate = {
+  id: 'ramp-check',
+  label: 'Ramp Check',
+  wave: [ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.swarmer],
+  pressureBeat: {
+    id: 'ramp-check',
+    label: 'Ramp Check',
+    objective: 'Collapse the early crossfire before slow engines stall out.',
+    durationMs: 16000,
+  },
+};
+
+const STABILIZE_TEMPLATE: WaveTemplate = {
+  id: 'stabilize-pocket',
+  label: 'Stabilize Pocket',
+  wave: [ENEMY_ARCHETYPES.anchor, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer],
+  pressureBeat: {
+    id: 'stabilize-pocket',
+    label: 'Stabilize Pocket',
+    objective: 'Hold one clean lane and recover space before the next collapse.',
+    durationMs: 16000,
+  },
+};
+
+const ANTI_TURTLE_TEMPLATE: WaveTemplate = {
+  id: 'bunker-break',
+  label: 'Bunker Break',
+  wave: [ENEMY_ARCHETYPES.crusher, ENEMY_ARCHETYPES.hexcaster, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.bulwark],
+  pressureBeat: {
+    id: 'bunker-break',
+    label: 'Bunker Break',
+    objective: 'Keep moving through the breach. Static bunkers will get cracked.',
+    durationMs: 18000,
+  },
+};
+
+const EXECUTION_WINDOW_TEMPLATE: WaveTemplate = {
+  id: 'execution-window',
+  label: 'Execution Window',
+  wave: [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.hexcaster, ENEMY_ARCHETYPES.shooter],
+  pressureBeat: {
+    id: 'execution-window',
+    label: 'Execution Window',
+    objective: 'Break the marked conduit before the shell hardens around it.',
+    durationMs: 18000,
+  },
+  eventTargetIndex: 2,
+  eventTargetColor: 0xfbbf24,
 };
 
 const PRE_BOSS_TEMPLATE: WaveTemplate = {
@@ -208,7 +269,11 @@ export class SpawnDirector {
   private lastWaveTemplateLabel = '';
   private lastWaveTemplateHighlight = false;
   private activePressureBeat: (PressureBeatDefinition & { untilMs: number }) | null = null;
+  private antiRampTriggered = false;
+  private stabilizeTriggered = false;
   private midPressureTriggered = false;
+  private antiTurtleTriggered = false;
+  private executionWindowTriggered = false;
   private preBossPressureTriggered = false;
 
   getLastWaveTemplateId(): string {
@@ -252,10 +317,30 @@ export class SpawnDirector {
   nextWave(elapsedMs: number): SpawnWaveResult {
     this.updatePressureBeat(elapsedMs);
 
+    if (!this.antiRampTriggered && elapsedMs >= 102_000 && elapsedMs < 120_000) {
+      this.antiRampTriggered = true;
+      return this.activateTemplate(ANTI_RAMP_TEMPLATE, elapsedMs);
+    }
+
+    if (!this.stabilizeTriggered && elapsedMs >= 156_000 && elapsedMs < 174_000) {
+      this.stabilizeTriggered = true;
+      return this.activateTemplate(STABILIZE_TEMPLATE, elapsedMs);
+    }
+
     const leadInThreshold = Math.max(240_000, BOSS_TRIGGER_TIME_MS - 24_000);
     if (!this.midPressureTriggered && elapsedMs >= 180_000 && elapsedMs < leadInThreshold) {
       this.midPressureTriggered = true;
       return this.activateTemplate(MID_PRESSURE_TEMPLATE, elapsedMs);
+    }
+
+    if (!this.antiTurtleTriggered && elapsedMs >= 222_000 && elapsedMs < 240_000) {
+      this.antiTurtleTriggered = true;
+      return this.activateTemplate(ANTI_TURTLE_TEMPLATE, elapsedMs);
+    }
+
+    if (!this.executionWindowTriggered && elapsedMs >= 264_000 && elapsedMs < leadInThreshold) {
+      this.executionWindowTriggered = true;
+      return this.activateTemplate(EXECUTION_WINDOW_TEMPLATE, elapsedMs);
     }
 
     if (!this.preBossPressureTriggered && elapsedMs >= leadInThreshold && elapsedMs < BOSS_TRIGGER_TIME_MS) {
@@ -264,7 +349,7 @@ export class SpawnDirector {
     }
 
     const stage = STAGES.find((entry) => elapsedMs < entry.untilMs) ?? STAGES[STAGES.length - 1];
-    const template = Phaser.Utils.Array.GetRandom(stage.templates);
+    const template = pickRandomTemplate(stage.templates);
     return this.activateTemplate(template, elapsedMs);
   }
 
@@ -285,6 +370,8 @@ export class SpawnDirector {
       templateId: template.id,
       templateLabel: template.label,
       templateHighlight: Boolean(template.pressureBeat),
+      eventTargetIndex: template.eventTargetIndex ?? null,
+      eventTargetColor: template.eventTargetColor ?? null,
     };
   }
 

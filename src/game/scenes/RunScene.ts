@@ -292,7 +292,12 @@ export class RunScene extends Phaser.Scene {
       return;
     }
     const result = this.spawnDirector.nextWave(this.runElapsedMs);
-    result.wave.forEach((archetype, index) => this.spawnEnemy(archetype, index, result.wave.length));
+    result.wave.forEach((archetype, index) => {
+      const enemy = this.spawnEnemy(archetype, index, result.wave.length);
+      if (result.eventTargetIndex !== null && index === result.eventTargetIndex) {
+        enemy.setEventMarker(result.eventTargetColor ?? 0xfbbf24);
+      }
+    });
     this.nextSpawnAtMs = this.time.now + this.getSpawnIntervalMs();
     this.publishHudState();
   }
@@ -410,7 +415,7 @@ export class RunScene extends Phaser.Scene {
         contactDamage: enemy.contactDamage,
         isElite: enemy.isElite(),
         isBoss: enemy.isBoss(),
-        isEventTarget: false,
+        isEventTarget: enemy.isEventMarked(),
         isMarked: enemy.isMarked(this.time.now),
         isDisrupted: enemy.isDisrupted(this.time.now),
         isAilmented: enemy.isAilmented(this.time.now),
@@ -967,10 +972,11 @@ export class RunScene extends Phaser.Scene {
     return Math.round(Phaser.Math.Linear(2100, ENEMY_SPAWN_INTERVAL_MS, progress));
   }
 
-  private spawnEnemy(archetype: EnemyArchetype, index: number, count: number): void {
+  private spawnEnemy(archetype: EnemyArchetype, index: number, count: number): Enemy {
     const spawnPosition = this.getSpawnPosition(index, count);
     const enemy = new Enemy(this, spawnPosition.x, spawnPosition.y, archetype);
     this.enemies.add(enemy);
+    return enemy;
   }
 
   private getSpawnPosition(index: number, count: number): Phaser.Math.Vector2 {
