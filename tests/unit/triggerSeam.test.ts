@@ -147,7 +147,7 @@ describe('trigger seam', () => {
     ).toBe(1);
   });
 
-  test('consume-triggered signature cooldown refund remains trait-gated', () => {
+  test('shade mark cash-out now has baseline cooldown tempo and the trait deepens it', () => {
     const traits = new TraitRuntime();
     const seam = new TriggerSeam({
       heroId: 'shade',
@@ -156,11 +156,11 @@ describe('trigger seam', () => {
     });
 
     expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: false }).cooldownRefundMs).toBe(0);
-    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).cooldownRefundMs).toBe(0);
+    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).cooldownRefundMs).toBe(120);
     expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).guardGain).toBe(0);
 
     traits.addTrait('focused-breach');
-    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).cooldownRefundMs).toBe(220);
+    expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).cooldownRefundMs).toBe(260);
     expect(seam.resolveOnConsumeSignaturePayoff({ consumedMark: true }).guardGain).toBe(0);
 
     traits.addTrait('scavenger-shield');
@@ -207,7 +207,7 @@ describe('trigger seam', () => {
 
     const consumePayoff = seam.resolveOnConsumeSignaturePayoff({ consumedMark: true });
     expect(consumePayoff).toEqual({
-      cooldownRefundMs: 0,
+      cooldownRefundMs: 120,
       guardGain: 2,
     });
 

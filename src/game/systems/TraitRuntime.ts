@@ -48,15 +48,20 @@ export class TraitRuntime {
     ability: AbilityDefinition;
     guardActive: boolean;
   }): number {
-    if (options.heroId === 'runner' && options.ability.id === 'brace-shot' && options.guardActive && this.hasTrait('steadfast-posture')) {
-      return (options.ability.burstCount ?? 1) + 1;
+    let burstCount = options.ability.burstCount ?? 1;
+
+    if (options.heroId === 'runner' && options.ability.id === 'brace-shot' && options.guardActive) {
+      burstCount += 1;
+      if (this.hasTrait('steadfast-posture')) {
+        burstCount += 1;
+      }
     }
 
     if (options.heroId === 'weaver' && options.ability.id === 'cinder-needles' && this.hasTrait('infectious-volley')) {
-      return (options.ability.burstCount ?? 1) + 1;
+      burstCount += 1;
     }
 
-    return options.ability.burstCount ?? 1;
+    return burstCount;
   }
 
   getPrimarySpreadDegrees(options: {
@@ -66,8 +71,8 @@ export class TraitRuntime {
   }): number {
     const baseSpread = options.ability.spreadDegrees ?? 0;
 
-    if (options.heroId === 'runner' && options.ability.id === 'brace-shot' && options.guardActive && this.hasTrait('steadfast-posture')) {
-      return baseSpread + 8;
+    if (options.heroId === 'runner' && options.ability.id === 'brace-shot' && options.guardActive) {
+      return baseSpread + (this.hasTrait('steadfast-posture') ? 12 : 4);
     }
 
     return baseSpread;
@@ -101,8 +106,12 @@ export class TraitRuntime {
     return this.hasTrait('focused-breach') ? 1.8 : 1.45;
   }
 
-  getSignatureMarkedCooldownRefundMs(): number {
-    return this.hasTrait('focused-breach') ? 220 : 0;
+  getSignatureMarkedCooldownRefundMs(heroId: HeroId): number {
+    if (heroId !== 'shade') {
+      return 0;
+    }
+
+    return this.hasTrait('focused-breach') ? 260 : 120;
   }
 
   getDisruptedDurationMs(baseDurationMs: number): number {

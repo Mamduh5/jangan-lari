@@ -151,7 +151,7 @@ export class TriggerSeam {
     }
 
     return {
-      cooldownRefundMs: this.options.traits.getSignatureMarkedCooldownRefundMs(),
+      cooldownRefundMs: this.options.traits.getSignatureMarkedCooldownRefundMs(this.options.heroId),
       guardGain: this.options.traits.getGuardGainOnSignatureConsume({
         heroId: this.options.heroId,
         consumedMark: context.consumedMark,

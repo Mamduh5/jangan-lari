@@ -42,7 +42,7 @@ describe('milestone 1 runtime helpers', () => {
     expect(choices.some((choice) => choice.lane === 'stabilize')).toBe(true);
   });
 
-  test('trait runtime only turns on stronger Guard patterns when the matching trait is owned', () => {
+  test('runner chassis makes Brace Shot denser once Guard is online, and the matching trait deepens it further', () => {
     const traits = new TraitRuntime();
     const ability = getAbilityDefinition('brace-shot');
 
@@ -57,6 +57,8 @@ describe('milestone 1 runtime helpers', () => {
         targetWasAilmented: false,
       }),
     ).toBe(2);
+    expect(traits.getPrimaryBurstCount({ heroId: 'runner', ability, guardActive: true })).toBe(4);
+    expect(traits.getPrimarySpreadDegrees({ heroId: 'runner', ability, guardActive: true })).toBe(26);
 
     traits.addTrait('close-guard');
     traits.addTrait('steadfast-posture');
@@ -72,7 +74,8 @@ describe('milestone 1 runtime helpers', () => {
         targetWasAilmented: false,
       }),
     ).toBe(3);
-    expect(traits.getPrimaryBurstCount({ heroId: 'runner', ability, guardActive: true })).toBe(4);
+    expect(traits.getPrimaryBurstCount({ heroId: 'runner', ability, guardActive: true })).toBe(5);
+    expect(traits.getPrimarySpreadDegrees({ heroId: 'runner', ability, guardActive: true })).toBe(34);
   });
 
   test('combat state runtime absorbs damage through Guard before health is touched', () => {

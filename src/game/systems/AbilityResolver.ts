@@ -401,11 +401,12 @@ export class AbilityResolver {
   }
 
   private tryUseHexDetonation(slot: AbilitySlot, ability: AbilityDefinition, currentTime: number): AbilityUseResult {
-    const target =
-      (this.evolutionId === 'cinder-crown'
-        ? this.findMarkedAndAilmentedEnemy(currentTime, ability.range)
-        : null) ??
-      this.findAilmentedEnemy(currentTime, ability.range);
+    const target = this.findBestHexDetonationTarget(
+      currentTime,
+      ability.range,
+      ability.radius ?? ability.range,
+      this.evolutionId === 'cinder-crown',
+    );
     if (!target) {
       return { used: false };
     }
@@ -859,6 +860,47 @@ export class AbilityResolver {
       (enemy) => enemy.isMarked(currentTime) && enemy.isAilmented(currentTime),
     );
     return this.findNearestFromList(candidates, range);
+  }
+
+  private findBestHexDetonationTarget(
+    currentTime: number,
+    range: number,
+    radius: number,
+    preferMarkedAilmented: boolean,
+  ): Enemy | null {
+    const candidates = this.getActiveEnemies().filter((enemy) => {
+      const distanceSq = Phaser.Math.Distance.Squared(this.options.player.x, this.options.player.y, enemy.x, enemy.y);
+      return distanceSq <= range * range && enemy.isAilmented(currentTime);
+    });
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    let bestTarget: Enemy | null = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    let nearestDistanceSq = Number.POSITIVE_INFINITY;
+
+    for (const candidate of candidates) {
+      const nearbyAilmentedCount = candidates.filter(
+        (other) => Phaser.Math.Distance.Between(candidate.x, candidate.y, other.x, other.y) <= radius,
+      ).length;
+      const markedBonus = preferMarkedAilmented && candidate.isMarked(currentTime) ? 100 : 0;
+      const nearbyMarkedCount = candidates.filter(
+        (other) =>
+          other.isMarked(currentTime) &&
+          Phaser.Math.Distance.Between(candidate.x, candidate.y, other.x, other.y) <= radius,
+      ).length;
+      const distanceSq = Phaser.Math.Distance.Squared(this.options.player.x, this.options.player.y, candidate.x, candidate.y);
+      const score = nearbyAilmentedCount * 10 + nearbyMarkedCount * 3 + markedBonus;
+
+      if (score > bestScore || (score === bestScore && distanceSq < nearestDistanceSq)) {
+        bestTarget = candidate;
+        bestScore = score;
+        nearestDistanceSq = distanceSq;
+      }
+    }
+
+    return bestTarget;
   }
 
   private findStateAffectedEnemy(currentTime: number, range: number): Enemy | null {

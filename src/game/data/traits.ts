@@ -38,7 +38,7 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     id: 'steadfast-posture',
     category: 'amplifier',
     title: 'Steadfast Posture',
-    description: 'While Guard is active, Brace Shot throws a broader, denser burst.',
+    description: 'While Guard is active, Brace Shot throws an even broader, denser burst.',
     heroBias: 'runner',
   },
   'iron-reserve': {
@@ -59,7 +59,7 @@ export const TRAIT_DEFINITIONS: Record<TraitId, TraitDefinition> = {
     id: 'focused-breach',
     category: 'amplifier',
     title: 'Focused Breach',
-    description: 'Hunter Sweep hits Marked enemies harder and recovers a little faster when it cashes out Mark.',
+    description: 'Hunter Sweep hits Marked enemies harder and recovers even faster when it cashes out Mark.',
     heroBias: 'shade',
   },
   'scavenger-shield': {

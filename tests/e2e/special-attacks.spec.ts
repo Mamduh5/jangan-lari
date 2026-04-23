@@ -378,6 +378,69 @@ test.describe('milestone 1 signature behavior', () => {
     expect(result.damage).toBeGreaterThan(0);
   });
 
+  test('base Hex Detonation prefers the denser afflicted cluster over a nearer lone target', async ({ page }) => {
+    await startRun(page, 'weaver');
+
+    const result = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        player: { x: number; y: number };
+        combatStates: {
+          applyAilment: (enemy: { applyAilment: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+        };
+        abilityResolver: {
+          tryUseAbility: (slot: 'signature', ability: unknown, currentTime: number) => { used: boolean; ailmentConsumes?: number };
+        };
+        abilityLoadout: { getAbility: (slot: 'signature') => unknown };
+        debugSpawnEnemy: (enemyId: 'anchor') => boolean;
+        enemies: {
+          getChildren: () => Array<{
+            x: number;
+            y: number;
+            getCurrentHealth: () => number;
+            body?: { reset?: (x: number, y: number) => void };
+          }>;
+        };
+      };
+
+      runScene.debugSpawnEnemy('anchor');
+      runScene.debugSpawnEnemy('anchor');
+      runScene.debugSpawnEnemy('anchor');
+      const [nearTarget, clusterLead, clusterWing] = runScene.enemies.getChildren().slice(-3);
+      const positions = [
+        { x: runScene.player.x + 110, y: runScene.player.y },
+        { x: runScene.player.x + 240, y: runScene.player.y + 10 },
+        { x: runScene.player.x + 290, y: runScene.player.y + 25 },
+      ];
+
+      [nearTarget, clusterLead, clusterWing].forEach((enemy, index) => {
+        enemy!.x = positions[index]!.x;
+        enemy!.y = positions[index]!.y;
+        enemy!.body?.reset?.(enemy!.x, enemy!.y);
+        runScene.combatStates.applyAilment(enemy as never, game.loop.time, 2400);
+      });
+
+      const nearBefore = nearTarget!.getCurrentHealth();
+      const clusterLeadBefore = clusterLead!.getCurrentHealth();
+      const clusterWingBefore = clusterWing!.getCurrentHealth();
+      const used = runScene.abilityResolver.tryUseAbility('signature', runScene.abilityLoadout.getAbility('signature'), game.loop.time);
+
+      return {
+        used: used.used,
+        ailmentConsumes: used.ailmentConsumes ?? 0,
+        nearDamage: nearBefore - nearTarget!.getCurrentHealth(),
+        clusterLeadDamage: clusterLeadBefore - clusterLead!.getCurrentHealth(),
+        clusterWingDamage: clusterWingBefore - clusterWing!.getCurrentHealth(),
+      };
+    });
+
+    expect(result.used).toBe(true);
+    expect(result.ailmentConsumes).toBeGreaterThanOrEqual(2);
+    expect(result.clusterLeadDamage).toBeGreaterThan(0);
+    expect(result.clusterWingDamage).toBeGreaterThan(0);
+    expect(result.nearDamage).toBe(0);
+  });
+
   test('Contagion Node equips into the support slot and can seed Ailment', async ({ page }) => {
     await startRun(page, 'weaver');
 

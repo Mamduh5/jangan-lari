@@ -180,7 +180,7 @@ describe('state transactions', () => {
     });
   });
 
-  test('signature mark-consume path uses transaction result without changing trait payoff', () => {
+  test('signature mark-consume path uses transaction result and preserves the deeper shade payoff', () => {
     const traits = new TraitRuntime();
     traits.addTrait('focused-breach');
     const states = new CombatStateRuntime();
@@ -198,6 +198,6 @@ describe('state transactions', () => {
     });
 
     expect(consumeTx.status).toBe('consumed');
-    expect(payoff.cooldownRefundMs).toBe(220);
+    expect(payoff.cooldownRefundMs).toBe(260);
   });
 });
