@@ -126,36 +126,8 @@ describe('milestone 1 runtime helpers', () => {
     expect(shadeSupportChoices[0]).toBe('spotter-drone');
   });
 
-  test('off-bias support remains eligible when the support pool shuffle brings it forward', () => {
+  test('runner alternate branch commitment still surfaces Echo Turret before the support slot is filled', () => {
     const director = new LevelUpDirector();
-    const traits = new TraitRuntime();
-
-    const runnerChoices = director.buildChoices('runner', traits, {
-      hasSupportAbility: false,
-      shuffle: <T extends { id?: string }>(items: T[]) =>
-        [...items].sort((left, right) => {
-          if (left.id === 'spotter-drone') return -1;
-          if (right.id === 'spotter-drone') return 1;
-          return 0;
-        }),
-    });
-    const shadeChoices = director.buildChoices('shade', traits, {
-      hasSupportAbility: false,
-      shuffle: <T extends { id?: string }>(items: T[]) =>
-        [...items].sort((left, right) => {
-          if (left.id === 'shock-lattice') return -1;
-          if (right.id === 'shock-lattice') return 1;
-          return 0;
-        }),
-    });
-
-    expect(runnerChoices.find((choice) => choice.category === 'support')?.id).toBe('spotter-drone');
-    expect(shadeChoices.find((choice) => choice.category === 'support')?.id).toBe('shock-lattice');
-  });
-
-  test('alternate branch commitment can bias the shared support offer without making it mandatory', () => {
-    const director = new LevelUpDirector();
-
     const runnerTraits = new TraitRuntime();
     runnerTraits.addTrait('iron-reserve');
     const runnerChoices = director.buildChoices('runner', runnerTraits, {
@@ -163,16 +135,54 @@ describe('milestone 1 runtime helpers', () => {
       shuffle: <T>(items: T[]) => [...items],
     });
 
+    expect(runnerChoices.find((choice) => choice.category === 'support')?.id).toBe('echo-turret');
+  });
+
+  test('branch slot can surface a converter path instead of forcing another support when the machine is already seeded', () => {
+    const director = new LevelUpDirector();
+
+    const shadeTraits = new TraitRuntime();
+    shadeTraits.addTrait('target-painter');
+    shadeTraits.addTrait('focused-breach');
+    const shadeChoices = director.buildChoices('shade', shadeTraits, {
+      hasSupportAbility: false,
+      shuffle: <T>(items: T[]) => [...items],
+    });
+
+    expect(shadeChoices.find((choice) => choice.id === 'scavenger-shield')?.lane).toBe('bridge');
+    expect(shadeChoices.find((choice) => choice.id === 'recovery-field')?.lane).toBe('stabilize');
+    expect(shadeChoices.some((choice) => choice.id === 'spotter-drone')).toBe(false);
+  });
+
+  test('weaver deepen-plus-converter path stays coherent before adding more producers', () => {
+    const director = new LevelUpDirector();
     const weaverTraits = new TraitRuntime();
     weaverTraits.addTrait('infectious-volley');
-    weaverTraits.addTrait('catalytic-exposure');
+
     const weaverChoices = director.buildChoices('weaver', weaverTraits, {
       hasSupportAbility: false,
       shuffle: <T>(items: T[]) => [...items],
     });
 
-    expect(runnerChoices.find((choice) => choice.category === 'support')?.id).toBe('echo-turret');
-    expect(weaverChoices.find((choice) => choice.category === 'support')?.id).toBe('echo-turret');
+    expect(weaverChoices.find((choice) => choice.id === 'lingering-fever')?.lane).toBe('deepen');
+    expect(weaverChoices.find((choice) => choice.id === 'volatile-bloom')?.lane).toBe('bridge');
+    expect(weaverChoices.some((choice) => choice.id === 'contagion-node')).toBe(false);
+  });
+
+  test('support-filled disrupted branches can ask for the setup extender instead of generic clutter', () => {
+    const director = new LevelUpDirector();
+    const runnerTraits = new TraitRuntime();
+    runnerTraits.addTrait('close-guard');
+
+    const runnerChoices = director.buildChoices('runner', runnerTraits, {
+      hasSupportAbility: true,
+      supportAbilityId: 'shock-lattice',
+      shuffle: <T>(items: T[]) => [...items],
+    });
+
+    expect(runnerChoices.find((choice) => choice.id === 'steadfast-posture')?.lane).toBe('deepen');
+    expect(runnerChoices.find((choice) => choice.id === 'lingering-static')?.lane).toBe('bridge');
+    expect(runnerChoices.some((choice) => choice.category === 'support')).toBe(false);
   });
 
   test('trait runtime extends disrupted setup and signature payoff when the new traits are owned', () => {
