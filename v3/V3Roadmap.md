@@ -6,6 +6,24 @@ V3 focuses on making the existing Guard, Mark, and Ailment engine feel memorable
 
 V3 should not be a rewrite, content flood, art pass, or meta-progression pass. It should use the existing runtime spine: heroes, ability loadout/resolver, combat states, traits, `TriggerSeam`, `LevelUpDirector`, `SpawnDirector`, State Break, boss flow, HUD, debug snapshots, and tests.
 
+## Global V3 Non-Goals
+
+- No asset or art pass.
+- No new hero batch.
+- No large enemy or content flood.
+- No map expansion.
+- No meta progression.
+- No generic proc engine.
+- No broad architecture rewrite.
+- No old weapon-system revival.
+- No longer run length as a fake solution.
+
+## Hero Emotional Targets
+
+- Iron Warden should feel like holding space, absorbing pressure, and converting defense into crushing retaliation.
+- Raptor Frame should feel like identifying priority targets, marking them, executing them, and chaining precision pressure.
+- Ash Weaver should feel like infecting clusters, spreading Ailment, and detonating or cascading corrupted groups.
+
 ## V3-M1: Hero Payoff Feel Pass
 
 ### Objective
@@ -44,6 +62,12 @@ The player can tell, without reading debug counters, that their Guard slam, Mark
 - No generic VFX framework.
 - No architecture rewrite.
 
+### Acceptance Checks
+
+- Player can identify Warden, Raptor, and Weaver payoff moments without debug or HUD inspection.
+- State Break success visibly feels caused by the payoff action.
+- No visual clutter, gameplay regression, or crash is introduced.
+
 ## V3-M2: Pressure Beat Set
 
 ### Objective
@@ -79,6 +103,12 @@ The player recognizes that different waves ask different questions: hold space, 
 - No new boss.
 - No new state family.
 - No random event scheduler.
+
+### Acceptance Checks
+
+- Each new pressure beat asks a different combat question.
+- Each hero has at least one valid answer path.
+- Failure creates pressure, not instant punishment.
 
 ## V3-M3: Behemoth Build-Question Pass
 
@@ -116,6 +146,12 @@ The boss feels like a final exam for the build the player made, not just a large
 - No map change.
 - No hard counter that invalidates a hero.
 
+### Acceptance Checks
+
+- Behemoth has readable Guard, Mark, and Ailment answer windows.
+- No hero is hard-countered.
+- Boss still works if the player has an imperfect build.
+
 ## V3-M4: Reward Excitement and Anti-Tax Tuning
 
 ### Objective
@@ -149,6 +185,12 @@ The player picks a reward because it answers the current run's needs, not becaus
 - No old weapon-upgrade revival.
 - No new rarity system.
 
+### Acceptance Checks
+
+- Support choices feel less tax-like.
+- Reward branches respond to run context.
+- No broad reward pool bloat is introduced.
+
 ## V3-M5: Run Pacing and Memorable Arc
 
 ### Objective
@@ -179,6 +221,12 @@ The run has fewer low-drama spans and more memorable steps toward a final identi
 - Do not add meta progression.
 - Do not compensate for pacing with raw enemy spam.
 - Do not make every minute a high-pressure event.
+
+### Acceptance Checks
+
+- First interesting identity moment happens earlier.
+- Mid-run has fewer low-drama spans.
+- Run is denser without becoming constant spam.
 
 ## V3-M6: Replay Validation Pass
 
@@ -211,6 +259,27 @@ Replaying the same hero can create different stories, not just the same support,
 - No new major system.
 - No art pass.
 - No sweeping balance rewrite unless a specific route is proven broken.
+
+### Acceptance Checks
+
+- Each hero has at least two viable-feeling run identities.
+- Debug and e2e coverage can inspect representative routes.
+- Manual replay confirms different stories, not just different numbers.
+
+## V3 Risk List
+
+- Payoff VFX becomes visual clutter.
+  Mitigation: keep effects short, state-specific, and tied to the actual payoff impact point; validate in crowded waves, not only isolated tests.
+- Pressure beats become chores instead of exciting build tests.
+  Mitigation: keep each beat short, readable, optional-to-perfect, and meaningfully relieved on success.
+- Boss build questions become hard counters.
+  Mitigation: make each answer path advantaged rather than mandatory, and preserve baseline survival routes for imperfect builds.
+- Reward tuning becomes speculative if done before encounter proof.
+  Mitigation: defer broad reward changes until payoff feel and pressure beats expose what choices actually matter.
+- Pacing becomes noisy if every minute becomes a forced event.
+  Mitigation: use authored peaks and recovery space; measure density by memorable decisions, not event count.
+- Debug and e2e validate counters but not feel.
+  Mitigation: pair automated coverage with manual replay notes for readability, cause/effect, and emotional payoff.
 
 ## V3 Closure Criteria
 
