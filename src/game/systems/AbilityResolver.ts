@@ -276,6 +276,9 @@ export class AbilityResolver {
         }),
     );
 
+    if (consumedMark) {
+      target.playPayoffReaction('mark-execute');
+    }
     const killed = target.takeDamage(damage, { x: this.options.player.x, y: this.options.player.y });
 
     const line = this.options.scene.add.line(
@@ -310,6 +313,7 @@ export class AbilityResolver {
         onComplete: () => burst.destroy(),
       });
 
+      this.playMarkExecutionCue(target);
       this.options.scene.cameras.main.shake(70, 0.0022);
     }
 
@@ -449,6 +453,9 @@ export class AbilityResolver {
         );
       }
 
+      if (consumedAilment) {
+        enemy.playPayoffReaction('ailment-burst');
+      }
       enemy.takeDamage(damage, { x: target.x, y: target.y });
 
       if (!consumedAilment) {
@@ -504,6 +511,7 @@ export class AbilityResolver {
           chainDamage = Math.round(chainDamage * this.options.traits.getSignatureDisruptedDamageMultiplier());
           disruptedTargetsHit += 1;
         }
+        chainedTarget.playPayoffReaction('ailment-burst');
         chainedTarget.takeDamage(chainDamage, { x: chainOrigin.x, y: chainOrigin.y });
 
         const chainLine = this.options.scene.add.line(
@@ -540,6 +548,10 @@ export class AbilityResolver {
       ease: 'Quad.Out',
       onComplete: () => ring.destroy(),
     });
+
+    if (ailmentConsumes > 0) {
+      this.playHexDetonationPayoffCue(target, radius, ailmentConsumes);
+    }
 
     return {
       used: true,
@@ -958,6 +970,9 @@ export class AbilityResolver {
         disruptedTargetsHit += 1;
       }
 
+      if (stateAffected) {
+        enemy.playPayoffReaction('guard-crush');
+      }
       enemy.takeDamage(damage, { x: this.options.player.x, y: this.options.player.y });
     }
 
@@ -980,6 +995,7 @@ export class AbilityResolver {
       ease: 'Quad.Out',
       onComplete: () => breachLine.destroy(),
     });
+    this.options.scene.cameras.main.shake(70, 0.0018);
 
     return { used: true, slot, disruptedTargetsHit };
   }
@@ -1006,7 +1022,7 @@ export class AbilityResolver {
       (enemy) => Phaser.Math.Distance.Between(this.options.player.x, this.options.player.y, enemy.x, enemy.y) <= radius,
     );
 
-    for (const enemy of targets) {
+    targets.forEach((enemy, index) => {
       const targetWasDisrupted = this.options.combatStates.isDisrupted(enemy, currentTime);
       let damage = Math.round(
         (ability.damage + spentGuard * 1.2) * damageScale * this.options.traits.getIronReserveDamageMultiplier(),
@@ -1016,26 +1032,114 @@ export class AbilityResolver {
         disruptedTargetsHit += 1;
       }
 
+      if (index < 5) {
+        enemy.playPayoffReaction('guard-crush');
+      }
       const killed = enemy.takeDamage(damage, { x: this.options.player.x, y: this.options.player.y });
       const knockback = new Phaser.Math.Vector2(enemy.x - this.options.player.x, enemy.y - this.options.player.y);
       if (!killed && enemy.active && enemy.body && knockback.lengthSq() > 0) {
         knockback.normalize().scale(160 + spentGuard * 5);
         enemy.body.setVelocity(knockback.x, knockback.y);
       }
-    }
+    });
 
     const ring = this.options.scene.add.circle(this.options.player.x, this.options.player.y, 24, ability.color, 0.16).setDepth(8);
-    ring.setStrokeStyle(4, ability.strokeColor, 0.95);
+    ring.setStrokeStyle(5, ability.strokeColor, 0.95);
     this.options.scene.tweens.add({
       targets: ring,
       radius,
       alpha: 0,
-      duration: 220,
+      duration: 240,
       ease: 'Quad.Out',
       onComplete: () => ring.destroy(),
     });
+    this.playBulwarkPayoffCue(radius, spentGuard, targets.length);
 
     return disruptedTargetsHit;
+  }
+
+  private playBulwarkPayoffCue(radius: number, spentGuard: number, targetCount: number): void {
+    const impact = this.options.scene.add.circle(this.options.player.x, this.options.player.y, 14, 0xffedd5, 0.24).setDepth(9);
+    impact.setStrokeStyle(3, 0xfb923c, 0.95);
+    this.options.scene.tweens.add({
+      targets: impact,
+      radius: Math.min(42, 24 + spentGuard * 1.2),
+      alpha: 0,
+      duration: 130,
+      ease: 'Quad.Out',
+      onComplete: () => impact.destroy(),
+    });
+
+    const pressureRing = this.options.scene.add.circle(this.options.player.x, this.options.player.y, Math.max(30, radius * 0.42), 0xfb923c, 0.08).setDepth(8.6);
+    pressureRing.setStrokeStyle(3, 0xffedd5, 0.72);
+    this.options.scene.tweens.add({
+      targets: pressureRing,
+      radius: radius + 18,
+      alpha: 0,
+      duration: 210,
+      ease: 'Quad.Out',
+      onComplete: () => pressureRing.destroy(),
+    });
+
+    if (targetCount > 0) {
+      this.options.scene.cameras.main.shake(55, 0.0015);
+    }
+  }
+
+  private playMarkExecutionCue(target: Enemy): void {
+    const size = Math.max(18, target.width * 0.56);
+    const horizontal = this.options.scene.add.line(0, 0, target.x - size, target.y, target.x + size, target.y, 0xfffbeb, 0.9);
+    const vertical = this.options.scene.add.line(0, 0, target.x, target.y - size, target.x, target.y + size, 0xfffbeb, 0.9);
+    [horizontal, vertical].forEach((line) => {
+      line.setLineWidth(2, 2);
+      line.setDepth(9.4);
+      this.options.scene.tweens.add({
+        targets: line,
+        alpha: 0,
+        duration: 120,
+        ease: 'Quad.Out',
+        onComplete: () => line.destroy(),
+      });
+    });
+
+    const pinpoint = this.options.scene.add.circle(target.x, target.y, Math.max(8, target.width * 0.24), 0xfffbeb, 0.28).setDepth(9.5);
+    pinpoint.setStrokeStyle(2, 0xfef08a, 0.9);
+    this.options.scene.tweens.add({
+      targets: pinpoint,
+      radius: Math.max(20, target.width * 0.58),
+      alpha: 0,
+      duration: 145,
+      ease: 'Quad.Out',
+      onComplete: () => pinpoint.destroy(),
+    });
+  }
+
+  private playHexDetonationPayoffCue(target: Enemy, radius: number, consumeCount: number): void {
+    const core = this.options.scene.add.circle(target.x, target.y, 12, 0xffedd5, 0.2).setDepth(9.2);
+    core.setStrokeStyle(3, 0xfb7185, 0.95);
+    this.options.scene.tweens.add({
+      targets: core,
+      radius: Math.min(radius * 0.72, 76),
+      alpha: 0,
+      duration: 190,
+      ease: 'Quad.Out',
+      onComplete: () => core.destroy(),
+    });
+
+    if (consumeCount > 1) {
+      const cascade = this.options.scene.add.circle(target.x, target.y, Math.min(36, radius * 0.35), 0xfb7185, 0.08).setDepth(8.7);
+      cascade.setStrokeStyle(3, 0xffedd5, 0.68);
+      this.options.scene.tweens.add({
+        targets: cascade,
+        radius: radius + Math.min(28, consumeCount * 6),
+        alpha: 0,
+        duration: 260,
+        ease: 'Quad.Out',
+        onComplete: () => cascade.destroy(),
+      });
+    }
+
+    this.options.scene.cameras.main.shake(consumeCount > 2 ? 70 : 45, consumeCount > 2 ? 0.0018 : 0.0012);
   }
 
   private findMarkedEnemyExcluding(currentTime: number, range: number, excluded: Enemy): Enemy | null {

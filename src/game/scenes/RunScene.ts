@@ -761,6 +761,7 @@ export class RunScene extends Phaser.Scene {
 
     if (target) {
       target.setEventMarker(0x4ade80);
+      this.playStateBreakPayoffCue(target, reason);
       this.dropStateBreakXpBurst(target);
       const burst = this.add.circle(target.x, target.y, 20, 0x4ade80, 0.18).setDepth(9);
       burst.setStrokeStyle(4, 0xdcfce7, 0.95);
@@ -785,6 +786,56 @@ export class RunScene extends Phaser.Scene {
     this.abilityLoadout.reduceCooldown('signature', 600, this.time.now);
     this.cameras.main.shake(80, 0.0018);
     this.publishHudState();
+  }
+
+  private playStateBreakPayoffCue(target: Enemy, reason: StateBreakReason): void {
+    const config = {
+      'guard-slam': {
+        color: 0xfb923c,
+        strokeColor: 0xffedd5,
+        lineWidth: 7,
+        startRadius: 18,
+        endRadius: 78,
+      },
+      'mark-consume': {
+        color: 0xfef08a,
+        strokeColor: 0xfffbeb,
+        lineWidth: 4,
+        startRadius: 12,
+        endRadius: 64,
+      },
+      'ailment-detonation': {
+        color: 0xfb7185,
+        strokeColor: 0xffedd5,
+        lineWidth: 5,
+        startRadius: 16,
+        endRadius: 84,
+      },
+    }[reason];
+
+    target.playPayoffReaction('state-break');
+
+    const payoffLine = this.add.line(0, 0, this.player.x, this.player.y, target.x, target.y, config.color, 0.88);
+    payoffLine.setLineWidth(config.lineWidth, config.lineWidth);
+    payoffLine.setDepth(9.3);
+    this.tweens.add({
+      targets: payoffLine,
+      alpha: 0,
+      duration: 170,
+      ease: 'Quad.Out',
+      onComplete: () => payoffLine.destroy(),
+    });
+
+    const shatter = this.add.circle(target.x, target.y, config.startRadius, config.color, 0.26).setDepth(9.4);
+    shatter.setStrokeStyle(4, config.strokeColor, 0.95);
+    this.tweens.add({
+      targets: shatter,
+      radius: config.endRadius,
+      alpha: 0,
+      duration: 230,
+      ease: 'Quad.Out',
+      onComplete: () => shatter.destroy(),
+    });
   }
 
   private resolveStateBreakFailure(message: string): void {

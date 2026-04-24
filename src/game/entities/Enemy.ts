@@ -30,6 +30,8 @@ export type EnemyAttackSignal =
       radius: number;
     };
 
+type PayoffReactionKind = 'guard-crush' | 'mark-execute' | 'ailment-burst' | 'state-break';
+
 export class Enemy extends Phaser.GameObjects.Rectangle {
   declare body: Phaser.Physics.Arcade.Body;
 
@@ -256,6 +258,86 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   setDamageTakenMultiplier(multiplier: number): void {
     this.damageTakenMultiplier = Phaser.Math.Clamp(multiplier, 0, 2);
+  }
+
+  playPayoffReaction(kind: PayoffReactionKind): void {
+    if (!this.active) {
+      return;
+    }
+
+    const config = {
+      'guard-crush': {
+        color: 0xfb923c,
+        strokeColor: 0xffedd5,
+        startRadius: this.archetype.size * 0.48,
+        endRadius: this.archetype.size * 1.15,
+        durationMs: 170,
+        alpha: 0.2,
+        strokeWidth: 3,
+        scaleX: 1.18,
+        scaleY: 0.82,
+      },
+      'mark-execute': {
+        color: 0xfef08a,
+        strokeColor: 0xfffbeb,
+        startRadius: this.archetype.size * 0.36,
+        endRadius: this.archetype.size * 0.88,
+        durationMs: 150,
+        alpha: 0.24,
+        strokeWidth: 3,
+        scaleX: 0.86,
+        scaleY: 1.16,
+      },
+      'ailment-burst': {
+        color: 0xfb7185,
+        strokeColor: 0xffedd5,
+        startRadius: this.archetype.size * 0.42,
+        endRadius: this.archetype.size * 1.05,
+        durationMs: 190,
+        alpha: 0.2,
+        strokeWidth: 3,
+        scaleX: 1.12,
+        scaleY: 0.88,
+      },
+      'state-break': {
+        color: 0x4ade80,
+        strokeColor: 0xdcfce7,
+        startRadius: this.archetype.size * 0.5,
+        endRadius: this.archetype.size * 1.35,
+        durationMs: 220,
+        alpha: 0.22,
+        strokeWidth: 4,
+        scaleX: 1.2,
+        scaleY: 0.8,
+      },
+    }[kind];
+
+    const reaction = this.scene.add.circle(this.x, this.y, config.startRadius, config.color, config.alpha);
+    reaction.setDepth(this.depth + 0.7);
+    reaction.setStrokeStyle(config.strokeWidth, config.strokeColor, 0.95);
+    this.scene.tweens.add({
+      targets: reaction,
+      radius: config.endRadius,
+      alpha: 0,
+      duration: config.durationMs,
+      ease: 'Quad.Out',
+      onComplete: () => reaction.destroy(),
+    });
+
+    if (this.deathPresentationActive) {
+      return;
+    }
+
+    this.scene.tweens.killTweensOf(this.responseScale);
+    this.responseScale.x = config.scaleX;
+    this.responseScale.y = config.scaleY;
+    this.scene.tweens.add({
+      targets: this.responseScale,
+      x: 1,
+      y: 1,
+      duration: config.durationMs,
+      ease: 'Quad.Out',
+    });
   }
 
   despawnSilently(): void {
