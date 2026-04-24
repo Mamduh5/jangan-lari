@@ -51,9 +51,12 @@ describe('spawn director pressure beats', () => {
 
     expect(wave.templateId).toBe('execution-window');
     expect(wave.wave.map((enemy) => enemy.id)).toEqual(['bulwark', 'harrier', 'hexcaster', 'shooter']);
+    expect(wave.eventType).toBe('state-break');
+    expect(wave.eventTitle).toBe('State Break');
+    expect(wave.eventObjective).toContain('hero payoff');
     expect(wave.eventTargetIndex).toBe(2);
     expect(wave.eventTargetColor).toBe(0xfbbf24);
-    expect(director.getPressureBeat(264_000).objective).toContain('marked conduit');
+    expect(director.getPressureBeat(264_000).objective).toContain('Guard, Mark, or Ailment payoff');
   });
 
   test('pressure beat snapshots expire cleanly after their duration', () => {

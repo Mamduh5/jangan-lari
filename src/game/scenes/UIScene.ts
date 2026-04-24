@@ -275,6 +275,9 @@ export class UIScene extends Phaser.Scene {
     const pressureBeatActive = Boolean(this.registry.get('run.pressureBeatActive'));
     const pressureBeatLabel = String(this.registry.get('run.pressureBeatLabel') ?? '');
     const pressureBeatObjective = String(this.registry.get('run.pressureBeatObjective') ?? '');
+    const eventStatus = String(this.registry.get('run.eventTargetStatus') ?? 'inactive');
+    const eventTitle = String(this.registry.get('run.eventTitle') ?? '');
+    const eventObjective = String(this.registry.get('run.eventObjective') ?? '');
     const bossHp = Number(this.registry.get('run.bossHp') ?? 0);
     const bossMaxHp = Number(this.registry.get('run.bossMaxHp') ?? 0);
     const bossProtectors = Number(this.registry.get('run.bossProtectors') ?? 0);
@@ -307,11 +310,13 @@ export class UIScene extends Phaser.Scene {
     this.objectiveText.setText(
       bossActive
         ? `${bossName} ${Math.max(0, Math.round(bossHp))}/${Math.max(1, Math.round(bossMaxHp))} | Escorts ${bossProtectors} | ${bossProtected ? 'Protected' : 'Vulnerable'}`
+        : eventStatus !== 'inactive' && eventObjective
+          ? `${eventTitle}: ${eventObjective}`
         : pressureBeatActive
           ? `${pressureBeatLabel}: ${pressureBeatObjective}`
           : bossObjective || 'Gather XP, shape a lane, and lock in before the boss.',
     );
-    this.objectiveText.setStyle(this.getObjectiveStyle({ bossActive, bossProtected, pressureBeatActive }));
+    this.objectiveText.setStyle(this.getObjectiveStyle({ bossActive, bossProtected, pressureBeatActive, eventStatus }));
 
     this.traitText.setText(`Traits: ${traits.length > 0 ? traits.join(' | ') : 'None yet'}`);
     this.supportText.setText(`Support Slot: ${supportName === 'Locked' ? 'Locked' : supportName}`);
@@ -361,7 +366,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0);
     this.levelUpHint = this.add
-      .text(GAME_WIDTH / 2, 506, '1 / 2 / 3 choose • Left / Right move focus • Enter confirms highlighted reward', {
+      .text(GAME_WIDTH / 2, 506, '1 / 2 / 3 choose | Left / Right move focus | Enter confirms highlighted reward', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#93c5fd',
@@ -496,7 +501,7 @@ export class UIScene extends Phaser.Scene {
 
       this.levelUpCards[index].setVisible(true);
       this.levelUpCards[index].setInteractive({ useHandCursor: true });
-      this.levelUpLaneTags[index].setVisible(true).setText(`${this.getLaneLabel(reward.lane)} • ${this.getCategoryLabel(reward.category)}`);
+      this.levelUpLaneTags[index].setVisible(true).setText(`${this.getLaneLabel(reward.lane)} | ${this.getCategoryLabel(reward.category)}`);
       this.levelUpLaneTags[index].setStyle({
         color: reward.lane === 'stabilize' ? '#052e16' : '#0f172a',
         backgroundColor: this.getLaneHex(reward.lane),
@@ -657,11 +662,25 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
-  private getObjectiveStyle(options: { bossActive: boolean; bossProtected: boolean; pressureBeatActive: boolean }): Phaser.Types.GameObjects.Text.TextStyle {
+  private getObjectiveStyle(options: {
+    bossActive: boolean;
+    bossProtected: boolean;
+    pressureBeatActive: boolean;
+    eventStatus: string;
+  }): Phaser.Types.GameObjects.Text.TextStyle {
     if (options.bossActive) {
       return options.bossProtected
         ? { color: '#dbeafe', backgroundColor: '#1e3a8a' }
         : { color: '#dcfce7', backgroundColor: '#14532d' };
+    }
+    if (options.eventStatus === 'active') {
+      return { color: '#fef3c7', backgroundColor: '#713f12' };
+    }
+    if (options.eventStatus === 'broken') {
+      return { color: '#dcfce7', backgroundColor: '#14532d' };
+    }
+    if (options.eventStatus === 'failed') {
+      return { color: '#fee2e2', backgroundColor: '#7f1d1d' };
     }
     if (options.pressureBeatActive) {
       return { color: '#fef3c7', backgroundColor: '#78350f' };

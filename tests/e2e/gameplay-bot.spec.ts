@@ -43,6 +43,16 @@ type Snapshot = {
     bossName: string;
     bossObjective: string;
     pressureBeat: { active: boolean; id: string; label: string; objective: string; remainingMs: number };
+    event: {
+      active: boolean;
+      type: 'challenge-wave' | 'reward-target' | 'state-break' | '';
+      title: string;
+      objective: string;
+      remainingMs: number;
+      targetStatus: 'inactive' | 'active' | 'broken' | 'failed';
+      rewardTargetSuccesses: number;
+      rewardTargetFailures: number;
+    };
     enemies: Array<{
       id?: string;
       distance: number;
@@ -584,6 +594,75 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
         eventTargetCount: 1,
       },
     ]);
+  });
+
+  test('state-break execution target resolves from each hero payoff path', async ({ page }) => {
+    test.setTimeout(45_000);
+
+    for (const hero of ['runner', 'shade', 'weaver'] as const) {
+      await page.goto('/');
+      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+      await clickCanvasPosition(page, getHeroCardX(hero), 382);
+      await clickCanvasPosition(page, 560, 82);
+      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+      const event = await page.evaluate((selectedHero) => {
+        const game = window.__JANGAN_LARI_GAME__!;
+        const runScene = game.scene.getScene('RunScene') as {
+          runElapsedMs: number;
+          player: { x: number; y: number };
+          spawnEnemyWave: () => void;
+          attemptAbilityUse: (time: number) => void;
+          combatStates: {
+            gainGuard: (amount: number) => void;
+            applyMark: (enemy: { applyMark: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+            applyDisrupted: (enemy: { applyDisrupted: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+            applyAilment: (enemy: { applyAilment: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+          };
+          enemies: {
+            getChildren: () => Array<{
+              x: number;
+              y: number;
+              isEventMarked: () => boolean;
+              body?: { reset?: (x: number, y: number) => void };
+            }>;
+          };
+          getGameplayBotSnapshot: () => NonNullable<Snapshot['run']>;
+        };
+
+        [180_000, 222_000, 264_000].forEach((elapsedMs) => {
+          runScene.runElapsedMs = elapsedMs;
+          runScene.spawnEnemyWave();
+        });
+        const target = runScene.enemies.getChildren().find((enemy) => enemy.isEventMarked());
+        if (!target) {
+          throw new Error('State-break target did not spawn.');
+        }
+
+        const offsetX = selectedHero === 'runner' ? 92 : selectedHero === 'shade' ? 165 : 112;
+        target.x = runScene.player.x + offsetX;
+        target.y = runScene.player.y;
+        target.body?.reset?.(target.x, target.y);
+
+        if (selectedHero === 'runner') {
+          runScene.combatStates.gainGuard(16);
+          runScene.combatStates.applyDisrupted(target as never, game.loop.time, 2400);
+        } else if (selectedHero === 'shade') {
+          runScene.combatStates.applyMark(target as never, game.loop.time, 2400);
+        } else {
+          runScene.combatStates.applyAilment(target as never, game.loop.time, 2400);
+        }
+
+        runScene.attemptAbilityUse(game.loop.time);
+        return runScene.getGameplayBotSnapshot().event;
+      }, hero);
+
+      expect(event.type).toBe('state-break');
+      expect(event.active).toBe(false);
+      expect(event.targetStatus, `${hero} should break the state target`).toBe('broken');
+      expect(event.rewardTargetSuccesses).toBeGreaterThanOrEqual(1);
+      expect(event.rewardTargetFailures).toBe(0);
+    }
   });
 
   test('forced late-run evolution and Behemoth encounter appear together on the live snapshot path', async ({ page }) => {

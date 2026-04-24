@@ -44,6 +44,9 @@ type EnemyBolt = {
   hasHitPlayer: boolean;
 };
 
+type StateBreakEventStatus = 'inactive' | 'active' | 'broken' | 'failed';
+type StateBreakReason = 'guard-slam' | 'mark-consume' | 'ailment-detonation';
+
 export class RunScene extends Phaser.Scene {
   player!: Player;
 
@@ -92,6 +95,13 @@ export class RunScene extends Phaser.Scene {
   private nextBossAddSpawnAtMs = 0;
   private bossTelegraphs: Phaser.GameObjects.Shape[] = [];
   private bossAddWaveIndex = 0;
+  private stateBreakTarget: Enemy | null = null;
+  private stateBreakStatus: StateBreakEventStatus = 'inactive';
+  private stateBreakTitle = '';
+  private stateBreakObjective = '';
+  private stateBreakUntilMs = 0;
+  private stateBreakSuccessCount = 0;
+  private stateBreakFailureCount = 0;
 
   private readonly handlePageVisibilityChange = (): void => {
     if (document.hidden && !this.isEnded && !this.isLevelingUp) {
@@ -142,6 +152,13 @@ export class RunScene extends Phaser.Scene {
     this.nextBossAddSpawnAtMs = 0;
     this.bossTelegraphs = [];
     this.bossAddWaveIndex = 0;
+    this.stateBreakTarget = null;
+    this.stateBreakStatus = 'inactive';
+    this.stateBreakTitle = '';
+    this.stateBreakObjective = '';
+    this.stateBreakUntilMs = 0;
+    this.stateBreakSuccessCount = 0;
+    this.stateBreakFailureCount = 0;
 
     this.cameras.main.setBackgroundColor('#111827');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -241,6 +258,7 @@ export class RunScene extends Phaser.Scene {
     this.player.move(this.readMovementInput());
     this.attemptAbilityUse(time);
     this.updateBossEncounter(time);
+    this.updateStateBreakEvent();
     this.updateEnemies(time);
     this.spawnIfDue(time);
 
@@ -296,6 +314,12 @@ export class RunScene extends Phaser.Scene {
       const enemy = this.spawnEnemy(archetype, index, result.wave.length);
       if (result.eventTargetIndex !== null && index === result.eventTargetIndex) {
         enemy.setEventMarker(result.eventTargetColor ?? 0xfbbf24);
+        if (result.eventType === 'state-break') {
+          this.beginStateBreakEvent(enemy, {
+            title: result.eventTitle,
+            objective: result.eventObjective,
+          });
+        }
       }
     });
     this.nextSpawnAtMs = this.time.now + this.getSpawnIntervalMs();
@@ -393,6 +417,14 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.pressureBeatLabel', pressureBeat.label);
     this.registry.set('run.pressureBeatObjective', pressureBeat.objective);
     this.registry.set('run.pressureBeatRemainingMs', pressureBeat.remainingMs);
+    this.registry.set('run.eventActive', this.stateBreakStatus === 'active');
+    this.registry.set('run.eventType', this.stateBreakStatus === 'inactive' ? '' : 'state-break');
+    this.registry.set('run.eventTitle', this.stateBreakTitle);
+    this.registry.set('run.eventObjective', this.getStateBreakObjectiveText());
+    this.registry.set('run.eventRemainingMs', this.getStateBreakRemainingMs());
+    this.registry.set('run.eventTargetStatus', this.stateBreakStatus);
+    this.registry.set('run.eventSuccesses', this.stateBreakSuccessCount);
+    this.registry.set('run.eventFailures', this.stateBreakFailureCount);
     this.registry.set('run.supportName', support?.name ?? 'Locked');
     this.registry.set('run.weaponNames', [primary.name, signature.name]);
     this.registry.set('run.abilityLabels', [
@@ -501,15 +533,16 @@ export class RunScene extends Phaser.Scene {
         highlight: this.spawnDirector.getLastWaveTemplateHighlight(),
       },
       event: {
-        active: false,
-        type: '',
-        title: '',
-        objective: '',
-        remainingMs: 0,
+        active: this.stateBreakStatus === 'active',
+        type: this.stateBreakStatus === 'inactive' ? '' : 'state-break',
+        title: this.stateBreakTitle,
+        objective: this.getStateBreakObjectiveText(),
+        remainingMs: this.getStateBreakRemainingMs(),
+        targetStatus: this.stateBreakStatus,
         challengeWaveSuccesses: 0,
         challengeWaveFailures: 0,
-        rewardTargetSuccesses: 0,
-        rewardTargetFailures: 0,
+        rewardTargetSuccesses: this.stateBreakSuccessCount,
+        rewardTargetFailures: this.stateBreakFailureCount,
       },
       combatResponse: {
         hitStopStarts: 0,
@@ -600,6 +633,8 @@ export class RunScene extends Phaser.Scene {
         return;
       }
 
+      const activeStateBreakTarget = this.getActiveStateBreakTarget();
+      const stateBreakTargetWasAilmented = Boolean(activeStateBreakTarget?.isAilmented(currentTime));
       const result = this.abilityResolver.tryUseAbility('signature', signature, currentTime);
       if (result.used) {
         this.abilityLoadout.commitUse('signature', currentTime);
@@ -631,8 +666,227 @@ export class RunScene extends Phaser.Scene {
             currentTime,
           );
         }
+        this.resolveStateBreakFromSignature(result, {
+          targetBeforeUse: activeStateBreakTarget,
+          targetWasAilmented: stateBreakTargetWasAilmented,
+          currentTime,
+        });
       }
     }
+  }
+
+  private beginStateBreakEvent(enemy: Enemy, options: { title: string; objective: string }): void {
+    this.stateBreakTarget = enemy;
+    this.stateBreakStatus = 'active';
+    this.stateBreakTitle = options.title || 'State Break';
+    this.stateBreakObjective = options.objective || 'Break the pressure target with a hero payoff.';
+    this.stateBreakUntilMs = this.runElapsedMs + 16_000;
+
+    const pulse = this.add.circle(enemy.x, enemy.y, 18, 0xfbbf24, 0.18).setDepth(8);
+    pulse.setStrokeStyle(4, 0xfef08a, 0.96);
+    this.tweens.add({
+      targets: pulse,
+      radius: Math.max(78, enemy.width * 1.8),
+      alpha: 0,
+      duration: 420,
+      ease: 'Quad.Out',
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
+  private updateStateBreakEvent(): void {
+    if (this.stateBreakStatus !== 'active') {
+      return;
+    }
+
+    const target = this.getActiveStateBreakTarget();
+    if (!target) {
+      this.resolveStateBreakFailure('Target escaped.');
+      return;
+    }
+
+    if (this.runElapsedMs >= this.stateBreakUntilMs) {
+      this.resolveStateBreakFailure('Conduit hardened.');
+    }
+  }
+
+  private resolveStateBreakFromSignature(
+    result: { signatureHit?: { target: Enemy; consumedMark: boolean } | null; ailmentConsumes?: number },
+    options: {
+      targetBeforeUse: Enemy | null;
+      targetWasAilmented: boolean;
+      currentTime: number;
+    },
+  ): void {
+    const target = options.targetBeforeUse;
+    if (this.stateBreakStatus !== 'active' || !target || target !== this.stateBreakTarget) {
+      return;
+    }
+
+    if (this.selectedHero.id === 'runner' && this.isStateBreakTargetInsideRunnerPayoff(target)) {
+      this.resolveStateBreakSuccess('guard-slam');
+      return;
+    }
+
+    if (
+      this.selectedHero.id === 'shade' &&
+      result.signatureHit?.target === target &&
+      result.signatureHit.consumedMark
+    ) {
+      this.resolveStateBreakSuccess('mark-consume');
+      return;
+    }
+
+    if (
+      this.selectedHero.id === 'weaver' &&
+      options.targetWasAilmented &&
+      !target.isAilmented(options.currentTime) &&
+      (result.ailmentConsumes ?? 0) > 0
+    ) {
+      this.resolveStateBreakSuccess('ailment-detonation');
+    }
+  }
+
+  private resolveStateBreakSuccess(reason: StateBreakReason): void {
+    if (this.stateBreakStatus !== 'active') {
+      return;
+    }
+
+    const target = this.stateBreakTarget?.active ? this.stateBreakTarget : null;
+    this.stateBreakStatus = 'broken';
+    this.stateBreakSuccessCount += 1;
+    this.stateBreakObjective = this.getStateBreakSuccessText(reason);
+    this.stateBreakUntilMs = this.runElapsedMs;
+    this.spawnDirector.clearPressureBeat();
+
+    if (target) {
+      target.setEventMarker(0x4ade80);
+      this.dropStateBreakXpBurst(target);
+      const burst = this.add.circle(target.x, target.y, 20, 0x4ade80, 0.18).setDepth(9);
+      burst.setStrokeStyle(4, 0xdcfce7, 0.95);
+      this.tweens.add({
+        targets: burst,
+        radius: 96,
+        alpha: 0,
+        duration: 320,
+        ease: 'Quad.Out',
+        onComplete: () => burst.destroy(),
+      });
+      this.time.delayedCall(900, () => {
+        if (target.active && this.stateBreakStatus === 'broken') {
+          target.setEventMarker(null);
+        }
+      });
+    }
+
+    this.player.heal(6);
+    const gained = this.combatStates.gainGuardTx(4).value;
+    this.traitRuntime.notifyGuardGain(this.time.now, gained);
+    this.abilityLoadout.reduceCooldown('signature', 600, this.time.now);
+    this.cameras.main.shake(80, 0.0018);
+    this.publishHudState();
+  }
+
+  private resolveStateBreakFailure(message: string): void {
+    if (this.stateBreakStatus !== 'active') {
+      return;
+    }
+
+    const target = this.getActiveStateBreakTarget();
+    this.stateBreakStatus = 'failed';
+    this.stateBreakFailureCount += 1;
+    this.stateBreakObjective = `${message} Reinforcements incoming.`;
+    this.stateBreakUntilMs = this.runElapsedMs;
+
+    if (target) {
+      target.setEventMarker(0xef4444);
+      this.spawnStateBreakFailureAdds(target);
+      const flare = this.add.circle(target.x, target.y, 22, 0xef4444, 0.16).setDepth(8);
+      flare.setStrokeStyle(4, 0xfee2e2, 0.9);
+      this.tweens.add({
+        targets: flare,
+        radius: 84,
+        alpha: 0,
+        duration: 300,
+        ease: 'Quad.Out',
+        onComplete: () => flare.destroy(),
+      });
+      this.time.delayedCall(900, () => {
+        if (target.active && this.stateBreakStatus === 'failed') {
+          target.setEventMarker(null);
+        }
+      });
+    }
+
+    this.publishHudState();
+  }
+
+  private getActiveStateBreakTarget(): Enemy | null {
+    if (this.stateBreakStatus !== 'active' || !this.stateBreakTarget?.active || !this.stateBreakTarget.isAlive()) {
+      return null;
+    }
+
+    return this.stateBreakTarget;
+  }
+
+  private isStateBreakTargetInsideRunnerPayoff(target: Enemy): boolean {
+    if (this.selectedEvolutionId === 'reckoner-drive') {
+      return Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y) <= 420;
+    }
+
+    return Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y) <= 170;
+  }
+
+  private getStateBreakSuccessText(reason: StateBreakReason): string {
+    switch (reason) {
+      case 'guard-slam':
+        return 'State Break: Guard slam shattered the conduit. Pressure relieved.';
+      case 'mark-consume':
+        return 'State Break: Mark execution broke the conduit. Pressure relieved.';
+      case 'ailment-detonation':
+      default:
+        return 'State Break: Ailment detonation broke the conduit. Pressure relieved.';
+    }
+  }
+
+  private getStateBreakObjectiveText(): string {
+    if (this.stateBreakStatus === 'active') {
+      return `${this.stateBreakObjective} ${Math.ceil(this.getStateBreakRemainingMs() / 1000)}s`;
+    }
+    return this.stateBreakObjective;
+  }
+
+  private getStateBreakRemainingMs(): number {
+    if (this.stateBreakStatus !== 'active') {
+      return 0;
+    }
+
+    return Math.max(0, this.stateBreakUntilMs - this.runElapsedMs);
+  }
+
+  private dropStateBreakXpBurst(target: Enemy): void {
+    const offsets = [
+      new Phaser.Math.Vector2(0, -28),
+      new Phaser.Math.Vector2(-26, 18),
+      new Phaser.Math.Vector2(26, 18),
+    ];
+
+    offsets.forEach((offset) => {
+      const gem = new XPGem(this, target.x + offset.x, target.y + offset.y, 8);
+      this.xpGems.add(gem);
+      this.xpGemSpawnCount += 1;
+    });
+  }
+
+  private spawnStateBreakFailureAdds(target: Enemy): void {
+    const addArchetypes = [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.shooter];
+    addArchetypes.forEach((archetype, index) => {
+      const angle = (Math.PI * 2 * index) / addArchetypes.length;
+      const x = Phaser.Math.Clamp(target.x + Math.cos(angle) * 96, 90, WORLD_WIDTH - 90);
+      const y = Phaser.Math.Clamp(target.y + Math.sin(angle) * 96, 90, WORLD_HEIGHT - 90);
+      const enemy = new Enemy(this, x, y, archetype);
+      this.enemies.add(enemy);
+    });
   }
 
   private updateEnemies(currentTime: number): void {
@@ -1091,6 +1345,7 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    this.clearStateBreakEvent();
     (this.enemies.getChildren() as Enemy[]).forEach((enemy) => {
       if (enemy.active) {
         enemy.despawnSilently();
@@ -1172,5 +1427,16 @@ export class RunScene extends Phaser.Scene {
     this.enemyBolts = [];
     this.bossTelegraphs.forEach((shape) => shape.destroy());
     this.bossTelegraphs = [];
+  }
+
+  private clearStateBreakEvent(): void {
+    if (this.stateBreakTarget?.active) {
+      this.stateBreakTarget.setEventMarker(null);
+    }
+    this.stateBreakTarget = null;
+    this.stateBreakStatus = 'inactive';
+    this.stateBreakTitle = '';
+    this.stateBreakObjective = '';
+    this.stateBreakUntilMs = 0;
   }
 }

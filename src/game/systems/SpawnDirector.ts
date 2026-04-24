@@ -13,6 +13,9 @@ type WaveTemplate = {
   label: string;
   wave: EnemyArchetype[];
   pressureBeat?: PressureBeatDefinition;
+  eventType?: 'state-break';
+  eventTitle?: string;
+  eventObjective?: string;
   eventTargetIndex?: number;
   eventTargetColor?: number;
 };
@@ -27,6 +30,9 @@ export type SpawnWaveResult = {
   templateId: string;
   templateLabel: string;
   templateHighlight: boolean;
+  eventType: 'state-break' | null;
+  eventTitle: string;
+  eventObjective: string;
   eventTargetIndex: number | null;
   eventTargetColor: number | null;
 };
@@ -99,10 +105,13 @@ const EXECUTION_WINDOW_TEMPLATE: WaveTemplate = {
   id: 'execution-window',
   label: 'Execution Window',
   wave: [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.hexcaster, ENEMY_ARCHETYPES.shooter],
+  eventType: 'state-break',
+  eventTitle: 'State Break',
+  eventObjective: 'Break the conduit with a hero payoff before it calls reinforcements.',
   pressureBeat: {
     id: 'execution-window',
     label: 'Execution Window',
-    objective: 'Break the marked conduit before the shell hardens around it.',
+    objective: 'Break the conduit with Guard, Mark, or Ailment payoff before the shell hardens.',
     durationMs: 18000,
   },
   eventTargetIndex: 2,
@@ -370,6 +379,9 @@ export class SpawnDirector {
       templateId: template.id,
       templateLabel: template.label,
       templateHighlight: Boolean(template.pressureBeat),
+      eventType: template.eventType ?? null,
+      eventTitle: template.eventTitle ?? '',
+      eventObjective: template.eventObjective ?? '',
       eventTargetIndex: template.eventTargetIndex ?? null,
       eventTargetColor: template.eventTargetColor ?? null,
     };
