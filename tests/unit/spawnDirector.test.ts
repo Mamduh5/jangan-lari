@@ -9,10 +9,13 @@ describe('spawn director pressure beats', () => {
     expect(wave.templateId).toBe('ramp-check');
     expect(wave.templateHighlight).toBe(true);
     expect(wave.wave.map((enemy) => enemy.id)).toEqual(['harrier', 'shooter', 'shooter', 'swarmer']);
-    expect(wave.eventTargetIndex).toBeNull();
+    expect(wave.eventType).toBe('priority-execution');
+    expect(wave.eventTargetIndex).toBe(0);
+    expect(wave.eventTargetColor).toBe(0xfef08a);
     expect(director.getPressureBeat(102_000)).toMatchObject({
       active: true,
       id: 'ramp-check',
+      type: 'priority-execution',
       label: 'Ramp Check',
     });
   });
@@ -24,7 +27,13 @@ describe('spawn director pressure beats', () => {
 
     expect(wave.templateId).toBe('stabilize-pocket');
     expect(wave.wave.map((enemy) => enemy.id)).toEqual(['anchor', 'shooter', 'swarmer', 'swarmer']);
-    expect(director.getPressureBeat(156_000).objective).toContain('recover space');
+    expect(wave.eventType).toBe('stabilize-collapse');
+    expect(wave.eventTargetIndex).toBe(0);
+    expect(director.getPressureBeat(156_000)).toMatchObject({
+      type: 'stabilize-collapse',
+      label: 'Stabilize Pocket',
+    });
+    expect(director.getPressureBeat(156_000).objective).toContain('messy cluster');
   });
 
   test('anti-turtle pressure beat triggers on the existing late-run path', () => {
@@ -35,10 +44,14 @@ describe('spawn director pressure beats', () => {
 
     expect(wave.templateId).toBe('bunker-break');
     expect(wave.wave.map((enemy) => enemy.id)).toEqual(['crusher', 'hexcaster', 'shooter', 'bulwark']);
+    expect(wave.eventType).toBe('hold-space');
+    expect(wave.eventTargetIndex).toBe(3);
+    expect(wave.eventTargetColor).toBe(0xfb923c);
     expect(director.getPressureBeat(222_000)).toMatchObject({
       active: true,
       id: 'bunker-break',
-      label: 'Bunker Break',
+      type: 'hold-space',
+      label: 'Hold Space',
     });
   });
 
@@ -57,6 +70,7 @@ describe('spawn director pressure beats', () => {
     expect(wave.eventTargetIndex).toBe(2);
     expect(wave.eventTargetColor).toBe(0xfbbf24);
     expect(director.getPressureBeat(264_000).objective).toContain('Guard, Mark, or Ailment payoff');
+    expect(director.getPressureBeat(264_000).type).toBe('state-break');
   });
 
   test('pressure beat snapshots expire cleanly after their duration', () => {

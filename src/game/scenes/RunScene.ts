@@ -27,7 +27,7 @@ import { AbilityLoadout } from '../systems/AbilityLoadout';
 import { AbilityResolver } from '../systems/AbilityResolver';
 import { CombatStateRuntime } from '../systems/CombatStateRuntime';
 import { LevelUpDirector } from '../systems/LevelUpDirector';
-import { SpawnDirector } from '../systems/SpawnDirector';
+import { SpawnDirector, type PressureBeatEventType } from '../systems/SpawnDirector';
 import { TraitRuntime } from '../systems/TraitRuntime';
 import { TriggerSeam } from '../systems/TriggerSeam';
 import { accumulateRunElapsedMs, calculateRunGoldReward, clearRunRegistryState, writeFreshRunRegistryState } from '../utils/runSession';
@@ -46,6 +46,9 @@ type EnemyBolt = {
 
 type StateBreakEventStatus = 'inactive' | 'active' | 'broken' | 'failed';
 type StateBreakReason = 'guard-slam' | 'mark-consume' | 'ailment-detonation';
+type PressureChallengeType = Exclude<PressureBeatEventType, 'state-break'>;
+type PressureChallengeStatus = 'inactive' | 'active' | 'completed' | 'failed';
+type PressureChallengeSuccessReason = 'held-zone' | 'target-cleared' | StateBreakReason;
 
 export class RunScene extends Phaser.Scene {
   player!: Player;
@@ -102,6 +105,15 @@ export class RunScene extends Phaser.Scene {
   private stateBreakUntilMs = 0;
   private stateBreakSuccessCount = 0;
   private stateBreakFailureCount = 0;
+  private pressureChallengeTarget: Enemy | null = null;
+  private pressureChallengeType: PressureChallengeType | null = null;
+  private pressureChallengeStatus: PressureChallengeStatus = 'inactive';
+  private pressureChallengeTitle = '';
+  private pressureChallengeObjective = '';
+  private pressureChallengeUntilMs = 0;
+  private pressureChallengeHoldMs = 0;
+  private pressureChallengeSuccessCount = 0;
+  private pressureChallengeFailureCount = 0;
 
   private readonly handlePageVisibilityChange = (): void => {
     if (document.hidden && !this.isEnded && !this.isLevelingUp) {
@@ -159,6 +171,15 @@ export class RunScene extends Phaser.Scene {
     this.stateBreakUntilMs = 0;
     this.stateBreakSuccessCount = 0;
     this.stateBreakFailureCount = 0;
+    this.pressureChallengeTarget = null;
+    this.pressureChallengeType = null;
+    this.pressureChallengeStatus = 'inactive';
+    this.pressureChallengeTitle = '';
+    this.pressureChallengeObjective = '';
+    this.pressureChallengeUntilMs = 0;
+    this.pressureChallengeHoldMs = 0;
+    this.pressureChallengeSuccessCount = 0;
+    this.pressureChallengeFailureCount = 0;
 
     this.cameras.main.setBackgroundColor('#111827');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -259,6 +280,7 @@ export class RunScene extends Phaser.Scene {
     this.attemptAbilityUse(time);
     this.updateBossEncounter(time);
     this.updateStateBreakEvent();
+    this.updatePressureChallengeEvent(activeDelta);
     this.updateEnemies(time);
     this.spawnIfDue(time);
 
@@ -315,9 +337,17 @@ export class RunScene extends Phaser.Scene {
       if (result.eventTargetIndex !== null && index === result.eventTargetIndex) {
         enemy.setEventMarker(result.eventTargetColor ?? 0xfbbf24);
         if (result.eventType === 'state-break') {
+          this.clearPressureChallengeEvent();
           this.beginStateBreakEvent(enemy, {
             title: result.eventTitle,
             objective: result.eventObjective,
+          });
+        } else if (result.eventType) {
+          this.beginPressureChallengeEvent(enemy, {
+            type: result.eventType,
+            title: result.eventTitle,
+            objective: result.eventObjective,
+            durationMs: result.eventDurationMs,
           });
         }
       }
@@ -417,14 +447,14 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.pressureBeatLabel', pressureBeat.label);
     this.registry.set('run.pressureBeatObjective', pressureBeat.objective);
     this.registry.set('run.pressureBeatRemainingMs', pressureBeat.remainingMs);
-    this.registry.set('run.eventActive', this.stateBreakStatus === 'active');
-    this.registry.set('run.eventType', this.stateBreakStatus === 'inactive' ? '' : 'state-break');
-    this.registry.set('run.eventTitle', this.stateBreakTitle);
-    this.registry.set('run.eventObjective', this.getStateBreakObjectiveText());
-    this.registry.set('run.eventRemainingMs', this.getStateBreakRemainingMs());
-    this.registry.set('run.eventTargetStatus', this.stateBreakStatus);
-    this.registry.set('run.eventSuccesses', this.stateBreakSuccessCount);
-    this.registry.set('run.eventFailures', this.stateBreakFailureCount);
+    this.registry.set('run.eventActive', this.getEventActive());
+    this.registry.set('run.eventType', this.getEventType());
+    this.registry.set('run.eventTitle', this.getEventTitle());
+    this.registry.set('run.eventObjective', this.getEventObjectiveText());
+    this.registry.set('run.eventRemainingMs', this.getEventRemainingMs());
+    this.registry.set('run.eventTargetStatus', this.getEventTargetStatus());
+    this.registry.set('run.eventSuccesses', this.getEventSuccessCount());
+    this.registry.set('run.eventFailures', this.getEventFailureCount());
     this.registry.set('run.supportName', support?.name ?? 'Locked');
     this.registry.set('run.weaponNames', [primary.name, signature.name]);
     this.registry.set('run.abilityLabels', [
@@ -533,14 +563,14 @@ export class RunScene extends Phaser.Scene {
         highlight: this.spawnDirector.getLastWaveTemplateHighlight(),
       },
       event: {
-        active: this.stateBreakStatus === 'active',
-        type: this.stateBreakStatus === 'inactive' ? '' : 'state-break',
-        title: this.stateBreakTitle,
-        objective: this.getStateBreakObjectiveText(),
-        remainingMs: this.getStateBreakRemainingMs(),
-        targetStatus: this.stateBreakStatus,
-        challengeWaveSuccesses: 0,
-        challengeWaveFailures: 0,
+        active: this.getEventActive(),
+        type: this.getEventType(),
+        title: this.getEventTitle(),
+        objective: this.getEventObjectiveText(),
+        remainingMs: this.getEventRemainingMs(),
+        targetStatus: this.getEventTargetStatus(),
+        challengeWaveSuccesses: this.pressureChallengeSuccessCount,
+        challengeWaveFailures: this.pressureChallengeFailureCount,
         rewardTargetSuccesses: this.stateBreakSuccessCount,
         rewardTargetFailures: this.stateBreakFailureCount,
       },
@@ -635,6 +665,8 @@ export class RunScene extends Phaser.Scene {
 
       const activeStateBreakTarget = this.getActiveStateBreakTarget();
       const stateBreakTargetWasAilmented = Boolean(activeStateBreakTarget?.isAilmented(currentTime));
+      const activePressureChallengeTarget = this.getActivePressureChallengeTarget();
+      const pressureChallengeTargetWasAilmented = Boolean(activePressureChallengeTarget?.isAilmented(currentTime));
       const result = this.abilityResolver.tryUseAbility('signature', signature, currentTime);
       if (result.used) {
         this.abilityLoadout.commitUse('signature', currentTime);
@@ -669,6 +701,11 @@ export class RunScene extends Phaser.Scene {
         this.resolveStateBreakFromSignature(result, {
           targetBeforeUse: activeStateBreakTarget,
           targetWasAilmented: stateBreakTargetWasAilmented,
+          currentTime,
+        });
+        this.resolvePressureChallengeFromSignature(result, {
+          targetBeforeUse: activePressureChallengeTarget,
+          targetWasAilmented: pressureChallengeTargetWasAilmented,
           currentTime,
         });
       }
@@ -913,6 +950,351 @@ export class RunScene extends Phaser.Scene {
     }
 
     return Math.max(0, this.stateBreakUntilMs - this.runElapsedMs);
+  }
+
+  private beginPressureChallengeEvent(
+    enemy: Enemy,
+    options: { type: PressureChallengeType; title: string; objective: string; durationMs: number },
+  ): void {
+    this.clearPressureChallengeEvent();
+    this.pressureChallengeTarget = enemy;
+    this.pressureChallengeType = options.type;
+    this.pressureChallengeStatus = 'active';
+    this.pressureChallengeTitle = options.title || this.getPressureChallengeDefaultTitle(options.type);
+    this.pressureChallengeObjective = options.objective || this.getPressureChallengeDefaultObjective(options.type);
+    this.pressureChallengeUntilMs = this.runElapsedMs + (options.durationMs || 16_000);
+    this.pressureChallengeHoldMs = 0;
+
+    const color = this.getPressureChallengeColor(options.type);
+    const pulse = this.add.circle(enemy.x, enemy.y, 20, color, 0.18).setDepth(8.8);
+    pulse.setStrokeStyle(4, 0xfffbeb, 0.86);
+    this.tweens.add({
+      targets: pulse,
+      radius: options.type === 'hold-space' ? 150 : Math.max(82, enemy.width * 2),
+      alpha: 0,
+      duration: 430,
+      ease: 'Quad.Out',
+      onComplete: () => pulse.destroy(),
+    });
+  }
+
+  private updatePressureChallengeEvent(deltaMs: number): void {
+    if (this.pressureChallengeStatus !== 'active') {
+      return;
+    }
+
+    const target = this.getActivePressureChallengeTarget();
+    if (!target) {
+      this.resolvePressureChallengeSuccess('target-cleared');
+      return;
+    }
+
+    if (this.pressureChallengeType === 'hold-space') {
+      const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y);
+      if (distance <= 150) {
+        this.pressureChallengeHoldMs += deltaMs;
+        if (this.pressureChallengeHoldMs >= 3200) {
+          this.resolvePressureChallengeSuccess('held-zone');
+          return;
+        }
+      } else {
+        this.pressureChallengeHoldMs = Math.max(0, this.pressureChallengeHoldMs - deltaMs * 0.45);
+      }
+    }
+
+    if (this.runElapsedMs >= this.pressureChallengeUntilMs) {
+      this.resolvePressureChallengeFailure();
+    }
+  }
+
+  private resolvePressureChallengeFromSignature(
+    result: { signatureHit?: { target: Enemy; consumedMark: boolean; killed: boolean } | null; ailmentConsumes?: number },
+    options: {
+      targetBeforeUse: Enemy | null;
+      targetWasAilmented: boolean;
+      currentTime: number;
+    },
+  ): void {
+    const target = options.targetBeforeUse;
+    if (this.pressureChallengeStatus !== 'active' || !this.pressureChallengeType || !target || target !== this.pressureChallengeTarget) {
+      if (
+        this.pressureChallengeStatus === 'active' &&
+        this.pressureChallengeType === 'stabilize-collapse' &&
+        this.selectedHero.id === 'weaver' &&
+        (result.ailmentConsumes ?? 0) >= 2
+      ) {
+        this.resolvePressureChallengeSuccess('ailment-detonation');
+      }
+      return;
+    }
+
+    if (this.selectedHero.id === 'runner' && this.isPressureChallengeTargetInsideRunnerPayoff(target)) {
+      this.resolvePressureChallengeSuccess('guard-slam');
+      return;
+    }
+
+    if (this.selectedHero.id === 'shade' && result.signatureHit?.target === target && result.signatureHit.consumedMark) {
+      this.resolvePressureChallengeSuccess('mark-consume');
+      return;
+    }
+
+    if (
+      this.selectedHero.id === 'weaver' &&
+      ((options.targetWasAilmented && !target.isAilmented(options.currentTime) && (result.ailmentConsumes ?? 0) > 0) ||
+        (this.pressureChallengeType === 'stabilize-collapse' && (result.ailmentConsumes ?? 0) >= 2))
+    ) {
+      this.resolvePressureChallengeSuccess('ailment-detonation');
+    }
+  }
+
+  private resolvePressureChallengeSuccess(reason: PressureChallengeSuccessReason): void {
+    if (this.pressureChallengeStatus !== 'active') {
+      return;
+    }
+
+    const target = this.pressureChallengeTarget?.active ? this.pressureChallengeTarget : null;
+    this.pressureChallengeStatus = 'completed';
+    this.pressureChallengeSuccessCount += 1;
+    this.pressureChallengeObjective = this.getPressureChallengeSuccessText(reason);
+    this.pressureChallengeUntilMs = this.runElapsedMs;
+    this.spawnDirector.clearPressureBeat();
+
+    if (target) {
+      target.setEventMarker(0x4ade80);
+      target.playPayoffReaction('state-break');
+      this.playPressureChallengeResolveCue(target, 0x4ade80, 0xdcfce7);
+      this.dropPressureChallengeReliefBurst(target);
+      this.time.delayedCall(850, () => {
+        if (target.active && this.pressureChallengeStatus === 'completed') {
+          target.setEventMarker(null);
+        }
+      });
+    }
+
+    this.player.heal(3);
+    const gained = this.combatStates.gainGuardTx(2).value;
+    this.traitRuntime.notifyGuardGain(this.time.now, gained);
+    this.abilityLoadout.reduceCooldown('signature', 280, this.time.now);
+    this.cameras.main.shake(55, 0.0012);
+    this.publishHudState();
+  }
+
+  private resolvePressureChallengeFailure(): void {
+    if (this.pressureChallengeStatus !== 'active') {
+      return;
+    }
+
+    const target = this.getActivePressureChallengeTarget();
+    this.pressureChallengeStatus = 'failed';
+    this.pressureChallengeFailureCount += 1;
+    this.pressureChallengeObjective = `${this.pressureChallengeTitle || 'Pressure beat'} failed. Controlled pressure incoming.`;
+    this.pressureChallengeUntilMs = this.runElapsedMs;
+
+    if (target) {
+      target.setEventMarker(0xef4444);
+      this.playPressureChallengeResolveCue(target, 0xef4444, 0xfee2e2);
+      this.spawnPressureChallengeFailureAdds(target, this.pressureChallengeType);
+      this.time.delayedCall(850, () => {
+        if (target.active && this.pressureChallengeStatus === 'failed') {
+          target.setEventMarker(null);
+        }
+      });
+    }
+
+    this.publishHudState();
+  }
+
+  private getActivePressureChallengeTarget(): Enemy | null {
+    if (this.pressureChallengeStatus !== 'active' || !this.pressureChallengeTarget?.active || !this.pressureChallengeTarget.isAlive()) {
+      return null;
+    }
+
+    return this.pressureChallengeTarget;
+  }
+
+  private isPressureChallengeTargetInsideRunnerPayoff(target: Enemy): boolean {
+    if (this.selectedEvolutionId === 'reckoner-drive') {
+      return Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y) <= 420;
+    }
+
+    return Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y) <= 170;
+  }
+
+  private getPressureChallengeObjectiveText(): string {
+    if (this.pressureChallengeStatus === 'active') {
+      const remaining = `${Math.ceil(this.getPressureChallengeRemainingMs() / 1000)}s`;
+      if (this.pressureChallengeType === 'hold-space') {
+        const held = Math.min(3.2, this.pressureChallengeHoldMs / 1000).toFixed(1);
+        return `${this.pressureChallengeObjective} Hold ${held}/3.2s | ${remaining}`;
+      }
+      return `${this.pressureChallengeObjective} ${remaining}`;
+    }
+    return this.pressureChallengeObjective;
+  }
+
+  private getPressureChallengeRemainingMs(): number {
+    if (this.pressureChallengeStatus !== 'active') {
+      return 0;
+    }
+
+    return Math.max(0, this.pressureChallengeUntilMs - this.runElapsedMs);
+  }
+
+  private getPressureChallengeDefaultTitle(type: PressureChallengeType): string {
+    switch (type) {
+      case 'hold-space':
+        return 'Hold Space';
+      case 'priority-execution':
+        return 'Priority Execution';
+      case 'stabilize-collapse':
+      default:
+        return 'Stabilize Pocket';
+    }
+  }
+
+  private getPressureChallengeDefaultObjective(type: PressureChallengeType): string {
+    switch (type) {
+      case 'hold-space':
+        return 'Stand near the breach anchor or break it with a payoff.';
+      case 'priority-execution':
+        return 'Break the ramp target before it turns the wave sharper.';
+      case 'stabilize-collapse':
+      default:
+        return 'Collapse the messy cluster before it spreads across the lane.';
+    }
+  }
+
+  private getPressureChallengeSuccessText(reason: PressureChallengeSuccessReason): string {
+    switch (reason) {
+      case 'held-zone':
+        return 'Hold Space: lane held. Pressure relieved.';
+      case 'target-cleared':
+        return `${this.pressureChallengeTitle || 'Pressure beat'}: target cleared. Pressure relieved.`;
+      case 'guard-slam':
+        return `${this.pressureChallengeTitle || 'Pressure beat'}: Guard slam broke the pressure.`;
+      case 'mark-consume':
+        return `${this.pressureChallengeTitle || 'Pressure beat'}: Mark execution cut the pressure.`;
+      case 'ailment-detonation':
+      default:
+        return `${this.pressureChallengeTitle || 'Pressure beat'}: Ailment detonation collapsed the pressure.`;
+    }
+  }
+
+  private getPressureChallengeColor(type: PressureChallengeType | null): number {
+    switch (type) {
+      case 'hold-space':
+        return 0xfb923c;
+      case 'priority-execution':
+        return 0xfef08a;
+      case 'stabilize-collapse':
+      default:
+        return 0xfb7185;
+    }
+  }
+
+  private playPressureChallengeResolveCue(target: Enemy, color: number, strokeColor: number): void {
+    const burst = this.add.circle(target.x, target.y, 18, color, 0.2).setDepth(9);
+    burst.setStrokeStyle(4, strokeColor, 0.92);
+    this.tweens.add({
+      targets: burst,
+      radius: 86,
+      alpha: 0,
+      duration: 280,
+      ease: 'Quad.Out',
+      onComplete: () => burst.destroy(),
+    });
+  }
+
+  private dropPressureChallengeReliefBurst(target: Enemy): void {
+    const offsets = [new Phaser.Math.Vector2(-18, -14), new Phaser.Math.Vector2(20, 16)];
+    offsets.forEach((offset) => {
+      const gem = new XPGem(this, target.x + offset.x, target.y + offset.y, 5);
+      this.xpGems.add(gem);
+      this.xpGemSpawnCount += 1;
+    });
+  }
+
+  private spawnPressureChallengeFailureAdds(target: Enemy, type: PressureChallengeType | null): void {
+    const addArchetypes =
+      type === 'priority-execution'
+        ? [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer]
+        : type === 'stabilize-collapse'
+          ? [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.shooter]
+          : [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.anchor];
+
+    addArchetypes.forEach((archetype, index) => {
+      const angle = (Math.PI * 2 * index) / addArchetypes.length + Math.PI / 5;
+      const x = Phaser.Math.Clamp(target.x + Math.cos(angle) * 88, 90, WORLD_WIDTH - 90);
+      const y = Phaser.Math.Clamp(target.y + Math.sin(angle) * 88, 90, WORLD_HEIGHT - 90);
+      const enemy = new Enemy(this, x, y, archetype);
+      this.enemies.add(enemy);
+    });
+  }
+
+  private clearPressureChallengeEvent(): void {
+    if (this.pressureChallengeTarget?.active) {
+      this.pressureChallengeTarget.setEventMarker(null);
+    }
+    this.pressureChallengeTarget = null;
+    this.pressureChallengeType = null;
+    this.pressureChallengeStatus = 'inactive';
+    this.pressureChallengeTitle = '';
+    this.pressureChallengeObjective = '';
+    this.pressureChallengeUntilMs = 0;
+    this.pressureChallengeHoldMs = 0;
+  }
+
+  private getEventActive(): boolean {
+    return this.stateBreakStatus === 'active' || this.pressureChallengeStatus === 'active';
+  }
+
+  private getEventType(): GameplayBotRunSnapshot['event']['type'] {
+    if (this.stateBreakStatus !== 'inactive') {
+      return 'state-break';
+    }
+    return this.pressureChallengeType ?? '';
+  }
+
+  private getEventTitle(): string {
+    if (this.stateBreakStatus !== 'inactive') {
+      return this.stateBreakTitle;
+    }
+    return this.pressureChallengeTitle;
+  }
+
+  private getEventObjectiveText(): string {
+    if (this.stateBreakStatus !== 'inactive') {
+      return this.getStateBreakObjectiveText();
+    }
+    return this.getPressureChallengeObjectiveText();
+  }
+
+  private getEventRemainingMs(): number {
+    if (this.stateBreakStatus !== 'inactive') {
+      return this.getStateBreakRemainingMs();
+    }
+    return this.getPressureChallengeRemainingMs();
+  }
+
+  private getEventTargetStatus(): GameplayBotRunSnapshot['event']['targetStatus'] {
+    if (this.stateBreakStatus !== 'inactive') {
+      return this.stateBreakStatus;
+    }
+    return this.pressureChallengeStatus;
+  }
+
+  private getEventSuccessCount(): number {
+    if (this.stateBreakStatus !== 'inactive') {
+      return this.stateBreakSuccessCount;
+    }
+    return this.pressureChallengeSuccessCount;
+  }
+
+  private getEventFailureCount(): number {
+    if (this.stateBreakStatus !== 'inactive') {
+      return this.stateBreakFailureCount;
+    }
+    return this.pressureChallengeFailureCount;
   }
 
   private dropStateBreakXpBurst(target: Enemy): void {
@@ -1397,6 +1779,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.clearStateBreakEvent();
+    this.clearPressureChallengeEvent();
     (this.enemies.getChildren() as Enemy[]).forEach((enemy) => {
       if (enemy.active) {
         enemy.despawnSilently();
@@ -1478,6 +1861,7 @@ export class RunScene extends Phaser.Scene {
     this.enemyBolts = [];
     this.bossTelegraphs.forEach((shape) => shape.destroy());
     this.bossTelegraphs = [];
+    this.clearPressureChallengeEvent();
   }
 
   private clearStateBreakEvent(): void {

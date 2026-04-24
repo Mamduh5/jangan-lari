@@ -3,17 +3,21 @@ import { ENEMY_ARCHETYPES, type EnemyArchetype } from '../data/enemies';
 
 type PressureBeatDefinition = {
   id: string;
+  type: PressureBeatType;
   label: string;
   objective: string;
   durationMs: number;
 };
+
+export type PressureBeatType = 'ambient' | 'hold-space' | 'priority-execution' | 'stabilize-collapse' | 'state-break';
+export type PressureBeatEventType = Exclude<PressureBeatType, 'ambient'>;
 
 type WaveTemplate = {
   id: string;
   label: string;
   wave: EnemyArchetype[];
   pressureBeat?: PressureBeatDefinition;
-  eventType?: 'state-break';
+  eventType?: PressureBeatEventType;
   eventTitle?: string;
   eventObjective?: string;
   eventTargetIndex?: number;
@@ -30,9 +34,10 @@ export type SpawnWaveResult = {
   templateId: string;
   templateLabel: string;
   templateHighlight: boolean;
-  eventType: 'state-break' | null;
+  eventType: PressureBeatEventType | null;
   eventTitle: string;
   eventObjective: string;
+  eventDurationMs: number;
   eventTargetIndex: number | null;
   eventTargetColor: number | null;
 };
@@ -40,6 +45,7 @@ export type SpawnWaveResult = {
 export type PressureBeatSnapshot = {
   active: boolean;
   id: string;
+  type: PressureBeatType | '';
   label: string;
   objective: string;
   remainingMs: number;
@@ -59,6 +65,7 @@ const MID_PRESSURE_TEMPLATE: WaveTemplate = {
   wave: [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.skimmer],
   pressureBeat: {
     id: 'mid-siege-crossfire',
+    type: 'ambient',
     label: 'Siege Crossfire',
     objective: 'Break the layered push before it boxes in your lane.',
     durationMs: 18000,
@@ -69,10 +76,16 @@ const ANTI_RAMP_TEMPLATE: WaveTemplate = {
   id: 'ramp-check',
   label: 'Ramp Check',
   wave: [ENEMY_ARCHETYPES.harrier, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.swarmer],
+  eventType: 'priority-execution',
+  eventTitle: 'Priority Execution',
+  eventObjective: 'Break the ramp target before it turns the wave sharper.',
+  eventTargetIndex: 0,
+  eventTargetColor: 0xfef08a,
   pressureBeat: {
     id: 'ramp-check',
+    type: 'priority-execution',
     label: 'Ramp Check',
-    objective: 'Collapse the early crossfire before slow engines stall out.',
+    objective: 'Execute the ramp target before it sharpens the crossfire.',
     durationMs: 16000,
   },
 };
@@ -81,22 +94,34 @@ const STABILIZE_TEMPLATE: WaveTemplate = {
   id: 'stabilize-pocket',
   label: 'Stabilize Pocket',
   wave: [ENEMY_ARCHETYPES.anchor, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer],
+  eventType: 'stabilize-collapse',
+  eventTitle: 'Stabilize Pocket',
+  eventObjective: 'Collapse the messy cluster before it spreads across the lane.',
+  eventTargetIndex: 0,
+  eventTargetColor: 0xfb7185,
   pressureBeat: {
     id: 'stabilize-pocket',
+    type: 'stabilize-collapse',
     label: 'Stabilize Pocket',
-    objective: 'Hold one clean lane and recover space before the next collapse.',
+    objective: 'Collapse the messy cluster and recover space before the next wave.',
     durationMs: 16000,
   },
 };
 
 const ANTI_TURTLE_TEMPLATE: WaveTemplate = {
   id: 'bunker-break',
-  label: 'Bunker Break',
+  label: 'Hold Space',
   wave: [ENEMY_ARCHETYPES.crusher, ENEMY_ARCHETYPES.hexcaster, ENEMY_ARCHETYPES.shooter, ENEMY_ARCHETYPES.bulwark],
+  eventType: 'hold-space',
+  eventTitle: 'Hold Space',
+  eventObjective: 'Stand near the breach anchor or break it with a payoff.',
+  eventTargetIndex: 3,
+  eventTargetColor: 0xfb923c,
   pressureBeat: {
     id: 'bunker-break',
-    label: 'Bunker Break',
-    objective: 'Keep moving through the breach. Static bunkers will get cracked.',
+    type: 'hold-space',
+    label: 'Hold Space',
+    objective: 'Hold near the breach anchor or break it with a Guard, Mark, or Ailment payoff.',
     durationMs: 18000,
   },
 };
@@ -110,6 +135,7 @@ const EXECUTION_WINDOW_TEMPLATE: WaveTemplate = {
   eventObjective: 'Break the conduit with a hero payoff before it calls reinforcements.',
   pressureBeat: {
     id: 'execution-window',
+    type: 'state-break',
     label: 'Execution Window',
     objective: 'Break the conduit with Guard, Mark, or Ailment payoff before the shell hardens.',
     durationMs: 18000,
@@ -124,6 +150,7 @@ const PRE_BOSS_TEMPLATE: WaveTemplate = {
   wave: [ENEMY_ARCHETYPES.bulwark, ENEMY_ARCHETYPES.hexcaster, ENEMY_ARCHETYPES.skimmer, ENEMY_ARCHETYPES.anchor],
   pressureBeat: {
     id: 'boss-lead-in',
+    type: 'ambient',
     label: 'Boss Lead-In',
     objective: 'Stabilize the lane before the Behemoth arrives.',
     durationMs: 18000,
@@ -304,6 +331,7 @@ export class SpawnDirector {
       return {
         active: false,
         id: '',
+        type: '',
         label: '',
         objective: '',
         remainingMs: 0,
@@ -313,6 +341,7 @@ export class SpawnDirector {
     return {
       active: true,
       id: this.activePressureBeat.id,
+      type: this.activePressureBeat.type,
       label: this.activePressureBeat.label,
       objective: this.activePressureBeat.objective,
       remainingMs: Math.max(0, this.activePressureBeat.untilMs - elapsedMs),
@@ -382,6 +411,7 @@ export class SpawnDirector {
       eventType: template.eventType ?? null,
       eventTitle: template.eventTitle ?? '',
       eventObjective: template.eventObjective ?? '',
+      eventDurationMs: template.pressureBeat?.durationMs ?? 0,
       eventTargetIndex: template.eventTargetIndex ?? null,
       eventTargetColor: template.eventTargetColor ?? null,
     };

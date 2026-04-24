@@ -42,14 +42,16 @@ type Snapshot = {
     bossProtected: boolean;
     bossName: string;
     bossObjective: string;
-    pressureBeat: { active: boolean; id: string; label: string; objective: string; remainingMs: number };
+    pressureBeat: { active: boolean; id: string; type: string; label: string; objective: string; remainingMs: number };
     event: {
       active: boolean;
-      type: 'challenge-wave' | 'reward-target' | 'state-break' | '';
+      type: 'challenge-wave' | 'reward-target' | 'state-break' | 'hold-space' | 'priority-execution' | 'stabilize-collapse' | '';
       title: string;
       objective: string;
       remainingMs: number;
-      targetStatus: 'inactive' | 'active' | 'broken' | 'failed';
+      targetStatus: 'inactive' | 'active' | 'broken' | 'completed' | 'failed';
+      challengeWaveSuccesses: number;
+      challengeWaveFailures: number;
       rewardTargetSuccesses: number;
       rewardTargetFailures: number;
     };
@@ -536,9 +538,10 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
         runElapsedMs: number;
         spawnEnemyWave: () => void;
         getGameplayBotSnapshot: () => {
-          pressureBeat: { active: boolean; id: string; label: string };
+          pressureBeat: { active: boolean; id: string; type: string; label: string };
           waveTemplate: { id: string; label: string; highlight: boolean };
           enemies: Array<{ id?: string; isEventTarget?: boolean }>;
+          event: { type: string; targetStatus: string };
         };
       };
 
@@ -550,7 +553,10 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
         return {
           elapsedMs,
           pressureId: snapshot.pressureBeat.id,
+          pressureType: snapshot.pressureBeat.type,
           templateId: snapshot.waveTemplate.id,
+          eventType: snapshot.event.type,
+          eventStatus: snapshot.event.targetStatus,
           highlight: snapshot.waveTemplate.highlight,
           eventTargetCount: snapshot.enemies.filter((enemy) => enemy.isEventTarget).length,
         };
@@ -561,35 +567,50 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
       {
         elapsedMs: 102_000,
         pressureId: 'ramp-check',
+        pressureType: 'priority-execution',
         templateId: 'ramp-check',
+        eventType: 'priority-execution',
+        eventStatus: 'active',
         highlight: true,
-        eventTargetCount: 0,
+        eventTargetCount: 1,
       },
       {
         elapsedMs: 156_000,
         pressureId: 'stabilize-pocket',
+        pressureType: 'stabilize-collapse',
         templateId: 'stabilize-pocket',
+        eventType: 'stabilize-collapse',
+        eventStatus: 'active',
         highlight: true,
-        eventTargetCount: 0,
+        eventTargetCount: 1,
       },
       {
         elapsedMs: 180_000,
         pressureId: 'mid-siege-crossfire',
+        pressureType: 'ambient',
         templateId: 'mid-siege-crossfire',
+        eventType: 'stabilize-collapse',
+        eventStatus: 'active',
         highlight: true,
-        eventTargetCount: 0,
+        eventTargetCount: 1,
       },
       {
         elapsedMs: 222_000,
         pressureId: 'bunker-break',
+        pressureType: 'hold-space',
         templateId: 'bunker-break',
+        eventType: 'hold-space',
+        eventStatus: 'active',
         highlight: true,
-        eventTargetCount: 0,
+        eventTargetCount: 1,
       },
       {
         elapsedMs: 264_000,
         pressureId: 'execution-window',
+        pressureType: 'state-break',
         templateId: 'execution-window',
+        eventType: 'state-break',
+        eventStatus: 'active',
         highlight: true,
         eventTargetCount: 1,
       },
@@ -663,6 +684,119 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
       expect(event.rewardTargetSuccesses).toBeGreaterThanOrEqual(1);
       expect(event.rewardTargetFailures).toBe(0);
     }
+  });
+
+  test('new pressure challenge beats resolve through favored payoff and failure debug paths', async ({ page }) => {
+    test.setTimeout(60_000);
+
+    const successCases = [
+      { hero: 'runner', checkpoint: 222_000, expectedType: 'hold-space' },
+      { hero: 'shade', checkpoint: 102_000, expectedType: 'priority-execution' },
+      { hero: 'weaver', checkpoint: 156_000, expectedType: 'stabilize-collapse' },
+    ] as const;
+
+    for (const entry of successCases) {
+      await page.goto('/');
+      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+      await clickCanvasPosition(page, getHeroCardX(entry.hero), 382);
+      await clickCanvasPosition(page, 560, 82);
+      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+      const event = await page.evaluate(({ hero, checkpoint }) => {
+        const game = window.__JANGAN_LARI_GAME__!;
+        const runScene = game.scene.getScene('RunScene') as {
+          runElapsedMs: number;
+          player: { x: number; y: number };
+          spawnEnemyWave: () => void;
+          attemptAbilityUse: (time: number) => void;
+          updatePressureChallengeEvent: (deltaMs: number) => void;
+          combatStates: {
+            gainGuard: (amount: number) => void;
+            applyMark: (enemy: { applyMark: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+            applyAilment: (enemy: { applyAilment: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+          };
+          enemies: {
+            getChildren: () => Array<{
+              x: number;
+              y: number;
+              isEventMarked: () => boolean;
+              body?: { reset?: (x: number, y: number) => void };
+            }>;
+          };
+          getGameplayBotSnapshot: () => NonNullable<Snapshot['run']>;
+        };
+
+        if (checkpoint === 222_000) {
+          runScene.runElapsedMs = 180_000;
+          runScene.spawnEnemyWave();
+        }
+        runScene.runElapsedMs = checkpoint;
+        runScene.spawnEnemyWave();
+
+        const enemies = runScene.enemies.getChildren();
+        const target = enemies.find((enemy) => enemy.isEventMarked());
+        if (!target) {
+          throw new Error('Pressure challenge target did not spawn.');
+        }
+
+        target.x = runScene.player.x + (hero === 'shade' ? 165 : 94);
+        target.y = runScene.player.y;
+        target.body?.reset?.(target.x, target.y);
+
+        if (hero === 'runner') {
+          runScene.combatStates.gainGuard(16);
+          runScene.updatePressureChallengeEvent(3300);
+        } else if (hero === 'shade') {
+          runScene.combatStates.applyMark(target as never, game.loop.time, 2400);
+          runScene.attemptAbilityUse(game.loop.time);
+        } else {
+          const nearby = enemies.find((enemy) => enemy !== target);
+          if (!nearby) {
+            throw new Error('Stabilize challenge needs a nearby enemy.');
+          }
+          nearby.x = target.x + 42;
+          nearby.y = target.y;
+          nearby.body?.reset?.(nearby.x, nearby.y);
+          runScene.combatStates.applyAilment(target as never, game.loop.time, 2400);
+          runScene.combatStates.applyAilment(nearby as never, game.loop.time, 2400);
+          runScene.attemptAbilityUse(game.loop.time);
+        }
+
+        return runScene.getGameplayBotSnapshot().event;
+      }, entry);
+
+      expect(event.type).toBe(entry.expectedType);
+      expect(event.active).toBe(false);
+      expect(event.targetStatus, `${entry.hero} should complete ${entry.expectedType}`).toBe('completed');
+      expect(event.challengeWaveSuccesses).toBeGreaterThanOrEqual(1);
+    }
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+    await clickCanvasPosition(page, getHeroCardX('runner'), 382);
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+    const failedEvent = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        runElapsedMs: number;
+        spawnEnemyWave: () => void;
+        updatePressureChallengeEvent: (deltaMs: number) => void;
+        getGameplayBotSnapshot: () => NonNullable<Snapshot['run']>;
+      };
+
+      runScene.runElapsedMs = 102_000;
+      runScene.spawnEnemyWave();
+      runScene.runElapsedMs = 119_000;
+      runScene.updatePressureChallengeEvent(100);
+      return runScene.getGameplayBotSnapshot().event;
+    });
+
+    expect(failedEvent.type).toBe('priority-execution');
+    expect(failedEvent.active).toBe(false);
+    expect(failedEvent.targetStatus).toBe('failed');
+    expect(failedEvent.challengeWaveFailures).toBeGreaterThanOrEqual(1);
   });
 
   test('forced late-run evolution and Behemoth encounter appear together on the live snapshot path', async ({ page }) => {

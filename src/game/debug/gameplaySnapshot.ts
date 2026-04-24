@@ -40,11 +40,11 @@ export type GameplayBotRewardChoice = {
 
 export type GameplayBotEventSnapshot = {
   active: boolean;
-  type: 'challenge-wave' | 'reward-target' | 'state-break' | '';
+  type: 'challenge-wave' | 'reward-target' | 'state-break' | 'hold-space' | 'priority-execution' | 'stabilize-collapse' | '';
   title: string;
   objective: string;
   remainingMs: number;
-  targetStatus: 'inactive' | 'active' | 'broken' | 'failed';
+  targetStatus: 'inactive' | 'active' | 'broken' | 'completed' | 'failed';
   challengeWaveSuccesses: number;
   challengeWaveFailures: number;
   rewardTargetSuccesses: number;
@@ -104,6 +104,7 @@ export type GameplayBotRunSnapshot = {
   pressureBeat: {
     active: boolean;
     id: string;
+    type: string;
     label: string;
     objective: string;
     remainingMs: number;

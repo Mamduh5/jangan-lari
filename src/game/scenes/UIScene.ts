@@ -676,7 +676,7 @@ export class UIScene extends Phaser.Scene {
     if (options.eventStatus === 'active') {
       return { color: '#fef3c7', backgroundColor: '#713f12' };
     }
-    if (options.eventStatus === 'broken') {
+    if (options.eventStatus === 'broken' || options.eventStatus === 'completed') {
       return { color: '#dcfce7', backgroundColor: '#14532d' };
     }
     if (options.eventStatus === 'failed') {
