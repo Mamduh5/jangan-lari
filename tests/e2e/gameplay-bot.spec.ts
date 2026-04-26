@@ -42,6 +42,16 @@ type Snapshot = {
     bossProtected: boolean;
     bossName: string;
     bossObjective: string;
+    bossQuestion: {
+      active: boolean;
+      type: 'guard-pressure' | 'priority-window' | 'cluster-setup' | '';
+      status: 'inactive' | 'active' | 'completed' | 'failed';
+      objective: string;
+      remainingMs: number;
+      successes: number;
+      failures: number;
+      targetActive: boolean;
+    };
     pressureBeat: { active: boolean; id: string; type: string; label: string; objective: string; remainingMs: number };
     event: {
       active: boolean;
@@ -855,5 +865,135 @@ test.describe('milestone 2 real-scene gameplay bot', () => {
     expect(snapshot.run?.evolutionId).toBe('reckoner-drive');
     expect(snapshot.run?.bossActive).toBe(true);
     expect(snapshot.run?.bossName).toBe('Behemoth');
+  });
+
+  test('Behemoth question windows resolve through favored payoff and failure debug paths', async ({ page }) => {
+    test.setTimeout(60_000);
+
+    const successCases = [
+      { hero: 'runner', question: 'guard-pressure' },
+      { hero: 'shade', question: 'priority-window' },
+      { hero: 'weaver', question: 'cluster-setup' },
+    ] as const;
+
+    for (const entry of successCases) {
+      await page.goto('/');
+      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+      await clickCanvasPosition(page, getHeroCardX(entry.hero), 382);
+      await clickCanvasPosition(page, 560, 82);
+      await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+      const bossQuestion = await page.evaluate(({ hero, question }) => {
+        const game = window.__JANGAN_LARI_GAME__!;
+        const runScene = game.scene.getScene('RunScene') as {
+          runElapsedMs: number;
+          player: { x: number; y: number };
+          debugForceBossEncounter: () => void;
+          beginBossQuestionWindow: (type: 'guard-pressure' | 'priority-window' | 'cluster-setup', currentTime: number) => void;
+          attemptAbilityUse: (time: number) => void;
+          combatStates: {
+            gainGuard: (amount: number) => void;
+            applyMark: (enemy: { applyMark: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+            applyAilment: (enemy: { applyAilment: (currentTime: number, durationMs: number) => void }, currentTime: number, durationMs: number) => void;
+          };
+          bossEnemy: { setEventMarker: (color: number | null) => void; setDamageTakenMultiplier: (multiplier: number) => void };
+          bossProtectors: Array<{ despawnSilently: () => void }>;
+          bossProtected: boolean;
+          enemies: {
+            getChildren: () => Array<{
+              x: number;
+              y: number;
+              isEventMarked: () => boolean;
+              isBoss?: () => boolean;
+              body?: { reset?: (x: number, y: number) => void };
+            }>;
+          };
+          getGameplayBotSnapshot: () => NonNullable<Snapshot['run']>;
+        };
+
+        runScene.debugForceBossEncounter();
+        runScene.bossProtectors.forEach((protector) => protector.despawnSilently());
+        runScene.bossProtectors = [];
+        runScene.bossProtected = false;
+        runScene.bossEnemy.setDamageTakenMultiplier(1);
+        runScene.bossEnemy.setEventMarker(null);
+        runScene.runElapsedMs = 1_000;
+        runScene.beginBossQuestionWindow(question, game.loop.time);
+
+        const enemies = runScene.enemies.getChildren();
+        const target = enemies.find((enemy) => enemy.isEventMarked() && !enemy.isBoss?.());
+        if (!target) {
+          throw new Error('Boss question target did not spawn.');
+        }
+
+        target.x = runScene.player.x + (hero === 'shade' ? 165 : 96);
+        target.y = runScene.player.y;
+        target.body?.reset?.(target.x, target.y);
+
+        if (hero === 'runner') {
+          runScene.combatStates.gainGuard(16);
+          runScene.attemptAbilityUse(game.loop.time);
+        } else if (hero === 'shade') {
+          runScene.combatStates.applyMark(target as never, game.loop.time, 2400);
+          runScene.attemptAbilityUse(game.loop.time);
+        } else {
+          const nearby = enemies.find((enemy) => enemy !== target && !enemy.isBoss?.());
+          if (!nearby) {
+            throw new Error('Cluster question needs a nearby add.');
+          }
+          nearby.x = target.x + 42;
+          nearby.y = target.y;
+          nearby.body?.reset?.(nearby.x, nearby.y);
+          runScene.combatStates.applyAilment(target as never, game.loop.time, 2400);
+          runScene.combatStates.applyAilment(nearby as never, game.loop.time, 2400);
+          runScene.attemptAbilityUse(game.loop.time);
+        }
+
+        return runScene.getGameplayBotSnapshot().bossQuestion;
+      }, entry);
+
+      expect(bossQuestion.type).toBe(entry.question);
+      expect(bossQuestion.active).toBe(false);
+      expect(bossQuestion.status, `${entry.hero} should complete ${entry.question}`).toBe('completed');
+      expect(bossQuestion.successes).toBeGreaterThanOrEqual(1);
+      expect(bossQuestion.failures).toBe(0);
+    }
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+    await clickCanvasPosition(page, getHeroCardX('runner'), 382);
+    await clickCanvasPosition(page, 560, 82);
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
+
+    const failedQuestion = await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as {
+        runElapsedMs: number;
+        debugForceBossEncounter: () => void;
+        beginBossQuestionWindow: (type: 'guard-pressure' | 'priority-window' | 'cluster-setup', currentTime: number) => void;
+        updateBossQuestionWindow: (currentTime: number, deltaMs: number) => void;
+        bossEnemy: { setEventMarker: (color: number | null) => void; setDamageTakenMultiplier: (multiplier: number) => void };
+        bossProtectors: Array<{ despawnSilently: () => void }>;
+        bossProtected: boolean;
+        getGameplayBotSnapshot: () => NonNullable<Snapshot['run']>;
+      };
+
+      runScene.debugForceBossEncounter();
+      runScene.bossProtectors.forEach((protector) => protector.despawnSilently());
+      runScene.bossProtectors = [];
+      runScene.bossProtected = false;
+      runScene.bossEnemy.setDamageTakenMultiplier(1);
+      runScene.bossEnemy.setEventMarker(null);
+      runScene.runElapsedMs = 1_000;
+      runScene.beginBossQuestionWindow('priority-window', game.loop.time);
+      runScene.runElapsedMs = 16_000;
+      runScene.updateBossQuestionWindow(game.loop.time + 12_000, 100);
+      return runScene.getGameplayBotSnapshot().bossQuestion;
+    });
+
+    expect(failedQuestion.type).toBe('priority-window');
+    expect(failedQuestion.active).toBe(false);
+    expect(failedQuestion.status).toBe('failed');
+    expect(failedQuestion.failures).toBeGreaterThanOrEqual(1);
   });
 });

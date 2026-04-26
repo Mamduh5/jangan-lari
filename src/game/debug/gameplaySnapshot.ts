@@ -101,6 +101,16 @@ export type GameplayBotRunSnapshot = {
   bossProtected: boolean;
   bossName: string;
   bossObjective: string;
+  bossQuestion: {
+    active: boolean;
+    type: 'guard-pressure' | 'priority-window' | 'cluster-setup' | '';
+    status: 'inactive' | 'active' | 'completed' | 'failed';
+    objective: string;
+    remainingMs: number;
+    successes: number;
+    failures: number;
+    targetActive: boolean;
+  };
   pressureBeat: {
     active: boolean;
     id: string;

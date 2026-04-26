@@ -309,7 +309,7 @@ export class UIScene extends Phaser.Scene {
 
     this.objectiveText.setText(
       bossActive
-        ? `${bossName} ${Math.max(0, Math.round(bossHp))}/${Math.max(1, Math.round(bossMaxHp))} | Escorts ${bossProtectors} | ${bossProtected ? 'Protected' : 'Vulnerable'}`
+        ? `${bossName} ${Math.max(0, Math.round(bossHp))}/${Math.max(1, Math.round(bossMaxHp))} | ${bossObjective || `Escorts ${bossProtectors} | ${bossProtected ? 'Protected' : 'Vulnerable'}`}`
         : eventStatus !== 'inactive' && eventObjective
           ? `${eventTitle}: ${eventObjective}`
         : pressureBeatActive

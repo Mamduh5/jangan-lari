@@ -49,6 +49,9 @@ type StateBreakReason = 'guard-slam' | 'mark-consume' | 'ailment-detonation';
 type PressureChallengeType = Exclude<PressureBeatEventType, 'state-break'>;
 type PressureChallengeStatus = 'inactive' | 'active' | 'completed' | 'failed';
 type PressureChallengeSuccessReason = 'held-zone' | 'target-cleared' | StateBreakReason;
+type BossQuestionType = 'guard-pressure' | 'priority-window' | 'cluster-setup';
+type BossQuestionStatus = 'inactive' | 'active' | 'completed' | 'failed';
+type BossQuestionSuccessReason = 'held-zone' | 'target-cleared' | StateBreakReason;
 
 export class RunScene extends Phaser.Scene {
   player!: Player;
@@ -98,6 +101,16 @@ export class RunScene extends Phaser.Scene {
   private nextBossAddSpawnAtMs = 0;
   private bossTelegraphs: Phaser.GameObjects.Shape[] = [];
   private bossAddWaveIndex = 0;
+  private bossQuestionTarget: Enemy | null = null;
+  private bossQuestionType: BossQuestionType | null = null;
+  private bossQuestionStatus: BossQuestionStatus = 'inactive';
+  private bossQuestionObjective = '';
+  private bossQuestionUntilMs = 0;
+  private bossQuestionHoldMs = 0;
+  private bossQuestionIndex = 0;
+  private nextBossQuestionAtMs = 0;
+  private bossQuestionSuccessCount = 0;
+  private bossQuestionFailureCount = 0;
   private stateBreakTarget: Enemy | null = null;
   private stateBreakStatus: StateBreakEventStatus = 'inactive';
   private stateBreakTitle = '';
@@ -164,6 +177,16 @@ export class RunScene extends Phaser.Scene {
     this.nextBossAddSpawnAtMs = 0;
     this.bossTelegraphs = [];
     this.bossAddWaveIndex = 0;
+    this.bossQuestionTarget = null;
+    this.bossQuestionType = null;
+    this.bossQuestionStatus = 'inactive';
+    this.bossQuestionObjective = '';
+    this.bossQuestionUntilMs = 0;
+    this.bossQuestionHoldMs = 0;
+    this.bossQuestionIndex = 0;
+    this.nextBossQuestionAtMs = 0;
+    this.bossQuestionSuccessCount = 0;
+    this.bossQuestionFailureCount = 0;
     this.stateBreakTarget = null;
     this.stateBreakStatus = 'inactive';
     this.stateBreakTitle = '';
@@ -278,7 +301,7 @@ export class RunScene extends Phaser.Scene {
 
     this.player.move(this.readMovementInput());
     this.attemptAbilityUse(time);
-    this.updateBossEncounter(time);
+    this.updateBossEncounter(time, activeDelta);
     this.updateStateBreakEvent();
     this.updatePressureChallengeEvent(activeDelta);
     this.updateEnemies(time);
@@ -550,6 +573,7 @@ export class RunScene extends Phaser.Scene {
       bossProtected: this.bossProtected,
       bossName: this.bossEnemy?.archetype.name ?? '',
       bossObjective: this.bossObjectiveText,
+      bossQuestion: this.getBossQuestionSnapshot(),
       pressureBeat: this.spawnDirector.getPressureBeat(this.runElapsedMs),
       enemies,
       xpGems,
@@ -667,6 +691,8 @@ export class RunScene extends Phaser.Scene {
       const stateBreakTargetWasAilmented = Boolean(activeStateBreakTarget?.isAilmented(currentTime));
       const activePressureChallengeTarget = this.getActivePressureChallengeTarget();
       const pressureChallengeTargetWasAilmented = Boolean(activePressureChallengeTarget?.isAilmented(currentTime));
+      const activeBossQuestionTarget = this.getActiveBossQuestionTarget();
+      const bossQuestionTargetWasAilmented = Boolean(activeBossQuestionTarget?.isAilmented(currentTime));
       const result = this.abilityResolver.tryUseAbility('signature', signature, currentTime);
       if (result.used) {
         this.abilityLoadout.commitUse('signature', currentTime);
@@ -706,6 +732,11 @@ export class RunScene extends Phaser.Scene {
         this.resolvePressureChallengeFromSignature(result, {
           targetBeforeUse: activePressureChallengeTarget,
           targetWasAilmented: pressureChallengeTargetWasAilmented,
+          currentTime,
+        });
+        this.resolveBossQuestionFromSignature(result, {
+          targetBeforeUse: activeBossQuestionTarget,
+          targetWasAilmented: bossQuestionTargetWasAilmented,
           currentTime,
         });
       }
@@ -1554,6 +1585,7 @@ export class RunScene extends Phaser.Scene {
       this.bossProtected = false;
       this.bossObjectiveText = 'Boss broken.';
       this.bossProtectors = [];
+      this.clearBossQuestionWindow();
       this.endRun(true);
     }
   }
@@ -1734,7 +1766,7 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  private updateBossEncounter(currentTime: number): void {
+  private updateBossEncounter(currentTime: number, deltaMs: number): void {
     if (
       !this.bossEncounterActive &&
       !this.isEnded &&
@@ -1759,18 +1791,387 @@ export class RunScene extends Phaser.Scene {
     this.bossProtected = activeProtectors.length > 0;
     this.bossEnemy?.setDamageTakenMultiplier(this.bossProtected ? 0.18 : 1);
     this.bossEnemy?.setEventMarker(this.bossProtected ? 0x60a5fa : null);
-    this.bossObjectiveText = this.bossProtected
-      ? `Break Escorts ${activeProtectors.length}`
-      : 'Boss Vulnerable';
+    this.updateBossQuestionWindow(currentTime, deltaMs);
+    this.bossObjectiveText = this.getBossObjectiveText(activeProtectors.length);
 
     if (this.pendingLevelUps > 0) {
       return;
     }
 
-    if (currentTime >= this.nextBossAddSpawnAtMs) {
+    if (!this.bossProtected && this.bossQuestionStatus !== 'active' && currentTime >= this.nextBossQuestionAtMs) {
+      this.beginNextBossQuestionWindow(currentTime);
+      this.bossObjectiveText = this.getBossObjectiveText(activeProtectors.length);
+    }
+
+    if (this.bossQuestionStatus !== 'active' && currentTime >= this.nextBossAddSpawnAtMs) {
       this.spawnBossAddWave();
       this.nextBossAddSpawnAtMs = currentTime + 9000;
     }
+  }
+
+  private updateBossQuestionWindow(currentTime: number, deltaMs: number): void {
+    if (this.bossQuestionStatus !== 'active') {
+      return;
+    }
+
+    const target = this.getActiveBossQuestionTarget();
+    if (!target) {
+      this.resolveBossQuestionSuccess('target-cleared');
+      return;
+    }
+
+    if (this.bossQuestionType === 'guard-pressure') {
+      const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y);
+      if (distance <= 165) {
+        this.bossQuestionHoldMs += deltaMs;
+        if (this.bossQuestionHoldMs >= 2800) {
+          this.resolveBossQuestionSuccess('held-zone');
+          return;
+        }
+      } else {
+        this.bossQuestionHoldMs = Math.max(0, this.bossQuestionHoldMs - deltaMs * 0.4);
+      }
+    }
+
+    if (this.runElapsedMs >= this.bossQuestionUntilMs) {
+      this.resolveBossQuestionFailure();
+    }
+
+    if (currentTime > this.bossQuestionUntilMs + 4000) {
+      this.clearBossQuestionWindow();
+    }
+  }
+
+  private beginNextBossQuestionWindow(currentTime: number): void {
+    if (!this.bossEnemy || !this.bossEnemy.active || this.bossProtected || this.bossQuestionStatus === 'active') {
+      return;
+    }
+
+    const sequence: BossQuestionType[] = ['guard-pressure', 'priority-window', 'cluster-setup'];
+    const type = sequence[this.bossQuestionIndex % sequence.length]!;
+    this.bossQuestionIndex += 1;
+    this.beginBossQuestionWindow(type, currentTime);
+  }
+
+  private beginBossQuestionWindow(type: BossQuestionType, currentTime: number): void {
+    if (!this.bossEnemy || !this.bossEnemy.active) {
+      return;
+    }
+
+    this.clearBossQuestionTargetMarker();
+    this.bossQuestionType = type;
+    this.bossQuestionStatus = 'active';
+    this.bossQuestionHoldMs = 0;
+    this.bossQuestionUntilMs = this.runElapsedMs + this.getBossQuestionDurationMs(type);
+    this.bossQuestionObjective = this.getBossQuestionStartText(type);
+
+    const target = this.spawnBossQuestionTarget(type);
+    this.bossQuestionTarget = target;
+    target.setEventMarker(this.getBossQuestionColor(type));
+    this.playBossQuestionCue(target, this.getBossQuestionColor(type), 0xfffbeb);
+  }
+
+  private spawnBossQuestionTarget(type: BossQuestionType): Enemy {
+    const origin = this.bossEnemy ?? this.player;
+    const angleToPlayer = Phaser.Math.Angle.Between(origin.x, origin.y, this.player.x, this.player.y);
+    const distance = type === 'guard-pressure' ? 145 : type === 'priority-window' ? 190 : 175;
+    const x = Phaser.Math.Clamp(origin.x + Math.cos(angleToPlayer) * distance, 100, WORLD_WIDTH - 100);
+    const y = Phaser.Math.Clamp(origin.y + Math.sin(angleToPlayer) * distance, 100, WORLD_HEIGHT - 100);
+    const archetype =
+      type === 'guard-pressure'
+        ? ENEMY_ARCHETYPES.bulwark
+        : type === 'priority-window'
+          ? ENEMY_ARCHETYPES.harrier
+          : ENEMY_ARCHETYPES.hexcaster;
+    const target = new Enemy(this, x, y, archetype);
+    this.enemies.add(target);
+
+    if (type === 'cluster-setup') {
+      [0, 1].forEach((index) => {
+        const angle = angleToPlayer + Phaser.Math.DegToRad(index === 0 ? 65 : -65);
+        const add = new Enemy(
+          this,
+          Phaser.Math.Clamp(x + Math.cos(angle) * 64, 90, WORLD_WIDTH - 90),
+          Phaser.Math.Clamp(y + Math.sin(angle) * 64, 90, WORLD_HEIGHT - 90),
+          ENEMY_ARCHETYPES.swarmer,
+        );
+        this.enemies.add(add);
+      });
+    }
+
+    return target;
+  }
+
+  private resolveBossQuestionFromSignature(
+    result: { signatureHit?: { target: Enemy; consumedMark: boolean; killed: boolean } | null; ailmentConsumes?: number },
+    options: {
+      targetBeforeUse: Enemy | null;
+      targetWasAilmented: boolean;
+      currentTime: number;
+    },
+  ): void {
+    const target = options.targetBeforeUse;
+    if (this.bossQuestionStatus !== 'active' || !this.bossQuestionType) {
+      return;
+    }
+
+    if (
+      this.bossQuestionType === 'cluster-setup' &&
+      this.selectedHero.id === 'weaver' &&
+      (result.ailmentConsumes ?? 0) >= 2
+    ) {
+      this.resolveBossQuestionSuccess('ailment-detonation');
+      return;
+    }
+
+    if (!target || target !== this.bossQuestionTarget) {
+      return;
+    }
+
+    if (this.selectedHero.id === 'runner' && this.isBossQuestionTargetInsideRunnerPayoff(target)) {
+      this.resolveBossQuestionSuccess('guard-slam');
+      return;
+    }
+
+    if (this.selectedHero.id === 'shade' && result.signatureHit?.target === target && result.signatureHit.consumedMark) {
+      this.resolveBossQuestionSuccess('mark-consume');
+      return;
+    }
+
+    if (
+      this.selectedHero.id === 'weaver' &&
+      options.targetWasAilmented &&
+      !target.isAilmented(options.currentTime) &&
+      (result.ailmentConsumes ?? 0) > 0
+    ) {
+      this.resolveBossQuestionSuccess('ailment-detonation');
+    }
+  }
+
+  private resolveBossQuestionSuccess(reason: BossQuestionSuccessReason): void {
+    if (this.bossQuestionStatus !== 'active') {
+      return;
+    }
+
+    const target = this.bossQuestionTarget?.active ? this.bossQuestionTarget : null;
+    this.bossQuestionStatus = 'completed';
+    this.bossQuestionSuccessCount += 1;
+    this.bossQuestionObjective = this.getBossQuestionSuccessText(reason);
+    this.bossQuestionUntilMs = this.runElapsedMs;
+    this.nextBossQuestionAtMs = this.time.now + 8500;
+    this.nextBossAddSpawnAtMs = Math.max(this.nextBossAddSpawnAtMs, this.time.now + 5200);
+
+    if (target) {
+      target.setEventMarker(0x4ade80);
+      target.playPayoffReaction('state-break');
+      this.playBossQuestionCue(target, 0x4ade80, 0xdcfce7);
+      this.time.delayedCall(900, () => {
+        if (target.active && this.bossQuestionStatus === 'completed') {
+          target.setEventMarker(null);
+        }
+      });
+    }
+
+    if (this.bossEnemy?.active && this.bossEnemy.isAlive()) {
+      this.bossEnemy.takeDamage(42, target ? { x: target.x, y: target.y } : undefined);
+      this.playBossQuestionCue(this.bossEnemy, 0x4ade80, 0xdcfce7);
+    }
+
+    this.player.heal(3);
+    const gained = this.combatStates.gainGuardTx(2).value;
+    this.traitRuntime.notifyGuardGain(this.time.now, gained);
+    this.abilityLoadout.reduceCooldown('signature', 260, this.time.now);
+    this.cameras.main.shake(65, 0.0015);
+    this.publishHudState();
+  }
+
+  private resolveBossQuestionFailure(): void {
+    if (this.bossQuestionStatus !== 'active') {
+      return;
+    }
+
+    const target = this.getActiveBossQuestionTarget();
+    this.bossQuestionStatus = 'failed';
+    this.bossQuestionFailureCount += 1;
+    this.bossQuestionObjective = `${this.getBossQuestionTitle(this.bossQuestionType)} failed. Behemoth presses the lane.`;
+    this.bossQuestionUntilMs = this.runElapsedMs;
+    this.nextBossQuestionAtMs = this.time.now + 9000;
+    this.nextBossAddSpawnAtMs = this.time.now + 3600;
+
+    if (target) {
+      target.setEventMarker(0xef4444);
+      this.playBossQuestionCue(target, 0xef4444, 0xfee2e2);
+      this.spawnBossQuestionFailureAdds(target, this.bossQuestionType);
+      this.time.delayedCall(900, () => {
+        if (target.active && this.bossQuestionStatus === 'failed') {
+          target.setEventMarker(null);
+        }
+      });
+    }
+
+    this.cameras.main.shake(60, 0.0014);
+    this.publishHudState();
+  }
+
+  private getBossObjectiveText(activeProtectorCount: number): string {
+    if (this.bossQuestionStatus !== 'inactive') {
+      return this.getBossQuestionObjectiveText();
+    }
+    return this.bossProtected ? `Break Escorts ${activeProtectorCount}` : 'Boss Vulnerable';
+  }
+
+  private getBossQuestionObjectiveText(): string {
+    if (this.bossQuestionStatus === 'active') {
+      const remaining = `${Math.ceil(this.getBossQuestionRemainingMs() / 1000)}s`;
+      if (this.bossQuestionType === 'guard-pressure') {
+        const held = Math.min(2.8, this.bossQuestionHoldMs / 1000).toFixed(1);
+        return `${this.bossQuestionObjective} Hold ${held}/2.8s | ${remaining}`;
+      }
+      return `${this.bossQuestionObjective} ${remaining}`;
+    }
+    return this.bossQuestionObjective;
+  }
+
+  private getBossQuestionSnapshot(): GameplayBotRunSnapshot['bossQuestion'] {
+    return {
+      active: this.bossQuestionStatus === 'active',
+      type: this.bossQuestionType ?? '',
+      status: this.bossQuestionStatus,
+      objective: this.getBossQuestionObjectiveText(),
+      remainingMs: this.getBossQuestionRemainingMs(),
+      successes: this.bossQuestionSuccessCount,
+      failures: this.bossQuestionFailureCount,
+      targetActive: Boolean(this.bossQuestionTarget?.active && this.bossQuestionTarget.isAlive()),
+    };
+  }
+
+  private getBossQuestionRemainingMs(): number {
+    if (this.bossQuestionStatus !== 'active') {
+      return 0;
+    }
+
+    return Math.max(0, this.bossQuestionUntilMs - this.runElapsedMs);
+  }
+
+  private getActiveBossQuestionTarget(): Enemy | null {
+    if (this.bossQuestionStatus !== 'active' || !this.bossQuestionTarget?.active || !this.bossQuestionTarget.isAlive()) {
+      return null;
+    }
+
+    return this.bossQuestionTarget;
+  }
+
+  private isBossQuestionTargetInsideRunnerPayoff(target: Enemy): boolean {
+    if (this.selectedEvolutionId === 'reckoner-drive') {
+      return Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y) <= 420;
+    }
+
+    return Phaser.Math.Distance.Between(this.player.x, this.player.y, target.x, target.y) <= 170;
+  }
+
+  private getBossQuestionDurationMs(type: BossQuestionType): number {
+    return type === 'guard-pressure' ? 12_000 : type === 'priority-window' ? 11_000 : 13_000;
+  }
+
+  private getBossQuestionTitle(type: BossQuestionType | null): string {
+    switch (type) {
+      case 'guard-pressure':
+        return 'Breach Pressure';
+      case 'priority-window':
+        return 'Execution Window';
+      case 'cluster-setup':
+      default:
+        return 'Cluster Collapse';
+    }
+  }
+
+  private getBossQuestionStartText(type: BossQuestionType): string {
+    switch (type) {
+      case 'guard-pressure':
+        return 'Hold near the breach node or break it with a payoff.';
+      case 'priority-window':
+        return 'Break the charged node before Behemoth reinforces.';
+      case 'cluster-setup':
+      default:
+        return 'Collapse the volatile cluster before it spreads.';
+    }
+  }
+
+  private getBossQuestionSuccessText(reason: BossQuestionSuccessReason): string {
+    switch (reason) {
+      case 'held-zone':
+        return 'Breach held. Behemoth pressure interrupted.';
+      case 'target-cleared':
+        return `${this.getBossQuestionTitle(this.bossQuestionType)} cleared. Behemoth exposed.`;
+      case 'guard-slam':
+        return 'Guard slam interrupted Behemoth pressure.';
+      case 'mark-consume':
+        return 'Mark execution cut Behemoth window open.';
+      case 'ailment-detonation':
+      default:
+        return 'Ailment detonation collapsed Behemoth setup.';
+    }
+  }
+
+  private getBossQuestionColor(type: BossQuestionType | null): number {
+    switch (type) {
+      case 'guard-pressure':
+        return 0xfb923c;
+      case 'priority-window':
+        return 0xfef08a;
+      case 'cluster-setup':
+      default:
+        return 0xfb7185;
+    }
+  }
+
+  private playBossQuestionCue(target: Enemy, color: number, strokeColor: number): void {
+    const cue = this.add.circle(target.x, target.y, Math.max(18, target.width * 0.44), color, 0.18).setDepth(9);
+    cue.setStrokeStyle(4, strokeColor, 0.9);
+    this.tweens.add({
+      targets: cue,
+      radius: Math.max(82, target.width * 1.7),
+      alpha: 0,
+      duration: 300,
+      ease: 'Quad.Out',
+      onComplete: () => cue.destroy(),
+    });
+  }
+
+  private spawnBossQuestionFailureAdds(target: Enemy, type: BossQuestionType | null): void {
+    const addArchetypes =
+      type === 'priority-window'
+        ? [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.shooter]
+        : type === 'cluster-setup'
+          ? [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.shooter]
+          : [ENEMY_ARCHETYPES.swarmer, ENEMY_ARCHETYPES.anchor];
+
+    addArchetypes.forEach((archetype, index) => {
+      const angle = (Math.PI * 2 * index) / addArchetypes.length;
+      const enemy = new Enemy(
+        this,
+        Phaser.Math.Clamp(target.x + Math.cos(angle) * 96, 90, WORLD_WIDTH - 90),
+        Phaser.Math.Clamp(target.y + Math.sin(angle) * 96, 90, WORLD_HEIGHT - 90),
+        archetype,
+      );
+      this.enemies.add(enemy);
+    });
+  }
+
+  private clearBossQuestionTargetMarker(): void {
+    if (this.bossQuestionTarget?.active) {
+      this.bossQuestionTarget.setEventMarker(null);
+    }
+  }
+
+  private clearBossQuestionWindow(): void {
+    this.clearBossQuestionTargetMarker();
+    this.bossQuestionTarget = null;
+    this.bossQuestionType = null;
+    this.bossQuestionStatus = 'inactive';
+    this.bossQuestionObjective = '';
+    this.bossQuestionUntilMs = 0;
+    this.bossQuestionHoldMs = 0;
   }
 
   private spawnBossEncounter(): void {
@@ -1800,9 +2201,18 @@ export class RunScene extends Phaser.Scene {
     this.spawnBossProtectors();
     this.bossProtected = true;
     this.bossAddWaveIndex = 0;
+    this.bossQuestionTarget = null;
+    this.bossQuestionType = null;
+    this.bossQuestionStatus = 'inactive';
+    this.bossQuestionObjective = '';
+    this.bossQuestionHoldMs = 0;
+    this.bossQuestionIndex = 0;
+    this.bossQuestionSuccessCount = 0;
+    this.bossQuestionFailureCount = 0;
     this.bossEnemy.setDamageTakenMultiplier(0.18);
     this.bossEnemy.setEventMarker(0x60a5fa);
     this.nextBossAddSpawnAtMs = this.time.now + 7000;
+    this.nextBossQuestionAtMs = this.time.now + 6500;
     this.bossObjectiveText = 'Break Escorts 2';
     this.publishHudState();
   }
@@ -1862,6 +2272,7 @@ export class RunScene extends Phaser.Scene {
     this.bossTelegraphs.forEach((shape) => shape.destroy());
     this.bossTelegraphs = [];
     this.clearPressureChallengeEvent();
+    this.clearBossQuestionWindow();
   }
 
   private clearStateBreakEvent(): void {
