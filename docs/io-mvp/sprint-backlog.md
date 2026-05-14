@@ -20,6 +20,12 @@ Acceptance checks:
 
 Goal: Make the controllable avatar read as a tank and move well on mobile.
 
+Status note:
+- Implemented a first-pass Phaser-shape tank presentation for the player with a directional hull, turret, and barrel.
+- Added a reusable movement input controller that normalizes keyboard and pointer-drag movement while preserving the last facing direction.
+- Added basic drag-anywhere pointer movement for mobile browsers; keyboard remains the preferred input while movement keys are actively pressed.
+- Deferred separate move/aim joysticks, neutral shapes, stat allocation, class branching, multiplayer, and backend work to later sprints.
+
 Deliverables:
 - Tank-shaped player presentation.
 - Mobile-first movement input plan or implementation.

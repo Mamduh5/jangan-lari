@@ -55,6 +55,8 @@ export type GameplayBotRunSnapshot = {
   player: {
     x: number;
     y: number;
+    facingX: number;
+    facingY: number;
     moveSpeed: number;
     pickupRange: number;
   };

@@ -40,7 +40,8 @@ import { Enemy, type EnemyAttackSignal } from '../entities/Enemy';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 import { XPGem } from '../entities/XPGem';
-import { createMovementKeys, type MovementKeys } from '../input/createMovementKeys';
+import { createMovementKeys } from '../input/createMovementKeys';
+import { MovementInputController } from '../input/MovementInputController';
 import type { GameplayBotRunSnapshot } from '../debug/gameplaySnapshot';
 import type { GameSaveData } from '../save/saveData';
 import { loadGameSave } from '../save/saveData';
@@ -97,7 +98,7 @@ export class RunScene extends Phaser.Scene {
   private ownedWeaponIds = new Set<string>();
   private spawnDirector!: SpawnDirector;
   private saveData!: GameSaveData;
-  private movementKeys!: MovementKeys;
+  private movementInput!: MovementInputController;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private combatResponse!: CombatResponseController;
@@ -257,7 +258,7 @@ export class RunScene extends Phaser.Scene {
     this.enemies = this.physics.add.group({ runChildUpdate: false });
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
     this.spawnDirector = new SpawnDirector();
-    this.movementKeys = createMovementKeys(this);
+    this.movementInput = new MovementInputController(this, createMovementKeys(this));
     this.combatResponse = new CombatResponseController({
       onHitStopStart: () => this.pauseCombatResponseSystems(),
       onHitStopEnd: () => this.resumeCombatResponseSystems(),
@@ -362,14 +363,9 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    const horizontal =
-      Number(this.movementKeys.right.isDown || this.movementKeys.altRight.isDown) -
-      Number(this.movementKeys.left.isDown || this.movementKeys.altLeft.isDown);
-    const vertical =
-      Number(this.movementKeys.down.isDown || this.movementKeys.altDown.isDown) -
-      Number(this.movementKeys.up.isDown || this.movementKeys.altUp.isDown);
-
-    this.player.move(new Phaser.Math.Vector2(horizontal, vertical));
+    const movementInput = this.movementInput.getMovementInput();
+    this.player.setFacingDirection(new Phaser.Math.Vector2(movementInput.facing.x, movementInput.facing.y));
+    this.player.move(new Phaser.Math.Vector2(movementInput.movement.x, movementInput.movement.y));
     this.updateEnemies();
     this.updateLineStrikeAttacks(delta);
     this.updateShockwaveAttacks(delta);
@@ -453,6 +449,8 @@ export class RunScene extends Phaser.Scene {
       player: {
         x: this.player.x,
         y: this.player.y,
+        facingX: this.player.getFacingDirection().x,
+        facingY: this.player.getFacingDirection().y,
         moveSpeed: this.player.getMoveSpeed(),
         pickupRange: this.player.getPickupRange(),
       },
@@ -1991,6 +1989,8 @@ export class RunScene extends Phaser.Scene {
   }
 
   private pauseGameplaySystems(instructionText?: string): void {
+    this.movementInput?.resetPointer();
+
     if (this.player?.active) {
       this.player.move(new Phaser.Math.Vector2(0, 0));
     }
@@ -2318,6 +2318,7 @@ export class RunScene extends Phaser.Scene {
     document.removeEventListener('visibilitychange', this.handlePageVisibilityChange);
     window.removeEventListener('blur', this.handleWindowBlur);
     window.removeEventListener('focus', this.handleWindowFocus);
+    this.movementInput?.destroy();
     this.combatResponse.clear({ suppressCallbacks: true });
 
     this.spawnTimer?.remove(false);

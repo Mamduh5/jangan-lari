@@ -15,8 +15,14 @@ export class Player extends Phaser.GameObjects.Rectangle {
   declare body: Phaser.Physics.Arcade.Body;
 
   private readonly aura: Phaser.GameObjects.Arc;
+  private readonly barrel: Phaser.GameObjects.Rectangle;
+  private readonly turret: Phaser.GameObjects.Arc;
   private readonly heroMarker: Phaser.GameObjects.Shape;
   private readonly baseFillColor: number;
+  private readonly baseBarrelColor: number;
+  private readonly baseTurretColor: number;
+  private readonly visualSize: number;
+  private facingDirection = new Phaser.Math.Vector2(1, 0);
   private speed = PLAYER_SPEED;
   private maxHealth = PLAYER_MAX_HP;
   private readonly hitInvulnerabilityMs = PLAYER_HIT_INVULNERABILITY_MS;
@@ -29,21 +35,49 @@ export class Player extends Phaser.GameObjects.Rectangle {
 
   constructor(scene: Phaser.Scene, x: number, y: number, hero: HeroDefinition) {
     const { appearance } = hero;
-    super(scene, x, y, appearance.size, appearance.size, appearance.bodyColor);
+    const hullWidth = Math.round(appearance.size * 1.12);
+    const hullHeight = Math.round(appearance.size * 0.82);
+    super(scene, x, y, hullWidth, hullHeight, appearance.bodyColor);
 
     this.baseFillColor = appearance.bodyColor;
+    this.baseBarrelColor = appearance.strokeColor;
+    this.baseTurretColor = appearance.markerColor;
+    this.visualSize = appearance.size;
+    this.facingDirection.setToPolar(Phaser.Math.DegToRad(appearance.angle), 1);
+
     this.aura = scene.add.circle(x, y, Math.round(appearance.size * 0.88), appearance.auraColor, 0.16);
     this.aura.setDepth(5);
     this.aura.setBlendMode(Phaser.BlendModes.ADD);
 
+    this.barrel = scene.add.rectangle(
+      x,
+      y,
+      Math.round(appearance.size * 0.68),
+      Math.max(6, Math.round(appearance.size * 0.18)),
+      appearance.strokeColor,
+      0.96,
+    );
+    this.barrel.setOrigin(0, 0.5);
+    this.barrel.setDepth(7);
+    this.barrel.setStrokeStyle(1, appearance.bodyColor, 0.65);
+
+    this.turret = scene.add.circle(
+      x,
+      y,
+      Math.max(7, Math.round(appearance.size * 0.25)),
+      appearance.markerColor,
+      0.96,
+    );
+    this.turret.setDepth(8);
+    this.turret.setStrokeStyle(2, appearance.strokeColor, 0.9);
+
     this.heroMarker =
       appearance.markerShape === 'dot'
-        ? scene.add.circle(x, y - appearance.size * 0.24, Math.max(4, Math.round(appearance.size * 0.14)), appearance.markerColor, 0.95)
-        : scene.add.rectangle(x, y - appearance.size * 0.24, Math.round(appearance.size * 0.5), 7, appearance.markerColor, 0.95);
-    this.heroMarker.setDepth(7);
+        ? scene.add.circle(x, y, Math.max(3, Math.round(appearance.size * 0.1)), appearance.strokeColor, 0.95)
+        : scene.add.rectangle(x, y, Math.round(appearance.size * 0.34), 5, appearance.strokeColor, 0.95);
+    this.heroMarker.setDepth(9);
 
     this.setStrokeStyle(3, appearance.strokeColor, 0.95);
-    this.setAngle(appearance.angle);
     this.setDepth(6);
 
     scene.add.existing(this);
@@ -141,17 +175,40 @@ export class Player extends Phaser.GameObjects.Rectangle {
 
     if (!this.isAlive()) {
       this.setFillStyle(0x64748b);
+      this.barrel.setFillStyle(0x475569, 0.74);
+      this.turret.setFillStyle(0x64748b, 0.74);
       this.setAlpha(0.7);
       this.aura.setAlpha(0.08);
+      this.barrel.setAlpha(0.42);
+      this.turret.setAlpha(0.5);
       this.heroMarker.setAlpha(0.25);
       return;
     }
 
     const invulnerable = currentTime < this.invulnerableUntil;
     this.setFillStyle(this.baseFillColor);
+    this.barrel.setFillStyle(this.baseBarrelColor, 0.96);
+    this.turret.setFillStyle(this.baseTurretColor, 0.96);
     this.setAlpha(invulnerable ? 0.72 : 1);
     this.aura.setAlpha(invulnerable ? 0.12 : 0.22);
+    this.barrel.setAlpha(invulnerable ? 0.62 : 1);
+    this.turret.setAlpha(invulnerable ? 0.7 : 1);
     this.heroMarker.setAlpha(invulnerable ? 0.55 : 0.95);
+  }
+
+  setFacingDirection(direction: Phaser.Math.Vector2): void {
+    if (direction.lengthSq() === 0) {
+      return;
+    }
+
+    this.facingDirection.copy(direction).normalize();
+  }
+
+  getFacingDirection(): { x: number; y: number } {
+    return {
+      x: this.facingDirection.x,
+      y: this.facingDirection.y,
+    };
   }
 
   move(direction: Phaser.Math.Vector2): void {
@@ -167,11 +224,14 @@ export class Player extends Phaser.GameObjects.Rectangle {
     }
 
     direction.normalize();
+    this.setFacingDirection(direction);
     this.body.setVelocity(direction.x * this.speed, direction.y * this.speed);
   }
 
   destroy(fromScene?: boolean): void {
     this.aura.destroy();
+    this.barrel.destroy();
+    this.turret.destroy();
     this.heroMarker.destroy();
     super.destroy(fromScene);
   }
@@ -182,9 +242,20 @@ export class Player extends Phaser.GameObjects.Rectangle {
 
   private syncVisualDecorations(currentTime: number): void {
     const pulse = 1 + Math.sin((currentTime + this.x * 0.45) * 0.01) * 0.035;
+    const facingAngle = Phaser.Math.RadToDeg(this.facingDirection.angle());
+    const barrelInset = this.visualSize * 0.12;
+    const markerOffset = this.visualSize * 0.18;
+
     this.aura.setPosition(this.x, this.y);
     this.aura.setScale(pulse);
-    this.heroMarker.setPosition(this.x, this.y - this.height * 0.26);
-    this.heroMarker.setAngle(this.angle);
+    this.setAngle(facingAngle);
+    this.barrel.setPosition(this.x + this.facingDirection.x * barrelInset, this.y + this.facingDirection.y * barrelInset);
+    this.barrel.setAngle(facingAngle);
+    this.turret.setPosition(this.x, this.y);
+    this.heroMarker.setPosition(
+      this.x + this.facingDirection.x * markerOffset,
+      this.y + this.facingDirection.y * markerOffset,
+    );
+    this.heroMarker.setAngle(facingAngle);
   }
 }
