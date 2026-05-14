@@ -1,0 +1,55 @@
+# Codex Agent Loop
+
+Use this loop for future `.io` MVP implementation tasks in this repo.
+
+## Default Loop
+
+1. Inspect
+   - Confirm branch and working tree status.
+   - Read the files that own the requested behavior before editing.
+   - Check nearby tests and existing helper APIs.
+
+2. Plan
+   - State the narrow behavior target.
+   - Identify files likely to change.
+   - Call out what is intentionally not changing.
+
+3. Implement Small Change
+   - Keep the change scoped to the sprint task.
+   - Reuse current Phaser, scene, entity, data, save, debug, and test patterns.
+   - Do not delete old systems unless the task explicitly asks for removal.
+   - Do not introduce multiplayer, backend, or `newsystem` dependencies.
+
+4. Test
+   - Run the smallest meaningful test set first.
+   - Prefer focused unit tests for pure logic.
+   - Use Playwright for browser flow, restart, mobile layout, and regression behavior.
+   - Run `npm run build` before closing implementation work when TypeScript or runtime code changed.
+
+5. Summarize
+   - List changed files.
+   - Explain behavior changes, not just code edits.
+   - Report exact commands run and whether they passed.
+   - Separate verified behavior from anything not manually or browser-tested.
+
+6. Stop
+   - Do not continue into the next sprint without a new prompt.
+   - Do not add polish, content, or architecture cleanup outside the requested slice.
+
+## Acceptance Criteria Format
+
+Each future task should include acceptance criteria in this shape:
+
+- Behavior: what the player or system can now do.
+- Scope: files or systems expected to change.
+- Constraints: what must not change.
+- Tests: exact unit, build, or Playwright checks expected.
+- Verification notes: any manual mobile-browser checks required.
+
+## Testing Expectations
+
+- Documentation-only changes do not require unit or e2e tests unless the task asks for them.
+- Pure data or math changes should have Vitest coverage.
+- Phaser scene, input, HUD, restart, and mobile behavior should include Playwright coverage where practical.
+- Performance-sensitive work should include a basic browser smoke check and a note about frame-rate or object-count risk.
+- Existing tests should not be modified just to make a failing behavior pass unless the product contract truly changed.
