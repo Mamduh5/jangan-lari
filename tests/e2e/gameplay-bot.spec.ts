@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { BOSS_SPAWN_TIME_MS, MINIBOSS_SPAWN_TIME_MS } from '../../src/game/config/constants';
 
 type GameplayBotEnemySummary = {
   id: string;
@@ -396,13 +397,43 @@ test.describe('gameplay bot smoke', () => {
     await forceUpgrade(page, 'unlock-phase-disc');
     await forceUpgrade(page, 'unlock-shatterbell');
     await forceUpgrade(page, 'unlock-sunwheel');
-    await forceEncounterWave(page, 100_000);
+    await forceEncounterWave(page, MINIBOSS_SPAWN_TIME_MS);
     await page.waitForFunction(() => {
       const enemies = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.enemies ?? [];
-      return enemies.some((enemy) => enemy.id === 'dreadnought') && enemies.some((enemy) => enemy.id === 'behemoth');
+      return enemies.some((enemy) => enemy.id === 'dreadnought');
     });
 
-    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
+    const dreadnoughtResult = await runGameplayBotUntil(
+      page,
+      30_000,
+      (run) => (run.combatResponse.enemyImpactCounts.dreadnought ?? 0) > 0 || run.endActive,
+    );
+    expect(
+      dreadnoughtResult.finalSnapshot.run?.combatResponse.enemyImpactCounts.dreadnought ?? 0,
+      'expected scheduled Dreadnought encounter to receive authored impact coverage before forcing the boss',
+    ).toBeGreaterThan(0);
+    expect(dreadnoughtResult.finalSnapshot.run?.endActive, 'expected the run to stay active for forced boss coverage').toBe(false);
+
+    await runGameplayBotUntil(page, 15_000, (run) => !run.levelUpActive);
+    await moveEnemyNearPlayer(page, 'dreadnought', { x: 760, y: 0 });
+    await forceEncounterWave(page, BOSS_SPAWN_TIME_MS);
+    await page.waitForFunction(() => {
+      const enemies = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.enemies ?? [];
+      return enemies.some((enemy) => enemy.id === 'behemoth');
+    });
+    await moveEnemyNearPlayer(page, 'behemoth', { x: 220, y: 0 });
+
+    const behemothResult = await runGameplayBotUntil(
+      page,
+      45_000,
+      (run) => (run.combatResponse.enemyImpactCounts.behemoth ?? 0) > 0 || run.endActive,
+    );
+    expect(
+      behemothResult.finalSnapshot.run?.combatResponse.enemyImpactCounts.behemoth ?? 0,
+      'expected scheduled Behemoth encounter to receive authored impact coverage',
+    ).toBeGreaterThan(0);
+
+    const result = behemothResult.finalSnapshot.run?.endActive ? behemothResult : await runGameplayBot(page, BOT_TIMEOUT_MS);
     const finalRun = result.finalSnapshot.run!;
     const dreadnoughtImpacts = finalRun.combatResponse.enemyImpactCounts.dreadnought ?? 0;
     const behemothImpacts = finalRun.combatResponse.enemyImpactCounts.behemoth ?? 0;
@@ -851,6 +882,49 @@ async function forceEncounterWave(page: import('@playwright/test').Page, elapsed
     runScene.spawnEnemyWave?.();
     runScene.publishHudState?.();
   }, elapsedMs);
+}
+
+async function moveEnemyNearPlayer(
+  page: import('@playwright/test').Page,
+  enemyId: string,
+  offset: { x: number; y: number },
+): Promise<void> {
+  await page.evaluate(
+    ({ nextEnemyId, nextOffset, worldWidth, worldHeight }) => {
+      const game = window.__JANGAN_LARI_GAME__;
+      if (!game?.scene.isActive('RunScene')) {
+        throw new Error('RunScene is not active for forced enemy positioning.');
+      }
+
+      const runScene = game.scene.getScene('RunScene') as {
+        player?: { x: number; y: number };
+        enemies?: {
+          getChildren?: () => Array<{
+            active?: boolean;
+            archetype?: { id?: string };
+            body?: { reset?: (x: number, y: number) => void; setVelocity?: (x: number, y: number) => void };
+            isAlive?: () => boolean;
+            setPosition?: (x: number, y: number) => void;
+          }>;
+        };
+      };
+      const player = runScene.player;
+      const enemy = runScene.enemies
+        ?.getChildren?.()
+        .find((entry) => entry.active && entry.isAlive?.() && entry.archetype?.id === nextEnemyId);
+
+      if (!player || !enemy) {
+        throw new Error(`Unable to position forced enemy: ${nextEnemyId}`);
+      }
+
+      const x = Math.max(120, Math.min(worldWidth - 120, player.x + nextOffset.x));
+      const y = Math.max(120, Math.min(worldHeight - 120, player.y + nextOffset.y));
+      enemy.setPosition?.(x, y);
+      enemy.body?.reset?.(x, y);
+      enemy.body?.setVelocity?.(0, 0);
+    },
+    { nextEnemyId: enemyId, nextOffset: offset, worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT },
+  );
 }
 
 async function forceRunEvent(
