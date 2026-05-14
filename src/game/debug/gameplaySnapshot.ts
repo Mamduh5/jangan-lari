@@ -22,6 +22,16 @@ export type GameplayBotGemSummary = {
   value: number;
 };
 
+export type GameplayBotNeutralShapeSummary = {
+  kind: string;
+  x: number;
+  y: number;
+  distance: number;
+  hp: number;
+  maxHp: number;
+  xpValue: number;
+};
+
 export type GameplayBotUpgradeChoice = {
   id: UpgradeId;
   title: string;
@@ -44,6 +54,8 @@ export type GameplayBotRunSnapshot = {
   hp: number;
   maxHp: number;
   level: number;
+  xp: number;
+  xpNext: number;
   kills: number;
   weaponCount: number;
   goldEarned: number;
@@ -61,6 +73,8 @@ export type GameplayBotRunSnapshot = {
     pickupRange: number;
   };
   enemies: GameplayBotEnemySummary[];
+  neutralShapeCount: number;
+  neutralShapes: GameplayBotNeutralShapeSummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
   waveTemplate: {

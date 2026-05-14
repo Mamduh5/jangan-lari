@@ -2,8 +2,14 @@ import Phaser from 'phaser';
 import { playWeaponFireCue } from '../audio/audioCuePlayer';
 import type { WeaponDefinition, WeaponStatPatch, WeaponStats } from '../data/weapons';
 import { Enemy } from '../entities/Enemy';
+import { NeutralShape } from '../entities/NeutralShape';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
+
+type WeaponTarget = {
+  x: number;
+  y: number;
+};
 
 export class AutoFireWeapon {
   private readonly projectileGroup: Phaser.Physics.Arcade.Group;
@@ -14,6 +20,7 @@ export class AutoFireWeapon {
     private readonly scene: Phaser.Scene,
     private readonly owner: Player,
     private readonly enemies: Phaser.Physics.Arcade.Group,
+    private readonly neutralShapes: Phaser.Physics.Arcade.Group | null,
     weapon: WeaponDefinition,
   ) {
     this.projectileGroup = this.scene.physics.add.group({ runChildUpdate: false });
@@ -102,7 +109,7 @@ export class AutoFireWeapon {
       return;
     }
 
-    const target = this.findNearestEnemy();
+    const target = this.findNearestTarget();
     if (!target) {
       return;
     }
@@ -136,10 +143,19 @@ export class AutoFireWeapon {
     }
   }
 
-  private findNearestEnemy(): Enemy | null {
+  private findNearestTarget(): WeaponTarget | null {
     const maxRangeSq = this.stats.range * this.stats.range;
-    const enemies = this.enemies.getChildren() as Enemy[];
+    const enemy = this.findNearestEnemy(maxRangeSq);
 
+    if (enemy) {
+      return enemy;
+    }
+
+    return this.findNearestNeutralShape(maxRangeSq);
+  }
+
+  private findNearestEnemy(maxRangeSq: number): Enemy | null {
+    const enemies = this.enemies.getChildren() as Enemy[];
     let nearestEnemy: Enemy | null = null;
     let nearestDistanceSq = maxRangeSq;
 
@@ -160,7 +176,33 @@ export class AutoFireWeapon {
     return nearestEnemy;
   }
 
-  private fireAt(target: Enemy): void {
+  private findNearestNeutralShape(maxRangeSq: number): NeutralShape | null {
+    if (!this.neutralShapes?.active) {
+      return null;
+    }
+
+    const neutralShapes = this.neutralShapes.getChildren() as NeutralShape[];
+    let nearestShape: NeutralShape | null = null;
+    let nearestDistanceSq = maxRangeSq;
+
+    for (const neutralShape of neutralShapes) {
+      if (!neutralShape.active || !neutralShape.isAlive()) {
+        continue;
+      }
+
+      const distanceSq = Phaser.Math.Distance.Squared(this.owner.x, this.owner.y, neutralShape.x, neutralShape.y);
+      if (distanceSq > nearestDistanceSq) {
+        continue;
+      }
+
+      nearestShape = neutralShape;
+      nearestDistanceSq = distanceSq;
+    }
+
+    return nearestShape;
+  }
+
+  private fireAt(target: WeaponTarget): void {
     const direction = new Phaser.Math.Vector2(target.x - this.owner.x, target.y - this.owner.y);
     if (direction.lengthSq() === 0) {
       return;

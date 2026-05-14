@@ -42,6 +42,12 @@ Acceptance checks:
 
 Goal: Shift the core loop toward farming neutral geometric shapes.
 
+Status note:
+- Added a first-pass neutral shape foundation with destructible square, triangle, and pentagon targets.
+- Shapes spawn at run start, refill under a cap, can be targeted by player projectiles, and drop XP gems through the existing XP/level-up flow.
+- Debug snapshots expose neutral shape count and nearby shape state for e2e coverage.
+- Deferred stat allocation, tank class branching, real PvP players, leaderboard pressure, multiplayer, and backend work.
+
 Deliverables:
 - Neutral shape entities with health, XP value, and simple respawn behavior.
 - Player projectiles can destroy shapes.

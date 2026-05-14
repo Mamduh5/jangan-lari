@@ -19,6 +19,16 @@ type GameplayBotGemSummary = {
   value: number;
 };
 
+type GameplayBotNeutralShapeSummary = {
+  kind: string;
+  x: number;
+  y: number;
+  distance: number;
+  hp: number;
+  maxHp: number;
+  xpValue: number;
+};
+
 type GameplayBotUpgradeChoice = {
   id: string;
   title: string;
@@ -29,6 +39,8 @@ type GameplayBotRunSnapshot = {
   hp: number;
   maxHp: number;
   level: number;
+  xp: number;
+  xpNext: number;
   kills: number;
   weaponCount: number;
   goldEarned: number;
@@ -44,6 +56,8 @@ type GameplayBotRunSnapshot = {
     pickupRange: number;
   };
   enemies: GameplayBotEnemySummary[];
+  neutralShapeCount: number;
+  neutralShapes: GameplayBotNeutralShapeSummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
   waveTemplate: {
@@ -190,7 +204,8 @@ test.describe('gameplay bot smoke', () => {
   });
 
   test('bot can run a deterministic Phase Disc loadout without hit-stop instability', async ({ page }) => {
-    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
+    const phaseDiscTimeoutMs = BOT_TIMEOUT_MS + 60_000;
+    test.setTimeout(phaseDiscTimeoutMs + 60_000);
 
     const runtimeErrors = trackRuntimeErrors(page);
 
@@ -207,8 +222,9 @@ test.describe('gameplay bot smoke', () => {
     await page.waitForFunction(() =>
       Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames.includes('Phase Disc')),
     );
+    await pauseNeutralShapeFarmingForCombatTest(page);
 
-    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
+    const result = await runGameplayBot(page, phaseDiscTimeoutMs);
     const finalRun = result.finalSnapshot.run!;
 
     console.log(
@@ -251,6 +267,7 @@ test.describe('gameplay bot smoke', () => {
     await page.waitForFunction(() =>
       Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames.includes('Shatterbell')),
     );
+    await pauseNeutralShapeFarmingForCombatTest(page);
 
     const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
     const finalRun = result.finalSnapshot.run!;
@@ -293,6 +310,7 @@ test.describe('gameplay bot smoke', () => {
     await page.waitForFunction(() =>
       Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames.includes('Sunwheel')),
     );
+    await pauseNeutralShapeFarmingForCombatTest(page);
 
     const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
     const finalRun = result.finalSnapshot.run!;
@@ -318,7 +336,8 @@ test.describe('gameplay bot smoke', () => {
   });
 
   test('bot can run a deterministic burst-loadout batch without broad combat-response instability', async ({ page }) => {
-    test.setTimeout(BOT_TIMEOUT_MS + 60_000);
+    const burstLoadoutTimeoutMs = BOT_TIMEOUT_MS + 60_000;
+    test.setTimeout(burstLoadoutTimeoutMs + 60_000);
 
     const runtimeErrors = trackRuntimeErrors(page);
 
@@ -337,8 +356,9 @@ test.describe('gameplay bot smoke', () => {
       const weaponNames = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.weaponNames ?? [];
       return weaponNames.includes('Twin Fangs') && weaponNames.includes('Bloom Cannon');
     });
+    await pauseNeutralShapeFarmingForCombatTest(page);
 
-    const result = await runGameplayBot(page, BOT_TIMEOUT_MS);
+    const result = await runGameplayBot(page, burstLoadoutTimeoutMs);
     const finalRun = result.finalSnapshot.run!;
     const twinFangsImpacts = finalRun.combatResponse.weaponImpactCounts['twin-fangs'] ?? 0;
     const bloomCannonImpacts = finalRun.combatResponse.weaponImpactCounts['bloom-cannon'] ?? 0;
@@ -380,6 +400,51 @@ test.describe('gameplay bot smoke', () => {
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 
+  test('neutral shapes spawn and can be farmed for XP', async ({ page }) => {
+    test.setTimeout(45_000);
+
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickStartRun(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+    });
+
+    await page.waitForFunction(() => (window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.neutralShapeCount ?? 0) > 0);
+    const initialSnapshot = await getGameplaySnapshot(page);
+    const initialRun = initialSnapshot.run;
+    if (!initialRun) {
+      throw new Error('Expected active run snapshot for neutral shape validation.');
+    }
+
+    expect(initialRun.neutralShapeCount, 'expected neutral shapes to spawn at run start').toBeGreaterThan(0);
+    expect(initialRun.neutralShapes.length, 'expected nearby neutral shape snapshot entries').toBeGreaterThan(0);
+
+    const startingXp = initialRun.xp;
+    const startingLevel = initialRun.level;
+    await moveNeutralShapeNearPlayer(page);
+    await page.waitForFunction(() => {
+      const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
+      if (!run) {
+        return false;
+      }
+
+      return Number(run.xp) > 0 || Number(run.level) > 1;
+    });
+
+    const finalRun = (await getGameplaySnapshot(page)).run;
+    expect(finalRun, 'expected active run snapshot after neutral shape farming').not.toBeNull();
+    expect(
+      (finalRun?.xp ?? 0) > 0 || (finalRun?.level ?? 1) > initialRun.level,
+      `expected neutral shape destruction to grant XP, started at level ${startingLevel} XP ${startingXp}`,
+    ).toBe(true);
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
+  });
+
   test('bot can exercise deterministic encounter enemies without encounter-response instability', async ({ page }) => {
     test.setTimeout(BOT_TIMEOUT_MS + 60_000);
 
@@ -414,14 +479,15 @@ test.describe('gameplay bot smoke', () => {
     ).toBeGreaterThan(0);
     expect(dreadnoughtResult.finalSnapshot.run?.endActive, 'expected the run to stay active for forced boss coverage').toBe(false);
 
-    await runGameplayBotUntil(page, 15_000, (run) => !run.levelUpActive);
-    await moveEnemyNearPlayer(page, 'dreadnought', { x: 760, y: 0 });
+    await moveNeutralShapesAwayFromPlayer(page);
+    await moveEnemiesAwayFromPlayer(page);
     await forceEncounterWave(page, BOSS_SPAWN_TIME_MS);
     await page.waitForFunction(() => {
       const enemies = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.enemies ?? [];
       return enemies.some((enemy) => enemy.id === 'behemoth');
     });
-    await moveEnemyNearPlayer(page, 'behemoth', { x: 220, y: 0 });
+    await moveEnemiesAwayFromPlayer(page, ['behemoth']);
+    await moveEnemyNearPlayer(page, 'behemoth', { x: 300, y: 0 });
 
     const behemothResult = await runGameplayBotUntil(
       page,
@@ -925,6 +991,136 @@ async function moveEnemyNearPlayer(
     },
     { nextEnemyId: enemyId, nextOffset: offset, worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT },
   );
+}
+
+async function moveEnemiesAwayFromPlayer(page: import('@playwright/test').Page, exceptEnemyIds: string[] = []): Promise<void> {
+  await page.evaluate(
+    ({ worldWidth, worldHeight, exceptIds }) => {
+      const game = window.__JANGAN_LARI_GAME__;
+      if (!game?.scene.isActive('RunScene')) {
+        throw new Error('RunScene is not active for enemy repositioning.');
+      }
+
+      const runScene = game.scene.getScene('RunScene') as {
+        player?: { x: number; y: number };
+        enemies?: {
+          getChildren?: () => Array<{
+            active?: boolean;
+            archetype?: { id?: string };
+            body?: { reset?: (x: number, y: number) => void; setVelocity?: (x: number, y: number) => void };
+            isAlive?: () => boolean;
+            setPosition?: (x: number, y: number) => void;
+          }>;
+        };
+      };
+      const player = runScene.player;
+      const enemies = runScene.enemies?.getChildren?.() ?? [];
+      const baseX = player && player.x < worldWidth / 2 ? worldWidth - 620 : 180;
+      const baseY = player && player.y < worldHeight / 2 ? worldHeight - 620 : 180;
+
+      enemies.forEach((enemy, index) => {
+        if (!enemy.active || !enemy.isAlive?.() || exceptIds.includes(enemy.archetype?.id ?? '')) {
+          return;
+        }
+
+        const x = Math.max(120, Math.min(worldWidth - 120, baseX + (index % 5) * 80));
+        const y = Math.max(120, Math.min(worldHeight - 120, baseY + Math.floor(index / 5) * 80));
+        enemy.setPosition?.(x, y);
+        enemy.body?.reset?.(x, y);
+        enemy.body?.setVelocity?.(0, 0);
+      });
+    },
+    { worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT, exceptIds: exceptEnemyIds },
+  );
+}
+
+async function moveNeutralShapeNearPlayer(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(({ worldWidth, worldHeight }) => {
+    const game = window.__JANGAN_LARI_GAME__;
+    if (!game?.scene.isActive('RunScene')) {
+      throw new Error('RunScene is not active for forced neutral shape positioning.');
+    }
+
+    const runScene = game.scene.getScene('RunScene') as {
+      player?: { x: number; y: number };
+      neutralShapes?: {
+        getChildren?: () => Array<{
+          active?: boolean;
+          body?: { reset?: (x: number, y: number) => void; setVelocity?: (x: number, y: number) => void };
+          isAlive?: () => boolean;
+          setPosition?: (x: number, y: number) => void;
+        }>;
+      };
+    };
+    const player = runScene.player;
+    const neutralShape = runScene.neutralShapes?.getChildren?.().find((entry) => entry.active && entry.isAlive?.());
+
+    if (!player || !neutralShape) {
+      throw new Error('Unable to position a neutral shape for farming validation.');
+    }
+
+    const x = Math.max(120, Math.min(worldWidth - 120, player.x + 80));
+    const y = Math.max(120, Math.min(worldHeight - 120, player.y));
+    neutralShape.setPosition?.(x, y);
+    neutralShape.body?.reset?.(x, y);
+    neutralShape.body?.setVelocity?.(0, 0);
+  }, { worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT });
+}
+
+async function moveNeutralShapesAwayFromPlayer(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(({ worldWidth, worldHeight }) => {
+    const game = window.__JANGAN_LARI_GAME__;
+    if (!game?.scene.isActive('RunScene')) {
+      throw new Error('RunScene is not active for neutral shape repositioning.');
+    }
+
+    const runScene = game.scene.getScene('RunScene') as {
+      player?: { x: number; y: number };
+      neutralShapes?: {
+        getChildren?: () => Array<{
+          active?: boolean;
+          body?: { reset?: (x: number, y: number) => void; setVelocity?: (x: number, y: number) => void };
+          isAlive?: () => boolean;
+          setPosition?: (x: number, y: number) => void;
+        }>;
+      };
+    };
+    const player = runScene.player;
+    const neutralShapes = runScene.neutralShapes?.getChildren?.() ?? [];
+    const baseX = player && player.x < worldWidth / 2 ? worldWidth - 520 : 160;
+    const baseY = player && player.y < worldHeight / 2 ? worldHeight - 520 : 160;
+
+    neutralShapes.forEach((neutralShape, index) => {
+      if (!neutralShape.active || !neutralShape.isAlive?.()) {
+        return;
+      }
+
+      const x = Math.max(120, Math.min(worldWidth - 120, baseX + (index % 4) * 90));
+      const y = Math.max(120, Math.min(worldHeight - 120, baseY + Math.floor(index / 4) * 90));
+      neutralShape.setPosition?.(x, y);
+      neutralShape.body?.reset?.(x, y);
+      neutralShape.body?.setVelocity?.(0, 0);
+    });
+  }, { worldWidth: WORLD_WIDTH, worldHeight: WORLD_HEIGHT });
+}
+
+async function pauseNeutralShapeFarmingForCombatTest(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const game = window.__JANGAN_LARI_GAME__;
+    if (!game?.scene.isActive('RunScene')) {
+      throw new Error('RunScene is not active for neutral shape spawn timer control.');
+    }
+
+    const runScene = game.scene.getScene('RunScene') as {
+      neutralShapeSpawnTimer?: { paused: boolean };
+    };
+
+    if (runScene.neutralShapeSpawnTimer) {
+      runScene.neutralShapeSpawnTimer.paused = true;
+    }
+  });
+
+  await moveNeutralShapesAwayFromPlayer(page);
 }
 
 async function forceRunEvent(

@@ -15,6 +15,11 @@ import {
   ENEMY_SPAWN_INTERVAL_MS,
   GAME_WIDTH,
   LEVEL_UP_FLASH_MS,
+  NEUTRAL_SHAPE_INITIAL_COUNT,
+  NEUTRAL_SHAPE_MAX_COUNT,
+  NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS,
+  NEUTRAL_SHAPE_SPAWN_INTERVAL_MS,
+  NEUTRAL_SHAPE_SPAWN_PADDING,
   PLAYER_HIT_SHAKE_DURATION_MS,
   PLAYER_HIT_SHAKE_INTENSITY,
   REWARD_TARGET_EVENT_DURATION_MS,
@@ -26,6 +31,7 @@ import {
   WORLD_WIDTH,
 } from '../config/constants';
 import { HEROES } from '../data/heroes';
+import { chooseNeutralShapeKind } from '../data/neutralShapes';
 import {
   UPGRADE_POOL,
   buildLevelUpChoices,
@@ -37,6 +43,7 @@ import {
 } from '../data/upgrades';
 import { WEAPON_DEFINITIONS, type WeaponDefinition, type WeaponId } from '../data/weapons';
 import { Enemy, type EnemyAttackSignal } from '../entities/Enemy';
+import { NeutralShape } from '../entities/NeutralShape';
 import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 import { XPGem } from '../entities/XPGem';
@@ -93,6 +100,7 @@ export class RunScene extends Phaser.Scene {
 
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
+  private neutralShapes!: Phaser.Physics.Arcade.Group;
   private xpGems!: Phaser.Physics.Arcade.Group;
   private weapons: AutoFireWeapon[] = [];
   private ownedWeaponIds = new Set<string>();
@@ -100,6 +108,7 @@ export class RunScene extends Phaser.Scene {
   private saveData!: GameSaveData;
   private movementInput!: MovementInputController;
   private spawnTimer?: Phaser.Time.TimerEvent;
+  private neutralShapeSpawnTimer?: Phaser.Time.TimerEvent;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private combatResponse!: CombatResponseController;
   private combatResponseImpactCounts: Partial<Record<WeaponId, number>> = {};
@@ -256,6 +265,7 @@ export class RunScene extends Phaser.Scene {
 
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2, selectedHero);
     this.enemies = this.physics.add.group({ runChildUpdate: false });
+    this.neutralShapes = this.physics.add.group({ runChildUpdate: false });
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
     this.spawnDirector = new SpawnDirector();
     this.movementInput = new MovementInputController(this, createMovementKeys(this));
@@ -270,6 +280,7 @@ export class RunScene extends Phaser.Scene {
     this.registerWeapon(WEAPON_DEFINITIONS[selectedHero.startingWeaponId]);
     this.applyPermanentUpgrades();
     this.applyHeroBonuses();
+    this.spawnInitialNeutralShapes();
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setZoom(1);
@@ -295,6 +306,12 @@ export class RunScene extends Phaser.Scene {
       delay: ENEMY_SPAWN_INTERVAL_MS,
       loop: true,
       callback: this.spawnEnemyWave,
+      callbackScope: this,
+    });
+    this.neutralShapeSpawnTimer = this.time.addEvent({
+      delay: NEUTRAL_SHAPE_SPAWN_INTERVAL_MS,
+      loop: true,
+      callback: this.refillNeutralShapes,
       callbackScope: this,
     });
 
@@ -366,6 +383,7 @@ export class RunScene extends Phaser.Scene {
     const movementInput = this.movementInput.getMovementInput();
     this.player.setFacingDirection(new Phaser.Math.Vector2(movementInput.facing.x, movementInput.facing.y));
     this.player.move(new Phaser.Math.Vector2(movementInput.movement.x, movementInput.movement.y));
+    this.updateNeutralShapes();
     this.updateEnemies();
     this.updateLineStrikeAttacks(delta);
     this.updateShockwaveAttacks(delta);
@@ -404,6 +422,7 @@ export class RunScene extends Phaser.Scene {
   public getGameplayBotSnapshot(): GameplayBotRunSnapshot {
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
     const activeEnemies = this.enemies?.active ? (this.enemies.getChildren() as Enemy[]) : [];
+    const activeNeutralShapes = this.neutralShapes?.active ? (this.neutralShapes.getChildren() as NeutralShape[]) : [];
     const activeGems = this.xpGems?.active ? (this.xpGems.getChildren() as XPGem[]) : [];
 
     const enemies = activeEnemies
@@ -420,6 +439,19 @@ export class RunScene extends Phaser.Scene {
       }))
       .sort((left, right) => left.distance - right.distance)
       .slice(0, 14);
+
+    const neutralShapes = activeNeutralShapes
+      .filter((neutralShape) => neutralShape.active && neutralShape.isAlive())
+      .map((neutralShape) => ({
+        kind: neutralShape.getKind(),
+        x: neutralShape.x,
+        y: neutralShape.y,
+        distance: Phaser.Math.Distance.Between(this.player.x, this.player.y, neutralShape.x, neutralShape.y),
+        hp: neutralShape.getCurrentHealth(),
+        maxHp: neutralShape.getMaxHealth(),
+        xpValue: neutralShape.getXpValue(),
+      }))
+      .sort((left, right) => left.distance - right.distance);
 
     const xpGems = activeGems
       .filter((gem) => gem.active)
@@ -438,6 +470,8 @@ export class RunScene extends Phaser.Scene {
       hp: this.player.getCurrentHealth(),
       maxHp: this.player.getMaxHealth(),
       level: this.player.getLevel(),
+      xp: this.player.getExperience(),
+      xpNext: this.player.getExperienceToNextLevel(),
       kills: this.killCount,
       weaponCount: this.weapons.length,
       weaponNames: this.weapons.map((weapon) => weapon.getStats().name),
@@ -455,6 +489,8 @@ export class RunScene extends Phaser.Scene {
         pickupRange: this.player.getPickupRange(),
       },
       enemies,
+      neutralShapeCount: neutralShapes.length,
+      neutralShapes: neutralShapes.slice(0, 16),
       xpGems,
       upgradeChoices: levelUpChoices.map((choice) => ({
         id: choice.id,
@@ -528,7 +564,7 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    const weapon = new AutoFireWeapon(this, this.player, this.enemies, definition);
+    const weapon = new AutoFireWeapon(this, this.player, this.enemies, this.neutralShapes, definition);
     this.applyWeaponModifiersTo(weapon);
     this.weapons.push(weapon);
     this.ownedWeaponIds.add(definition.id);
@@ -537,6 +573,13 @@ export class RunScene extends Phaser.Scene {
       this.physics.add.overlap(weapon.getProjectiles(), this.enemies, (projectileObject, enemyObject) => {
         if (projectileObject instanceof Projectile && enemyObject instanceof Enemy) {
           this.handleProjectileEnemyOverlap(projectileObject, enemyObject);
+        }
+      }),
+    );
+    this.colliders.push(
+      this.physics.add.overlap(weapon.getProjectiles(), this.neutralShapes, (projectileObject, shapeObject) => {
+        if (projectileObject instanceof Projectile && shapeObject instanceof NeutralShape) {
+          this.handleProjectileNeutralShapeOverlap(projectileObject, shapeObject);
         }
       }),
     );
@@ -651,6 +694,70 @@ export class RunScene extends Phaser.Scene {
     const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, archetype);
     this.enemies.add(enemy);
     return enemy;
+  }
+
+  private spawnInitialNeutralShapes(): void {
+    for (let index = 0; index < NEUTRAL_SHAPE_INITIAL_COUNT; index += 1) {
+      this.spawnNeutralShape();
+    }
+  }
+
+  private refillNeutralShapes(): void {
+    if (this.isEnded || this.isLevelingUp || this.isSystemPaused || !this.neutralShapes?.active) {
+      return;
+    }
+
+    if (this.getActiveNeutralShapeCount() >= NEUTRAL_SHAPE_MAX_COUNT) {
+      return;
+    }
+
+    this.spawnNeutralShape();
+  }
+
+  private spawnNeutralShape(kind = chooseNeutralShapeKind(Phaser.Math.FloatBetween(0, 0.999999))): NeutralShape | null {
+    if (!this.neutralShapes?.active || this.getActiveNeutralShapeCount() >= NEUTRAL_SHAPE_MAX_COUNT) {
+      return null;
+    }
+
+    const spawnPoint = this.getNeutralShapeSpawnPoint();
+    const neutralShape = new NeutralShape(this, spawnPoint.x, spawnPoint.y, kind);
+    this.neutralShapes.add(neutralShape);
+    return neutralShape;
+  }
+
+  private getActiveNeutralShapeCount(): number {
+    if (!this.neutralShapes?.active) {
+      return 0;
+    }
+
+    return (this.neutralShapes.getChildren() as NeutralShape[]).filter(
+      (neutralShape) => neutralShape.active && neutralShape.isAlive(),
+    ).length;
+  }
+
+  private getNeutralShapeSpawnPoint(): Phaser.Math.Vector2 {
+    for (let attempt = 0; attempt < 18; attempt += 1) {
+      const x = Phaser.Math.Between(NEUTRAL_SHAPE_SPAWN_PADDING, WORLD_WIDTH - NEUTRAL_SHAPE_SPAWN_PADDING);
+      const y = Phaser.Math.Between(NEUTRAL_SHAPE_SPAWN_PADDING, WORLD_HEIGHT - NEUTRAL_SHAPE_SPAWN_PADDING);
+
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) >= NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS) {
+        return new Phaser.Math.Vector2(x, y);
+      }
+    }
+
+    const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    return new Phaser.Math.Vector2(
+      Phaser.Math.Clamp(
+        this.player.x + Math.cos(angle) * NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS,
+        NEUTRAL_SHAPE_SPAWN_PADDING,
+        WORLD_WIDTH - NEUTRAL_SHAPE_SPAWN_PADDING,
+      ),
+      Phaser.Math.Clamp(
+        this.player.y + Math.sin(angle) * NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS,
+        NEUTRAL_SHAPE_SPAWN_PADDING,
+        WORLD_HEIGHT - NEUTRAL_SHAPE_SPAWN_PADDING,
+      ),
+    );
   }
 
   private presentEncounterSpawn(archetype: EnemyArchetype, spawnPoint: Phaser.Math.Vector2): void {
@@ -1177,6 +1284,18 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
+  private updateNeutralShapes(): void {
+    if (!this.neutralShapes?.active) {
+      return;
+    }
+
+    const neutralShapes = this.neutralShapes.getChildren() as NeutralShape[];
+
+    for (const neutralShape of neutralShapes) {
+      neutralShape.updatePresentation(this.time.now);
+    }
+  }
+
   private handleProjectileEnemyOverlap(projectile: Projectile, enemy: Enemy): void {
     if (!projectile.active || !enemy.active || this.isEnded) {
       return;
@@ -1213,6 +1332,40 @@ export class RunScene extends Phaser.Scene {
 
     if (explosionRadius > 0 && explosionDamage > 0) {
       this.applyProjectileExplosion(enemyX, enemyY, explosionRadius, explosionDamage, enemy, impactColor);
+    }
+
+    if (shouldDeactivate) {
+      projectile.deactivate();
+    }
+  }
+
+  private handleProjectileNeutralShapeOverlap(projectile: Projectile, neutralShape: NeutralShape): void {
+    if (!projectile.active || !neutralShape.active || !neutralShape.isAlive() || this.isEnded) {
+      return;
+    }
+
+    const shapeX = neutralShape.x;
+    const shapeY = neutralShape.y;
+    const damage = projectile.getDamage();
+    const xpValue = neutralShape.getXpValue();
+    const impactColor = projectile.getVisualColor();
+    const impactRadius = projectile.getVisualRadius();
+    const shouldDeactivate = projectile.consumeHit();
+    const shapeDestroyed = neutralShape.takeDamage(damage, this.time.now);
+    const baseBurstRadius = Math.max(12, impactRadius * 2);
+
+    this.createBurstCircle(shapeX, shapeY, impactColor, Math.max(4, impactRadius * 0.55), baseBurstRadius, 80, 0.2);
+    this.createBurstCircle(shapeX, shapeY, 0xffffff, Math.max(3, impactRadius * 0.22), Math.max(8, impactRadius), 65, 0.14);
+
+    if (shapeDestroyed) {
+      this.showFloatingText(shapeX, shapeY - 18, `+${xpValue} XP`, '#bfdbfe', 15);
+      this.createBurstCircle(shapeX, shapeY, impactColor, 8, 34, 180, 0.72);
+      this.createBurstCircle(shapeX, shapeY, 0xffffff, 4, 24, 130, 0.22);
+      const gem = new XPGem(this, shapeX, shapeY, xpValue);
+      this.xpGems.add(gem);
+      neutralShape.destroy();
+    } else if (damage >= 18) {
+      this.showFloatingText(shapeX, shapeY - 16, `${damage}`, '#e0f2fe', 14);
     }
 
     if (shouldDeactivate) {
@@ -1999,6 +2152,9 @@ export class RunScene extends Phaser.Scene {
     if (this.spawnTimer) {
       this.spawnTimer.paused = true;
     }
+    if (this.neutralShapeSpawnTimer) {
+      this.neutralShapeSpawnTimer.paused = true;
+    }
 
     if (instructionText) {
       this.registry.set('run.instructions', instructionText);
@@ -2013,6 +2169,9 @@ export class RunScene extends Phaser.Scene {
     this.physics.resume();
     if (this.spawnTimer) {
       this.spawnTimer.paused = false;
+    }
+    if (this.neutralShapeSpawnTimer) {
+      this.neutralShapeSpawnTimer.paused = false;
     }
 
     if (instructionText) {
@@ -2069,6 +2228,7 @@ export class RunScene extends Phaser.Scene {
     this.saveData = questResolution.saveData;
 
     this.spawnTimer?.remove(false);
+    this.neutralShapeSpawnTimer?.remove(false);
     this.player.move(new Phaser.Math.Vector2(0, 0));
     this.player.updateVisualState(this.time.now);
     this.physics.pause();
@@ -2323,6 +2483,8 @@ export class RunScene extends Phaser.Scene {
 
     this.spawnTimer?.remove(false);
     this.spawnTimer = undefined;
+    this.neutralShapeSpawnTimer?.remove(false);
+    this.neutralShapeSpawnTimer = undefined;
 
     for (const collider of this.colliders) {
       collider.destroy();
@@ -2347,6 +2509,7 @@ export class RunScene extends Phaser.Scene {
     this.enemyBolts = [];
 
     this.destroyPhysicsGroup(this.enemies);
+    this.destroyPhysicsGroup(this.neutralShapes);
     this.destroyPhysicsGroup(this.xpGems);
 
     if (this.player?.active) {
@@ -2433,6 +2596,9 @@ export class RunScene extends Phaser.Scene {
     if (this.spawnTimer) {
       this.spawnTimer.paused = true;
     }
+    if (this.neutralShapeSpawnTimer) {
+      this.neutralShapeSpawnTimer.paused = true;
+    }
   }
 
   private resumeCombatResponseSystems(): void {
@@ -2449,6 +2615,9 @@ export class RunScene extends Phaser.Scene {
     this.physics.resume();
     if (this.spawnTimer) {
       this.spawnTimer.paused = false;
+    }
+    if (this.neutralShapeSpawnTimer) {
+      this.neutralShapeSpawnTimer.paused = false;
     }
   }
 }
