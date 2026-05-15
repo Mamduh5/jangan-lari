@@ -3,9 +3,12 @@ import type { PermanentUpgradeId } from '../data/permanentUpgrades';
 import type { QuestId } from '../data/quests';
 import type { TankClassId } from '../data/tankClasses';
 
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 const SAVE_STORAGE_KEY = 'jangan-lari-save-v1';
 const LOCAL_LEADERBOARD_LIMIT = 5;
+
+export const CONTROL_GUIDE_MODES = ['hidden', 'subtle', 'visible'] as const;
+export type ControlGuideMode = (typeof CONTROL_GUIDE_MODES)[number];
 
 export type ProgressStats = {
   totalKills: number;
@@ -37,6 +40,8 @@ export type GameSaveData = {
   progressStats: ProgressStats;
   bestScore: number;
   localLeaderboard: LocalLeaderboardEntry[];
+  controlGuideMode: ControlGuideMode;
+  controlHintDismissed: boolean;
 };
 
 export function createDefaultSaveData(): GameSaveData {
@@ -62,6 +67,8 @@ export function createDefaultSaveData(): GameSaveData {
     },
     bestScore: 0,
     localLeaderboard: [],
+    controlGuideMode: 'subtle',
+    controlHintDismissed: false,
   };
 }
 
@@ -128,6 +135,8 @@ export function loadGameSave(): GameSaveData {
       },
       bestScore: Math.max(0, Number(parsed.bestScore ?? 0)),
       localLeaderboard: sanitizeLocalLeaderboard(parsed.localLeaderboard),
+      controlGuideMode: sanitizeControlGuideMode(parsed.controlGuideMode, fallback.controlGuideMode),
+      controlHintDismissed: Boolean(parsed.controlHintDismissed ?? fallback.controlHintDismissed),
     };
 
     loaded.bestScore = Math.max(loaded.bestScore, loaded.localLeaderboard[0]?.score ?? 0);
@@ -141,6 +150,42 @@ export function loadGameSave(): GameSaveData {
 
 export function writeGameSave(saveData: GameSaveData): void {
   window.localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(saveData));
+}
+
+export function updateControlGuideMode(saveData: GameSaveData, mode: ControlGuideMode): GameSaveData {
+  const nextSave: GameSaveData = {
+    ...saveData,
+    unlockedHeroes: [...saveData.unlockedHeroes],
+    unlockedPermanentUpgrades: [...saveData.unlockedPermanentUpgrades],
+    purchasedPermanentUpgrades: { ...saveData.purchasedPermanentUpgrades },
+    completedQuests: [...saveData.completedQuests],
+    progressStats: { ...saveData.progressStats },
+    localLeaderboard: [...saveData.localLeaderboard],
+    controlGuideMode: mode,
+  };
+
+  writeGameSave(nextSave);
+  return nextSave;
+}
+
+export function markControlHintDismissed(saveData: GameSaveData): GameSaveData {
+  if (saveData.controlHintDismissed) {
+    return saveData;
+  }
+
+  const nextSave: GameSaveData = {
+    ...saveData,
+    unlockedHeroes: [...saveData.unlockedHeroes],
+    unlockedPermanentUpgrades: [...saveData.unlockedPermanentUpgrades],
+    purchasedPermanentUpgrades: { ...saveData.purchasedPermanentUpgrades },
+    completedQuests: [...saveData.completedQuests],
+    progressStats: { ...saveData.progressStats },
+    localLeaderboard: [...saveData.localLeaderboard],
+    controlHintDismissed: true,
+  };
+
+  writeGameSave(nextSave);
+  return nextSave;
 }
 
 export function recordLocalLeaderboardEntry(
@@ -219,4 +264,8 @@ function sanitizeLocalLeaderboard(value: unknown): LocalLeaderboardEntry[] {
 
 function isTankClassId(value: unknown): value is TankClassId {
   return value === 'basic' || value === 'twin' || value === 'sniper';
+}
+
+function sanitizeControlGuideMode(value: unknown, fallback: ControlGuideMode): ControlGuideMode {
+  return CONTROL_GUIDE_MODES.includes(value as ControlGuideMode) ? (value as ControlGuideMode) : fallback;
 }

@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { getCombatResponseTuningSnapshot, type CombatResponseTuningSnapshot } from '../combat/combatResponse';
 import type { EnemyArchetypeId } from '../data/enemies';
+import type { ControlGuideMode } from '../save/saveData';
 import type { TankClassId } from '../data/tankClasses';
 import type { TankStatEffectSnapshot, TankStatLevels } from '../data/tankStats';
 import type { UpgradeId } from '../data/upgrades';
@@ -108,6 +109,8 @@ export type GameplayBotRunSnapshot = {
     movementSource: 'keyboard' | 'pointer' | 'idle';
     hasExplicitAim: boolean;
   };
+  controlGuideMode: ControlGuideMode;
+  controlHintVisible: boolean;
   tankStats: {
     availablePoints: number;
     levels: TankStatLevels;

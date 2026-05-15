@@ -241,3 +241,27 @@ Acceptance checks:
 - Weapon fire follows aim/facing direction.
 - Keyboard movement still works without overriding explicit aim.
 - Existing mobile layout and focused smoke checks pass.
+
+## Sprint 11: Mobile Control Guide And Settings
+
+Goal: Make the invisible dual-zone mobile controls understandable and configurable without changing the control model.
+
+Status note:
+- Added a browser-local control guide visibility setting with `hidden`, `subtle`, and `visible` modes.
+- Added optional in-run movement and aim guide visuals for the fixed 1280x720 FIT layout.
+- Added an early-run control hint for left-move, right-aim, and automatic weapon fire; it dismisses after early use or a short timeout.
+- Hidden mode preserves the current invisible-control feel while keeping the underlying left/right dual-zone input unchanged.
+- Browser Chrome and FIT side letterboxing remain accepted for now.
+- APK/WebView fullscreen, aspect-ratio work, and full gameplay-bot recalibration remain deferred.
+
+Deliverables:
+- Persisted local guide visibility setting.
+- Mobile-readable left movement and right aim guide visuals.
+- Lightweight first-run control hint.
+- Focused controls e2e coverage.
+
+Acceptance checks:
+- New players can infer left-side movement and right-side aim.
+- Owner can switch guides off.
+- Dual-stick movement and aim continue to work.
+- Phaser scale remains FIT with the fixed 1280x720 virtual coordinate system.

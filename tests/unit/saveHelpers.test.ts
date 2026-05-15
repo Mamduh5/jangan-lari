@@ -1,5 +1,12 @@
 ﻿import { HEROES } from '../../src/game/data/heroes';
-import { createDefaultSaveData, loadGameSave, recordLocalLeaderboardEntry, writeGameSave } from '../../src/game/save/saveData';
+import {
+  createDefaultSaveData,
+  loadGameSave,
+  markControlHintDismissed,
+  recordLocalLeaderboardEntry,
+  updateControlGuideMode,
+  writeGameSave,
+} from '../../src/game/save/saveData';
 import { isHeroUnlocked, selectHero, unlockHero } from '../../src/game/save/saveHeroes';
 
 describe('save helpers', () => {
@@ -33,6 +40,8 @@ describe('save helpers', () => {
           totalGoldCollected: 20,
           eliteKills: 1,
         },
+        controlGuideMode: 'loud',
+        controlHintDismissed: true,
       }),
     );
 
@@ -44,6 +53,8 @@ describe('save helpers', () => {
     expect(save.progressStats.totalKills).toBe(0);
     expect(save.bestScore).toBe(0);
     expect(save.localLeaderboard).toEqual([]);
+    expect(save.controlGuideMode).toBe('subtle');
+    expect(save.controlHintDismissed).toBe(true);
   });
 
   test('unlockHero requires enough gold and selects the unlocked hero', () => {
@@ -74,6 +85,18 @@ describe('save helpers', () => {
 
     const parsed = JSON.parse(window.localStorage.getItem('jangan-lari-save-v1') ?? '{}');
     expect(parsed.totalGold).toBe(77);
+  });
+
+  test('control guide settings persist locally', () => {
+    const hiddenSave = updateControlGuideMode(createDefaultSaveData(), 'hidden');
+    expect(hiddenSave.controlGuideMode).toBe('hidden');
+
+    const dismissedSave = markControlHintDismissed(hiddenSave);
+    expect(dismissedSave.controlHintDismissed).toBe(true);
+
+    const parsed = JSON.parse(window.localStorage.getItem('jangan-lari-save-v1') ?? '{}');
+    expect(parsed.controlGuideMode).toBe('hidden');
+    expect(parsed.controlHintDismissed).toBe(true);
   });
 
   test('recordLocalLeaderboardEntry stores top local runs and updates best score', () => {

@@ -21,6 +21,8 @@ This document records the intended direction for the `.io` MVP without importing
 - Keep debug and bot-facing state explicit so future QA tooling can observe player stats, tank class, shapes, XP, score, and restart state.
 - Keep score pressure local-only for the MVP: run score math stays in a pure helper, and best-score/top-five history stays in browser localStorage until a later backend task exists.
 - Treat mobile-browser landscape readability as the runtime baseline before APK/PWA wrapper work.
+- Preserve Phaser `FIT` scaling and the fixed 1280x720 virtual coordinate contract until a dedicated aspect-ratio or wrapper sprint proves a broader layout change.
+- Keep mobile control guidance optional and browser-local: guide visibility belongs in local save data, while the dual-zone input model remains the gameplay contract.
 - Preserve fast restart and scene cleanup as first-class architecture concerns.
 
 ## Replace Or Simplify
@@ -45,6 +47,8 @@ This document records the intended direction for the `.io` MVP without importing
 - Matchmaking.
 - Large content expansion.
 - Full game rename.
+- APK/WebView fullscreen and aspect-ratio-specific layout work.
+- Full gameplay-bot recalibration outside focused feature validation.
 
 ## Future Multiplayer Seams
 

@@ -60,8 +60,8 @@ import { createMovementKeys } from '../input/createMovementKeys';
 import { MovementInputController, type MovementInputSnapshot } from '../input/MovementInputController';
 import type { GameplayBotRunSnapshot } from '../debug/gameplaySnapshot';
 import { getTankStatDefinition, type TankStatId } from '../data/tankStats';
-import type { GameSaveData } from '../save/saveData';
-import { loadGameSave, recordLocalLeaderboardEntry } from '../save/saveData';
+import type { ControlGuideMode, GameSaveData } from '../save/saveData';
+import { loadGameSave, markControlHintDismissed, recordLocalLeaderboardEntry, updateControlGuideMode } from '../save/saveData';
 import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
@@ -209,6 +209,7 @@ export class RunScene extends Phaser.Scene {
   private challengeWaveFailureCount = 0;
   private rewardTargetSuccessCount = 0;
   private rewardTargetFailureCount = 0;
+  private controlHintVisible = false;
   private rewardTargetMarker?: Phaser.GameObjects.Arc;
   private rewardTargetLabel?: Phaser.GameObjects.Text;
   private lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
@@ -237,6 +238,7 @@ export class RunScene extends Phaser.Scene {
 
   create(): void {
     this.saveData = loadGameSave();
+    this.controlHintVisible = !this.saveData.controlHintDismissed;
 
     const freshSession = createFreshRunSessionState();
     this.runElapsedMs = freshSession.runElapsedMs;
@@ -445,6 +447,7 @@ export class RunScene extends Phaser.Scene {
 
     const movementInput = this.movementInput.getMovementInput();
     this.lastMovementInput = movementInput;
+    this.dismissControlHintIfNeeded(movementInput);
     this.player.setFacingDirection(new Phaser.Math.Vector2(movementInput.facing.x, movementInput.facing.y));
     this.player.move(new Phaser.Math.Vector2(movementInput.movement.x, movementInput.movement.y), false);
     this.updateNeutralShapes();
@@ -583,6 +586,8 @@ export class RunScene extends Phaser.Scene {
         movementSource: this.lastMovementInput.source,
         hasExplicitAim: this.lastMovementInput.hasExplicitAim,
       },
+      controlGuideMode: String(this.registry.get('run.controlGuideMode') ?? this.saveData.controlGuideMode) as ControlGuideMode,
+      controlHintVisible: Boolean(this.registry.get('run.controlHintVisible')),
       tankStats: {
         availablePoints: this.tankStats.getAvailablePoints(),
         levels: this.tankStats.getLevels(),
@@ -760,6 +765,12 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.endRun(victory, victory ? 'Victory' : 'Defeat', 'Debug score run complete.');
+  }
+
+  public setControlGuideMode(mode: ControlGuideMode): void {
+    this.saveData = updateControlGuideMode(this.saveData, mode);
+    this.registry.set('run.controlGuideMode', this.saveData.controlGuideMode);
+    this.publishHudState();
   }
 
   private registerWeapon(definition: WeaponDefinition, announce = false): void {
@@ -2535,6 +2546,25 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.eventTitle', this.activeRunEvent?.title ?? '');
     this.registry.set('run.eventText', this.activeRunEvent?.objective ?? '');
     this.registry.set('run.eventRemainingMs', this.activeRunEvent ? Math.max(0, this.activeRunEvent.endsAtMs - this.runElapsedMs) : 0);
+    this.registry.set('run.controlGuideMode', this.saveData.controlGuideMode);
+    this.registry.set('run.controlHintVisible', this.controlHintVisible);
+  }
+
+  private dismissControlHintIfNeeded(movementInput: MovementInputSnapshot): void {
+    if (!this.controlHintVisible) {
+      return;
+    }
+
+    const hasMovement = movementInput.source !== 'idle' && (movementInput.movement.x !== 0 || movementInput.movement.y !== 0);
+    const hasAim = movementInput.aimActive;
+    const hasTimedOut = this.runElapsedMs >= 5500;
+
+    if (!hasMovement && !hasAim && !hasTimedOut) {
+      return;
+    }
+
+    this.controlHintVisible = false;
+    this.saveData = markControlHintDismissed(this.saveData);
   }
 
   private calculateCurrentRunScore(): number {

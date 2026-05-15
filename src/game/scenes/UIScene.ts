@@ -3,7 +3,13 @@ import type { UpgradeDefinition } from '../data/upgrades';
 import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
-import type { LocalLeaderboardEntry } from '../save/saveData';
+import {
+  CONTROL_GUIDE_MODES,
+  loadGameSave,
+  updateControlGuideMode,
+  type ControlGuideMode,
+  type LocalLeaderboardEntry,
+} from '../save/saveData';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { RunScene } from './RunScene';
 
@@ -56,6 +62,13 @@ export class UIScene extends Phaser.Scene {
   private statHelpText!: Phaser.GameObjects.Text;
   private statButtons: Partial<Record<TankStatId, Phaser.GameObjects.Rectangle>> = {};
   private statButtonLabels: Partial<Record<TankStatId, Phaser.GameObjects.Text>> = {};
+  private controlGuideMode: ControlGuideMode = 'subtle';
+  private controlGuideVisualContainer!: Phaser.GameObjects.Container;
+  private controlGuideZones: Phaser.GameObjects.Arc[] = [];
+  private controlGuideLabels: Phaser.GameObjects.Text[] = [];
+  private controlGuideSubLabels: Phaser.GameObjects.Text[] = [];
+  private controlHintContainer!: Phaser.GameObjects.Container;
+  private controlGuideToggleButton!: Phaser.GameObjects.Text;
 
   private readonly handleSelectUpgradeOne = (): void => {
     this.selectUpgrade(0);
@@ -88,6 +101,10 @@ export class UIScene extends Phaser.Scene {
     this.classChoiceActionLabels = [];
     this.statButtons = {};
     this.statButtonLabels = {};
+    this.controlGuideZones = [];
+    this.controlGuideLabels = [];
+    this.controlGuideSubLabels = [];
+    this.controlGuideMode = this.readControlGuideMode();
 
     const topLeftPanel = this.add.rectangle(20, 16, 390, 148, 0x102033, 0.86).setOrigin(0);
     topLeftPanel.setStrokeStyle(1, 0x4b6b8a, 0.84);
@@ -314,6 +331,9 @@ export class UIScene extends Phaser.Scene {
     this.classChoiceContainer = this.createClassChoiceOverlay();
     this.statAllocationContainer = this.createStatAllocationPanel();
     this.orientationHintContainer = this.createOrientationHintOverlay();
+    this.controlGuideVisualContainer = this.createControlGuideVisuals();
+    this.controlHintContainer = this.createControlHintOverlay();
+    this.controlGuideToggleButton = this.createControlGuideToggleButton();
 
     this.input.keyboard?.on('keydown-ENTER', this.handleConfirmInput, this);
     this.input.keyboard?.on('keydown-SPACE', this.handleConfirmInput, this);
@@ -391,6 +411,7 @@ export class UIScene extends Phaser.Scene {
     this.refreshEventHud(eventActive, eventTitle, eventText, eventRemainingMs, levelUpActive || classChoiceActive, endActive);
     this.refreshStatAllocationPanel(statPoints, tankStatLevels, levelUpActive, classChoiceActive, endActive);
     this.refreshOrientationHint();
+    this.refreshControlGuideState(levelUpActive, classChoiceActive, endActive);
 
     this.endContainer.setVisible(endActive);
     this.levelUpContainer.setVisible(levelUpActive && !classChoiceActive && !endActive);
@@ -425,6 +446,10 @@ export class UIScene extends Phaser.Scene {
     endStats: string;
     leaderboard: string;
     orientationHintVisible: boolean;
+    controlGuideMode: ControlGuideMode;
+    controlGuidesVisible: boolean;
+    controlHintVisible: boolean;
+    controlGuideToggleText: string;
   } {
     return {
       hero: this.heroText.text,
@@ -442,6 +467,10 @@ export class UIScene extends Phaser.Scene {
       endStats: this.endStatsText.text,
       leaderboard: this.endLeaderboardText.text,
       orientationHintVisible: this.orientationHintContainer.visible,
+      controlGuideMode: this.controlGuideMode,
+      controlGuidesVisible: this.controlGuideVisualContainer.visible,
+      controlHintVisible: this.controlHintContainer.visible,
+      controlGuideToggleText: this.controlGuideToggleButton.text,
     };
   }
 
@@ -798,6 +827,186 @@ export class UIScene extends Phaser.Scene {
     container.setVisible(false);
 
     return container;
+  }
+
+  private createControlGuideVisuals(): Phaser.GameObjects.Container {
+    const zoneConfigs = [
+      { x: 164, y: 552, color: 0x38bdf8, label: 'MOVE', subLabel: 'LEFT SIDE' },
+      { x: GAME_WIDTH - 164, y: 552, color: 0xfacc15, label: 'AIM', subLabel: 'RIGHT SIDE' },
+    ];
+    const children: Phaser.GameObjects.GameObject[] = [];
+
+    for (const config of zoneConfigs) {
+      const zone = this.add.circle(config.x, config.y, 84, config.color, 0.08);
+      zone.setStrokeStyle(3, config.color, 0.3);
+      zone.setScrollFactor(0);
+
+      const label = this.add
+        .text(config.x, config.y - 10, config.label, {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '19px',
+          color: '#f8fafc',
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0);
+
+      const subLabel = this.add
+        .text(config.x, config.y + 18, config.subLabel, {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '11px',
+          color: '#cbd5e1',
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0);
+
+      this.controlGuideZones.push(zone);
+      this.controlGuideLabels.push(label);
+      this.controlGuideSubLabels.push(subLabel);
+      children.push(zone, label, subLabel);
+    }
+
+    const container = this.add.container(0, 0, children);
+    container.setDepth(64);
+    container.setScrollFactor(0);
+    container.setVisible(false);
+
+    return container;
+  }
+
+  private createControlHintOverlay(): Phaser.GameObjects.Container {
+    const panel = this.add.rectangle(GAME_WIDTH / 2, 516, 456, 72, 0x08111f, 0.88);
+    panel.setStrokeStyle(1, 0x60a5fa, 0.7);
+    panel.setScrollFactor(0);
+
+    const hintText = this.add
+      .text(GAME_WIDTH / 2, 516, 'Left side: move\nRight side: aim\nWeapons fire automatically', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#e0f2fe',
+        align: 'center',
+        lineSpacing: 3,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    const container = this.add.container(0, 0, [panel, hintText]);
+    container.setDepth(66);
+    container.setScrollFactor(0);
+    container.setVisible(false);
+
+    return container;
+  }
+
+  private createControlGuideToggleButton(): Phaser.GameObjects.Text {
+    const button = this.add
+      .text(GAME_WIDTH - 28, 178, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '15px',
+        color: '#dbeafe',
+        backgroundColor: '#111827',
+        padding: { left: 10, right: 10, top: 6, bottom: 6 },
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+
+    button.on('pointerdown', () => this.cycleControlGuideMode());
+    button.on('pointerover', () => button.setStyle({ color: '#ffffff', backgroundColor: '#1f2937' }));
+    button.on('pointerout', () => this.refreshControlGuideButton());
+    button.setDepth(80);
+
+    return button;
+  }
+
+  private refreshControlGuideState(levelUpActive: boolean, classChoiceActive: boolean, endActive: boolean): void {
+    const mode = this.readControlGuideMode();
+    if (mode !== this.controlGuideMode) {
+      this.controlGuideMode = mode;
+    }
+
+    const mobileControlUi = this.shouldUseMobileControlUi();
+    const modalOverlayActive = levelUpActive || classChoiceActive || endActive || this.orientationHintContainer.visible;
+    const guidesVisible = mobileControlUi && this.controlGuideMode !== 'hidden' && !modalOverlayActive;
+    const hintVisible = guidesVisible && Boolean(this.registry.get('run.controlHintVisible'));
+
+    this.controlGuideVisualContainer.setVisible(guidesVisible);
+    this.controlHintContainer.setVisible(hintVisible);
+    this.controlGuideToggleButton.setVisible(mobileControlUi && !modalOverlayActive);
+    this.refreshControlGuideButton();
+    this.applyControlGuidePresentation();
+  }
+
+  private applyControlGuidePresentation(): void {
+    const presentation =
+      this.controlGuideMode === 'visible'
+        ? { fillAlpha: 0.18, strokeAlpha: 0.72, labelAlpha: 0.92, subLabelAlpha: 0.78 }
+        : { fillAlpha: 0.08, strokeAlpha: 0.3, labelAlpha: 0.5, subLabelAlpha: 0.42 };
+
+    for (let index = 0; index < this.controlGuideZones.length; index += 1) {
+      const zone = this.controlGuideZones[index];
+      const color = index === 0 ? 0x38bdf8 : 0xfacc15;
+      zone.setFillStyle(color, presentation.fillAlpha);
+      zone.setStrokeStyle(this.controlGuideMode === 'visible' ? 3 : 2, color, presentation.strokeAlpha);
+      this.controlGuideLabels[index].setAlpha(presentation.labelAlpha);
+      this.controlGuideSubLabels[index].setAlpha(presentation.subLabelAlpha);
+    }
+  }
+
+  private cycleControlGuideMode(): void {
+    const nextMode: ControlGuideMode =
+      this.controlGuideMode === 'subtle' ? 'visible' : this.controlGuideMode === 'visible' ? 'hidden' : 'subtle';
+    this.setControlGuideMode(nextMode);
+  }
+
+  private setControlGuideMode(mode: ControlGuideMode): void {
+    const runScene = this.scene.isActive('RunScene') ? (this.scene.get('RunScene') as RunScene & {
+      setControlGuideMode?: (nextMode: ControlGuideMode) => void;
+    }) : null;
+
+    if (runScene?.setControlGuideMode) {
+      runScene.setControlGuideMode(mode);
+    } else {
+      updateControlGuideMode(loadGameSave(), mode);
+      this.registry.set('run.controlGuideMode', mode);
+    }
+
+    this.controlGuideMode = mode;
+    this.refreshControlGuideButton();
+  }
+
+  private refreshControlGuideButton(): void {
+    this.setTextIfChanged(this.controlGuideToggleButton, `Guide: ${this.getControlGuideModeLabel(this.controlGuideMode)}`);
+    this.controlGuideToggleButton.setStyle({
+      color: this.controlGuideMode === 'hidden' ? '#94a3b8' : '#dbeafe',
+      backgroundColor: this.controlGuideMode === 'visible' ? '#1e3a5f' : '#111827',
+    });
+  }
+
+  private readControlGuideMode(): ControlGuideMode {
+    const value = this.registry.get('run.controlGuideMode');
+    if (CONTROL_GUIDE_MODES.includes(value as ControlGuideMode)) {
+      return value as ControlGuideMode;
+    }
+
+    return loadGameSave().controlGuideMode;
+  }
+
+  private shouldUseMobileControlUi(): boolean {
+    const viewportWidth = window.innerWidth || this.scale.displaySize.width;
+    const viewportHeight = window.innerHeight || this.scale.displaySize.height;
+    return viewportWidth <= 960 || viewportHeight <= 540;
+  }
+
+  private getControlGuideModeLabel(mode: ControlGuideMode): string {
+    switch (mode) {
+      case 'hidden':
+        return 'Hidden';
+      case 'visible':
+        return 'Visible';
+      case 'subtle':
+      default:
+        return 'Subtle';
+    }
   }
 
   private refreshEndOverlay(
