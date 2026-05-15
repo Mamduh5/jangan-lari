@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { getCombatResponseTuningSnapshot, type CombatResponseTuningSnapshot } from '../combat/combatResponse';
 import type { EnemyArchetypeId } from '../data/enemies';
+import type { TankClassId } from '../data/tankClasses';
 import type { TankStatEffectSnapshot, TankStatLevels } from '../data/tankStats';
 import type { UpgradeId } from '../data/upgrades';
 import type { WeaponId } from '../data/weapons';
@@ -64,6 +65,10 @@ export type GameplayBotRunSnapshot = {
     id: WeaponId;
     damage: number;
     fireCooldownMs: number;
+    projectileSpeed: number;
+    range: number;
+    burstCount: number;
+    spreadDegrees: number;
   } | null;
   levelUpActive: boolean;
   endActive: boolean;
@@ -82,6 +87,20 @@ export type GameplayBotRunSnapshot = {
     availablePoints: number;
     levels: TankStatLevels;
     effects: TankStatEffectSnapshot;
+  };
+  tankClass: {
+    id: TankClassId;
+    title: string;
+    description: string;
+  };
+  classChoice: {
+    available: boolean;
+    active: boolean;
+    choices: Array<{
+      id: TankClassId;
+      title: string;
+      description: string;
+    }>;
   };
   enemies: GameplayBotEnemySummary[];
   neutralShapeCount: number;

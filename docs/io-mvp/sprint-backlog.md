@@ -90,6 +90,13 @@ Acceptance checks:
 
 Goal: Add class identity without overbuilding content.
 
+Status note:
+- Added a run-only tank class branching foundation with Basic as the default class and Twin/Sniper as the first evolution choices.
+- Evolution is available at level 4, with a focused debug path for browser validation.
+- Twin adds a readable two-shot spread, while Sniper adds longer, faster, harder precision shots.
+- Class choice is exposed in the gameplay debug snapshot and shown through a compact pointer/touch overlay.
+- Deferred full class tree, additional branch tiers, class balance, PvP leaderboard pressure, multiplayer, and server authority.
+
 Deliverables:
 - First class-branch decision point.
 - Small data model for tank class definitions.

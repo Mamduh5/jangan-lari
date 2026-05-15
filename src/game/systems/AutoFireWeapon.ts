@@ -57,6 +57,10 @@ export class AutoFireWeapon {
   }
 
   applyStatPatch(patch: WeaponStatPatch): void {
+    if (patch.damage !== undefined) {
+      this.stats.damage = Math.max(1, this.stats.damage + patch.damage);
+    }
+
     if (patch.burstCount !== undefined) {
       this.stats.burstCount = Math.max(1, patch.burstCount);
     }

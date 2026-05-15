@@ -10,19 +10,26 @@ import {
   PLAYER_XP_PER_LEVEL,
 } from '../config/constants';
 import type { HeroDefinition } from '../data/heroes';
+import type { TankClassVisualIdentity } from '../data/tankClasses';
 
 export class Player extends Phaser.GameObjects.Rectangle {
   declare body: Phaser.Physics.Arcade.Body;
 
   private readonly aura: Phaser.GameObjects.Arc;
   private readonly barrel: Phaser.GameObjects.Rectangle;
+  private readonly secondaryBarrel: Phaser.GameObjects.Rectangle;
   private readonly turret: Phaser.GameObjects.Arc;
   private readonly heroMarker: Phaser.GameObjects.Shape;
-  private readonly baseFillColor: number;
-  private readonly baseBarrelColor: number;
-  private readonly baseTurretColor: number;
+  private readonly baseBarrelWidth: number;
+  private readonly baseBarrelHeight: number;
   private readonly visualSize: number;
   private facingDirection = new Phaser.Math.Vector2(1, 0);
+  private currentFillColor: number;
+  private currentBarrelColor: number;
+  private currentTurretColor: number;
+  private barrelCount: 1 | 2 = 1;
+  private barrelLengthMultiplier = 1;
+  private barrelWidthMultiplier = 1;
   private speed = PLAYER_SPEED;
   private maxHealth = PLAYER_MAX_HP;
   private readonly hitInvulnerabilityMs = PLAYER_HIT_INVULNERABILITY_MS;
@@ -39,9 +46,11 @@ export class Player extends Phaser.GameObjects.Rectangle {
     const hullHeight = Math.round(appearance.size * 0.82);
     super(scene, x, y, hullWidth, hullHeight, appearance.bodyColor);
 
-    this.baseFillColor = appearance.bodyColor;
-    this.baseBarrelColor = appearance.strokeColor;
-    this.baseTurretColor = appearance.markerColor;
+    this.currentFillColor = appearance.bodyColor;
+    this.currentBarrelColor = appearance.strokeColor;
+    this.currentTurretColor = appearance.markerColor;
+    this.baseBarrelWidth = Math.round(appearance.size * 0.68);
+    this.baseBarrelHeight = Math.max(6, Math.round(appearance.size * 0.18));
     this.visualSize = appearance.size;
     this.facingDirection.setToPolar(Phaser.Math.DegToRad(appearance.angle), 1);
 
@@ -52,14 +61,27 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.barrel = scene.add.rectangle(
       x,
       y,
-      Math.round(appearance.size * 0.68),
-      Math.max(6, Math.round(appearance.size * 0.18)),
+      this.baseBarrelWidth,
+      this.baseBarrelHeight,
       appearance.strokeColor,
       0.96,
     );
     this.barrel.setOrigin(0, 0.5);
     this.barrel.setDepth(7);
     this.barrel.setStrokeStyle(1, appearance.bodyColor, 0.65);
+
+    this.secondaryBarrel = scene.add.rectangle(
+      x,
+      y,
+      this.baseBarrelWidth,
+      this.baseBarrelHeight,
+      appearance.strokeColor,
+      0.96,
+    );
+    this.secondaryBarrel.setOrigin(0, 0.5);
+    this.secondaryBarrel.setDepth(7);
+    this.secondaryBarrel.setStrokeStyle(1, appearance.bodyColor, 0.65);
+    this.secondaryBarrel.setVisible(false);
 
     this.turret = scene.add.circle(
       x,
@@ -135,7 +157,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
 
     this.scene.time.delayedCall(PLAYER_HIT_FLASH_MS, () => {
       if (this.active) {
-        this.setFillStyle(this.isAlive() ? this.baseFillColor : 0x64748b);
+        this.setFillStyle(this.isAlive() ? this.currentFillColor : 0x64748b);
       }
     });
 
@@ -154,6 +176,24 @@ export class Player extends Phaser.GameObjects.Rectangle {
 
   addPickupRange(amount: number): void {
     this.pickupRange += amount;
+  }
+
+  applyTankClassVisualIdentity(visual: TankClassVisualIdentity): void {
+    this.barrelCount = visual.barrelCount;
+    this.barrelLengthMultiplier = visual.barrelLengthMultiplier;
+    this.barrelWidthMultiplier = visual.barrelWidthMultiplier;
+    this.currentFillColor = visual.hullColor;
+    this.currentBarrelColor = visual.barrelColor;
+    this.currentTurretColor = visual.turretColor;
+
+    this.setFillStyle(visual.hullColor);
+    this.setStrokeStyle(3, visual.barrelColor, 0.95);
+    this.barrel.setFillStyle(visual.barrelColor, 0.96);
+    this.barrel.setStrokeStyle(1, visual.hullColor, 0.65);
+    this.secondaryBarrel.setFillStyle(visual.barrelColor, 0.96);
+    this.secondaryBarrel.setStrokeStyle(1, visual.hullColor, 0.65);
+    this.secondaryBarrel.setVisible(visual.barrelCount === 2);
+    this.turret.setFillStyle(visual.turretColor, 0.96);
   }
 
   gainExperience(amount: number): number {
@@ -176,22 +216,26 @@ export class Player extends Phaser.GameObjects.Rectangle {
     if (!this.isAlive()) {
       this.setFillStyle(0x64748b);
       this.barrel.setFillStyle(0x475569, 0.74);
+      this.secondaryBarrel.setFillStyle(0x475569, 0.74);
       this.turret.setFillStyle(0x64748b, 0.74);
       this.setAlpha(0.7);
       this.aura.setAlpha(0.08);
       this.barrel.setAlpha(0.42);
+      this.secondaryBarrel.setAlpha(0.42);
       this.turret.setAlpha(0.5);
       this.heroMarker.setAlpha(0.25);
       return;
     }
 
     const invulnerable = currentTime < this.invulnerableUntil;
-    this.setFillStyle(this.baseFillColor);
-    this.barrel.setFillStyle(this.baseBarrelColor, 0.96);
-    this.turret.setFillStyle(this.baseTurretColor, 0.96);
+    this.setFillStyle(this.currentFillColor);
+    this.barrel.setFillStyle(this.currentBarrelColor, 0.96);
+    this.secondaryBarrel.setFillStyle(this.currentBarrelColor, 0.96);
+    this.turret.setFillStyle(this.currentTurretColor, 0.96);
     this.setAlpha(invulnerable ? 0.72 : 1);
     this.aura.setAlpha(invulnerable ? 0.12 : 0.22);
     this.barrel.setAlpha(invulnerable ? 0.62 : 1);
+    this.secondaryBarrel.setAlpha(invulnerable ? 0.62 : 1);
     this.turret.setAlpha(invulnerable ? 0.7 : 1);
     this.heroMarker.setAlpha(invulnerable ? 0.55 : 0.95);
   }
@@ -231,6 +275,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
   destroy(fromScene?: boolean): void {
     this.aura.destroy();
     this.barrel.destroy();
+    this.secondaryBarrel.destroy();
     this.turret.destroy();
     this.heroMarker.destroy();
     super.destroy(fromScene);
@@ -245,12 +290,27 @@ export class Player extends Phaser.GameObjects.Rectangle {
     const facingAngle = Phaser.Math.RadToDeg(this.facingDirection.angle());
     const barrelInset = this.visualSize * 0.12;
     const markerOffset = this.visualSize * 0.18;
+    const barrelOffset = this.barrelCount === 2 ? this.visualSize * 0.13 : 0;
+    const perpendicularX = -this.facingDirection.y;
+    const perpendicularY = this.facingDirection.x;
+    const barrelWidth = Math.round(this.baseBarrelWidth * this.barrelLengthMultiplier);
+    const barrelHeight = Math.max(4, Math.round(this.baseBarrelHeight * this.barrelWidthMultiplier));
 
     this.aura.setPosition(this.x, this.y);
     this.aura.setScale(pulse);
     this.setAngle(facingAngle);
-    this.barrel.setPosition(this.x + this.facingDirection.x * barrelInset, this.y + this.facingDirection.y * barrelInset);
+    this.barrel.setSize(barrelWidth, barrelHeight);
+    this.secondaryBarrel.setSize(barrelWidth, barrelHeight);
+    this.barrel.setPosition(
+      this.x + this.facingDirection.x * barrelInset + perpendicularX * barrelOffset,
+      this.y + this.facingDirection.y * barrelInset + perpendicularY * barrelOffset,
+    );
     this.barrel.setAngle(facingAngle);
+    this.secondaryBarrel.setPosition(
+      this.x + this.facingDirection.x * barrelInset - perpendicularX * barrelOffset,
+      this.y + this.facingDirection.y * barrelInset - perpendicularY * barrelOffset,
+    );
+    this.secondaryBarrel.setAngle(facingAngle);
     this.turret.setPosition(this.x, this.y);
     this.heroMarker.setPosition(
       this.x + this.facingDirection.x * markerOffset,

@@ -33,6 +33,15 @@ import {
 import { HEROES } from '../data/heroes';
 import { chooseNeutralShapeKind } from '../data/neutralShapes';
 import {
+  BASIC_TANK_CLASS_ID,
+  TANK_CLASS_EVOLUTION_LEVEL,
+  canSelectTankClass,
+  getAvailableTankClassChoices,
+  getTankClassDefinition,
+  type TankClassDefinition,
+  type TankClassId,
+} from '../data/tankClasses';
+import {
   UPGRADE_POOL,
   buildLevelUpChoices,
   findUpgradeDefinitionById,
@@ -159,10 +168,16 @@ export class RunScene extends Phaser.Scene {
   private goldEarned = 0;
   private isEnded = false;
   private isLevelingUp = false;
+  private isChoosingTankClass = false;
   private isSystemPaused = false;
   private isTransitioningToMenu = false;
   private isResolvingLevelUpChoice = false;
   private levelUpStartQueued = false;
+  private tankClassChoiceStartQueued = false;
+  private tankClassChoiceConsumed = false;
+  private isTankClassChoiceForced = false;
+  private currentTankClassId: TankClassId = BASIC_TANK_CLASS_ID;
+  private currentTankClass: TankClassDefinition = getTankClassDefinition(BASIC_TANK_CLASS_ID);
   private guaranteedSignatureChoices = 0;
   private guaranteedBreakthroughChoices = 0;
   private breakthroughMilestoneConsumed = false;
@@ -219,10 +234,16 @@ export class RunScene extends Phaser.Scene {
     this.goldEarned = freshSession.goldEarned;
     this.isEnded = freshSession.isEnded;
     this.isLevelingUp = freshSession.isLevelingUp;
+    this.isChoosingTankClass = false;
     this.isSystemPaused = freshSession.isSystemPaused;
     this.isTransitioningToMenu = freshSession.isTransitioningToMenu;
     this.isResolvingLevelUpChoice = freshSession.isResolvingLevelUpChoice;
     this.levelUpStartQueued = false;
+    this.tankClassChoiceStartQueued = false;
+    this.tankClassChoiceConsumed = false;
+    this.isTankClassChoiceForced = false;
+    this.currentTankClassId = BASIC_TANK_CLASS_ID;
+    this.currentTankClass = getTankClassDefinition(BASIC_TANK_CLASS_ID);
     this.guaranteedSignatureChoices = 0;
     this.guaranteedBreakthroughChoices = 0;
     this.breakthroughMilestoneConsumed = false;
@@ -267,6 +288,7 @@ export class RunScene extends Phaser.Scene {
     this.drawArena();
 
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2, selectedHero);
+    this.player.applyTankClassVisualIdentity(this.currentTankClass.visual);
     this.enemies = this.physics.add.group({ runChildUpdate: false });
     this.neutralShapes = this.physics.add.group({ runChildUpdate: false });
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
@@ -355,6 +377,18 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    if (this.tankClassChoiceStartQueued && !this.isLevelingUp && !this.isChoosingTankClass) {
+      this.tankClassChoiceStartQueued = false;
+      this.beginTankClassChoice();
+      this.publishHudState();
+      return;
+    }
+
+    if (this.isChoosingTankClass) {
+      this.publishHudState();
+      return;
+    }
+
     if (
       shouldBeginQueuedLevelUp({
         levelUpQueued: this.levelUpStartQueued,
@@ -409,6 +443,8 @@ export class RunScene extends Phaser.Scene {
 
     this.isTransitioningToMenu = true;
     this.levelUpStartQueued = false;
+    this.tankClassChoiceStartQueued = false;
+    this.isTankClassChoiceForced = false;
     this.clearActiveRunEvent();
     this.pauseGameplaySystems();
     clearRunRegistryState(this.registry, this.saveData?.totalGold ?? Number(this.registry.get('save.totalGold') ?? 0));
@@ -429,6 +465,7 @@ export class RunScene extends Phaser.Scene {
     const activeNeutralShapes = this.neutralShapes?.active ? (this.neutralShapes.getChildren() as NeutralShape[]) : [];
     const activeGems = this.xpGems?.active ? (this.xpGems.getChildren() as XPGem[]) : [];
     const primaryWeaponStats = this.weapons[0]?.getStats();
+    const tankClassChoices = this.isChoosingTankClass ? this.getAvailableTankClassChoices() : [];
 
     const enemies = activeEnemies
       .filter((enemy) => enemy.active && enemy.isAlive())
@@ -485,6 +522,10 @@ export class RunScene extends Phaser.Scene {
             id: primaryWeaponStats.id,
             damage: primaryWeaponStats.damage,
             fireCooldownMs: primaryWeaponStats.fireCooldownMs,
+            projectileSpeed: primaryWeaponStats.projectileSpeed,
+            range: primaryWeaponStats.range,
+            burstCount: primaryWeaponStats.burstCount ?? 1,
+            spreadDegrees: primaryWeaponStats.spreadDegrees ?? 0,
           }
         : null,
       goldEarned: this.goldEarned,
@@ -504,6 +545,20 @@ export class RunScene extends Phaser.Scene {
         availablePoints: this.tankStats.getAvailablePoints(),
         levels: this.tankStats.getLevels(),
         effects: this.tankStats.getEffects(),
+      },
+      tankClass: {
+        id: this.currentTankClass.id,
+        title: this.currentTankClass.title,
+        description: this.currentTankClass.description,
+      },
+      classChoice: {
+        available: this.isChoosingTankClass || this.shouldQueueTankClassChoice(),
+        active: this.isChoosingTankClass,
+        choices: tankClassChoices.map((choice) => ({
+          id: choice.id,
+          title: choice.title,
+          description: choice.description,
+        })),
       },
       enemies,
       neutralShapeCount: neutralShapes.length,
@@ -594,6 +649,47 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
   }
 
+  public selectTankClass(classId: TankClassId): boolean {
+    if (
+      !this.isChoosingTankClass ||
+      this.isEnded ||
+      this.isTransitioningToMenu ||
+      !canSelectTankClass({
+        classId,
+        level: this.isTankClassChoiceForced ? TANK_CLASS_EVOLUTION_LEVEL : this.player.getLevel(),
+        currentClassId: this.currentTankClassId,
+        classChoiceConsumed: this.tankClassChoiceConsumed,
+      })
+    ) {
+      return false;
+    }
+
+    this.applyTankClass(getTankClassDefinition(classId));
+    this.isChoosingTankClass = false;
+    this.isTankClassChoiceForced = false;
+    this.tankClassChoiceConsumed = true;
+    this.registry.set('run.classChoiceActive', false);
+    this.registry.set('run.classChoiceChoices', []);
+    this.registry.set('run.instructions', 'Class selected. Continue shaping your tank.');
+
+    if (!this.isSystemPaused) {
+      this.resumeGameplaySystems('Class selected. Continue shaping your tank.');
+    }
+
+    this.publishHudState();
+    return true;
+  }
+
+  public debugUnlockTankClassChoice(): void {
+    if (this.isEnded || this.isTransitioningToMenu || this.tankClassChoiceConsumed) {
+      return;
+    }
+
+    this.tankClassChoiceStartQueued = false;
+    this.beginTankClassChoice(true);
+    this.publishHudState();
+  }
+
   public debugForceRunEvent(type: RunEventType): boolean {
     if (this.isEnded || this.isTransitioningToMenu || this.isLevelingUp || this.activeRunEvent) {
       return false;
@@ -609,6 +705,9 @@ export class RunScene extends Phaser.Scene {
 
     const weapon = new AutoFireWeapon(this, this.player, this.enemies, this.neutralShapes, definition);
     this.applyWeaponModifiersTo(weapon);
+    if (this.currentTankClassId !== BASIC_TANK_CLASS_ID) {
+      weapon.applyStatPatch(this.currentTankClass.weaponPatch);
+    }
     this.weapons.push(weapon);
     this.ownedWeaponIds.add(definition.id);
 
@@ -1895,7 +1994,52 @@ export class RunScene extends Phaser.Scene {
 
     this.pendingLevelUps += levelsGained;
     this.tankStats.grantPoints(levelsGained);
+    this.queueTankClassChoiceIfEligible();
     this.queueLevelUpStart();
+  }
+
+  private queueTankClassChoiceIfEligible(): void {
+    if (!this.shouldQueueTankClassChoice()) {
+      return;
+    }
+
+    this.tankClassChoiceStartQueued = true;
+  }
+
+  private shouldQueueTankClassChoice(): boolean {
+    return (
+      !this.isChoosingTankClass &&
+      !this.tankClassChoiceConsumed &&
+      this.currentTankClassId === BASIC_TANK_CLASS_ID &&
+      this.player.getLevel() >= TANK_CLASS_EVOLUTION_LEVEL
+    );
+  }
+
+  private getAvailableTankClassChoices(): TankClassDefinition[] {
+    return getAvailableTankClassChoices({
+      level: this.isTankClassChoiceForced ? TANK_CLASS_EVOLUTION_LEVEL : this.player.getLevel(),
+      currentClassId: this.currentTankClassId,
+      classChoiceConsumed: this.tankClassChoiceConsumed,
+    });
+  }
+
+  private beginTankClassChoice(force = false): void {
+    this.isTankClassChoiceForced = force;
+    const choices = this.getAvailableTankClassChoices();
+    if (choices.length === 0 || this.isChoosingTankClass || this.isEnded) {
+      this.isTankClassChoiceForced = false;
+      return;
+    }
+
+    this.isChoosingTankClass = true;
+    this.pauseGameplaySystems('Choose a tank class branch.');
+    this.cameras.main.flash(LEVEL_UP_FLASH_MS, 125, 211, 252, false);
+    this.createBurstCircle(this.player.x, this.player.y, 0x38bdf8, 18, 84, 260, 0.62);
+    this.showFloatingText(this.player.x, this.player.y - 60, 'EVOLUTION READY', '#bae6fd', 24);
+    this.registry.set('run.classChoiceActive', true);
+    this.registry.set('run.classChoiceAvailable', true);
+    this.registry.set('run.classChoiceChoices', choices);
+    this.registry.set('run.instructions', 'Choose a tank class branch.');
   }
 
   private beginLevelUp(): void {
@@ -2095,6 +2239,21 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
+  private applyTankClass(definition: TankClassDefinition): void {
+    this.currentTankClassId = definition.id;
+    this.currentTankClass = definition;
+    this.player.applyTankClassVisualIdentity(definition.visual);
+
+    for (const weapon of this.weapons) {
+      weapon.applyStatPatch(definition.weaponPatch);
+    }
+
+    this.showFloatingText(this.player.x, this.player.y - 86, `${definition.title} class`, '#bae6fd', 20);
+    this.createBurstCircle(this.player.x, this.player.y, definition.visual.turretColor, 18, 72, 240, 0.72);
+    this.cameras.main.flash(140, 125, 211, 252, false);
+    playCue('upgrade-confirm');
+  }
+
   private showTankStatSelectionFeedback(statId: TankStatId, nextLevel: number): void {
     const definition = getTankStatDefinition(statId);
     const palette: Record<TankStatId, { color: string; burstColor: number }> = {
@@ -2214,8 +2373,14 @@ export class RunScene extends Phaser.Scene {
     this.isSystemPaused = shouldPause;
 
     if (shouldPause) {
-      const message = this.isLevelingUp ? 'Tab inactive. Upgrade choice paused.' : 'Tab inactive. Run paused.';
+      const message = this.isChoosingTankClass
+        ? 'Tab inactive. Class choice paused.'
+        : this.isLevelingUp
+          ? 'Tab inactive. Upgrade choice paused.'
+          : 'Tab inactive. Run paused.';
       this.pauseGameplaySystems(message);
+    } else if (this.isChoosingTankClass) {
+      this.registry.set('run.instructions', 'Choose a tank class branch.');
     } else if (this.isLevelingUp) {
       this.registry.set('run.instructions', 'Choose an upgrade. Auto-pick starts in 15 seconds.');
     } else {
@@ -2246,7 +2411,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private resumeGameplaySystems(instructionText?: string): void {
-    if (this.isEnded || this.isSystemPaused || this.isLevelingUp || this.isTransitioningToMenu) {
+    if (this.isEnded || this.isSystemPaused || this.isLevelingUp || this.isChoosingTankClass || this.isTransitioningToMenu) {
       return;
     }
 
@@ -2278,6 +2443,14 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.statPoints', this.tankStats.getAvailablePoints());
     this.registry.set('run.tankStatLevels', this.tankStats.getLevels());
     this.registry.set('run.tankStatEffects', this.tankStats.getEffects());
+    this.registry.set('run.tankClass', {
+      id: this.currentTankClass.id,
+      title: this.currentTankClass.title,
+      description: this.currentTankClass.description,
+    });
+    this.registry.set('run.classChoiceAvailable', this.isChoosingTankClass || this.shouldQueueTankClassChoice());
+    this.registry.set('run.classChoiceActive', this.isChoosingTankClass);
+    this.registry.set('run.classChoiceChoices', this.isChoosingTankClass ? this.getAvailableTankClassChoices() : []);
     this.registry.set('run.targetMs', RUN_TARGET_DURATION_MS);
     this.registry.set('run.goldEarned', this.goldEarned);
     this.registry.set('run.totalGold', this.saveData.totalGold);
@@ -2297,7 +2470,10 @@ export class RunScene extends Phaser.Scene {
 
     this.isEnded = true;
     this.levelUpStartQueued = false;
+    this.tankClassChoiceStartQueued = false;
+    this.isTankClassChoiceForced = false;
     this.isLevelingUp = false;
+    this.isChoosingTankClass = false;
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = 0;
     this.clearActiveRunEvent();
@@ -2351,6 +2527,8 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.levelUpActive', false);
     this.registry.set('run.levelUpChoices', []);
     this.registry.set('run.levelUpRemainingMs', 0);
+    this.registry.set('run.classChoiceActive', false);
+    this.registry.set('run.classChoiceChoices', []);
     this.registry.set('run.instructions', 'Press Enter, Space, or click the button to return to menu.');
     this.registry.set('run.eventActive', false);
     this.registry.set('run.eventType', '');
@@ -2671,6 +2849,7 @@ export class RunScene extends Phaser.Scene {
     if (
       this.isEnded ||
       this.isLevelingUp ||
+      this.isChoosingTankClass ||
       this.isSystemPaused ||
       this.isTransitioningToMenu ||
       !this.sys.isActive()
@@ -2695,7 +2874,7 @@ export class RunScene extends Phaser.Scene {
 
     this.tweens.resumeAll();
 
-    if (this.isEnded || this.isLevelingUp || this.isSystemPaused || this.isTransitioningToMenu) {
+    if (this.isEnded || this.isLevelingUp || this.isChoosingTankClass || this.isSystemPaused || this.isTransitioningToMenu) {
       return;
     }
 

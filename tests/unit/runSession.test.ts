@@ -132,6 +132,8 @@ describe('runSession helpers', () => {
     expect(registry.writes['run.instructions']).toBe('Selected Hero: Runner');
     expect(registry.writes['run.levelUpMode']).toBe('normal');
     expect(registry.writes['run.statPoints']).toBe(0);
+    expect(registry.writes['run.tankClass']).toMatchObject({ id: 'basic', title: 'Basic' });
+    expect(registry.writes['run.classChoiceActive']).toBe(false);
     expect(registry.writes['run.totalGold']).toBe(90);
 
     clearRunRegistryState(registry, 120);
@@ -144,6 +146,7 @@ describe('runSession helpers', () => {
       moveSpeed: 0,
       maxHealth: 0,
     });
+    expect(registry.writes['run.classChoiceChoices']).toEqual([]);
     expect(registry.writes['run.totalGold']).toBe(120);
   });
 });

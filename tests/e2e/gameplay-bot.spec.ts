@@ -40,6 +40,12 @@ type GameplayBotTankStatLevels = {
   maxHealth: number;
 };
 
+type GameplayBotTankClassChoice = {
+  id: string;
+  title: string;
+  description: string;
+};
+
 type GameplayBotRunSnapshot = {
   elapsedMs: number;
   hp: number;
@@ -54,6 +60,10 @@ type GameplayBotRunSnapshot = {
     id: string;
     damage: number;
     fireCooldownMs: number;
+    projectileSpeed: number;
+    range: number;
+    burstCount: number;
+    spreadDegrees: number;
   } | null;
   levelUpActive: boolean;
   endActive: boolean;
@@ -75,6 +85,12 @@ type GameplayBotRunSnapshot = {
       moveSpeedBonus: number;
       maxHealthBonus: number;
     };
+  };
+  tankClass: GameplayBotTankClassChoice;
+  classChoice: {
+    available: boolean;
+    active: boolean;
+    choices: GameplayBotTankClassChoice[];
   };
   enemies: GameplayBotEnemySummary[];
   neutralShapeCount: number;
@@ -500,6 +516,57 @@ test.describe('gameplay bot smoke', () => {
     expect(finalRun?.tankStats.levels.moveSpeed).toBe(1);
     expect(finalRun?.tankStats.effects.moveSpeedBonus).toBe(10);
     expect(finalRun?.player.moveSpeed).toBeGreaterThan(startingMoveSpeed);
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
+  });
+
+  test('class branching can choose Twin and preserve stat allocation', async ({ page }) => {
+    test.setTimeout(45_000);
+
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickStartRun(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+    });
+
+    await grantStatPoints(page, 1);
+    await forceClassChoice(page);
+    await page.waitForFunction(() => {
+      const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
+      return Boolean(run?.classChoice.active && run.classChoice.choices.some((choice) => choice.id === 'twin'));
+    });
+
+    const beforeClass = (await getGameplaySnapshot(page)).run;
+    if (!beforeClass?.primaryWeapon) {
+      throw new Error('Expected a primary weapon before class branching validation.');
+    }
+
+    await clickTankClassChoice(page, 0);
+    await page.waitForFunction(() => {
+      const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
+      return Boolean(run?.tankClass.id === 'twin' && !run.classChoice.active && run.primaryWeapon?.burstCount === 2);
+    });
+
+    const afterClass = (await getGameplaySnapshot(page)).run;
+    expect(afterClass, 'expected active run snapshot after class choice').not.toBeNull();
+    expect(afterClass?.tankClass).toMatchObject({ id: 'twin', title: 'Twin' });
+    expect(afterClass?.primaryWeapon?.burstCount).toBe(2);
+    expect(afterClass?.primaryWeapon?.spreadDegrees).toBeGreaterThan(0);
+    expect(afterClass?.tankStats.availablePoints).toBe(1);
+
+    await clickTankStatButton(page, 2);
+    await page.waitForFunction(() => {
+      const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
+      return Boolean(run?.tankClass.id === 'twin' && run.tankStats.availablePoints === 0 && run.tankStats.levels.moveSpeed === 1);
+    });
+
+    const finalRun = (await getGameplaySnapshot(page)).run;
+    expect(finalRun?.tankClass.id).toBe('twin');
+    expect(finalRun?.tankStats.levels.moveSpeed).toBe(1);
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 
@@ -955,6 +1022,28 @@ async function clickTankStatButton(page: import('@playwright/test').Page, statIn
   });
 }
 
+async function clickTankClassChoice(page: import('@playwright/test').Page, choiceIndex: number): Promise<void> {
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error('Game canvas is not available for tank class choice click.');
+  }
+
+  const gameWidth = 1280;
+  const gameHeight = 720;
+  const buttonX = 450 + choiceIndex * 380;
+  const buttonY = 378;
+
+  await canvas.click({
+    position: {
+      x: (buttonX / gameWidth) * box.width,
+      y: (buttonY / gameHeight) * box.height,
+    },
+  });
+}
+
 async function grantStatPoints(page: import('@playwright/test').Page, points: number): Promise<void> {
   await page.evaluate((nextPoints) => {
     const game = window.__JANGAN_LARI_GAME__;
@@ -967,6 +1056,20 @@ async function grantStatPoints(page: import('@playwright/test').Page, points: nu
     };
     runScene.debugGrantStatPoints?.(nextPoints);
   }, points);
+}
+
+async function forceClassChoice(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const game = window.__JANGAN_LARI_GAME__;
+    if (!game?.scene.isActive('RunScene')) {
+      throw new Error('RunScene is not active for forced class branching validation.');
+    }
+
+    const runScene = game.scene.getScene('RunScene') as {
+      debugUnlockTankClassChoice?: () => void;
+    };
+    runScene.debugUnlockTankClassChoice?.();
+  });
 }
 
 async function forceUpgrade(

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { UpgradeDefinition } from '../data/upgrades';
+import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
@@ -35,6 +36,10 @@ export class UIScene extends Phaser.Scene {
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
   private levelUpDescriptions: Phaser.GameObjects.Text[] = [];
   private levelUpBadges: Phaser.GameObjects.Text[] = [];
+  private classChoiceContainer!: Phaser.GameObjects.Container;
+  private classChoiceCards: Phaser.GameObjects.Rectangle[] = [];
+  private classChoiceTitles: Phaser.GameObjects.Text[] = [];
+  private classChoiceDescriptions: Phaser.GameObjects.Text[] = [];
   private statAllocationContainer!: Phaser.GameObjects.Container;
   private statPointText!: Phaser.GameObjects.Text;
   private statButtons: Partial<Record<TankStatId, Phaser.GameObjects.Rectangle>> = {};
@@ -63,6 +68,9 @@ export class UIScene extends Phaser.Scene {
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
     this.levelUpBadges = [];
+    this.classChoiceCards = [];
+    this.classChoiceTitles = [];
+    this.classChoiceDescriptions = [];
     this.statButtons = {};
     this.statButtonLabels = {};
 
@@ -243,6 +251,7 @@ export class UIScene extends Phaser.Scene {
 
     this.endContainer = this.createEndOverlay();
     this.levelUpContainer = this.createLevelUpOverlay();
+    this.classChoiceContainer = this.createClassChoiceOverlay();
     this.statAllocationContainer = this.createStatAllocationPanel();
 
     this.input.keyboard?.on('keydown-ENTER', this.handleConfirmInput, this);
@@ -279,6 +288,9 @@ export class UIScene extends Phaser.Scene {
     const eventRemainingMs = Number(this.registry.get('run.eventRemainingMs') ?? 0);
     const levelUpMode = String(this.registry.get('run.levelUpMode') ?? 'normal');
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
+    const tankClass = (this.registry.get('run.tankClass') ?? { title: 'Basic' }) as { title?: string };
+    const classChoiceActive = Boolean(this.registry.get('run.classChoiceActive'));
+    const classChoiceChoices = (this.registry.get('run.classChoiceChoices') ?? []) as TankClassDefinition[];
     const statPoints = Number(this.registry.get('run.statPoints') ?? 0);
     const tankStatLevels = (this.registry.get('run.tankStatLevels') ?? {
       bulletDamage: 0,
@@ -287,7 +299,7 @@ export class UIScene extends Phaser.Scene {
       maxHealth: 0,
     }) as TankStatLevels;
 
-    this.setTextIfChanged(this.heroText, heroName || '--');
+    this.setTextIfChanged(this.heroText, `${heroName || '--'} / ${tankClass.title ?? 'Basic'}`);
     this.setTextIfChanged(this.hpValueText, `HP ${currentHp}/${maxHp}`);
     this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 220, 0, 220);
     this.setTextIfChanged(this.timerText, this.formatTime(Math.max(0, targetMs - elapsedMs)));
@@ -298,12 +310,13 @@ export class UIScene extends Phaser.Scene {
     this.refreshWeaponIcons(weaponNames);
     this.refreshAlert(alertKind, alertMessage);
     this.refreshRewardToast(rewardMessage, rewardColor);
-    this.refreshInstruction(instructionMessage, levelUpActive, endActive);
-    this.refreshEventHud(eventActive, eventTitle, eventText, eventRemainingMs, levelUpActive, endActive);
+    this.refreshInstruction(instructionMessage, levelUpActive || classChoiceActive, endActive);
+    this.refreshEventHud(eventActive, eventTitle, eventText, eventRemainingMs, levelUpActive || classChoiceActive, endActive);
     this.refreshStatAllocationPanel(statPoints, tankStatLevels, levelUpActive, endActive);
 
     this.endContainer.setVisible(endActive);
     this.levelUpContainer.setVisible(levelUpActive && !endActive);
+    this.classChoiceContainer.setVisible(classChoiceActive && !endActive);
 
     if (endActive) {
       this.refreshEndOverlay(kills, elapsedMs);
@@ -311,6 +324,10 @@ export class UIScene extends Phaser.Scene {
 
     if (levelUpActive && !endActive) {
       this.refreshLevelUpChoices(levelUpChoices, levelUpRemainingMs, levelUpMode === 'breakthrough' ? 'breakthrough' : 'normal');
+    }
+
+    if (classChoiceActive && !endActive) {
+      this.refreshClassChoiceCards(classChoiceChoices);
     }
   }
 
@@ -471,6 +488,71 @@ export class UIScene extends Phaser.Scene {
     return container;
   }
 
+  private createClassChoiceOverlay(): Phaser.GameObjects.Container {
+    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.78).setOrigin(0).setScrollFactor(0);
+    const heading = this.add
+      .text(GAME_WIDTH / 2, 138, 'EVOLUTION', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '25px',
+        color: '#bae6fd',
+        letterSpacing: 2,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+    const subheading = this.add
+      .text(GAME_WIDTH / 2, 184, 'Choose a class branch', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '34px',
+        color: '#eff6ff',
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    const children: Phaser.GameObjects.GameObject[] = [backdrop, heading, subheading];
+
+    for (let index = 0; index < 2; index += 1) {
+      const x = GAME_WIDTH / 2 - 190 + index * 380;
+      const card = this.add.rectangle(x, 378, 310, 170, 0x101827, 0.99).setScrollFactor(0);
+      card.setStrokeStyle(2, 0x38bdf8, 0.9);
+      card.setInteractive({ useHandCursor: true });
+      card.on('pointerdown', () => this.selectTankClass(index));
+      card.on('pointerover', () => this.applyClassChoiceCardHover(index, true));
+      card.on('pointerout', () => this.applyClassChoiceCardHover(index, false));
+
+      const title = this.add
+        .text(x - 118, 326, '', {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '28px',
+          color: '#f8fafc',
+        })
+        .setOrigin(0, 0.5)
+        .setScrollFactor(0);
+
+      const description = this.add
+        .text(x - 118, 362, '', {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '15px',
+          color: '#cbd5e1',
+          wordWrap: { width: 236 },
+          lineSpacing: 5,
+        })
+        .setOrigin(0, 0)
+        .setScrollFactor(0);
+
+      this.classChoiceCards.push(card);
+      this.classChoiceTitles.push(title);
+      this.classChoiceDescriptions.push(description);
+      children.push(card, title, description);
+    }
+
+    const container = this.add.container(0, 0, children);
+    container.setDepth(96);
+    container.setVisible(false);
+    container.setScrollFactor(0);
+
+    return container;
+  }
+
   private createStatAllocationPanel(): Phaser.GameObjects.Container {
     const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 106, 760, 96, 0x08111f, 0.96).setScrollFactor(0);
     panel.setStrokeStyle(1, 0x38bdf8, 0.86);
@@ -609,6 +691,31 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
+  private refreshClassChoiceCards(choices: TankClassDefinition[]): void {
+    for (let index = 0; index < this.classChoiceCards.length; index += 1) {
+      const choice = choices[index];
+      const card = this.classChoiceCards[index];
+      const title = this.classChoiceTitles[index];
+      const description = this.classChoiceDescriptions[index];
+
+      if (!choice) {
+        card.setVisible(false);
+        title.setVisible(false);
+        description.setVisible(false);
+        continue;
+      }
+
+      card.setVisible(true);
+      title.setVisible(true);
+      description.setVisible(true);
+      card.setData('classId', choice.id);
+      card.setData('baseColor', choice.id === 'twin' ? 0x0d2536 : 0x101b35);
+      this.setTextIfChanged(title, choice.title);
+      this.setTextIfChanged(description, choice.description);
+      this.applyClassChoiceCardHover(index, false);
+    }
+  }
+
   private selectUpgrade(index: number): void {
     if (!this.registry.get('run.levelUpActive') || this.registry.get('run.endActive') || !this.scene.isActive('RunScene')) {
       return;
@@ -625,6 +732,21 @@ export class UIScene extends Phaser.Scene {
 
     const runScene = this.scene.get('RunScene') as RunScene;
     runScene.allocateTankStat(statId);
+  }
+
+  private selectTankClass(index: number): void {
+    if (!this.registry.get('run.classChoiceActive') || this.registry.get('run.endActive') || !this.scene.isActive('RunScene')) {
+      return;
+    }
+
+    const choices = (this.registry.get('run.classChoiceChoices') ?? []) as TankClassDefinition[];
+    const choice = choices[index];
+    if (!choice) {
+      return;
+    }
+
+    const runScene = this.scene.get('RunScene') as RunScene;
+    runScene.selectTankClass(choice.id);
   }
 
   private handleConfirmInput(): void {
@@ -907,6 +1029,17 @@ export class UIScene extends Phaser.Scene {
     button.setStrokeStyle(1, hovered ? 0x7dd3fc : 0x38bdf8, 0.98);
   }
 
+  private applyClassChoiceCardHover(index: number, hovered: boolean): void {
+    const card = this.classChoiceCards[index];
+    if (!card?.visible) {
+      return;
+    }
+
+    const baseColor = Number(card.getData('baseColor') ?? 0x101827);
+    card.setFillStyle(baseColor, hovered ? 1 : 0.99);
+    card.setStrokeStyle(2, hovered ? 0xfef08a : 0x38bdf8, hovered ? 1 : 0.9);
+  }
+
   private setTextIfChanged(target: Phaser.GameObjects.Text, nextText: string): void {
     if (target.text !== nextText) {
       target.setText(nextText);
@@ -925,6 +1058,9 @@ export class UIScene extends Phaser.Scene {
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
     this.levelUpBadges = [];
+    this.classChoiceCards = [];
+    this.classChoiceTitles = [];
+    this.classChoiceDescriptions = [];
     this.statButtons = {};
     this.statButtonLabels = {};
   }
