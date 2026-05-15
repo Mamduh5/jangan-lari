@@ -63,6 +63,16 @@ For a normal feature sprint, use this ladder:
 3. `git diff --check`
 4. One focused e2e command for the feature under change, when browser coverage is needed.
 
-Do not run the full Playwright suite during normal feature work. `npm run test:e2e` is reserved for milestone validation, pre-merge validation, or explicit test-maintenance tasks.
+Use the focused e2e scripts in `package.json` for normal sprint browser checks:
+
+- `npm run test:e2e:menu`
+- `npm run test:e2e:special`
+- `npm run test:e2e:hud`
+- `npm run test:e2e:neutral-shapes`
+- `npm run test:e2e:stat-allocation`
+- `npm run test:e2e:class-branching`
+- `npm run test:e2e:smoke` for the bounded stable smoke set.
+
+Do not run the full Playwright suite during normal feature work. `npm run test:e2e` is reserved for milestone validation, pre-merge validation, or explicit test-maintenance tasks. As of Sprint 6, `tests/e2e/gameplay-bot.spec.ts` is known long-running after the Sprint 2-4 progression changes and requires dedicated recalibration before it can serve as a routine full-suite gate.
 
 If a full e2e run is explicitly requested and fails, stop after the first failure. Report the failing spec, the likely product or test-maintenance root cause, and the smallest recommended follow-up. Do not loop on unrelated legacy specs, increase timeouts broadly, or rewrite deterministic loadout tests as part of a feature sprint.

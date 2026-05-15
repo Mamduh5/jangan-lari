@@ -134,6 +134,12 @@ Acceptance checks:
 
 Goal: Prepare stable runtime inspection hooks for future automation.
 
+Status note:
+- Added focused e2e package scripts for menu flow, special attacks, mobile HUD, neutral shapes, stat allocation, and class branching.
+- Added a bounded `test:e2e:smoke` command that runs only the stable focused smoke files and does not include the full `gameplay-bot.spec.ts` suite.
+- Current runtime observability already exposes the MVP debug fields future bots need: HP/max HP, level/XP, neutral shapes, stat points/stat levels, current class, class-choice state, and the Sprint 5 HUD snapshot.
+- Full gameplay-bot recalibration remains deferred to dedicated test-maintenance; future `Mamduh5/brower-game-bots` integration also remains deferred.
+
 Deliverables:
 - Expanded gameplay snapshot fields for tank stats, class, shape counts, projectiles, score, and restart state.
 - Stable selectors or public debug handles for browser tests.
