@@ -27,15 +27,18 @@ test.describe('mobile dual-stick aim', () => {
 
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-    await clickCanvasPoint(page, 560, 82);
+    await page.keyboard.press('Enter');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run));
 
     const initialRun = await getRunSnapshot(page);
-    const moveStart = await getCanvasAbsolutePoint(page, 220, 360);
-    const moveEnd = await getCanvasAbsolutePoint(page, 320, 360);
+
+    const moveStart = await getCanvasAbsolutePoint(page, 140, 300);
+    const moveEnd = await getCanvasAbsolutePoint(page, 240, 300);
+
     await page.mouse.move(moveStart.x, moveStart.y);
     await page.mouse.down();
     await page.mouse.move(moveEnd.x, moveEnd.y, { steps: 4 });
+
     await page.waitForFunction(
       (start) => {
         const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
@@ -47,10 +50,12 @@ test.describe('mobile dual-stick aim', () => {
     const movedRun = await getRunSnapshot(page);
     expect(movedRun.input.movementSource).toBe('pointer');
     expect(movedRun.input.movement.x).toBeGreaterThan(0.8);
+
     await page.mouse.up();
 
-    const aimStart = await getCanvasAbsolutePoint(page, 980, 300);
-    const aimEnd = await getCanvasAbsolutePoint(page, 980, 220);
+    const aimStart = await getCanvasAbsolutePoint(page, 690, 300);
+    const aimEnd = await getCanvasAbsolutePoint(page, 690, 220);
+
     await page.mouse.move(aimStart.x, aimStart.y);
     await page.mouse.down();
     await page.mouse.move(aimEnd.x, aimEnd.y, { steps: 4 });
@@ -129,16 +134,18 @@ async function getCanvasPosition(page: import('@playwright/test').Page, gameX: n
   };
 }
 
-async function getCanvasAbsolutePoint(page: import('@playwright/test').Page, gameX: number, gameY: number): Promise<{ x: number; y: number }> {
+async function getCanvasAbsolutePoint(page: import('@playwright/test').Page, x: number, y: number) {
   const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+
   const box = await canvas.boundingBox();
   if (!box) {
     throw new Error('Game canvas is not available.');
   }
 
   return {
-    x: box.x + (gameX / 1280) * box.width,
-    y: box.y + (gameY / 720) * box.height,
+    x: box.x + Math.max(1, Math.min(box.width - 1, x)),
+    y: box.y + Math.max(1, Math.min(box.height - 1, y)),
   };
 }
 

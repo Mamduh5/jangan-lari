@@ -172,7 +172,7 @@ export class MovementInputController {
     this.scene.input.on('pointermove', this.handlePointerMove);
     this.scene.input.on('pointerup', this.handlePointerUp);
     this.scene.input.on('pointerupoutside', this.handlePointerUp);
-    this.scene.input.on('gameout', this.resetPointer, this);
+    // this.scene.input.on('gameout', this.resetPointer, this);
   }
 
   getMovementInput(): MovementInputSnapshot {
@@ -199,7 +199,7 @@ export class MovementInputController {
     this.scene.input.off('pointermove', this.handlePointerMove);
     this.scene.input.off('pointerup', this.handlePointerUp);
     this.scene.input.off('pointerupoutside', this.handlePointerUp);
-    this.scene.input.off('gameout', this.resetPointer, this);
+    // this.scene.input.off('gameout', this.resetPointer, this);
     this.resetPointer();
   }
 

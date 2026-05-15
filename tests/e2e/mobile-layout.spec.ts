@@ -36,7 +36,7 @@ test.describe('mobile landscape layout', () => {
     const menuCanvasBox = await canvas.boundingBox();
     expect(menuCanvasBox?.height ?? 0).toBeGreaterThanOrEqual(380);
 
-    await clickCanvasPoint(page, 560, 82);
+    await page.keyboard.press('Enter');
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;
       return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
@@ -156,7 +156,7 @@ async function forceClassChoice(page: import('@playwright/test').Page): Promise<
   });
 }
 
-async function clickCanvasPoint(page: import('@playwright/test').Page, gameX: number, gameY: number): Promise<void> {
+async function clickCanvasPoint(page: import('@playwright/test').Page, x: number, y: number): Promise<void> {
   const canvas = page.locator('canvas');
   await expect(canvas).toBeVisible();
 
@@ -167,8 +167,8 @@ async function clickCanvasPoint(page: import('@playwright/test').Page, gameX: nu
 
   await canvas.click({
     position: {
-      x: (gameX / 1280) * box.width,
-      y: (gameY / 720) * box.height,
+      x: Math.max(1, Math.min(box.width - 1, x)),
+      y: Math.max(1, Math.min(box.height - 1, y)),
     },
   });
 }

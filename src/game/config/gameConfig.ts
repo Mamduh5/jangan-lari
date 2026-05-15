@@ -12,6 +12,9 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   backgroundColor: '#0b1020',
+  input: {
+    activePointers: 3,
+  },
   autoRound: true,
   roundPixels: true,
   antialias: true,
@@ -22,8 +25,8 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     },
   },
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.NO_CENTER,
     expandParent: true,
   },
   scene: [BootScene, MenuScene, MetaScene, RunScene, UIScene],

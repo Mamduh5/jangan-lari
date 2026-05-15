@@ -4,7 +4,7 @@ import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import type { LocalLeaderboardEntry } from '../save/saveData';
-import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+// import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { RunScene } from './RunScene';
 
 export class UIScene extends Phaser.Scene {
@@ -74,6 +74,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
+    const viewWidth = this.scale.width;
+    const viewHeight = this.scale.height;
     this.weaponIconFrames = [];
     this.weaponIconTexts = [];
     this.levelUpCards = [];
@@ -141,7 +143,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.timerText = this.add
-      .text(GAME_WIDTH / 2, 34, '00:00', {
+      .text(viewWidth / 2, 34, '00:00', {
         fontFamily: 'Georgia, serif',
         fontSize: '36px',
         color: '#e0f2fe',
@@ -150,7 +152,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.alertText = this.add
-      .text(GAME_WIDTH / 2, 76, '', {
+      .text(viewWidth / 2, 76, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#dbeafe',
@@ -162,7 +164,7 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.rewardText = this.add
-      .text(GAME_WIDTH / 2, 112, '', {
+      .text(viewWidth / 2, 112, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#fef3c7',
@@ -176,7 +178,7 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.instructionText = this.add
-      .text(GAME_WIDTH / 2, 156, '', {
+      .text(viewWidth / 2, 156, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '13px',
         color: '#cbd5e1',
@@ -189,11 +191,11 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setVisible(false);
 
-    this.eventPanel = this.add.rectangle(GAME_WIDTH / 2, 206, 520, 68, 0x111827, 0.9).setScrollFactor(0).setVisible(false);
+    this.eventPanel = this.add.rectangle(viewWidth / 2, 206, 520, 68, 0x111827, 0.9).setScrollFactor(0).setVisible(false);
     this.eventPanel.setStrokeStyle(1, 0xfbbf24, 0.9);
 
     this.eventTitleText = this.add
-      .text(GAME_WIDTH / 2 - 240, 182, '', {
+      .text(viewWidth / 2 - 240, 182, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#fde68a',
@@ -203,7 +205,7 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.eventBodyText = this.add
-      .text(GAME_WIDTH / 2 - 240, 202, '', {
+      .text(viewWidth / 2 - 240, 202, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '13px',
         color: '#f8fafc',
@@ -214,7 +216,7 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.eventTimerText = this.add
-      .text(GAME_WIDTH / 2 + 224, 182, '', {
+      .text(viewWidth / 2 + 224, 182, '', {
         fontFamily: 'Georgia, serif',
         fontSize: '24px',
         color: '#fde68a',
@@ -223,12 +225,12 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setVisible(false);
 
-    const topRightPanel = this.add.rectangle(GAME_WIDTH - 320, 16, 300, 148, 0x102033, 0.86).setOrigin(0);
+    const topRightPanel = this.add.rectangle(viewWidth - 320, 16, 300, 148, 0x102033, 0.86).setOrigin(0);
     topRightPanel.setStrokeStyle(1, 0x4b6b8a, 0.84);
     topRightPanel.setScrollFactor(0);
 
     this.scoreText = this.add
-      .text(GAME_WIDTH - 44, 30, 'Score 0', {
+      .text(viewWidth - 44, 30, 'Score 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '22px',
         color: '#fef08a',
@@ -237,7 +239,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.goldText = this.add
-      .text(GAME_WIDTH - 44, 68, 'Run Gold 0', {
+      .text(viewWidth - 44, 68, 'Run Gold 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '20px',
         color: '#fde68a',
@@ -246,7 +248,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.killsText = this.add
-      .text(GAME_WIDTH - 44, 104, 'Kills 0', {
+      .text(viewWidth - 44, 104, 'Kills 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '19px',
         color: '#d7e2ef',
@@ -255,7 +257,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.weaponSummaryText = this.add
-      .text(38, GAME_HEIGHT - 116, 'Weapon --', {
+      .text(38, viewHeight - 116, 'Weapon --', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#e0f2fe',
@@ -265,12 +267,12 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     for (let index = 0; index < 4; index += 1) {
-      const frame = this.add.rectangle(38 + index * 52, GAME_HEIGHT - 88, 40, 40, 0x172033, 0.98).setOrigin(0);
+      const frame = this.add.rectangle(38 + index * 52, viewHeight - 88, 40, 40, 0x172033, 0.98).setOrigin(0);
       frame.setStrokeStyle(1, 0x334155, 0.92);
       frame.setScrollFactor(0);
 
       const icon = this.add
-        .text(58 + index * 52, GAME_HEIGHT - 68, '--', {
+        .text(58 + index * 52, viewHeight - 68, '--', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '13px',
           color: '#eff6ff',
@@ -283,15 +285,15 @@ export class UIScene extends Phaser.Scene {
       this.weaponIconTexts.push(icon);
     }
 
-    const xpBarFrame = this.add.rectangle(38, GAME_HEIGHT - 38, 312, 20, 0x172554, 0.98).setOrigin(0, 0.5);
+    const xpBarFrame = this.add.rectangle(38, viewHeight - 38, 312, 20, 0x172554, 0.98).setOrigin(0, 0.5);
     xpBarFrame.setStrokeStyle(1, 0x60a5fa, 0.9);
     xpBarFrame.setScrollFactor(0);
 
-    this.xpBarFill = this.add.rectangle(38, GAME_HEIGHT - 38, 0, 14, 0x38bdf8, 1).setOrigin(0, 0.5);
+    this.xpBarFill = this.add.rectangle(38, viewHeight - 38, 0, 14, 0x38bdf8, 1).setOrigin(0, 0.5);
     this.xpBarFill.setScrollFactor(0);
 
     this.xpBarLabel = this.add
-      .text(38, GAME_HEIGHT - 18, 'LV 1  XP 0/0', {
+      .text(38, viewHeight - 18, 'LV 1  XP 0/0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#bfdbfe',
@@ -299,7 +301,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.add
-      .text(GAME_WIDTH - 30, GAME_HEIGHT - 28, 'ESC: Return to Menu', {
+      .text(viewWidth - 30, viewHeight - 28, 'ESC: Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#cbd5e1',
@@ -444,12 +446,15 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createEndOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.78).setOrigin(0).setScrollFactor(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 640, 500, 0x0f172a, 0.995).setScrollFactor(0);
+    const viewWidth = this.scale.width;
+    const viewHeight = this.scale.height;
+
+    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.78)
+    const panel = this.add.rectangle(viewWidth / 2, viewHeight / 2, 640, 500, 0x0f172a, 0.995).setScrollFactor(0);
     panel.setStrokeStyle(2, 0x475569, 1);
 
     this.endTitleText = this.add
-      .text(GAME_WIDTH / 2, 150, 'Victory', {
+      .text(viewWidth / 2, 150, 'Victory', {
         fontFamily: 'Georgia, serif',
         fontSize: '46px',
         color: '#f8fafc',
@@ -458,7 +463,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.endSubtitleText = this.add
-      .text(GAME_WIDTH / 2, 196, '', {
+      .text(viewWidth / 2, 196, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#cbd5e1',
@@ -467,7 +472,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.endStatsText = this.add
-      .text(GAME_WIDTH / 2, 266, '', {
+      .text(viewWidth / 2, 266, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '19px',
         color: '#bfdbfe',
@@ -478,7 +483,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.endLeaderboardText = this.add
-      .text(GAME_WIDTH / 2, 348, '', {
+      .text(viewWidth / 2, 348, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#dbeafe',
@@ -490,7 +495,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.endButton = this.add
-      .text(GAME_WIDTH / 2, 562, 'Return to Menu', {
+      .text(viewWidth / 2, 562, 'Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fef3c7',
@@ -510,7 +515,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     const helpText = this.add
-      .text(GAME_WIDTH / 2, 606, 'Enter or Space continues', {
+      .text(viewWidth / 2, 606, 'Enter or Space continues', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#93c5fd',
@@ -536,9 +541,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createLevelUpOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.8).setOrigin(0).setScrollFactor(0);
+    const viewWidth = this.scale.width;
+    const viewHeight = this.scale.height;
+
+    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.8)
     this.levelUpHeadingText = this.add
-      .text(GAME_WIDTH / 2, 112, 'BONUS PICK', {
+      .text(viewWidth / 2, 112, 'BONUS PICK', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#bfdbfe',
@@ -547,7 +555,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0);
     this.levelUpSubheadingText = this.add
-      .text(GAME_WIDTH / 2, 154, 'Legacy bonus choice. Stat points are spent from the bottom bar after this pick.', {
+      .text(viewWidth / 2, 154, 'Legacy bonus choice. Stat points are spent from the bottom bar after this pick.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '17px',
         color: '#d7e2ef',
@@ -557,7 +565,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0);
     this.levelUpTimerText = this.add
-      .text(GAME_WIDTH / 2, 198, '15.0', {
+      .text(viewWidth / 2, 198, '15.0', {
         fontFamily: 'Georgia, serif',
         fontSize: '38px',
         color: '#fef08a',
@@ -624,9 +632,12 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createClassChoiceOverlay(): Phaser.GameObjects.Container {
-    const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.78).setOrigin(0).setScrollFactor(0);
+    const viewWidth = this.scale.width;
+    const viewHeight = this.scale.height;
+
+    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.78)
     const heading = this.add
-      .text(GAME_WIDTH / 2, 138, 'EVOLUTION', {
+      .text(viewWidth / 2, 138, 'EVOLUTION', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '25px',
         color: '#bae6fd',
@@ -635,7 +646,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0);
     const subheading = this.add
-      .text(GAME_WIDTH / 2, 184, 'Choose a class branch', {
+      .text(viewWidth / 2, 184, 'Choose a class branch', {
         fontFamily: 'Georgia, serif',
         fontSize: '34px',
         color: '#eff6ff',
@@ -646,7 +657,7 @@ export class UIScene extends Phaser.Scene {
     const children: Phaser.GameObjects.GameObject[] = [backdrop, heading, subheading];
 
     for (let index = 0; index < 2; index += 1) {
-      const x = GAME_WIDTH / 2 - 190 + index * 380;
+      const x = viewWidth / 2 - 190 + index * 380;
       const card = this.add.rectangle(x, 378, 310, 170, 0x101827, 0.99).setScrollFactor(0);
       card.setStrokeStyle(2, 0x38bdf8, 0.9);
       card.setInteractive({ useHandCursor: true });
@@ -701,11 +712,14 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createStatAllocationPanel(): Phaser.GameObjects.Container {
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 106, 760, 96, 0x08111f, 0.96).setScrollFactor(0);
+    const viewWidth = this.scale.width;
+    const viewHeight = this.scale.height;
+
+    const panel = this.add.rectangle(viewWidth / 2, viewHeight - 106, 760, 96, 0x08111f, 0.96)
     panel.setStrokeStyle(1, 0x38bdf8, 0.86);
 
     this.statPointText = this.add
-      .text(GAME_WIDTH / 2 - 354, GAME_HEIGHT - 144, 'STAT POINTS 0', {
+      .text(viewWidth / 2 - 354, viewHeight - 144, 'STAT POINTS 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#bae6fd',
@@ -714,7 +728,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.statHelpText = this.add
-      .text(GAME_WIDTH / 2 + 354, GAME_HEIGHT - 144, 'Tap a stat to spend', {
+      .text(viewWidth / 2 + 354, viewHeight - 144, 'Tap a stat to spend', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '13px',
         color: '#cbd5e1',
@@ -723,12 +737,12 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     const children: Phaser.GameObjects.GameObject[] = [panel, this.statPointText, this.statHelpText];
-    const startX = GAME_WIDTH / 2 - 260;
+    const startX = viewWidth / 2 - 260;
 
     TANK_STAT_IDS.forEach((statId, index) => {
       const definition = TANK_STAT_DEFINITIONS[statId];
       const x = startX + index * 174;
-      const button = this.add.rectangle(x, GAME_HEIGHT - 96, 162, 62, 0x132033, 0.98).setScrollFactor(0);
+      const button = this.add.rectangle(x, viewHeight - 96, 162, 62, 0x132033, 0.98).setScrollFactor(0);
       button.setStrokeStyle(1, 0x334155, 0.95);
       button.setInteractive({ useHandCursor: true });
       button.on('pointerdown', () => this.allocateTankStat(statId));
@@ -736,7 +750,7 @@ export class UIScene extends Phaser.Scene {
       button.on('pointerout', () => this.applyStatButtonHover(statId, false));
 
       const label = this.add
-        .text(x, GAME_HEIGHT - 96, `${definition.shortLabel} 0/${definition.maxLevel}\n${definition.summary}`, {
+        .text(x, viewHeight - 96, `${definition.shortLabel} 0/${definition.maxLevel}\n${definition.summary}`, {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '14px',
           color: '#e0f2fe',
@@ -760,11 +774,14 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createOrientationHintOverlay(): Phaser.GameObjects.Container {
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 620, 170, 0x102033, 0.94).setScrollFactor(0);
+    const viewWidth = this.scale.width;
+    const viewHeight = this.scale.height;
+
+    const panel = this.add.rectangle(viewWidth / 2, viewHeight / 2, 620, 170, 0x102033, 0.94)
     panel.setStrokeStyle(2, 0xfacc15, 0.95);
 
     this.orientationHintText = this.add
-      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Rotate for landscape play\nThe arena and HUD are tuned for horizontal mobile screens.', {
+      .text(viewWidth / 2, viewHeight / 2, 'Rotate for landscape play\nThe arena and HUD are tuned for horizontal mobile screens.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#f8fafc',
