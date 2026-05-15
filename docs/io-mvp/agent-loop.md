@@ -72,6 +72,7 @@ Use the focused e2e scripts in `package.json` for normal sprint browser checks:
 - `npm run test:e2e:stat-allocation`
 - `npm run test:e2e:class-branching`
 - `npm run test:e2e:leaderboard`
+- `npm run test:e2e:mobile-layout`
 - `npm run test:e2e:smoke` for the bounded stable smoke set.
 
 Do not run the full Playwright suite during normal feature work. `npm run test:e2e` is reserved for milestone validation, pre-merge validation, or explicit test-maintenance tasks. As of Sprint 6, `tests/e2e/gameplay-bot.spec.ts` is known long-running after the Sprint 2-4 progression changes and requires dedicated recalibration before it can serve as a routine full-suite gate.

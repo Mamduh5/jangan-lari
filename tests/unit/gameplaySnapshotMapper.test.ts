@@ -12,6 +12,7 @@ function createRunSnapshot(overrides: Partial<GameplayBotRunSnapshot> = {}): Gam
     kills: 2,
     weaponCount: 1,
     goldEarned: 4,
+    totalGold: 24,
     score: 178,
     bestScore: 300,
     finalScore: 0,

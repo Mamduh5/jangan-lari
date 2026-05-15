@@ -21,6 +21,8 @@ export class UIScene extends Phaser.Scene {
   private alertText!: Phaser.GameObjects.Text;
   private rewardText!: Phaser.GameObjects.Text;
   private instructionText!: Phaser.GameObjects.Text;
+  private orientationHintContainer!: Phaser.GameObjects.Container;
+  private orientationHintText!: Phaser.GameObjects.Text;
   private eventPanel!: Phaser.GameObjects.Rectangle;
   private eventTitleText!: Phaser.GameObjects.Text;
   private eventBodyText!: Phaser.GameObjects.Text;
@@ -38,6 +40,7 @@ export class UIScene extends Phaser.Scene {
   private endButton!: Phaser.GameObjects.Text;
   private levelUpContainer!: Phaser.GameObjects.Container;
   private levelUpHeadingText!: Phaser.GameObjects.Text;
+  private levelUpSubheadingText!: Phaser.GameObjects.Text;
   private levelUpTimerText!: Phaser.GameObjects.Text;
   private levelUpCards: Phaser.GameObjects.Rectangle[] = [];
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
@@ -84,55 +87,56 @@ export class UIScene extends Phaser.Scene {
     this.statButtons = {};
     this.statButtonLabels = {};
 
-    const topLeftPanel = this.add.rectangle(24, 18, 326, 130, 0x030712, 0.88).setOrigin(0);
-    topLeftPanel.setStrokeStyle(1, 0x334155, 0.96);
+    const topLeftPanel = this.add.rectangle(20, 16, 390, 148, 0x102033, 0.86).setOrigin(0);
+    topLeftPanel.setStrokeStyle(1, 0x4b6b8a, 0.84);
     topLeftPanel.setScrollFactor(0);
 
     this.heroText = this.add
-      .text(38, 30, '--', {
+      .text(38, 28, '--', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '21px',
+        fontSize: '23px',
         color: '#f8fafc',
-        wordWrap: { width: 286 },
+        wordWrap: { width: 336 },
       })
       .setScrollFactor(0);
 
-    const hpBarFrame = this.add.rectangle(38, 68, 258, 20, 0x172033, 0.98).setOrigin(0, 0.5);
-    hpBarFrame.setStrokeStyle(1, 0x475569, 0.95);
+    const hpBarFrame = this.add.rectangle(38, 72, 320, 24, 0x1b2f46, 0.98).setOrigin(0, 0.5);
+    hpBarFrame.setStrokeStyle(1, 0x6b8bae, 0.88);
     hpBarFrame.setScrollFactor(0);
 
-    this.hpBarFill = this.add.rectangle(38, 68, 0, 14, 0xf87171, 1).setOrigin(0, 0.5);
+    this.hpBarFill = this.add.rectangle(38, 72, 0, 18, 0xf87171, 1).setOrigin(0, 0.5);
     this.hpBarFill.setScrollFactor(0);
 
     this.hpValueText = this.add
-      .text(38, 82, 'HP --/--', {
+      .text(38, 92, 'HP --/--', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
+        fontSize: '17px',
         color: '#fecaca',
       })
       .setScrollFactor(0);
 
     this.levelValueText = this.add
-      .text(158, 82, 'LV 1  XP 0/0', {
+      .text(176, 92, 'LV 1  XP 0/0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
+        fontSize: '17px',
         color: '#bfdbfe',
       })
       .setScrollFactor(0);
 
     this.classStatusText = this.add
-      .text(38, 106, 'Class Basic', {
+      .text(38, 120, 'Class Basic', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
+        fontSize: '17px',
         color: '#bae6fd',
       })
       .setScrollFactor(0);
 
     this.statSummaryText = this.add
-      .text(38, 126, 'Stats DMG0 RLD0 SPD0 HP0', {
+      .text(176, 120, 'Stats DMG0 RLD0 SPD0 HP0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
+        fontSize: '16px',
         color: '#cbd5e1',
+        wordWrap: { width: 210 },
       })
       .setScrollFactor(0);
 
@@ -219,35 +223,33 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setVisible(false);
 
-    this.goldText = this.add
-      .text(GAME_WIDTH - 34, 24, 'Gold 0', {
+    const topRightPanel = this.add.rectangle(GAME_WIDTH - 320, 16, 300, 148, 0x102033, 0.86).setOrigin(0);
+    topRightPanel.setStrokeStyle(1, 0x4b6b8a, 0.84);
+    topRightPanel.setScrollFactor(0);
+
+    this.scoreText = this.add
+      .text(GAME_WIDTH - 44, 30, 'Score 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
+        fontSize: '22px',
+        color: '#fef08a',
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0);
+
+    this.goldText = this.add
+      .text(GAME_WIDTH - 44, 68, 'Run Gold 0', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '20px',
         color: '#fde68a',
-        backgroundColor: '#172036',
-        padding: { left: 12, right: 12, top: 8, bottom: 8 },
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
     this.killsText = this.add
-      .text(GAME_WIDTH - 34, 64, 'Kills 0', {
+      .text(GAME_WIDTH - 44, 104, 'Kills 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#cbd5e1',
-        backgroundColor: '#172036',
-        padding: { left: 12, right: 12, top: 8, bottom: 8 },
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0);
-
-    this.scoreText = this.add
-      .text(GAME_WIDTH - 34, 104, 'Score 0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#fef08a',
-        backgroundColor: '#172036',
-        padding: { left: 12, right: 12, top: 8, bottom: 8 },
+        fontSize: '19px',
+        color: '#d7e2ef',
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
@@ -309,6 +311,7 @@ export class UIScene extends Phaser.Scene {
     this.levelUpContainer = this.createLevelUpOverlay();
     this.classChoiceContainer = this.createClassChoiceOverlay();
     this.statAllocationContainer = this.createStatAllocationPanel();
+    this.orientationHintContainer = this.createOrientationHintOverlay();
 
     this.input.keyboard?.on('keydown-ENTER', this.handleConfirmInput, this);
     this.input.keyboard?.on('keydown-SPACE', this.handleConfirmInput, this);
@@ -332,7 +335,7 @@ export class UIScene extends Phaser.Scene {
     const finalScore = Number(this.registry.get('run.finalScore') ?? 0);
     const newBestScore = Boolean(this.registry.get('run.newBestScore'));
     const localLeaderboard = (this.registry.get('run.localLeaderboard') ?? []) as LocalLeaderboardEntry[];
-    const totalGold = Number(this.registry.get('run.totalGold') ?? this.registry.get('save.totalGold') ?? 0);
+    const runGold = Number(this.registry.get('run.goldEarned') ?? 0);
     const heroName = String(this.registry.get('run.heroName') ?? '--');
     const weaponNames = (this.registry.get('run.weaponNames') ?? []) as string[];
     const levelUpRemainingMs = Number(this.registry.get('run.levelUpRemainingMs') ?? 0);
@@ -366,14 +369,14 @@ export class UIScene extends Phaser.Scene {
 
     this.setTextIfChanged(this.heroText, heroName || '--');
     this.setTextIfChanged(this.hpValueText, `HP ${currentHp}/${maxHp}`);
-    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 258, 0, 258);
+    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 320, 0, 320);
     this.setTextIfChanged(this.levelValueText, xpLabel);
     this.setTextIfChanged(this.classStatusText, `Class ${classTitle}${classChoiceActive ? ' - Choose now' : ''}`);
     this.classStatusText.setColor(classChoiceActive ? '#fef08a' : '#bae6fd');
     this.setTextIfChanged(this.statSummaryText, `Stats ${statSummary}${statPoints > 0 ? `  +${statPoints}` : ''}`);
     this.statSummaryText.setColor(statPoints > 0 ? '#fef08a' : '#cbd5e1');
     this.setTextIfChanged(this.timerText, this.formatTime(Math.max(0, targetMs - elapsedMs)));
-    this.setTextIfChanged(this.goldText, `Gold ${totalGold}`);
+    this.setTextIfChanged(this.goldText, `Run Gold ${runGold}`);
     this.setTextIfChanged(this.killsText, `Kills ${kills}`);
     this.setTextIfChanged(this.scoreText, `Score ${score}`);
     this.setTextIfChanged(this.weaponSummaryText, this.formatWeaponSummary(weaponNames, classTitle));
@@ -384,10 +387,11 @@ export class UIScene extends Phaser.Scene {
     this.refreshRewardToast(rewardMessage, rewardColor);
     this.refreshInstruction(instructionMessage, levelUpActive || classChoiceActive, endActive);
     this.refreshEventHud(eventActive, eventTitle, eventText, eventRemainingMs, levelUpActive || classChoiceActive, endActive);
-    this.refreshStatAllocationPanel(statPoints, tankStatLevels, levelUpActive, endActive);
+    this.refreshStatAllocationPanel(statPoints, tankStatLevels, levelUpActive, classChoiceActive, endActive);
+    this.refreshOrientationHint();
 
     this.endContainer.setVisible(endActive);
-    this.levelUpContainer.setVisible(levelUpActive && !endActive);
+    this.levelUpContainer.setVisible(levelUpActive && !classChoiceActive && !endActive);
     this.classChoiceContainer.setVisible(classChoiceActive && !endActive);
 
     if (endActive) {
@@ -418,6 +422,7 @@ export class UIScene extends Phaser.Scene {
     classChoiceVisible: boolean;
     endStats: string;
     leaderboard: string;
+    orientationHintVisible: boolean;
   } {
     return {
       hero: this.heroText.text,
@@ -434,6 +439,7 @@ export class UIScene extends Phaser.Scene {
       classChoiceVisible: this.classChoiceContainer.visible,
       endStats: this.endStatsText.text,
       leaderboard: this.endLeaderboardText.text,
+      orientationHintVisible: this.orientationHintContainer.visible,
     };
   }
 
@@ -532,7 +538,7 @@ export class UIScene extends Phaser.Scene {
   private createLevelUpOverlay(): Phaser.GameObjects.Container {
     const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.8).setOrigin(0).setScrollFactor(0);
     this.levelUpHeadingText = this.add
-      .text(GAME_WIDTH / 2, 126, 'LEVEL UP', {
+      .text(GAME_WIDTH / 2, 112, 'BONUS PICK', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#bfdbfe',
@@ -540,16 +546,26 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
+    this.levelUpSubheadingText = this.add
+      .text(GAME_WIDTH / 2, 154, 'Legacy bonus choice. Stat points are spent from the bottom bar after this pick.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '17px',
+        color: '#d7e2ef',
+        align: 'center',
+        wordWrap: { width: 720 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
     this.levelUpTimerText = this.add
-      .text(GAME_WIDTH / 2, 184, '15.0', {
+      .text(GAME_WIDTH / 2, 198, '15.0', {
         fontFamily: 'Georgia, serif',
-        fontSize: '42px',
+        fontSize: '38px',
         color: '#fef08a',
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    const children: Phaser.GameObjects.GameObject[] = [backdrop, this.levelUpHeadingText, this.levelUpTimerText];
+    const children: Phaser.GameObjects.GameObject[] = [backdrop, this.levelUpHeadingText, this.levelUpSubheadingText, this.levelUpTimerText];
 
     for (let index = 0; index < 3; index += 1) {
       const x = 258 + index * 382;
@@ -743,6 +759,30 @@ export class UIScene extends Phaser.Scene {
     return container;
   }
 
+  private createOrientationHintOverlay(): Phaser.GameObjects.Container {
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 620, 170, 0x102033, 0.94).setScrollFactor(0);
+    panel.setStrokeStyle(2, 0xfacc15, 0.95);
+
+    this.orientationHintText = this.add
+      .text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Rotate for landscape play\nThe arena and HUD are tuned for horizontal mobile screens.', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '24px',
+        color: '#f8fafc',
+        align: 'center',
+        lineSpacing: 10,
+        wordWrap: { width: 540 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    const container = this.add.container(0, 0, [panel, this.orientationHintText]);
+    container.setDepth(120);
+    container.setScrollFactor(0);
+    container.setVisible(false);
+
+    return container;
+  }
+
   private refreshEndOverlay(
     kills: number,
     elapsedMs: number,
@@ -772,7 +812,13 @@ export class UIScene extends Phaser.Scene {
     remainingMs: number,
     mode: 'normal' | 'breakthrough',
   ): void {
-    this.setTextIfChanged(this.levelUpHeadingText, mode === 'breakthrough' ? 'BREAKTHROUGH' : 'LEVEL UP');
+    this.setTextIfChanged(this.levelUpHeadingText, mode === 'breakthrough' ? 'BREAKTHROUGH BONUS' : 'BONUS PICK');
+    this.setTextIfChanged(
+      this.levelUpSubheadingText,
+      mode === 'breakthrough'
+        ? 'Pick a rare weapon bonus, then continue with stat/class progression.'
+        : 'Legacy bonus choice. Stat points are spent from the bottom bar after this pick.',
+    );
     this.levelUpHeadingText.setColor(mode === 'breakthrough' ? '#f9a8d4' : '#bfdbfe');
     this.levelUpTimerText.setColor(mode === 'breakthrough' ? '#f9a8d4' : '#fef08a');
     this.setTextIfChanged(this.levelUpTimerText, `${(remainingMs / 1000).toFixed(1)}`);
@@ -810,9 +856,10 @@ export class UIScene extends Phaser.Scene {
     statPoints: number,
     levels: TankStatLevels,
     levelUpActive: boolean,
+    classChoiceActive: boolean,
     endActive: boolean,
   ): void {
-    const shouldShow = !endActive && (levelUpActive || statPoints > 0);
+    const shouldShow = !endActive && !levelUpActive && !classChoiceActive && statPoints > 0;
     this.statAllocationContainer.setVisible(shouldShow);
 
     if (!shouldShow) {
@@ -1038,6 +1085,14 @@ export class UIScene extends Phaser.Scene {
     this.setTextIfChanged(this.eventTitleText, title.toUpperCase());
     this.setTextIfChanged(this.eventBodyText, objective);
     this.setTextIfChanged(this.eventTimerText, `${Math.max(0, remainingMs / 1000).toFixed(1)}s`);
+  }
+
+  private refreshOrientationHint(): void {
+    const viewportWidth = window.innerWidth || this.scale.displaySize.width;
+    const viewportHeight = window.innerHeight || this.scale.displaySize.height;
+    const shouldShow = viewportWidth < viewportHeight || viewportWidth < 620;
+
+    this.orientationHintContainer.setVisible(shouldShow);
   }
 
   private getAlertPalette(kind: string): { textColor: string; backgroundColor: string } {

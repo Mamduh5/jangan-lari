@@ -61,6 +61,7 @@ export type GameplayBotRunSnapshot = {
   kills: number;
   weaponCount: number;
   goldEarned: number;
+  totalGold: number;
   score: number;
   bestScore: number;
   finalScore: number;

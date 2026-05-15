@@ -10,8 +10,10 @@ type HudSnapshot = {
   xp: string;
   gold: string;
   kills: string;
+  score: string;
   statPanelVisible: boolean;
   classChoiceVisible: boolean;
+  orientationHintVisible: boolean;
 };
 
 type RunSnapshot = {
@@ -47,8 +49,10 @@ test.describe('mobile HUD readability', () => {
     expect(initialHud.classStatus).toContain('Class Basic');
     expect(initialHud.statSummary).toContain('DMG0 RLD0 SPD0 HP0');
     expect(initialHud.weaponSummary).toContain('Weapon');
-    expect(initialHud.gold).toMatch(/^Gold \d+$/);
+    expect(initialHud.gold).toMatch(/^Run Gold \d+$/);
     expect(initialHud.kills).toBe('Kills 0');
+    expect(initialHud.score).toMatch(/^Score \d+$/);
+    expect(initialHud.orientationHintVisible).toBe(true);
 
     await grantStatPoints(page, 1);
     await page.waitForFunction(() => {

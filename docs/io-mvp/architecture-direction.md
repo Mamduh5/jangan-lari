@@ -20,6 +20,7 @@ This document records the intended direction for the `.io` MVP without importing
 - Keep tank definitions, stat definitions, shape definitions, and class-branch data data-driven.
 - Keep debug and bot-facing state explicit so future QA tooling can observe player stats, tank class, shapes, XP, score, and restart state.
 - Keep score pressure local-only for the MVP: run score math stays in a pure helper, and best-score/top-five history stays in browser localStorage until a later backend task exists.
+- Treat mobile-browser landscape readability as the runtime baseline before APK/PWA wrapper work.
 - Preserve fast restart and scene cleanup as first-class architecture concerns.
 
 ## Replace Or Simplify

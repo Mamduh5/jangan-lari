@@ -192,3 +192,27 @@ Acceptance checks:
 - Core state needed for future snapshots is easy to locate.
 - Local gameplay behavior remains unchanged except for intentional seam cleanup.
 - Build and relevant tests pass.
+
+## Sprint 9: Mobile Viewport And UI Clarity
+
+Goal: Make the current game readable and playable in mobile browser landscape before adding more features.
+
+Status note:
+- Added a mobile viewport/layout pass so the Phaser canvas uses dynamic viewport height and does not require manual browser zoom-out.
+- Improved in-run HUD readability with larger grouped run panels and softer contrast.
+- Corrected in-run gold display to show run-earned gold, while debug state keeps run gold and total gold distinct.
+- Reduced progression confusion by treating old reward cards as legacy bonus picks and keeping stat/class progression from visually stacking with them.
+- Deferred dual-stick manual aim to Sprint 10.
+- Deferred APK/PWA wrapper work until the mobile browser experience is acceptable.
+
+Deliverables:
+- Mobile landscape viewport behavior.
+- Clearer in-run HUD for HP, XP, level, score, run gold, stat points, and class.
+- Simple portrait or narrow viewport landscape recommendation.
+- Focused mobile layout e2e coverage.
+
+Acceptance checks:
+- Mobile landscape viewport uses the screen better without manual zoom-out.
+- In-run gold shows run-earned gold, not total account/session gold.
+- Stat/class progression remains clear.
+- Existing focused smoke and HUD checks pass.

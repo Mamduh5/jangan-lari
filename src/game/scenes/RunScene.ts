@@ -536,6 +536,7 @@ export class RunScene extends Phaser.Scene {
           }
         : null,
       goldEarned: this.goldEarned,
+      totalGold: this.saveData.totalGold,
       score: this.calculateCurrentRunScore(),
       bestScore: this.saveData.bestScore,
       finalScore: this.finalScore,
