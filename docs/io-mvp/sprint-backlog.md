@@ -316,3 +316,25 @@ Acceptance checks:
 - Class choice still appears when available.
 - Phaser scale remains FIT with the fixed 1280x720 virtual coordinate contract.
 - Focused validation stays limited to unit, build, smoke/mobile-layout/hud/controls/upgrade-exhaustion e2e, and diff check.
+
+## Sprint 14: Foundation Freeze
+
+Goal: Freeze `io/mvp-foundation` as the reusable mobile `.io` game foundation branch.
+
+Status note:
+- Added `docs/io-mvp/foundation-freeze.md` as the checkpoint document for foundation contents, deferrals, limitations, branch strategy, and verification commands.
+- Marked `io/mvp-foundation` as the reusable base after this checkpoint.
+- Recommended `io/mobile-alpha` as the next product branch.
+- Kept side letterboxing accepted under Phaser FIT and deferred aspect-ratio polish.
+- Kept full gameplay-bot recalibration as dedicated test-maintenance debt.
+- Deferred endless scaling, bot tanks, and multiplayer spikes to later branches.
+
+Deliverables:
+- Foundation freeze document.
+- Existing planning docs point future product work at `io/mobile-alpha`.
+- Standard focused verification commands are documented.
+- No gameplay/runtime behavior changes.
+
+Acceptance checks:
+- `npm test`, `npm run build`, focused e2e smoke/mobile-layout/aim/controls/upgrade-exhaustion, and `git diff --check` pass.
+- Full `npm run test:e2e`, `npm run test:all`, and whole `gameplay-bot.spec.ts` are not part of the freeze checkpoint.

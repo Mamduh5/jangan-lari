@@ -2,6 +2,8 @@
 
 This document records the intended direction for the `.io` MVP without importing a new architecture.
 
+Sprint 14 freezes `io/mvp-foundation` as a reusable mobile `.io` foundation branch. Product-specific iteration should branch from it, with `io/mobile-alpha` as the recommended next branch.
+
 ## Keep And Reuse
 
 - Phaser 3 with Vite and TypeScript remains the runtime.
@@ -27,6 +29,7 @@ This document records the intended direction for the `.io` MVP without importing
 - Keep APK/mobile run UI touch-first: browser keyboard hints can remain for desktop, but mobile-facing overlays should use tap/menu/resume copy and avoid blocking play when no action is available.
 - Treat exhausted progression as non-blocking. If stat points cannot be spent because stats are maxed, or if the legacy bonus pool is empty, gameplay should continue with a small status toast at most.
 - Preserve fast restart and scene cleanup as first-class architecture concerns.
+- Keep `io/mvp-foundation` reusable: changes after the freeze should favor docs, verification, and reusable seams unless a later task explicitly reopens foundation work.
 
 ## Replace Or Simplify
 
@@ -55,6 +58,25 @@ This document records the intended direction for the `.io` MVP without importing
 - Endless/infinite upgrade mode and late-run boss scaling changes.
 - Multiplayer/bot-mode rules, including player-like bot tanks and multiplayer level caps.
 - Full gameplay-bot recalibration outside focused feature validation.
+
+## Frozen Foundation Boundary
+
+Stay reusable in `io/mvp-foundation`:
+
+- Phaser/Vite runtime structure.
+- Fixed 1280x720 FIT scaling contract.
+- Dual-zone mobile input and guide settings.
+- Neutral shape, XP, stat, class, score, save, debug snapshot, and focused test patterns.
+- Capacitor Android wrapper path.
+- Multiplayer-prep contracts without networking.
+
+Move product-specific work to later branches:
+
+- `io/mobile-alpha` for player-facing product iteration.
+- `io/android-polish` for wrapper/fullscreen/device polish.
+- `io/endless-mode` for infinite progression and late-run scaling.
+- `io/bot-tanks-spike` for local bot tank prototypes.
+- `io/multiplayer-spike` for authoritative networking experiments.
 
 ## Future Multiplayer Seams
 

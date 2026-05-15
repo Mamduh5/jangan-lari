@@ -6,6 +6,8 @@ This folder defines the planning rails for turning the current Phaser top-down a
 
 - Base branch: `main`.
 - Working branch: `io/mvp-foundation`.
+- Sprint 14 freezes `io/mvp-foundation` as the reusable mobile `.io` foundation branch.
+- Product work should branch from this checkpoint, with `io/mobile-alpha` as the recommended next branch.
 - Do not use `newsystem/v1`, `newsystem/v2`, or `newsystem/v3` as a base.
 - Do not import the `newsystem` architecture unless a later task explicitly asks for it.
 
@@ -58,3 +60,5 @@ This repo is the game runtime. `Mamduh5/brower-game-bots` is future QA and autom
 ## Working Rule
 
 Future implementation prompts should change one small game slice at a time. Each task should inspect the existing code first, make the smallest coherent change, run the relevant tests, summarize exactly what changed, and stop.
+
+For the frozen foundation contents, deferred work, normal verification commands, Android check, and suggested next branches, see `docs/io-mvp/foundation-freeze.md`.

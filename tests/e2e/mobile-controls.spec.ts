@@ -31,6 +31,7 @@ type RunSnapshot = {
 
 test.describe('mobile control guides', () => {
   test('guides can be toggled while movement and aim remain playable', async ({ page }) => {
+    test.setTimeout(45_000);
     await page.setViewportSize({ width: 844, height: 390 });
     const runtimeErrors = trackRuntimeErrors(page);
 

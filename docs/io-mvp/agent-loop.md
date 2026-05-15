@@ -69,6 +69,8 @@ Use the focused e2e scripts in `package.json` for normal sprint browser checks:
 - `npm run test:e2e:special`
 - `npm run test:e2e:hud`
 - `npm run test:e2e:aim`
+- `npm run test:e2e:controls`
+- `npm run test:e2e:upgrade-exhaustion`
 - `npm run test:e2e:neutral-shapes`
 - `npm run test:e2e:stat-allocation`
 - `npm run test:e2e:class-branching`
@@ -79,5 +81,18 @@ Use the focused e2e scripts in `package.json` for normal sprint browser checks:
 Do not run the full Playwright suite during normal feature work. `npm run test:e2e` is reserved for milestone validation, pre-merge validation, or explicit test-maintenance tasks. As of Sprint 6, `tests/e2e/gameplay-bot.spec.ts` is known long-running after the Sprint 2-4 progression changes and requires dedicated recalibration before it can serve as a routine full-suite gate.
 
 Pure docs, type-contract, or mapper-only multiplayer-prep work should use unit tests, build, and `git diff --check`. Run browser smoke only when runtime behavior, package scripts, HUD/debug runtime surfaces, or scene wiring changed.
+
+For the frozen `io/mvp-foundation` checkpoint and normal product-branch verification, use:
+
+1. `npm test`
+2. `npm run build`
+3. `npm run test:e2e:smoke`
+4. `npm run test:e2e:mobile-layout`
+5. `npm run test:e2e:aim`
+6. `npm run test:e2e:controls`
+7. `npm run test:e2e:upgrade-exhaustion`
+8. `git diff --check`
+
+For Android wrapper validation, use `npm run android:sync` and `npm run apk:dev` when local Android tooling is available.
 
 If a full e2e run is explicitly requested and fails, stop after the first failure. Report the failing spec, the likely product or test-maintenance root cause, and the smallest recommended follow-up. Do not loop on unrelated legacy specs, increase timeouts broadly, or rewrite deterministic loadout tests as part of a feature sprint.
