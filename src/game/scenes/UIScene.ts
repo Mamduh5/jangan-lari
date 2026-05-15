@@ -10,6 +10,9 @@ export class UIScene extends Phaser.Scene {
   private heroText!: Phaser.GameObjects.Text;
   private hpValueText!: Phaser.GameObjects.Text;
   private hpBarFill!: Phaser.GameObjects.Rectangle;
+  private levelValueText!: Phaser.GameObjects.Text;
+  private classStatusText!: Phaser.GameObjects.Text;
+  private statSummaryText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
   private killsText!: Phaser.GameObjects.Text;
@@ -22,6 +25,7 @@ export class UIScene extends Phaser.Scene {
   private eventTimerText!: Phaser.GameObjects.Text;
   private weaponIconFrames: Phaser.GameObjects.Rectangle[] = [];
   private weaponIconTexts: Phaser.GameObjects.Text[] = [];
+  private weaponSummaryText!: Phaser.GameObjects.Text;
   private xpBarFill!: Phaser.GameObjects.Rectangle;
   private xpBarLabel!: Phaser.GameObjects.Text;
   private endContainer!: Phaser.GameObjects.Container;
@@ -40,8 +44,10 @@ export class UIScene extends Phaser.Scene {
   private classChoiceCards: Phaser.GameObjects.Rectangle[] = [];
   private classChoiceTitles: Phaser.GameObjects.Text[] = [];
   private classChoiceDescriptions: Phaser.GameObjects.Text[] = [];
+  private classChoiceActionLabels: Phaser.GameObjects.Text[] = [];
   private statAllocationContainer!: Phaser.GameObjects.Container;
   private statPointText!: Phaser.GameObjects.Text;
+  private statHelpText!: Phaser.GameObjects.Text;
   private statButtons: Partial<Record<TankStatId, Phaser.GameObjects.Rectangle>> = {};
   private statButtonLabels: Partial<Record<TankStatId, Phaser.GameObjects.Text>> = {};
 
@@ -71,33 +77,59 @@ export class UIScene extends Phaser.Scene {
     this.classChoiceCards = [];
     this.classChoiceTitles = [];
     this.classChoiceDescriptions = [];
+    this.classChoiceActionLabels = [];
     this.statButtons = {};
     this.statButtonLabels = {};
 
-    const topLeftPanel = this.add.rectangle(24, 18, 274, 86, 0x030712, 0.88).setOrigin(0);
+    const topLeftPanel = this.add.rectangle(24, 18, 326, 130, 0x030712, 0.88).setOrigin(0);
     topLeftPanel.setStrokeStyle(1, 0x334155, 0.96);
     topLeftPanel.setScrollFactor(0);
 
     this.heroText = this.add
       .text(38, 30, '--', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '24px',
+        fontSize: '21px',
         color: '#f8fafc',
+        wordWrap: { width: 286 },
       })
       .setScrollFactor(0);
 
-    const hpBarFrame = this.add.rectangle(38, 68, 220, 18, 0x172033, 0.98).setOrigin(0, 0.5);
+    const hpBarFrame = this.add.rectangle(38, 68, 258, 20, 0x172033, 0.98).setOrigin(0, 0.5);
     hpBarFrame.setStrokeStyle(1, 0x475569, 0.95);
     hpBarFrame.setScrollFactor(0);
 
-    this.hpBarFill = this.add.rectangle(38, 68, 0, 12, 0xf87171, 1).setOrigin(0, 0.5);
+    this.hpBarFill = this.add.rectangle(38, 68, 0, 14, 0xf87171, 1).setOrigin(0, 0.5);
     this.hpBarFill.setScrollFactor(0);
 
     this.hpValueText = this.add
       .text(38, 82, 'HP --/--', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
+        fontSize: '14px',
         color: '#fecaca',
+      })
+      .setScrollFactor(0);
+
+    this.levelValueText = this.add
+      .text(158, 82, 'LV 1  XP 0/0', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#bfdbfe',
+      })
+      .setScrollFactor(0);
+
+    this.classStatusText = this.add
+      .text(38, 106, 'Class Basic', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#bae6fd',
+      })
+      .setScrollFactor(0);
+
+    this.statSummaryText = this.add
+      .text(38, 126, 'Stats DMG0 RLD0 SPD0 HP0', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '13px',
+        color: '#cbd5e1',
       })
       .setScrollFactor(0);
 
@@ -137,7 +169,7 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.instructionText = this.add
-      .text(GAME_WIDTH / 2, 148, '', {
+      .text(GAME_WIDTH / 2, 156, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '13px',
         color: '#cbd5e1',
@@ -206,6 +238,16 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
+    this.weaponSummaryText = this.add
+      .text(38, GAME_HEIGHT - 116, 'Weapon --', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#e0f2fe',
+        backgroundColor: '#111827',
+        padding: { left: 8, right: 8, top: 4, bottom: 4 },
+      })
+      .setScrollFactor(0);
+
     for (let index = 0; index < 4; index += 1) {
       const frame = this.add.rectangle(38 + index * 52, GAME_HEIGHT - 88, 40, 40, 0x172033, 0.98).setOrigin(0);
       frame.setStrokeStyle(1, 0x334155, 0.92);
@@ -225,17 +267,17 @@ export class UIScene extends Phaser.Scene {
       this.weaponIconTexts.push(icon);
     }
 
-    const xpBarFrame = this.add.rectangle(38, GAME_HEIGHT - 38, 272, 18, 0x172554, 0.98).setOrigin(0, 0.5);
+    const xpBarFrame = this.add.rectangle(38, GAME_HEIGHT - 38, 312, 20, 0x172554, 0.98).setOrigin(0, 0.5);
     xpBarFrame.setStrokeStyle(1, 0x60a5fa, 0.9);
     xpBarFrame.setScrollFactor(0);
 
-    this.xpBarFill = this.add.rectangle(38, GAME_HEIGHT - 38, 0, 12, 0x38bdf8, 1).setOrigin(0, 0.5);
+    this.xpBarFill = this.add.rectangle(38, GAME_HEIGHT - 38, 0, 14, 0x38bdf8, 1).setOrigin(0, 0.5);
     this.xpBarFill.setScrollFactor(0);
 
     this.xpBarLabel = this.add
       .text(38, GAME_HEIGHT - 18, 'LV 1  XP 0/0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
+        fontSize: '14px',
         color: '#bfdbfe',
       })
       .setScrollFactor(0);
@@ -299,14 +341,24 @@ export class UIScene extends Phaser.Scene {
       maxHealth: 0,
     }) as TankStatLevels;
 
-    this.setTextIfChanged(this.heroText, `${heroName || '--'} / ${tankClass.title ?? 'Basic'}`);
+    const classTitle = tankClass.title ?? 'Basic';
+    const xpLabel = `LV ${level}  XP ${xp}/${xpNext}`;
+    const statSummary = this.formatStatSummary(tankStatLevels);
+
+    this.setTextIfChanged(this.heroText, heroName || '--');
     this.setTextIfChanged(this.hpValueText, `HP ${currentHp}/${maxHp}`);
-    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 220, 0, 220);
+    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 258, 0, 258);
+    this.setTextIfChanged(this.levelValueText, xpLabel);
+    this.setTextIfChanged(this.classStatusText, `Class ${classTitle}${classChoiceActive ? ' - Choose now' : ''}`);
+    this.classStatusText.setColor(classChoiceActive ? '#fef08a' : '#bae6fd');
+    this.setTextIfChanged(this.statSummaryText, `Stats ${statSummary}${statPoints > 0 ? `  +${statPoints}` : ''}`);
+    this.statSummaryText.setColor(statPoints > 0 ? '#fef08a' : '#cbd5e1');
     this.setTextIfChanged(this.timerText, this.formatTime(Math.max(0, targetMs - elapsedMs)));
     this.setTextIfChanged(this.goldText, `Gold ${totalGold}`);
     this.setTextIfChanged(this.killsText, `Kills ${kills}`);
-    this.setTextIfChanged(this.xpBarLabel, `LV ${level}  XP ${xp}/${xpNext}`);
-    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 272, 0, 272);
+    this.setTextIfChanged(this.weaponSummaryText, this.formatWeaponSummary(weaponNames, classTitle));
+    this.setTextIfChanged(this.xpBarLabel, xpLabel);
+    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 312, 0, 312);
     this.refreshWeaponIcons(weaponNames);
     this.refreshAlert(alertKind, alertMessage);
     this.refreshRewardToast(rewardMessage, rewardColor);
@@ -329,6 +381,34 @@ export class UIScene extends Phaser.Scene {
     if (classChoiceActive && !endActive) {
       this.refreshClassChoiceCards(classChoiceChoices);
     }
+  }
+
+  public getHudSnapshot(): {
+    hero: string;
+    hp: string;
+    level: string;
+    classStatus: string;
+    statSummary: string;
+    weaponSummary: string;
+    xp: string;
+    gold: string;
+    kills: string;
+    statPanelVisible: boolean;
+    classChoiceVisible: boolean;
+  } {
+    return {
+      hero: this.heroText.text,
+      hp: this.hpValueText.text,
+      level: this.levelValueText.text,
+      classStatus: this.classStatusText.text,
+      statSummary: this.statSummaryText.text,
+      weaponSummary: this.weaponSummaryText.text,
+      xp: this.xpBarLabel.text,
+      gold: this.goldText.text,
+      kills: this.killsText.text,
+      statPanelVisible: this.statAllocationContainer.visible,
+      classChoiceVisible: this.classChoiceContainer.visible,
+    };
   }
 
   private createEndOverlay(): Phaser.GameObjects.Container {
@@ -539,10 +619,22 @@ export class UIScene extends Phaser.Scene {
         .setOrigin(0, 0)
         .setScrollFactor(0);
 
+      const action = this.add
+        .text(x, 438, 'TAP TO EVOLVE', {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '13px',
+          color: '#fef08a',
+          backgroundColor: '#1e293b',
+          padding: { left: 10, right: 10, top: 5, bottom: 5 },
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0);
+
       this.classChoiceCards.push(card);
       this.classChoiceTitles.push(title);
       this.classChoiceDescriptions.push(description);
-      children.push(card, title, description);
+      this.classChoiceActionLabels.push(action);
+      children.push(card, title, description, action);
     }
 
     const container = this.add.container(0, 0, children);
@@ -558,21 +650,30 @@ export class UIScene extends Phaser.Scene {
     panel.setStrokeStyle(1, 0x38bdf8, 0.86);
 
     this.statPointText = this.add
-      .text(GAME_WIDTH / 2 - 354, GAME_HEIGHT - 142, 'STAT POINTS 0', {
+      .text(GAME_WIDTH / 2 - 354, GAME_HEIGHT - 144, 'STAT POINTS 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
+        fontSize: '16px',
         color: '#bae6fd',
       })
       .setOrigin(0, 0.5)
       .setScrollFactor(0);
 
-    const children: Phaser.GameObjects.GameObject[] = [panel, this.statPointText];
+    this.statHelpText = this.add
+      .text(GAME_WIDTH / 2 + 354, GAME_HEIGHT - 144, 'Tap a stat to spend', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '13px',
+        color: '#cbd5e1',
+      })
+      .setOrigin(1, 0.5)
+      .setScrollFactor(0);
+
+    const children: Phaser.GameObjects.GameObject[] = [panel, this.statPointText, this.statHelpText];
     const startX = GAME_WIDTH / 2 - 260;
 
     TANK_STAT_IDS.forEach((statId, index) => {
       const definition = TANK_STAT_DEFINITIONS[statId];
       const x = startX + index * 174;
-      const button = this.add.rectangle(x, GAME_HEIGHT - 98, 156, 58, 0x132033, 0.98).setScrollFactor(0);
+      const button = this.add.rectangle(x, GAME_HEIGHT - 96, 162, 62, 0x132033, 0.98).setScrollFactor(0);
       button.setStrokeStyle(1, 0x334155, 0.95);
       button.setInteractive({ useHandCursor: true });
       button.on('pointerdown', () => this.allocateTankStat(statId));
@@ -580,9 +681,9 @@ export class UIScene extends Phaser.Scene {
       button.on('pointerout', () => this.applyStatButtonHover(statId, false));
 
       const label = this.add
-        .text(x, GAME_HEIGHT - 98, `${definition.shortLabel} 0/${definition.maxLevel}\n${definition.summary}`, {
+        .text(x, GAME_HEIGHT - 96, `${definition.shortLabel} 0/${definition.maxLevel}\n${definition.summary}`, {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '13px',
+          fontSize: '14px',
           color: '#e0f2fe',
           align: 'center',
           lineSpacing: 3,
@@ -671,6 +772,8 @@ export class UIScene extends Phaser.Scene {
     }
 
     this.setTextIfChanged(this.statPointText, `STAT POINTS ${statPoints}`);
+    this.setTextIfChanged(this.statHelpText, statPoints > 0 ? 'Tap a stat to spend' : 'Current run stat levels');
+    this.statHelpText.setColor(statPoints > 0 ? '#fef08a' : '#94a3b8');
 
     for (const statId of TANK_STAT_IDS) {
       const definition = TANK_STAT_DEFINITIONS[statId];
@@ -697,17 +800,20 @@ export class UIScene extends Phaser.Scene {
       const card = this.classChoiceCards[index];
       const title = this.classChoiceTitles[index];
       const description = this.classChoiceDescriptions[index];
+      const action = this.classChoiceActionLabels[index];
 
       if (!choice) {
         card.setVisible(false);
         title.setVisible(false);
         description.setVisible(false);
+        action.setVisible(false);
         continue;
       }
 
       card.setVisible(true);
       title.setVisible(true);
       description.setVisible(true);
+      action.setVisible(true);
       card.setData('classId', choice.id);
       card.setData('baseColor', choice.id === 'twin' ? 0x0d2536 : 0x101b35);
       this.setTextIfChanged(title, choice.title);
@@ -776,6 +882,16 @@ export class UIScene extends Phaser.Scene {
     const seconds = totalSeconds % 60;
 
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  private formatStatSummary(levels: TankStatLevels): string {
+    return `DMG${levels.bulletDamage ?? 0} RLD${levels.reload ?? 0} SPD${levels.moveSpeed ?? 0} HP${levels.maxHealth ?? 0}`;
+  }
+
+  private formatWeaponSummary(weaponNames: string[], classTitle: string): string {
+    const primaryWeapon = weaponNames[0] ?? '--';
+    const extraCount = Math.max(0, weaponNames.length - 1);
+    return `Weapon ${primaryWeapon}${extraCount > 0 ? ` +${extraCount}` : ''} / ${classTitle}`;
   }
 
   private refreshWeaponIcons(weaponNames: string[]): void {
@@ -1061,6 +1177,7 @@ export class UIScene extends Phaser.Scene {
     this.classChoiceCards = [];
     this.classChoiceTitles = [];
     this.classChoiceDescriptions = [];
+    this.classChoiceActionLabels = [];
     this.statButtons = {};
     this.statButtonLabels = {};
   }

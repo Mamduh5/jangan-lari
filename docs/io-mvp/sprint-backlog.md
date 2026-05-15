@@ -113,6 +113,12 @@ Acceptance checks:
 
 Goal: Make the run state readable on a phone-sized screen.
 
+Status note:
+- Added a compact always-visible run HUD pass for HP, level, XP, stat levels, available stat points, current class, weapon/class summary, kills, and gold.
+- Stat allocation and class-choice overlays remain pointer/touch driven, with clearer tap affordances and actual HUD text exposed through a focused UI snapshot for browser checks.
+- Milestone full-e2e diagnostics after Sprint 4 identified `tests/e2e/gameplay-bot.spec.ts` as the long-running suite; `menu-flow.spec.ts` and `special-attacks.spec.ts` pass individually.
+- Full gameplay-bot recalibration is deferred to dedicated test-maintenance, while normal feature sprints continue with unit, build, diff check, and focused e2e validation only.
+
 Deliverables:
 - Simplified HUD for HP, XP, level, score, stat points, and class.
 - Touch-friendly level/stat prompts.
