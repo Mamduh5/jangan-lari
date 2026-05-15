@@ -4,7 +4,7 @@ import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import type { LocalLeaderboardEntry } from '../save/saveData';
-// import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { RunScene } from './RunScene';
 
 export class UIScene extends Phaser.Scene {
@@ -74,8 +74,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   create(): void {
-    const viewWidth = this.scale.width;
-    const viewHeight = this.scale.height;
+    const viewWidth = GAME_WIDTH;
+    const viewHeight = GAME_HEIGHT;
     this.weaponIconFrames = [];
     this.weaponIconTexts = [];
     this.levelUpCards = [];
@@ -446,8 +446,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createEndOverlay(): Phaser.GameObjects.Container {
-    const viewWidth = this.scale.width;
-    const viewHeight = this.scale.height;
+    const viewWidth = GAME_WIDTH;
+    const viewHeight = GAME_HEIGHT;
 
     const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.78)
     const panel = this.add.rectangle(viewWidth / 2, viewHeight / 2, 640, 500, 0x0f172a, 0.995).setScrollFactor(0);
@@ -541,8 +541,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createLevelUpOverlay(): Phaser.GameObjects.Container {
-    const viewWidth = this.scale.width;
-    const viewHeight = this.scale.height;
+    const viewWidth = GAME_WIDTH;
+    const viewHeight = GAME_HEIGHT;
 
     const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.8)
     this.levelUpHeadingText = this.add
@@ -632,8 +632,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createClassChoiceOverlay(): Phaser.GameObjects.Container {
-    const viewWidth = this.scale.width;
-    const viewHeight = this.scale.height;
+    const viewWidth = GAME_WIDTH;
+    const viewHeight = GAME_HEIGHT;
 
     const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.78)
     const heading = this.add
@@ -712,8 +712,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createStatAllocationPanel(): Phaser.GameObjects.Container {
-    const viewWidth = this.scale.width;
-    const viewHeight = this.scale.height;
+    const viewWidth = GAME_WIDTH;
+    const viewHeight = GAME_HEIGHT;
 
     const panel = this.add.rectangle(viewWidth / 2, viewHeight - 106, 760, 96, 0x08111f, 0.96)
     panel.setStrokeStyle(1, 0x38bdf8, 0.86);
@@ -774,8 +774,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createOrientationHintOverlay(): Phaser.GameObjects.Container {
-    const viewWidth = this.scale.width;
-    const viewHeight = this.scale.height;
+    const viewWidth = GAME_WIDTH;
+    const viewHeight = GAME_HEIGHT;
 
     const panel = this.add.rectangle(viewWidth / 2, viewHeight / 2, 620, 170, 0x102033, 0.94)
     panel.setStrokeStyle(2, 0xfacc15, 0.95);

@@ -144,8 +144,8 @@ async function getCanvasAbsolutePoint(page: import('@playwright/test').Page, x: 
   }
 
   return {
-    x: box.x + Math.max(1, Math.min(box.width - 1, x)),
-    y: box.y + Math.max(1, Math.min(box.height - 1, y)),
+    x: box.x + Math.max(1, Math.min(box.width - 1, (x / 1280) * box.width)),
+    y: box.y + Math.max(1, Math.min(box.height - 1, (y / 720) * box.height)),
   };
 }
 
