@@ -53,3 +53,26 @@ Do not build multiplayer yet, but keep these seams in mind:
 - avoid hidden scene-only state for core player stats;
 - prefer deterministic pure helpers for stat and class calculations;
 - keep leaderboard pressure abstract enough to swap local scores for server scores later.
+
+## Sprint 8 Server Authority Boundary
+
+Current state after Sprint 7:
+
+- The runtime is still single-player and client-authoritative.
+- Score pressure and the top-five leaderboard are local-only browser state.
+- `gameplaySnapshot.ts` is a local debug and automation surface, not a network protocol.
+- `simulationTypes.ts` and `gameplaySnapshotMapper.ts` are pure observational seams only.
+
+Future server-authority boundary:
+
+- Clients should eventually send input commands and requested stat/class choices.
+- A room server should eventually own movement validity, projectile spawning, collisions, damage, XP, stat/class validation, score, run completion, and leaderboard eligibility.
+- Clients must not be trusted for final position, damage, kills, XP, stat points, class unlocks, score, best score, or leaderboard entries.
+
+Migration order:
+
+1. Extract pure simulation helpers.
+2. Create headless local simulation tests.
+3. Add an authoritative room server prototype.
+4. Add snapshot replication.
+5. Gate debug hooks and add anti-cheat validation.

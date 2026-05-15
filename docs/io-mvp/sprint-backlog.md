@@ -176,6 +176,12 @@ Acceptance checks:
 
 Goal: Prepare for future authoritative WebSocket multiplayer without adding it.
 
+Status note:
+- Added `docs/io-mvp/multiplayer-prep.md` to document current client authority, future server authority, extraction targets, client-only responsibilities, and debug hooks that must be gated before competitive builds.
+- Added pure future-facing simulation/input/snapshot contracts without Phaser, WebSocket, backend, account, or online leaderboard code.
+- Added a read-only mapper from the current gameplay debug snapshot to the future-facing simulation snapshot shape.
+- Deferred actual networking, room server work, snapshot replication runtime, anti-cheat, accounts/auth, online leaderboard, and multiplayer UI.
+
 Deliverables:
 - Documented local simulation boundaries.
 - Input intent, player state, tank stats, projectile state, and shape state identified for future serialization.
