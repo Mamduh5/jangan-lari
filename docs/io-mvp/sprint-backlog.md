@@ -154,6 +154,12 @@ Acceptance checks:
 
 Goal: Add leaderboard pressure without backend or multiplayer.
 
+Status note:
+- Added a transparent local score model for neutral shapes destroyed, enemy kills, level reached, time survived, and run gold.
+- Added browser-local best score and top-five run history through the existing save layer.
+- Surfaced current score in the HUD, final score/new-best state on the end screen, and a compact local top-five panel.
+- Deferred backend persistence, online leaderboard, accounts/auth, real multiplayer, and server authority.
+
 Deliverables:
 - Local run score model.
 - Local or mocked async leaderboard display.

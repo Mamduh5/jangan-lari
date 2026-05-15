@@ -61,6 +61,12 @@ export type GameplayBotRunSnapshot = {
   kills: number;
   weaponCount: number;
   goldEarned: number;
+  score: number;
+  bestScore: number;
+  finalScore: number;
+  newBestScore: boolean;
+  localLeaderboardEntryCount: number;
+  neutralShapesDestroyed: number;
   primaryWeapon: {
     id: WeaponId;
     damage: number;

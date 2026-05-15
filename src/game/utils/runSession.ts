@@ -14,6 +14,7 @@ export type RunSessionState = {
   levelUpRemainingMs: number;
   killCount: number;
   eliteKillCount: number;
+  neutralShapesDestroyed: number;
   goldEarned: number;
   isEnded: boolean;
   isLevelingUp: boolean;
@@ -37,6 +38,7 @@ export function createFreshRunSessionState(): RunSessionState {
     levelUpRemainingMs: 0,
     killCount: 0,
     eliteKillCount: 0,
+    neutralShapesDestroyed: 0,
     goldEarned: 0,
     isEnded: false,
     isLevelingUp: false,
@@ -166,6 +168,12 @@ export function writeFreshRunRegistryState(registry: RegistryLike, selectedHeroN
     'run.rewardColor': '#fcd34d',
     'run.instructions': `Selected Hero: ${selectedHeroName}`,
     'run.elapsedMs': 0,
+    'run.score': 0,
+    'run.bestScore': 0,
+    'run.finalScore': 0,
+    'run.newBestScore': false,
+    'run.localLeaderboard': [],
+    'run.localLeaderboardEntryCount': 0,
     'run.goldEarned': 0,
     'run.totalGold': totalGold,
   };
@@ -214,6 +222,12 @@ export function clearRunRegistryState(registry: RegistryLike, totalGold: number)
     'run.rewardColor': '#fcd34d',
     'run.instructions': 'Return to menu complete.',
     'run.elapsedMs': 0,
+    'run.score': 0,
+    'run.bestScore': 0,
+    'run.finalScore': 0,
+    'run.newBestScore': false,
+    'run.localLeaderboard': [],
+    'run.localLeaderboardEntryCount': 0,
     'run.goldEarned': 0,
     'run.totalGold': totalGold,
   };

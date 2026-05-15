@@ -61,7 +61,7 @@ import { MovementInputController } from '../input/MovementInputController';
 import type { GameplayBotRunSnapshot } from '../debug/gameplaySnapshot';
 import { getTankStatDefinition, type TankStatId } from '../data/tankStats';
 import type { GameSaveData } from '../save/saveData';
-import { loadGameSave } from '../save/saveData';
+import { loadGameSave, recordLocalLeaderboardEntry } from '../save/saveData';
 import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
@@ -80,6 +80,7 @@ import {
   tickLevelUpCountdown,
   writeFreshRunRegistryState,
 } from '../utils/runSession';
+import { calculateRunScore } from '../utils/runScore';
 
 type RunEventType = 'challenge-wave' | 'reward-target';
 
@@ -165,7 +166,10 @@ export class RunScene extends Phaser.Scene {
   private levelUpRemainingMs = 0;
   private killCount = 0;
   private eliteKillCount = 0;
+  private neutralShapesDestroyed = 0;
   private goldEarned = 0;
+  private finalScore = 0;
+  private newBestScore = false;
   private isEnded = false;
   private isLevelingUp = false;
   private isChoosingTankClass = false;
@@ -231,7 +235,10 @@ export class RunScene extends Phaser.Scene {
     this.levelUpRemainingMs = freshSession.levelUpRemainingMs;
     this.killCount = freshSession.killCount;
     this.eliteKillCount = freshSession.eliteKillCount;
+    this.neutralShapesDestroyed = freshSession.neutralShapesDestroyed;
     this.goldEarned = freshSession.goldEarned;
+    this.finalScore = 0;
+    this.newBestScore = false;
     this.isEnded = freshSession.isEnded;
     this.isLevelingUp = freshSession.isLevelingUp;
     this.isChoosingTankClass = false;
@@ -529,6 +536,12 @@ export class RunScene extends Phaser.Scene {
           }
         : null,
       goldEarned: this.goldEarned,
+      score: this.calculateCurrentRunScore(),
+      bestScore: this.saveData.bestScore,
+      finalScore: this.finalScore,
+      newBestScore: this.newBestScore,
+      localLeaderboardEntryCount: this.saveData.localLeaderboard.length,
+      neutralShapesDestroyed: this.neutralShapesDestroyed,
       levelUpActive: Boolean(this.registry.get('run.levelUpActive')),
       endActive: Boolean(this.registry.get('run.endActive')),
       victory: Boolean(this.registry.get('run.victory')),
@@ -696,6 +709,28 @@ export class RunScene extends Phaser.Scene {
     }
 
     return type === 'challenge-wave' ? this.startChallengeWaveEvent(true) : this.startRewardTargetEvent(true);
+  }
+
+  public debugAddScoreProgress(options: { neutralShapesDestroyed?: number; enemyKills?: number; elapsedMs?: number } = {}): void {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.neutralShapesDestroyed += Math.max(0, Math.floor(options.neutralShapesDestroyed ?? 0));
+    this.killCount += Math.max(0, Math.floor(options.enemyKills ?? 0));
+    this.runElapsedMs = Math.min(
+      RUN_TARGET_DURATION_MS,
+      this.runElapsedMs + Math.max(0, Math.floor(options.elapsedMs ?? 0)),
+    );
+    this.publishHudState();
+  }
+
+  public debugEndRun(victory = false): void {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.endRun(victory, victory ? 'Victory' : 'Defeat', 'Debug score run complete.');
   }
 
   private registerWeapon(definition: WeaponDefinition, announce = false): void {
@@ -1500,6 +1535,7 @@ export class RunScene extends Phaser.Scene {
     this.createBurstCircle(shapeX, shapeY, 0xffffff, Math.max(3, impactRadius * 0.22), Math.max(8, impactRadius), 65, 0.14);
 
     if (shapeDestroyed) {
+      this.neutralShapesDestroyed += 1;
       this.showFloatingText(shapeX, shapeY - 18, `+${xpValue} XP`, '#bfdbfe', 15);
       this.createBurstCircle(shapeX, shapeY, impactColor, 8, 34, 180, 0.72);
       this.createBurstCircle(shapeX, shapeY, 0xffffff, 4, 24, 130, 0.22);
@@ -2433,6 +2469,7 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    const score = this.calculateCurrentRunScore();
     this.registry.set('run.hp', this.player.getCurrentHealth());
     this.registry.set('run.maxHp', this.player.getMaxHealth());
     this.registry.set('run.level', this.player.getLevel());
@@ -2455,12 +2492,28 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.goldEarned', this.goldEarned);
     this.registry.set('run.totalGold', this.saveData.totalGold);
     this.registry.set('run.elapsedMs', this.runElapsedMs);
+    this.registry.set('run.score', score);
+    this.registry.set('run.bestScore', this.saveData.bestScore);
+    this.registry.set('run.finalScore', this.finalScore);
+    this.registry.set('run.newBestScore', this.newBestScore);
+    this.registry.set('run.localLeaderboard', this.saveData.localLeaderboard);
+    this.registry.set('run.localLeaderboardEntryCount', this.saveData.localLeaderboard.length);
     this.registry.set('run.weaponNames', this.weapons.map((weapon) => weapon.getStats().name));
     this.registry.set('run.eventActive', Boolean(this.activeRunEvent));
     this.registry.set('run.eventType', this.activeRunEvent?.type ?? '');
     this.registry.set('run.eventTitle', this.activeRunEvent?.title ?? '');
     this.registry.set('run.eventText', this.activeRunEvent?.objective ?? '');
     this.registry.set('run.eventRemainingMs', this.activeRunEvent ? Math.max(0, this.activeRunEvent.endsAtMs - this.runElapsedMs) : 0);
+  }
+
+  private calculateCurrentRunScore(): number {
+    return calculateRunScore({
+      neutralShapesDestroyed: this.neutralShapesDestroyed,
+      enemyKills: this.killCount,
+      levelReached: this.player.getLevel(),
+      timeSurvivedMs: this.runElapsedMs,
+      goldEarned: this.goldEarned,
+    });
   }
 
   private endRun(victory: boolean, title: string, subtitle: string): void {
@@ -2489,6 +2542,17 @@ export class RunScene extends Phaser.Scene {
       eliteKills: this.eliteKillCount,
     });
     this.saveData = questResolution.saveData;
+    this.finalScore = this.calculateCurrentRunScore();
+    const leaderboardResult = recordLocalLeaderboardEntry(this.saveData, {
+      score: this.finalScore,
+      level: this.player.getLevel(),
+      classId: this.currentTankClass.id,
+      classTitle: this.currentTankClass.title,
+      kills: this.killCount,
+      timeSurvivedMs: this.runElapsedMs,
+    });
+    this.saveData = leaderboardResult.saveData;
+    this.newBestScore = leaderboardResult.isNewBest;
 
     this.spawnTimer?.remove(false);
     this.neutralShapeSpawnTimer?.remove(false);

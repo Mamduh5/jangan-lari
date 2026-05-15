@@ -1,5 +1,5 @@
 ﻿import { HEROES } from '../../src/game/data/heroes';
-import { createDefaultSaveData, loadGameSave, writeGameSave } from '../../src/game/save/saveData';
+import { createDefaultSaveData, loadGameSave, recordLocalLeaderboardEntry, writeGameSave } from '../../src/game/save/saveData';
 import { isHeroUnlocked, selectHero, unlockHero } from '../../src/game/save/saveHeroes';
 
 describe('save helpers', () => {
@@ -42,6 +42,8 @@ describe('save helpers', () => {
     expect(save.unlockedHeroes).toEqual(['vanguard']);
     expect(save.purchasedPermanentUpgrades['max-hp']).toBe(0);
     expect(save.progressStats.totalKills).toBe(0);
+    expect(save.bestScore).toBe(0);
+    expect(save.localLeaderboard).toEqual([]);
   });
 
   test('unlockHero requires enough gold and selects the unlocked hero', () => {
@@ -72,5 +74,43 @@ describe('save helpers', () => {
 
     const parsed = JSON.parse(window.localStorage.getItem('jangan-lari-save-v1') ?? '{}');
     expect(parsed.totalGold).toBe(77);
+  });
+
+  test('recordLocalLeaderboardEntry stores top local runs and updates best score', () => {
+    const first = recordLocalLeaderboardEntry(createDefaultSaveData(), {
+      score: 240,
+      level: 3,
+      classId: 'twin',
+      classTitle: 'Twin',
+      kills: 4,
+      timeSurvivedMs: 12_000,
+      timestamp: 1000,
+    });
+
+    expect(first.isNewBest).toBe(true);
+    expect(first.saveData.bestScore).toBe(240);
+    expect(first.saveData.localLeaderboard).toHaveLength(1);
+    expect(first.saveData.localLeaderboard[0]).toMatchObject({
+      score: 240,
+      level: 3,
+      classId: 'twin',
+      classTitle: 'Twin',
+      kills: 4,
+      timeSurvivedMs: 12_000,
+    });
+
+    const second = recordLocalLeaderboardEntry(first.saveData, {
+      score: 120,
+      level: 2,
+      classId: 'basic',
+      classTitle: 'Basic',
+      kills: 1,
+      timeSurvivedMs: 5000,
+      timestamp: 2000,
+    });
+
+    expect(second.isNewBest).toBe(false);
+    expect(second.saveData.bestScore).toBe(240);
+    expect(second.saveData.localLeaderboard.map((entry) => entry.score)).toEqual([240, 120]);
   });
 });

@@ -12,6 +12,7 @@ type CodexSection = 'runner' | 'weapon' | 'threats';
 export class MenuScene extends Phaser.Scene {
   private saveData!: GameSaveData;
   private goldText!: Phaser.GameObjects.Text;
+  private bestScoreText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private heroActionButtons: Phaser.GameObjects.Text[] = [];
   private heroInfoTexts: Phaser.GameObjects.Text[] = [];
@@ -87,6 +88,16 @@ export class MenuScene extends Phaser.Scene {
         color: '#fde68a',
         backgroundColor: '#172036',
         padding: { left: 14, right: 14, top: 8, bottom: 8 },
+      })
+      .setOrigin(1, 0.5);
+
+    this.bestScoreText = this.add
+      .text(GAME_WIDTH - 72, 88, `Best ${this.saveData.bestScore}`, {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '18px',
+        color: '#fef08a',
+        backgroundColor: '#172036',
+        padding: { left: 12, right: 12, top: 6, bottom: 6 },
       })
       .setOrigin(1, 0.5);
 
@@ -509,6 +520,7 @@ export class MenuScene extends Phaser.Scene {
 
   private refreshHeroView(): void {
     this.goldText.setText(`Gold ${this.saveData.totalGold}`);
+    this.bestScoreText.setText(`Best ${this.saveData.bestScore}`);
 
     for (let index = 0; index < HERO_LIST.length; index += 1) {
       const hero = HERO_LIST[index];

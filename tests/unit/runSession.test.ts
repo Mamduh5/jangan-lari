@@ -29,6 +29,7 @@ describe('runSession helpers', () => {
       levelUpRemainingMs: 0,
       killCount: 0,
       eliteKillCount: 0,
+      neutralShapesDestroyed: 0,
       goldEarned: 0,
       isEnded: false,
       isLevelingUp: false,
@@ -135,6 +136,9 @@ describe('runSession helpers', () => {
     expect(registry.writes['run.tankClass']).toMatchObject({ id: 'basic', title: 'Basic' });
     expect(registry.writes['run.classChoiceActive']).toBe(false);
     expect(registry.writes['run.totalGold']).toBe(90);
+    expect(registry.writes['run.score']).toBe(0);
+    expect(registry.writes['run.bestScore']).toBe(0);
+    expect(registry.writes['run.localLeaderboard']).toEqual([]);
 
     clearRunRegistryState(registry, 120);
     expect(registry.writes['run.levelUpActive']).toBe(false);
@@ -148,5 +152,7 @@ describe('runSession helpers', () => {
     });
     expect(registry.writes['run.classChoiceChoices']).toEqual([]);
     expect(registry.writes['run.totalGold']).toBe(120);
+    expect(registry.writes['run.score']).toBe(0);
+    expect(registry.writes['run.localLeaderboardEntryCount']).toBe(0);
   });
 });

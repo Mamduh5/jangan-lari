@@ -1,9 +1,11 @@
 import { HERO_IDS, type HeroId } from '../data/heroes';
 import type { PermanentUpgradeId } from '../data/permanentUpgrades';
 import type { QuestId } from '../data/quests';
+import type { TankClassId } from '../data/tankClasses';
 
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 const SAVE_STORAGE_KEY = 'jangan-lari-save-v1';
+const LOCAL_LEADERBOARD_LIMIT = 5;
 
 export type ProgressStats = {
   totalKills: number;
@@ -11,6 +13,17 @@ export type ProgressStats = {
   maxLevelReached: number;
   totalGoldCollected: number;
   eliteKills: number;
+};
+
+export type LocalLeaderboardEntry = {
+  id: string;
+  score: number;
+  level: number;
+  classId: TankClassId;
+  classTitle: string;
+  kills: number;
+  timeSurvivedMs: number;
+  timestamp: number;
 };
 
 export type GameSaveData = {
@@ -22,6 +35,8 @@ export type GameSaveData = {
   purchasedPermanentUpgrades: Record<PermanentUpgradeId, number>;
   completedQuests: QuestId[];
   progressStats: ProgressStats;
+  bestScore: number;
+  localLeaderboard: LocalLeaderboardEntry[];
 };
 
 export function createDefaultSaveData(): GameSaveData {
@@ -45,6 +60,8 @@ export function createDefaultSaveData(): GameSaveData {
       totalGoldCollected: 0,
       eliteKills: 0,
     },
+    bestScore: 0,
+    localLeaderboard: [],
   };
 }
 
@@ -109,7 +126,11 @@ export function loadGameSave(): GameSaveData {
         totalGoldCollected: Math.max(0, Number(parsed.progressStats?.totalGoldCollected ?? 0)),
         eliteKills: Math.max(0, Number(parsed.progressStats?.eliteKills ?? 0)),
       },
+      bestScore: Math.max(0, Number(parsed.bestScore ?? 0)),
+      localLeaderboard: sanitizeLocalLeaderboard(parsed.localLeaderboard),
     };
+
+    loaded.bestScore = Math.max(loaded.bestScore, loaded.localLeaderboard[0]?.score ?? 0);
 
     window.localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(loaded));
     return loaded;
@@ -120,4 +141,82 @@ export function loadGameSave(): GameSaveData {
 
 export function writeGameSave(saveData: GameSaveData): void {
   window.localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(saveData));
+}
+
+export function recordLocalLeaderboardEntry(
+  saveData: GameSaveData,
+  entry: Omit<LocalLeaderboardEntry, 'id' | 'timestamp'> & { timestamp?: number },
+): { saveData: GameSaveData; entry: LocalLeaderboardEntry; isNewBest: boolean } {
+  const previousBestScore = Math.max(saveData.bestScore, saveData.localLeaderboard[0]?.score ?? 0);
+  const timestamp = Math.max(0, Number(entry.timestamp ?? Date.now()));
+  const nextEntry: LocalLeaderboardEntry = {
+    id: `run-${timestamp}-${Math.max(0, Math.floor(entry.score))}`,
+    score: Math.max(0, Math.floor(entry.score)),
+    level: Math.max(1, Math.floor(entry.level)),
+    classId: entry.classId,
+    classTitle: entry.classTitle || entry.classId,
+    kills: Math.max(0, Math.floor(entry.kills)),
+    timeSurvivedMs: Math.max(0, Math.floor(entry.timeSurvivedMs)),
+    timestamp,
+  };
+  const localLeaderboard = [...saveData.localLeaderboard, nextEntry]
+    .sort((left, right) => right.score - left.score || right.timestamp - left.timestamp)
+    .slice(0, LOCAL_LEADERBOARD_LIMIT);
+  const nextSave: GameSaveData = {
+    ...saveData,
+    selectedHero: saveData.selectedHero,
+    unlockedHeroes: [...saveData.unlockedHeroes],
+    unlockedPermanentUpgrades: [...saveData.unlockedPermanentUpgrades],
+    purchasedPermanentUpgrades: { ...saveData.purchasedPermanentUpgrades },
+    completedQuests: [...saveData.completedQuests],
+    progressStats: { ...saveData.progressStats },
+    bestScore: Math.max(previousBestScore, nextEntry.score),
+    localLeaderboard,
+  };
+
+  writeGameSave(nextSave);
+  return {
+    saveData: nextSave,
+    entry: nextEntry,
+    isNewBest: nextEntry.score > previousBestScore,
+  };
+}
+
+function sanitizeLocalLeaderboard(value: unknown): LocalLeaderboardEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .flatMap((entry): LocalLeaderboardEntry[] => {
+      if (!entry || typeof entry !== 'object') {
+        return [];
+      }
+
+      const candidate = entry as Partial<LocalLeaderboardEntry>;
+      if (!candidate.classId || !isTankClassId(candidate.classId)) {
+        return [];
+      }
+
+      const score = Math.max(0, Math.floor(Number(candidate.score ?? 0)));
+      const timestamp = Math.max(0, Math.floor(Number(candidate.timestamp ?? 0)));
+      return [
+        {
+          id: String(candidate.id || `run-${timestamp}-${score}`),
+          score,
+          level: Math.max(1, Math.floor(Number(candidate.level ?? 1))),
+          classId: candidate.classId,
+          classTitle: String(candidate.classTitle || candidate.classId),
+          kills: Math.max(0, Math.floor(Number(candidate.kills ?? 0))),
+          timeSurvivedMs: Math.max(0, Math.floor(Number(candidate.timeSurvivedMs ?? 0))),
+          timestamp,
+        },
+      ];
+    })
+    .sort((left, right) => right.score - left.score || right.timestamp - left.timestamp)
+    .slice(0, LOCAL_LEADERBOARD_LIMIT);
+}
+
+function isTankClassId(value: unknown): value is TankClassId {
+  return value === 'basic' || value === 'twin' || value === 'sniper';
 }

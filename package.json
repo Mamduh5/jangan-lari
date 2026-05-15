@@ -17,6 +17,7 @@
     "test:e2e:neutral-shapes": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"neutral shapes\"",
     "test:e2e:stat-allocation": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"stat allocation\"",
     "test:e2e:class-branching": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"class branching\"",
+    "test:e2e:leaderboard": "playwright test tests/e2e/local-leaderboard.spec.ts",
     "test:e2e:smoke": "playwright test tests/e2e/menu-flow.spec.ts tests/e2e/special-attacks.spec.ts tests/e2e/mobile-hud.spec.ts",
     "test:all": "npm run test:unit && npm run test:e2e"
   },

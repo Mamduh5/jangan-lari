@@ -3,6 +3,7 @@ import type { UpgradeDefinition } from '../data/upgrades';
 import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
+import type { LocalLeaderboardEntry } from '../save/saveData';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { RunScene } from './RunScene';
 
@@ -14,6 +15,7 @@ export class UIScene extends Phaser.Scene {
   private classStatusText!: Phaser.GameObjects.Text;
   private statSummaryText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
+  private scoreText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
   private killsText!: Phaser.GameObjects.Text;
   private alertText!: Phaser.GameObjects.Text;
@@ -32,6 +34,7 @@ export class UIScene extends Phaser.Scene {
   private endTitleText!: Phaser.GameObjects.Text;
   private endSubtitleText!: Phaser.GameObjects.Text;
   private endStatsText!: Phaser.GameObjects.Text;
+  private endLeaderboardText!: Phaser.GameObjects.Text;
   private endButton!: Phaser.GameObjects.Text;
   private levelUpContainer!: Phaser.GameObjects.Container;
   private levelUpHeadingText!: Phaser.GameObjects.Text;
@@ -238,6 +241,17 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
+    this.scoreText = this.add
+      .text(GAME_WIDTH - 34, 104, 'Score 0', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '18px',
+        color: '#fef08a',
+        backgroundColor: '#172036',
+        padding: { left: 12, right: 12, top: 8, bottom: 8 },
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0);
+
     this.weaponSummaryText = this.add
       .text(38, GAME_HEIGHT - 116, 'Weapon --', {
         fontFamily: 'Trebuchet MS, sans-serif',
@@ -313,6 +327,11 @@ export class UIScene extends Phaser.Scene {
     const xpNext = Number(this.registry.get('run.xpNext') ?? 1);
     const elapsedMs = Number(this.registry.get('run.elapsedMs') ?? 0);
     const targetMs = Number(this.registry.get('run.targetMs') ?? 0);
+    const score = Number(this.registry.get('run.score') ?? 0);
+    const bestScore = Number(this.registry.get('run.bestScore') ?? 0);
+    const finalScore = Number(this.registry.get('run.finalScore') ?? 0);
+    const newBestScore = Boolean(this.registry.get('run.newBestScore'));
+    const localLeaderboard = (this.registry.get('run.localLeaderboard') ?? []) as LocalLeaderboardEntry[];
     const totalGold = Number(this.registry.get('run.totalGold') ?? this.registry.get('save.totalGold') ?? 0);
     const heroName = String(this.registry.get('run.heroName') ?? '--');
     const weaponNames = (this.registry.get('run.weaponNames') ?? []) as string[];
@@ -356,6 +375,7 @@ export class UIScene extends Phaser.Scene {
     this.setTextIfChanged(this.timerText, this.formatTime(Math.max(0, targetMs - elapsedMs)));
     this.setTextIfChanged(this.goldText, `Gold ${totalGold}`);
     this.setTextIfChanged(this.killsText, `Kills ${kills}`);
+    this.setTextIfChanged(this.scoreText, `Score ${score}`);
     this.setTextIfChanged(this.weaponSummaryText, this.formatWeaponSummary(weaponNames, classTitle));
     this.setTextIfChanged(this.xpBarLabel, xpLabel);
     this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 312, 0, 312);
@@ -371,7 +391,7 @@ export class UIScene extends Phaser.Scene {
     this.classChoiceContainer.setVisible(classChoiceActive && !endActive);
 
     if (endActive) {
-      this.refreshEndOverlay(kills, elapsedMs);
+      this.refreshEndOverlay(kills, elapsedMs, finalScore, bestScore, newBestScore, localLeaderboard);
     }
 
     if (levelUpActive && !endActive) {
@@ -393,8 +413,11 @@ export class UIScene extends Phaser.Scene {
     xp: string;
     gold: string;
     kills: string;
+    score: string;
     statPanelVisible: boolean;
     classChoiceVisible: boolean;
+    endStats: string;
+    leaderboard: string;
   } {
     return {
       hero: this.heroText.text,
@@ -406,18 +429,21 @@ export class UIScene extends Phaser.Scene {
       xp: this.xpBarLabel.text,
       gold: this.goldText.text,
       kills: this.killsText.text,
+      score: this.scoreText.text,
       statPanelVisible: this.statAllocationContainer.visible,
       classChoiceVisible: this.classChoiceContainer.visible,
+      endStats: this.endStatsText.text,
+      leaderboard: this.endLeaderboardText.text,
     };
   }
 
   private createEndOverlay(): Phaser.GameObjects.Container {
     const backdrop = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.78).setOrigin(0).setScrollFactor(0);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 520, 314, 0x0f172a, 0.995).setScrollFactor(0);
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 640, 500, 0x0f172a, 0.995).setScrollFactor(0);
     panel.setStrokeStyle(2, 0x475569, 1);
 
     this.endTitleText = this.add
-      .text(GAME_WIDTH / 2, 246, 'Victory', {
+      .text(GAME_WIDTH / 2, 150, 'Victory', {
         fontFamily: 'Georgia, serif',
         fontSize: '46px',
         color: '#f8fafc',
@@ -426,7 +452,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.endSubtitleText = this.add
-      .text(GAME_WIDTH / 2, 294, '', {
+      .text(GAME_WIDTH / 2, 196, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '18px',
         color: '#cbd5e1',
@@ -435,9 +461,9 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.endStatsText = this.add
-      .text(GAME_WIDTH / 2, 366, '', {
+      .text(GAME_WIDTH / 2, 266, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
+        fontSize: '19px',
         color: '#bfdbfe',
         align: 'center',
         lineSpacing: 6,
@@ -445,8 +471,20 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0);
 
+    this.endLeaderboardText = this.add
+      .text(GAME_WIDTH / 2, 348, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '16px',
+        color: '#dbeafe',
+        align: 'center',
+        lineSpacing: 5,
+        wordWrap: { width: 560 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0);
+
     this.endButton = this.add
-      .text(GAME_WIDTH / 2, 466, 'Return to Menu', {
+      .text(GAME_WIDTH / 2, 562, 'Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#fef3c7',
@@ -466,7 +504,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     const helpText = this.add
-      .text(GAME_WIDTH / 2, 514, 'Enter or Space continues', {
+      .text(GAME_WIDTH / 2, 606, 'Enter or Space continues', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#93c5fd',
@@ -480,6 +518,7 @@ export class UIScene extends Phaser.Scene {
       this.endTitleText,
       this.endSubtitleText,
       this.endStatsText,
+      this.endLeaderboardText,
       this.endButton,
       helpText,
     ]);
@@ -704,7 +743,14 @@ export class UIScene extends Phaser.Scene {
     return container;
   }
 
-  private refreshEndOverlay(kills: number, elapsedMs: number): void {
+  private refreshEndOverlay(
+    kills: number,
+    elapsedMs: number,
+    finalScore: number,
+    bestScore: number,
+    newBestScore: boolean,
+    leaderboard: LocalLeaderboardEntry[],
+  ): void {
     const victory = Boolean(this.registry.get('run.victory'));
     const title = String(this.registry.get('run.endTitle') ?? (victory ? 'Victory' : 'Defeat'));
     const subtitle = String(this.registry.get('run.endSubtitle') ?? '');
@@ -715,8 +761,10 @@ export class UIScene extends Phaser.Scene {
     this.setTextIfChanged(this.endSubtitleText, subtitle);
     this.setTextIfChanged(
       this.endStatsText,
-      `Time ${this.formatTime(elapsedMs)}\nGold +${goldEarned}\nKills ${kills}`,
+      `Score ${finalScore}${newBestScore ? '  NEW BEST' : ''}\nBest ${bestScore}\nTime ${this.formatTime(elapsedMs)}  Kills ${kills}  Gold +${goldEarned}`,
     );
+    this.endStatsText.setColor(newBestScore ? '#fef08a' : '#bfdbfe');
+    this.setTextIfChanged(this.endLeaderboardText, this.formatLeaderboard(leaderboard));
   }
 
   private refreshLevelUpChoices(
@@ -882,6 +930,20 @@ export class UIScene extends Phaser.Scene {
     const seconds = totalSeconds % 60;
 
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  private formatLeaderboard(entries: LocalLeaderboardEntry[]): string {
+    if (entries.length === 0) {
+      return 'Local Top 5\nNo local runs recorded yet.';
+    }
+
+    const rows = entries.slice(0, 5).map((entry, index) => {
+      const date = new Date(entry.timestamp);
+      const dateLabel = Number.isNaN(date.getTime()) ? 'local run' : date.toLocaleDateString();
+      return `${index + 1}. ${entry.score}  ${entry.classTitle}  LV ${entry.level}  K ${entry.kills}  ${this.formatTime(entry.timeSurvivedMs)}  ${dateLabel}`;
+    });
+
+    return ['Local Top 5', ...rows].join('\n');
   }
 
   private formatStatSummary(levels: TankStatLevels): string {
