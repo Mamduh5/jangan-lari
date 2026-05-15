@@ -59,7 +59,7 @@ import { XPGem } from '../entities/XPGem';
 import { createMovementKeys } from '../input/createMovementKeys';
 import { MovementInputController, type MovementInputSnapshot } from '../input/MovementInputController';
 import type { GameplayBotRunSnapshot } from '../debug/gameplaySnapshot';
-import { getTankStatDefinition, type TankStatId } from '../data/tankStats';
+import { TANK_STAT_IDS, getTankStatDefinition, type TankStatId } from '../data/tankStats';
 import type { ControlGuideMode, GameSaveData } from '../save/saveData';
 import { loadGameSave, markControlHintDismissed, recordLocalLeaderboardEntry, updateControlGuideMode } from '../save/saveData';
 import { applyRunProgressToQuests } from '../save/saveQuests';
@@ -213,6 +213,7 @@ export class RunScene extends Phaser.Scene {
   private rewardTargetMarker?: Phaser.GameObjects.Arc;
   private rewardTargetLabel?: Phaser.GameObjects.Text;
   private lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
+  private statsMaxedToastShownForPoints = 0;
 
   // These modifiers stack from heroes, permanent upgrades, and level-up picks.
   private globalWeaponDamageBonus = 0;
@@ -284,6 +285,7 @@ export class RunScene extends Phaser.Scene {
     this.rewardTargetLabel?.destroy();
     this.rewardTargetLabel = undefined;
     this.lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
+    this.statsMaxedToastShownForPoints = 0;
     this.globalWeaponDamageBonus = freshSession.globalWeaponDamageBonus;
     this.globalWeaponCooldownReduction = freshSession.globalWeaponCooldownReduction;
     this.globalProjectileSpeedBonus = freshSession.globalProjectileSpeedBonus;
@@ -567,6 +569,9 @@ export class RunScene extends Phaser.Scene {
       localLeaderboardEntryCount: this.saveData.localLeaderboard.length,
       neutralShapesDestroyed: this.neutralShapesDestroyed,
       levelUpActive: Boolean(this.registry.get('run.levelUpActive')),
+      levelUpChoiceCount: levelUpChoices.length,
+      upgradePoolExhausted: Boolean(this.registry.get('run.upgradePoolExhausted')),
+      rewardText: String(this.registry.get('run.rewardText') ?? ''),
       endActive: Boolean(this.registry.get('run.endActive')),
       victory: Boolean(this.registry.get('run.victory')),
       endTitle: String(this.registry.get('run.endTitle') ?? ''),
@@ -590,6 +595,8 @@ export class RunScene extends Phaser.Scene {
       controlHintVisible: Boolean(this.registry.get('run.controlHintVisible')),
       tankStats: {
         availablePoints: this.tankStats.getAvailablePoints(),
+        canSpend: this.hasSpendableTankStats(),
+        statsMaxed: this.areTankStatsMaxedWithPoints(),
         levels: this.tankStats.getLevels(),
         effects: this.tankStats.getEffects(),
       },
@@ -693,6 +700,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.tankStats.grantPoints(points);
+    this.maybeShowStatsMaxedToast();
     this.publishHudState();
   }
 
@@ -2125,12 +2133,16 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    const presented = this.presentLevelUpChoices();
+    if (!presented) {
+      return;
+    }
+
     this.isLevelingUp = true;
     this.pauseGameplaySystems();
     this.cameras.main.flash(LEVEL_UP_FLASH_MS, 255, 230, 130, false);
     this.createBurstCircle(this.player.x, this.player.y, 0xfde68a, 18, 82, 260, 0.95);
     this.showFloatingText(this.player.x, this.player.y - 56, 'LEVEL UP', '#fde68a', 24);
-    this.presentLevelUpChoices();
   }
 
   private queueLevelUpStart(): void {
@@ -2141,7 +2153,7 @@ export class RunScene extends Phaser.Scene {
     this.levelUpStartQueued = true;
   }
 
-  private presentLevelUpChoices(): void {
+  private presentLevelUpChoices(): boolean {
     const levelUpMode: UpgradeChoiceMode = this.guaranteedBreakthroughChoices > 0 ? 'breakthrough' : 'normal';
     const forceSignature = levelUpMode === 'breakthrough' || this.guaranteedSignatureChoices > 0;
     const choices = buildLevelUpChoices({
@@ -2153,6 +2165,28 @@ export class RunScene extends Phaser.Scene {
       mode: levelUpMode,
       shuffle: <T>(items: T[]): T[] => Phaser.Utils.Array.Shuffle(items),
     });
+
+    if (choices.length === 0) {
+      this.pendingLevelUps = Math.max(0, this.pendingLevelUps - 1);
+      this.isLevelingUp = false;
+      this.isResolvingLevelUpChoice = false;
+      this.levelUpRemainingMs = 0;
+      this.registry.set('run.levelUpActive', false);
+      this.registry.set('run.levelUpMode', 'normal');
+      this.registry.set('run.levelUpChoices', []);
+      this.registry.set('run.levelUpChoiceCount', 0);
+      this.registry.set('run.levelUpRemainingMs', 0);
+      this.registry.set('run.upgradePoolExhausted', true);
+      this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
+      this.showRewardToast('Upgrade pool empty', '#bfdbfe');
+      if (!this.isSystemPaused) {
+        this.resumeGameplaySystems('Survive the full timer or kill the final boss.');
+      }
+      if (this.pendingLevelUps > 0) {
+        this.queueLevelUpStart();
+      }
+      return false;
+    }
 
     if (levelUpMode === 'breakthrough') {
       this.guaranteedBreakthroughChoices = Math.max(0, this.guaranteedBreakthroughChoices - 1);
@@ -2167,8 +2201,11 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.levelUpActive', true);
     this.registry.set('run.levelUpMode', levelUpMode);
     this.registry.set('run.levelUpChoices', choices);
+    this.registry.set('run.levelUpChoiceCount', choices.length);
     this.registry.set('run.levelUpRemainingMs', this.levelUpRemainingMs);
+    this.registry.set('run.upgradePoolExhausted', false);
     this.registry.set('run.instructions', 'Choose an upgrade. Auto-pick starts in 15 seconds.');
+    return true;
   }
 
   private updateLevelUpCountdown(deltaMs: number): void {
@@ -2200,7 +2237,9 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.levelUpActive', false);
     this.registry.set('run.levelUpMode', 'normal');
     this.registry.set('run.levelUpChoices', []);
+    this.registry.set('run.levelUpChoiceCount', 0);
     this.registry.set('run.levelUpRemainingMs', 0);
+    this.registry.set('run.upgradePoolExhausted', false);
     this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
 
     if (!this.isSystemPaused) {
@@ -2522,6 +2561,8 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.statPoints', this.tankStats.getAvailablePoints());
     this.registry.set('run.tankStatLevels', this.tankStats.getLevels());
     this.registry.set('run.tankStatEffects', this.tankStats.getEffects());
+    this.registry.set('run.canSpendStatPoints', this.hasSpendableTankStats());
+    this.registry.set('run.statsMaxed', this.areTankStatsMaxedWithPoints());
     this.registry.set('run.tankClass', {
       id: this.currentTankClass.id,
       title: this.currentTankClass.title,
@@ -2548,6 +2589,30 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.eventRemainingMs', this.activeRunEvent ? Math.max(0, this.activeRunEvent.endsAtMs - this.runElapsedMs) : 0);
     this.registry.set('run.controlGuideMode', this.saveData.controlGuideMode);
     this.registry.set('run.controlHintVisible', this.controlHintVisible);
+    this.maybeShowStatsMaxedToast();
+  }
+
+  private hasSpendableTankStats(): boolean {
+    return TANK_STAT_IDS.some((statId) => this.tankStats.canSpend(statId));
+  }
+
+  private areTankStatsMaxedWithPoints(): boolean {
+    return this.tankStats.getAvailablePoints() > 0 && !this.hasSpendableTankStats();
+  }
+
+  private maybeShowStatsMaxedToast(): void {
+    const availablePoints = this.tankStats.getAvailablePoints();
+    if (availablePoints <= 0 || this.hasSpendableTankStats()) {
+      this.statsMaxedToastShownForPoints = 0;
+      return;
+    }
+
+    if (this.statsMaxedToastShownForPoints === availablePoints) {
+      return;
+    }
+
+    this.statsMaxedToastShownForPoints = availablePoints;
+    this.showRewardToast('Stats maxed', '#bfdbfe');
   }
 
   private dismissControlHintIfNeeded(movementInput: MovementInputSnapshot): void {
@@ -2651,10 +2716,12 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.questRewards', questResolution.rewardMessages);
     this.registry.set('run.levelUpActive', false);
     this.registry.set('run.levelUpChoices', []);
+    this.registry.set('run.levelUpChoiceCount', 0);
     this.registry.set('run.levelUpRemainingMs', 0);
+    this.registry.set('run.upgradePoolExhausted', false);
     this.registry.set('run.classChoiceActive', false);
     this.registry.set('run.classChoiceChoices', []);
-    this.registry.set('run.instructions', 'Press Enter, Space, or click the button to return to menu.');
+    this.registry.set('run.instructions', 'Tap the button to return to menu.');
     this.registry.set('run.eventActive', false);
     this.registry.set('run.eventType', '');
     this.registry.set('run.eventTitle', '');

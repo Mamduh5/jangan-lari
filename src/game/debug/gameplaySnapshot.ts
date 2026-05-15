@@ -83,6 +83,9 @@ export type GameplayBotRunSnapshot = {
     };
   } | null;
   levelUpActive: boolean;
+  levelUpChoiceCount: number;
+  upgradePoolExhausted: boolean;
+  rewardText: string;
   endActive: boolean;
   victory: boolean;
   endTitle: string;
@@ -113,6 +116,8 @@ export type GameplayBotRunSnapshot = {
   controlHintVisible: boolean;
   tankStats: {
     availablePoints: number;
+    canSpend: boolean;
+    statsMaxed: boolean;
     levels: TankStatLevels;
     effects: TankStatEffectSnapshot;
   };

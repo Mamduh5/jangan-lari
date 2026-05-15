@@ -24,6 +24,8 @@ This document records the intended direction for the `.io` MVP without importing
 - Preserve Phaser `FIT` scaling and the fixed 1280x720 virtual coordinate contract until a dedicated aspect-ratio or wrapper sprint proves a broader layout change.
 - Keep mobile control guidance optional and browser-local: guide visibility belongs in local save data, while the dual-zone input model remains the gameplay contract.
 - Treat the Android wrapper as a packaging shell around the web runtime. Native changes should stay limited to wrapper concerns such as orientation, system UI, signing, and device deployment until the web game contract changes deliberately.
+- Keep APK/mobile run UI touch-first: browser keyboard hints can remain for desktop, but mobile-facing overlays should use tap/menu/resume copy and avoid blocking play when no action is available.
+- Treat exhausted progression as non-blocking. If stat points cannot be spent because stats are maxed, or if the legacy bonus pool is empty, gameplay should continue with a small status toast at most.
 - Preserve fast restart and scene cleanup as first-class architecture concerns.
 
 ## Replace Or Simplify
@@ -33,6 +35,7 @@ This document records the intended direction for the `.io` MVP without importing
 - Replace auto-targeting survivor weapons with tank projectile firing and stat-influenced bullet behavior.
 - Use player aim/facing as the primary player weapon direction; enemy auto-targeting should not steer player shots in the `.io` branch.
 - Simplify level-up card choices into stat allocation suitable for mobile.
+- Do not implement endless or infinite upgrade scaling as a side effect of exhaustion cleanup; that belongs in a later balancing sprint.
 - Simplify HUD density: prioritize health, level, XP, score, available stat points, class state, and leaderboard pressure.
 - Treat gold, quests, permanent upgrades, mid-run events, elites, minibosses, and bosses as legacy systems unless a later sprint reintroduces them deliberately.
 
@@ -49,6 +52,8 @@ This document records the intended direction for the `.io` MVP without importing
 - Large content expansion.
 - Full game rename.
 - Aspect-ratio-specific layout work beyond the initial APK/WebView wrapper spike.
+- Endless/infinite upgrade mode and late-run boss scaling changes.
+- Multiplayer/bot-mode rules, including player-like bot tanks and multiplayer level caps.
 - Full gameplay-bot recalibration outside focused feature validation.
 
 ## Future Multiplayer Seams

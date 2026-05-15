@@ -27,6 +27,7 @@ export class UIScene extends Phaser.Scene {
   private alertText!: Phaser.GameObjects.Text;
   private rewardText!: Phaser.GameObjects.Text;
   private instructionText!: Phaser.GameObjects.Text;
+  private returnHintText!: Phaser.GameObjects.Text;
   private orientationHintContainer!: Phaser.GameObjects.Container;
   private orientationHintText!: Phaser.GameObjects.Text;
   private eventPanel!: Phaser.GameObjects.Rectangle;
@@ -44,6 +45,7 @@ export class UIScene extends Phaser.Scene {
   private endStatsText!: Phaser.GameObjects.Text;
   private endLeaderboardText!: Phaser.GameObjects.Text;
   private endButton!: Phaser.GameObjects.Text;
+  private endHelpText!: Phaser.GameObjects.Text;
   private levelUpContainer!: Phaser.GameObjects.Container;
   private levelUpHeadingText!: Phaser.GameObjects.Text;
   private levelUpSubheadingText!: Phaser.GameObjects.Text;
@@ -317,7 +319,7 @@ export class UIScene extends Phaser.Scene {
       })
       .setScrollFactor(0);
 
-    this.add
+    this.returnHintText = this.add
       .text(viewWidth - 30, viewHeight - 28, 'ESC: Return to Menu', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
@@ -325,6 +327,7 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(1, 1)
       .setScrollFactor(0);
+    this.returnHintText.setVisible(!this.shouldUseMobileCopy());
 
     this.endContainer = this.createEndOverlay();
     this.levelUpContainer = this.createLevelUpOverlay();
@@ -412,16 +415,17 @@ export class UIScene extends Phaser.Scene {
     this.refreshStatAllocationPanel(statPoints, tankStatLevels, levelUpActive, classChoiceActive, endActive);
     this.refreshOrientationHint();
     this.refreshControlGuideState(levelUpActive, classChoiceActive, endActive);
+    this.refreshMobileCopyState();
 
     this.endContainer.setVisible(endActive);
-    this.levelUpContainer.setVisible(levelUpActive && !classChoiceActive && !endActive);
+    this.levelUpContainer.setVisible(levelUpActive && levelUpChoices.length > 0 && !classChoiceActive && !endActive);
     this.classChoiceContainer.setVisible(classChoiceActive && !endActive);
 
     if (endActive) {
       this.refreshEndOverlay(kills, elapsedMs, finalScore, bestScore, newBestScore, localLeaderboard);
     }
 
-    if (levelUpActive && !endActive) {
+    if (levelUpActive && levelUpChoices.length > 0 && !endActive) {
       this.refreshLevelUpChoices(levelUpChoices, levelUpRemainingMs, levelUpMode === 'breakthrough' ? 'breakthrough' : 'normal');
     }
 
@@ -442,6 +446,13 @@ export class UIScene extends Phaser.Scene {
     kills: string;
     score: string;
     statPanelVisible: boolean;
+    levelUpVisible: boolean;
+    levelUpChoiceCount: number;
+    upgradePoolExhausted: boolean;
+    rewardText: string;
+    instructionText: string;
+    returnHintVisible: boolean;
+    returnHintText: string;
     classChoiceVisible: boolean;
     endStats: string;
     leaderboard: string;
@@ -463,6 +474,13 @@ export class UIScene extends Phaser.Scene {
       kills: this.killsText.text,
       score: this.scoreText.text,
       statPanelVisible: this.statAllocationContainer.visible,
+      levelUpVisible: this.levelUpContainer.visible,
+      levelUpChoiceCount: Number(this.registry.get('run.levelUpChoiceCount') ?? 0),
+      upgradePoolExhausted: Boolean(this.registry.get('run.upgradePoolExhausted')),
+      rewardText: this.rewardText.visible ? this.rewardText.text : '',
+      instructionText: this.instructionText.visible ? this.instructionText.text : '',
+      returnHintVisible: this.returnHintText.visible,
+      returnHintText: this.returnHintText.text,
       classChoiceVisible: this.classChoiceContainer.visible,
       endStats: this.endStatsText.text,
       leaderboard: this.endLeaderboardText.text,
@@ -543,7 +561,7 @@ export class UIScene extends Phaser.Scene {
       this.endButton.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
     });
 
-    const helpText = this.add
+    this.endHelpText = this.add
       .text(viewWidth / 2, 606, 'Enter or Space continues', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
@@ -560,7 +578,7 @@ export class UIScene extends Phaser.Scene {
       this.endStatsText,
       this.endLeaderboardText,
       this.endButton,
-      helpText,
+      this.endHelpText,
     ]);
     container.setDepth(100);
     container.setVisible(false);
@@ -997,6 +1015,16 @@ export class UIScene extends Phaser.Scene {
     return viewportWidth <= 960 || viewportHeight <= 540;
   }
 
+  private shouldUseMobileCopy(): boolean {
+    return this.shouldUseMobileControlUi();
+  }
+
+  private refreshMobileCopyState(): void {
+    const mobileCopy = this.shouldUseMobileCopy();
+    this.returnHintText.setVisible(!mobileCopy);
+    this.setTextIfChanged(this.endHelpText, mobileCopy ? 'Tap to continue' : 'Enter or Space continues');
+  }
+
   private getControlGuideModeLabel(mode: ControlGuideMode): string {
     switch (mode) {
       case 'hidden':
@@ -1085,7 +1113,8 @@ export class UIScene extends Phaser.Scene {
     classChoiceActive: boolean,
     endActive: boolean,
   ): void {
-    const shouldShow = !endActive && !levelUpActive && !classChoiceActive && statPoints > 0;
+    const canSpendAnyStat = this.canSpendAnyTankStat(statPoints, levels);
+    const shouldShow = !endActive && !levelUpActive && !classChoiceActive && canSpendAnyStat;
     this.statAllocationContainer.setVisible(shouldShow);
 
     if (!shouldShow) {
@@ -1113,6 +1142,10 @@ export class UIScene extends Phaser.Scene {
       this.setTextIfChanged(label, `${definition.shortLabel} ${level}/${definition.maxLevel}\n${definition.summary}`);
       label.setColor(canSpend ? '#e0f2fe' : '#94a3b8');
     }
+  }
+
+  private canSpendAnyTankStat(statPoints: number, levels: TankStatLevels): boolean {
+    return statPoints > 0 && TANK_STAT_IDS.some((statId) => (levels[statId] ?? 0) < TANK_STAT_DEFINITIONS[statId].maxLevel);
   }
 
   private refreshClassChoiceCards(choices: TankClassDefinition[]): void {
@@ -1286,8 +1319,30 @@ export class UIScene extends Phaser.Scene {
       return;
     }
 
-    this.setTextIfChanged(this.instructionText, message);
+    const copy = this.getInstructionCopy(message);
+    if (!copy) {
+      this.instructionText.setVisible(false);
+      return;
+    }
+
+    this.setTextIfChanged(this.instructionText, copy);
     this.instructionText.setVisible(true);
+  }
+
+  private getInstructionCopy(message: string): string {
+    if (!this.shouldUseMobileCopy()) {
+      return message;
+    }
+
+    if (message === 'Press Enter, Space, or click the button to return to menu.') {
+      return 'Tap the button to return to menu.';
+    }
+
+    if (/\b(Enter|Space|ESC)\b/.test(message)) {
+      return '';
+    }
+
+    return message;
   }
 
   private refreshEventHud(

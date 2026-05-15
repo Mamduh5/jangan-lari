@@ -52,6 +52,20 @@ describe('tank stat runtime', () => {
     expect(stats.getAvailablePoints()).toBe(3);
   });
 
+  test('keeps leftover points unspendable after every stat reaches max level', () => {
+    const stats = new TankStatRuntime();
+    stats.grantPoints(27);
+
+    for (const statId of ['bulletDamage', 'reload', 'moveSpeed', 'maxHealth'] as const) {
+      for (let index = 0; index < 5; index += 1) {
+        stats.spendPoint(statId);
+      }
+    }
+
+    expect(stats.getAvailablePoints()).toBe(7);
+    expect((['bulletDamage', 'reload', 'moveSpeed', 'maxHealth'] as const).some((statId) => stats.canSpend(statId))).toBe(false);
+  });
+
   test('calculates stat effects predictably from levels', () => {
     expect(
       createTankStatEffectSnapshot({

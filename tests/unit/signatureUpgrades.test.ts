@@ -159,4 +159,17 @@ describe('signature upgrade helpers', () => {
       }),
     ).toBe(false);
   });
+
+  test('choice builder returns no blocking choices when the available pool is empty', () => {
+    const choices = buildLevelUpChoices({
+      upgrades: [],
+      ownedWeaponIds: ['arc-bolt'],
+      takenUpgradeIds: [],
+      forceSignature: true,
+      mode: 'breakthrough',
+      shuffle: <T>(items: T[]): T[] => [...items],
+    });
+
+    expect(choices).toEqual([]);
+  });
 });

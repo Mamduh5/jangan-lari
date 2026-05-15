@@ -422,7 +422,7 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(centerX, GAME_HEIGHT - 18, 'Enter or Space starts. M opens meta. Codex opens from the menu.', {
+      .text(centerX, GAME_HEIGHT - 18, this.shouldUseMobileCopy() ? 'Tap Start Run to enter the arena.' : 'Enter or Space starts. M opens meta. Codex opens from the menu.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#94a3b8',
@@ -476,6 +476,12 @@ export class MenuScene extends Phaser.Scene {
     }
 
     this.startButton.emit('pointerdown');
+  }
+
+  private shouldUseMobileCopy(): boolean {
+    const viewportWidth = window.innerWidth || this.scale.displaySize.width;
+    const viewportHeight = window.innerHeight || this.scale.displaySize.height;
+    return viewportWidth <= 960 || viewportHeight <= 540;
   }
 
   private handleMetaShortcut(): void {

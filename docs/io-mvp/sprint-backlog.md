@@ -290,3 +290,29 @@ Acceptance checks:
 - Android project can be synced from the web build.
 - If local Android build tools are unavailable, the exact user commands are documented.
 - No full Playwright or gameplay-bot suite is required for this spike.
+
+## Sprint 13: APK/Mobile UX Polish And Upgrade Exhaustion Cleanup
+
+Goal: Reduce APK/mobile annoyance while preventing exhausted progression UI from blocking play.
+
+Status note:
+- Removed mobile-facing desktop keyboard hints from normal run UI, including the in-run `ESC: Return to Menu` hint and end-screen keyboard helper copy.
+- Kept desktop keyboard shortcuts and desktop helper text available where useful.
+- Hid the stat allocation panel when stat points remain but every stat is already maxed.
+- Added defensive empty-upgrade handling so a level-up with no selectable bonus choices resumes gameplay instead of showing a blocking overlay.
+- Added debug/HUD snapshot fields for level-up choice count, upgrade-pool exhaustion, reward toast text, and maxed-stat spendability.
+- Added focused upgrade-exhaustion coverage for mobile landscape.
+- Deferred endless/infinite upgrades, multiplayer/bot-mode rules, aspect-ratio/letterboxing work, and full gameplay-bot recalibration.
+
+Deliverables:
+- Mobile/APK copy no longer presents browser keyboard hints during normal play.
+- Exhausted stat allocation does not block movement/aim/gameplay.
+- Empty legacy bonus-pick state does not create a blocking level-up overlay.
+- Focused e2e script for upgrade exhaustion.
+
+Acceptance checks:
+- HP, XP, level, class, score, run gold, and guide controls remain visible.
+- Stat allocation still appears when points are spendable.
+- Class choice still appears when available.
+- Phaser scale remains FIT with the fixed 1280x720 virtual coordinate contract.
+- Focused validation stays limited to unit, build, smoke/mobile-layout/hud/controls/upgrade-exhaustion e2e, and diff check.
