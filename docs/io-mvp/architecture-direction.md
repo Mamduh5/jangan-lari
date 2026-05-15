@@ -16,7 +16,7 @@ This document records the intended direction for the `.io` MVP without importing
 ## Refactor Gradually
 
 - Split tank-specific behavior out of survivor-style player logic only when implementation tasks require it.
-- Move `.io` stat math into small pure helpers before wiring it deeply into Phaser scenes.
+- Keep `.io` stat math in small pure helpers or focused runtimes before wiring it deeply into Phaser scenes.
 - Keep tank definitions, stat definitions, shape definitions, and class-branch data data-driven.
 - Keep debug and bot-facing state explicit so future QA tooling can observe player stats, tank class, shapes, XP, score, and restart state.
 - Preserve fast restart and scene cleanup as first-class architecture concerns.

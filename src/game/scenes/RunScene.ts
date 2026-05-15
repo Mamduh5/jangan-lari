@@ -50,12 +50,14 @@ import { XPGem } from '../entities/XPGem';
 import { createMovementKeys } from '../input/createMovementKeys';
 import { MovementInputController } from '../input/MovementInputController';
 import type { GameplayBotRunSnapshot } from '../debug/gameplaySnapshot';
+import { getTankStatDefinition, type TankStatId } from '../data/tankStats';
 import type { GameSaveData } from '../save/saveData';
 import { loadGameSave } from '../save/saveData';
 import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 import { SpawnDirector } from '../systems/SpawnDirector';
+import { TankStatRuntime } from '../systems/TankStatRuntime';
 import type { EnemyArchetypeId } from '../data/enemies';
 import { ENEMY_ARCHETYPES, type EnemyArchetype } from '../data/enemies';
 import {
@@ -107,6 +109,7 @@ export class RunScene extends Phaser.Scene {
   private spawnDirector!: SpawnDirector;
   private saveData!: GameSaveData;
   private movementInput!: MovementInputController;
+  private tankStats!: TankStatRuntime;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private neutralShapeSpawnTimer?: Phaser.Time.TimerEvent;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
@@ -269,6 +272,7 @@ export class RunScene extends Phaser.Scene {
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
     this.spawnDirector = new SpawnDirector();
     this.movementInput = new MovementInputController(this, createMovementKeys(this));
+    this.tankStats = new TankStatRuntime();
     this.combatResponse = new CombatResponseController({
       onHitStopStart: () => this.pauseCombatResponseSystems(),
       onHitStopEnd: () => this.resumeCombatResponseSystems(),
@@ -424,6 +428,7 @@ export class RunScene extends Phaser.Scene {
     const activeEnemies = this.enemies?.active ? (this.enemies.getChildren() as Enemy[]) : [];
     const activeNeutralShapes = this.neutralShapes?.active ? (this.neutralShapes.getChildren() as NeutralShape[]) : [];
     const activeGems = this.xpGems?.active ? (this.xpGems.getChildren() as XPGem[]) : [];
+    const primaryWeaponStats = this.weapons[0]?.getStats();
 
     const enemies = activeEnemies
       .filter((enemy) => enemy.active && enemy.isAlive())
@@ -475,6 +480,13 @@ export class RunScene extends Phaser.Scene {
       kills: this.killCount,
       weaponCount: this.weapons.length,
       weaponNames: this.weapons.map((weapon) => weapon.getStats().name),
+      primaryWeapon: primaryWeaponStats
+        ? {
+            id: primaryWeaponStats.id,
+            damage: primaryWeaponStats.damage,
+            fireCooldownMs: primaryWeaponStats.fireCooldownMs,
+          }
+        : null,
       goldEarned: this.goldEarned,
       levelUpActive: Boolean(this.registry.get('run.levelUpActive')),
       endActive: Boolean(this.registry.get('run.endActive')),
@@ -487,6 +499,11 @@ export class RunScene extends Phaser.Scene {
         facingY: this.player.getFacingDirection().y,
         moveSpeed: this.player.getMoveSpeed(),
         pickupRange: this.player.getPickupRange(),
+      },
+      tankStats: {
+        availablePoints: this.tankStats.getAvailablePoints(),
+        levels: this.tankStats.getLevels(),
+        effects: this.tankStats.getEffects(),
       },
       enemies,
       neutralShapeCount: neutralShapes.length,
@@ -549,6 +566,32 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.finishLevelUpSelection();
+  }
+
+  public allocateTankStat(statId: TankStatId): boolean {
+    if (this.isEnded || this.isTransitioningToMenu || !this.tankStats.canSpend(statId)) {
+      return false;
+    }
+
+    this.movementInput?.resetPointer();
+    const result = this.tankStats.spendPoint(statId);
+    if (!result.spent) {
+      return false;
+    }
+
+    this.applyTankStatSpend(result.statId, result.effectDelta);
+    this.showTankStatSelectionFeedback(result.statId, result.nextLevel);
+    this.publishHudState();
+    return true;
+  }
+
+  public debugGrantStatPoints(points = 1): void {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.tankStats.grantPoints(points);
+    this.publishHudState();
   }
 
   public debugForceRunEvent(type: RunEventType): boolean {
@@ -1026,7 +1069,7 @@ export class RunScene extends Phaser.Scene {
       this.showFloatingText(this.player.x, this.player.y - 92, `+${rewardXp} XP`, '#bfdbfe', 16);
       rewardMessages.push(`+${rewardXp} XP`);
       if (levelsGained > 0) {
-        this.pendingLevelUps += levelsGained;
+        this.handlePlayerLevelsGained(levelsGained);
       }
     }
 
@@ -1036,7 +1079,7 @@ export class RunScene extends Phaser.Scene {
       rewardMessages.push(rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade');
     }
 
-    if ((rewardXp > 0 || rewardLevelUps > 0) && !this.isLevelingUp) {
+    if (rewardLevelUps > 0 && !this.isLevelingUp) {
       this.queueLevelUpStart();
     }
 
@@ -1527,7 +1570,7 @@ export class RunScene extends Phaser.Scene {
         this.createBurstCircle(x, y, 0xc084fc, 16, 54, 240, 0.42);
         this.createBurstCircle(x, y, 0x60a5fa, 10, 42, 180, 0.32);
         if (bonusLevelsGained > 0) {
-          this.pendingLevelUps += bonusLevelsGained;
+          this.handlePlayerLevelsGained(bonusLevelsGained);
         }
         rewardMessages.push('signature pick primed');
         rewardMessages.push(`+${RunScene.FIRST_ELITE_XP_BONUS} XP`);
@@ -1550,7 +1593,7 @@ export class RunScene extends Phaser.Scene {
       }
     }
 
-    if ((rewardLevelUps > 0 || bonusLevelsGained > 0) && !this.isLevelingUp) {
+    if (rewardLevelUps > 0 && !this.isLevelingUp) {
       this.queueLevelUpStart();
     }
 
@@ -1839,11 +1882,20 @@ export class RunScene extends Phaser.Scene {
     gem.destroy();
 
     if (levelsGained > 0) {
-      this.pendingLevelUps += levelsGained;
-      this.queueLevelUpStart();
+      this.handlePlayerLevelsGained(levelsGained);
     }
 
     this.publishHudState();
+  }
+
+  private handlePlayerLevelsGained(levelsGained: number): void {
+    if (levelsGained <= 0) {
+      return;
+    }
+
+    this.pendingLevelUps += levelsGained;
+    this.tankStats.grantPoints(levelsGained);
+    this.queueLevelUpStart();
   }
 
   private beginLevelUp(): void {
@@ -2026,6 +2078,38 @@ export class RunScene extends Phaser.Scene {
     this.takenUniqueUpgradeIds.add(upgrade.id);
   }
 
+  private applyTankStatSpend(statId: TankStatId, effectDelta: number): void {
+    switch (statId) {
+      case 'bulletDamage':
+        this.applyWeaponDamageBonus(effectDelta);
+        break;
+      case 'reload':
+        this.applyWeaponCooldownReduction(effectDelta);
+        break;
+      case 'moveSpeed':
+        this.player.addMoveSpeed(effectDelta);
+        break;
+      case 'maxHealth':
+        this.player.addMaxHealth(effectDelta);
+        break;
+    }
+  }
+
+  private showTankStatSelectionFeedback(statId: TankStatId, nextLevel: number): void {
+    const definition = getTankStatDefinition(statId);
+    const palette: Record<TankStatId, { color: string; burstColor: number }> = {
+      bulletDamage: { color: '#fde68a', burstColor: 0xf59e0b },
+      reload: { color: '#99f6e4', burstColor: 0x14b8a6 },
+      moveSpeed: { color: '#bfdbfe', burstColor: 0x38bdf8 },
+      maxHealth: { color: '#fecaca', burstColor: 0xf87171 },
+    };
+    const statPalette = palette[statId];
+
+    this.showFloatingText(this.player.x, this.player.y - 78, `${definition.shortLabel} ${nextLevel}/${definition.maxLevel}`, statPalette.color, 17);
+    this.createBurstCircle(this.player.x, this.player.y, statPalette.burstColor, 12, 46, 180, 0.48);
+    playCue('upgrade-confirm');
+  }
+
   private showUpgradeSelectionFeedback(upgrade: UpgradeDefinition): void {
     const presentation: Record<
       UpgradeId,
@@ -2191,6 +2275,9 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.weaponCount', this.weapons.length);
     this.registry.set('run.xp', this.player.getExperience());
     this.registry.set('run.xpNext', this.player.getExperienceToNextLevel());
+    this.registry.set('run.statPoints', this.tankStats.getAvailablePoints());
+    this.registry.set('run.tankStatLevels', this.tankStats.getLevels());
+    this.registry.set('run.tankStatEffects', this.tankStats.getEffects());
     this.registry.set('run.targetMs', RUN_TARGET_DURATION_MS);
     this.registry.set('run.goldEarned', this.goldEarned);
     this.registry.set('run.totalGold', this.saveData.totalGold);

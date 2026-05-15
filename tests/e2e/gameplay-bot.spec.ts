@@ -33,6 +33,13 @@ type GameplayBotUpgradeChoice = {
   title: string;
 };
 
+type GameplayBotTankStatLevels = {
+  bulletDamage: number;
+  reload: number;
+  moveSpeed: number;
+  maxHealth: number;
+};
+
 type GameplayBotRunSnapshot = {
   elapsedMs: number;
   hp: number;
@@ -43,6 +50,11 @@ type GameplayBotRunSnapshot = {
   kills: number;
   weaponCount: number;
   goldEarned: number;
+  primaryWeapon: {
+    id: string;
+    damage: number;
+    fireCooldownMs: number;
+  } | null;
   levelUpActive: boolean;
   endActive: boolean;
   victory: boolean;
@@ -53,6 +65,16 @@ type GameplayBotRunSnapshot = {
     y: number;
     moveSpeed: number;
     pickupRange: number;
+  };
+  tankStats: {
+    availablePoints: number;
+    levels: GameplayBotTankStatLevels;
+    effects: {
+      bulletDamageBonus: number;
+      fireCooldownReductionMs: number;
+      moveSpeedBonus: number;
+      maxHealthBonus: number;
+    };
   };
   enemies: GameplayBotEnemySummary[];
   neutralShapeCount: number;
@@ -435,6 +457,49 @@ test.describe('gameplay bot smoke', () => {
       (finalRun?.xp ?? 0) > 0 || (finalRun?.level ?? 1) > initialRun.level,
       `expected neutral shape destruction to grant XP, started at level ${startingLevel} XP ${startingXp}`,
     ).toBe(true);
+    expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
+  });
+
+  test('stat allocation can spend a run stat point through the UI', async ({ page }) => {
+    test.setTimeout(45_000);
+
+    const runtimeErrors = trackRuntimeErrors(page);
+
+    await page.goto('/');
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
+
+    await clickStartRun(page);
+    await page.waitForFunction(() => {
+      const game = window.__JANGAN_LARI_GAME__;
+      return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
+    });
+
+    const initialRun = (await getGameplaySnapshot(page)).run;
+    if (!initialRun) {
+      throw new Error('Expected active run snapshot for stat allocation validation.');
+    }
+
+    const startingMoveSpeed = initialRun.player.moveSpeed;
+    await grantStatPoints(page, 1);
+    await page.waitForFunction(() => (window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run?.tankStats.availablePoints ?? 0) === 1);
+
+    await clickTankStatButton(page, 2);
+    await page.waitForFunction((previousMoveSpeed) => {
+      const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
+      return (
+        Boolean(run) &&
+        run.tankStats.availablePoints === 0 &&
+        run.tankStats.levels.moveSpeed === 1 &&
+        run.player.moveSpeed > previousMoveSpeed
+      );
+    }, startingMoveSpeed);
+
+    const finalRun = (await getGameplaySnapshot(page)).run;
+    expect(finalRun, 'expected active run snapshot after stat allocation').not.toBeNull();
+    expect(finalRun?.tankStats.availablePoints).toBe(0);
+    expect(finalRun?.tankStats.levels.moveSpeed).toBe(1);
+    expect(finalRun?.tankStats.effects.moveSpeedBonus).toBe(10);
+    expect(finalRun?.player.moveSpeed).toBeGreaterThan(startingMoveSpeed);
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 
@@ -866,6 +931,42 @@ async function clickLevelUpChoice(page: import('@playwright/test').Page, choiceI
       y: (buttonY / gameHeight) * box.height,
     },
   });
+}
+
+async function clickTankStatButton(page: import('@playwright/test').Page, statIndex: number): Promise<void> {
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error('Game canvas is not available for tank stat button click.');
+  }
+
+  const gameWidth = 1280;
+  const gameHeight = 720;
+  const buttonX = 380 + statIndex * 174;
+  const buttonY = 622;
+
+  await canvas.click({
+    position: {
+      x: (buttonX / gameWidth) * box.width,
+      y: (buttonY / gameHeight) * box.height,
+    },
+  });
+}
+
+async function grantStatPoints(page: import('@playwright/test').Page, points: number): Promise<void> {
+  await page.evaluate((nextPoints) => {
+    const game = window.__JANGAN_LARI_GAME__;
+    if (!game?.scene.isActive('RunScene')) {
+      throw new Error('RunScene is not active for forced stat allocation validation.');
+    }
+
+    const runScene = game.scene.getScene('RunScene') as {
+      debugGrantStatPoints?: (value: number) => void;
+    };
+    runScene.debugGrantStatPoints?.(nextPoints);
+  }, points);
 }
 
 async function forceUpgrade(

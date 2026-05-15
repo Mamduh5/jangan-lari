@@ -68,10 +68,16 @@ Known follow-up:
 
 Goal: Let level gains create clear stat decisions.
 
+Status note:
+- Added a run-only stat allocation foundation that grants stat points from XP-driven level progression.
+- Current stats are bullet damage, reload, move speed, and max health, each capped at a small fixed level.
+- Allocation is available through a compact pointer/touch UI and exposed through the gameplay debug snapshot.
+- Deferred full stat balancing, tank class branching, PvP leaderboard pressure, multiplayer, and server authority.
+
 Deliverables:
 - Available stat point tracking.
 - Mobile-readable stat allocation UI.
-- Initial stat set such as health, movement speed, bullet damage, bullet speed, reload, and body durability.
+- Initial stat set covering max health, movement speed, bullet damage, and reload.
 - Pure stat calculation helpers where possible.
 
 Acceptance checks:

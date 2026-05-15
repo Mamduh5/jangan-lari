@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { UpgradeDefinition } from '../data/upgrades';
+import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { RunScene } from './RunScene';
@@ -34,6 +35,10 @@ export class UIScene extends Phaser.Scene {
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
   private levelUpDescriptions: Phaser.GameObjects.Text[] = [];
   private levelUpBadges: Phaser.GameObjects.Text[] = [];
+  private statAllocationContainer!: Phaser.GameObjects.Container;
+  private statPointText!: Phaser.GameObjects.Text;
+  private statButtons: Partial<Record<TankStatId, Phaser.GameObjects.Rectangle>> = {};
+  private statButtonLabels: Partial<Record<TankStatId, Phaser.GameObjects.Text>> = {};
 
   private readonly handleSelectUpgradeOne = (): void => {
     this.selectUpgrade(0);
@@ -58,6 +63,8 @@ export class UIScene extends Phaser.Scene {
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
     this.levelUpBadges = [];
+    this.statButtons = {};
+    this.statButtonLabels = {};
 
     const topLeftPanel = this.add.rectangle(24, 18, 274, 86, 0x030712, 0.88).setOrigin(0);
     topLeftPanel.setStrokeStyle(1, 0x334155, 0.96);
@@ -236,6 +243,7 @@ export class UIScene extends Phaser.Scene {
 
     this.endContainer = this.createEndOverlay();
     this.levelUpContainer = this.createLevelUpOverlay();
+    this.statAllocationContainer = this.createStatAllocationPanel();
 
     this.input.keyboard?.on('keydown-ENTER', this.handleConfirmInput, this);
     this.input.keyboard?.on('keydown-SPACE', this.handleConfirmInput, this);
@@ -271,6 +279,13 @@ export class UIScene extends Phaser.Scene {
     const eventRemainingMs = Number(this.registry.get('run.eventRemainingMs') ?? 0);
     const levelUpMode = String(this.registry.get('run.levelUpMode') ?? 'normal');
     const levelUpChoices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
+    const statPoints = Number(this.registry.get('run.statPoints') ?? 0);
+    const tankStatLevels = (this.registry.get('run.tankStatLevels') ?? {
+      bulletDamage: 0,
+      reload: 0,
+      moveSpeed: 0,
+      maxHealth: 0,
+    }) as TankStatLevels;
 
     this.setTextIfChanged(this.heroText, heroName || '--');
     this.setTextIfChanged(this.hpValueText, `HP ${currentHp}/${maxHp}`);
@@ -285,6 +300,7 @@ export class UIScene extends Phaser.Scene {
     this.refreshRewardToast(rewardMessage, rewardColor);
     this.refreshInstruction(instructionMessage, levelUpActive, endActive);
     this.refreshEventHud(eventActive, eventTitle, eventText, eventRemainingMs, levelUpActive, endActive);
+    this.refreshStatAllocationPanel(statPoints, tankStatLevels, levelUpActive, endActive);
 
     this.endContainer.setVisible(endActive);
     this.levelUpContainer.setVisible(levelUpActive && !endActive);
@@ -455,6 +471,56 @@ export class UIScene extends Phaser.Scene {
     return container;
   }
 
+  private createStatAllocationPanel(): Phaser.GameObjects.Container {
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 106, 760, 96, 0x08111f, 0.96).setScrollFactor(0);
+    panel.setStrokeStyle(1, 0x38bdf8, 0.86);
+
+    this.statPointText = this.add
+      .text(GAME_WIDTH / 2 - 354, GAME_HEIGHT - 142, 'STAT POINTS 0', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: '#bae6fd',
+      })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0);
+
+    const children: Phaser.GameObjects.GameObject[] = [panel, this.statPointText];
+    const startX = GAME_WIDTH / 2 - 260;
+
+    TANK_STAT_IDS.forEach((statId, index) => {
+      const definition = TANK_STAT_DEFINITIONS[statId];
+      const x = startX + index * 174;
+      const button = this.add.rectangle(x, GAME_HEIGHT - 98, 156, 58, 0x132033, 0.98).setScrollFactor(0);
+      button.setStrokeStyle(1, 0x334155, 0.95);
+      button.setInteractive({ useHandCursor: true });
+      button.on('pointerdown', () => this.allocateTankStat(statId));
+      button.on('pointerover', () => this.applyStatButtonHover(statId, true));
+      button.on('pointerout', () => this.applyStatButtonHover(statId, false));
+
+      const label = this.add
+        .text(x, GAME_HEIGHT - 98, `${definition.shortLabel} 0/${definition.maxLevel}\n${definition.summary}`, {
+          fontFamily: 'Trebuchet MS, sans-serif',
+          fontSize: '13px',
+          color: '#e0f2fe',
+          align: 'center',
+          lineSpacing: 3,
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0);
+
+      this.statButtons[statId] = button;
+      this.statButtonLabels[statId] = label;
+      children.push(button, label);
+    });
+
+    const container = this.add.container(0, 0, children);
+    container.setDepth(95);
+    container.setVisible(false);
+    container.setScrollFactor(0);
+
+    return container;
+  }
+
   private refreshEndOverlay(kills: number, elapsedMs: number): void {
     const victory = Boolean(this.registry.get('run.victory'));
     const title = String(this.registry.get('run.endTitle') ?? (victory ? 'Victory' : 'Defeat'));
@@ -509,6 +575,40 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
+  private refreshStatAllocationPanel(
+    statPoints: number,
+    levels: TankStatLevels,
+    levelUpActive: boolean,
+    endActive: boolean,
+  ): void {
+    const shouldShow = !endActive && (levelUpActive || statPoints > 0);
+    this.statAllocationContainer.setVisible(shouldShow);
+
+    if (!shouldShow) {
+      return;
+    }
+
+    this.setTextIfChanged(this.statPointText, `STAT POINTS ${statPoints}`);
+
+    for (const statId of TANK_STAT_IDS) {
+      const definition = TANK_STAT_DEFINITIONS[statId];
+      const level = levels[statId] ?? 0;
+      const button = this.statButtons[statId];
+      const label = this.statButtonLabels[statId];
+      const canSpend = statPoints > 0 && level < definition.maxLevel;
+
+      if (!button || !label) {
+        continue;
+      }
+
+      button.setData('canSpend', canSpend);
+      button.setFillStyle(canSpend ? 0x132033 : 0x0f172a, canSpend ? 0.98 : 0.72);
+      button.setStrokeStyle(1, canSpend ? 0x38bdf8 : 0x334155, canSpend ? 0.95 : 0.72);
+      this.setTextIfChanged(label, `${definition.shortLabel} ${level}/${definition.maxLevel}\n${definition.summary}`);
+      label.setColor(canSpend ? '#e0f2fe' : '#94a3b8');
+    }
+  }
+
   private selectUpgrade(index: number): void {
     if (!this.registry.get('run.levelUpActive') || this.registry.get('run.endActive') || !this.scene.isActive('RunScene')) {
       return;
@@ -516,6 +616,15 @@ export class UIScene extends Phaser.Scene {
 
     const runScene = this.scene.get('RunScene') as RunScene;
     runScene.selectLevelUp(index);
+  }
+
+  private allocateTankStat(statId: TankStatId): void {
+    if (this.registry.get('run.endActive') || !this.scene.isActive('RunScene')) {
+      return;
+    }
+
+    const runScene = this.scene.get('RunScene') as RunScene;
+    runScene.allocateTankStat(statId);
   }
 
   private handleConfirmInput(): void {
@@ -788,6 +897,16 @@ export class UIScene extends Phaser.Scene {
     card.setStrokeStyle(2, hovered ? 0x93c5fd : 0x334155, 1);
   }
 
+  private applyStatButtonHover(statId: TankStatId, hovered: boolean): void {
+    const button = this.statButtons[statId];
+    if (!button?.visible || !button.getData('canSpend')) {
+      return;
+    }
+
+    button.setFillStyle(hovered ? 0x1e3a5f : 0x132033, 0.98);
+    button.setStrokeStyle(1, hovered ? 0x7dd3fc : 0x38bdf8, 0.98);
+  }
+
   private setTextIfChanged(target: Phaser.GameObjects.Text, nextText: string): void {
     if (target.text !== nextText) {
       target.setText(nextText);
@@ -806,5 +925,7 @@ export class UIScene extends Phaser.Scene {
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
     this.levelUpBadges = [];
+    this.statButtons = {};
+    this.statButtonLabels = {};
   }
 }
