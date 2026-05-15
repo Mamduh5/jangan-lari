@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Jangan Lari</string>
+    <string name="title_activity_main">Jangan Lari</string>
+    <string name="package_name">com.mamduh5.janganlari</string>
+    <string name="custom_url_scheme">com.mamduh5.janganlari</string>
+</resources>

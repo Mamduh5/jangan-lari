@@ -265,3 +265,28 @@ Acceptance checks:
 - Owner can switch guides off.
 - Dual-stick movement and aim continue to work.
 - Phaser scale remains FIT with the fixed 1280x720 virtual coordinate system.
+
+## Sprint 12: Android APK/WebView Wrapper Spike
+
+Goal: Add the smallest safe Android wrapper path so the existing Vite/Phaser game can be tested as an Android app without Chrome browser UI.
+
+Status note:
+- Added a minimal Capacitor Android wrapper path around the existing Vite build output.
+- Pinned Capacitor to v7.6.5 because the current local Node runtime is 20.19.6 and Capacitor v8 CLI requires Node 22.
+- Generated the Android project and configured the Activity for sensor landscape plus immersive sticky system UI.
+- Verified a local debug APK build with explicit Android Studio JBR/SDK environment variables.
+- Added `docs/io-mvp/android-wrapper.md` with setup, sync, Android Studio, debug APK, fullscreen, and limitation notes.
+- Kept Phaser scale at FIT + CENTER_BOTH and did not change gameplay systems.
+- Browser Chrome UI, Android transient system bars, and FIT side letterboxing remain known limitations for later device testing/aspect-ratio work.
+
+Deliverables:
+- Capacitor config targeting `dist`.
+- Android platform project for local device testing.
+- Package scripts for add/sync/open/build/debug APK flow.
+- Wrapper runbook.
+
+Acceptance checks:
+- Existing web build and tests still pass.
+- Android project can be synced from the web build.
+- If local Android build tools are unavailable, the exact user commands are documented.
+- No full Playwright or gameplay-bot suite is required for this spike.
