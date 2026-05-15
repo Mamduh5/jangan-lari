@@ -13,6 +13,7 @@ import {
   ELITE_SPAWN_INDICATOR_MS,
   ENDING_FLASH_MS,
   ENEMY_SPAWN_INTERVAL_MS,
+  GAME_HEIGHT,
   GAME_WIDTH,
   LEVEL_UP_FLASH_MS,
   NEUTRAL_SHAPE_INITIAL_COUNT,
@@ -539,6 +540,11 @@ export class RunScene extends Phaser.Scene {
     const combatResponseMetrics = this.combatResponse.getMetrics();
 
     return {
+      config: {
+        gameWidth: GAME_WIDTH,
+        gameHeight: GAME_HEIGHT,
+        scaleMode: 'FIT',
+      },
       elapsedMs: this.runElapsedMs,
       hp: this.player.getCurrentHealth(),
       maxHp: this.player.getMaxHealth(),
@@ -593,6 +599,7 @@ export class RunScene extends Phaser.Scene {
       },
       controlGuideMode: String(this.registry.get('run.controlGuideMode') ?? this.saveData.controlGuideMode) as ControlGuideMode,
       controlHintVisible: Boolean(this.registry.get('run.controlHintVisible')),
+      controlJoysticks: this.movementInput.getPointerGuideState(),
       tankStats: {
         availablePoints: this.tankStats.getAvailablePoints(),
         canSpend: this.hasSpendableTankStats(),
@@ -989,26 +996,26 @@ export class RunScene extends Phaser.Scene {
 
   private presentEncounterSpawn(archetype: EnemyArchetype, spawnPoint: Phaser.Math.Vector2): void {
     if (archetype.isBoss) {
-      this.registry.set('run.instructions', 'Boss sighted. Defeat it or survive to extraction.');
-      this.setAlert('boss', 'Final boss active', 2600);
+      this.registry.set('run.instructions', 'Final boss active.');
+      this.setAlert('boss', 'Final boss', 1800);
       this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
-      this.showEncounterBanner('FINAL BOSS', `${archetype.name} has arrived. Watch the charge and break it for victory.`, 0xf87171, 2600);
+      this.showEncounterBanner('FINAL BOSS', `${archetype.name} active`, 0xf87171, 1800);
       this.cameras.main.shake(160, 0.0023);
       this.cameras.main.flash(180, 255, 120, 120, false);
       playCue('boss-arrival');
     } else if (archetype.isMiniboss) {
-      this.registry.set('run.instructions', 'Miniboss approaching. Break the charge and claim the reward.');
-      this.setAlert('miniboss', 'Miniboss active', 2200);
+      this.registry.set('run.instructions', 'Miniboss active.');
+      this.setAlert('miniboss', 'Miniboss', 1500);
       this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'MINIBOSS', 0xfda4af);
-      this.showEncounterBanner('MINIBOSS', `${archetype.name} enters the arena. Beat it for bonus gold and a free upgrade.`, 0xfda4af, 2200);
+      this.showEncounterBanner('MINIBOSS', `${archetype.name} active`, 0xfda4af, 1500);
       this.cameras.main.shake(120, 0.0018);
       this.cameras.main.flash(120, 255, 180, 180, false);
       playCue('miniboss-arrival');
     } else if (archetype.isElite) {
-      this.registry.set('run.instructions', 'Elite enemy incoming. Keep moving.');
-      this.setAlert('elite', 'Elite target active', 1600);
+      this.registry.set('run.instructions', 'Elite active.');
+      this.setAlert('elite', 'Elite', 1100);
       this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
-      this.showEncounterBanner('ELITE TARGET', `${archetype.name} is carrying a reward cache.`, 0xe9d5ff, 1500);
+      this.showEncounterBanner('ELITE', `${archetype.name} active`, 0xe9d5ff, 1000);
       this.cameras.main.shake(90, 0.0012);
       this.cameras.main.flash(90, 190, 150, 255, false);
       playCue('elite-arrival');
@@ -1128,7 +1135,7 @@ export class RunScene extends Phaser.Scene {
     this.activeRunEvent = {
       type: 'challenge-wave',
       title: 'Challenge Wave',
-      objective: 'Outlast the surge or wipe it out for a bonus upgrade.',
+      objective: 'Clear or outlast.',
       startedAtMs: this.runElapsedMs,
       endsAtMs: this.runElapsedMs + CHALLENGE_WAVE_EVENT_DURATION_MS,
       challengeEnemies,
@@ -1136,14 +1143,9 @@ export class RunScene extends Phaser.Scene {
       rewardLevelUps: 1,
     };
     this.challengeWaveEventConsumed = true;
-    this.registry.set('run.instructions', 'Challenge wave active. Survive the surge or clear it for a reward.');
-    this.setAlert('objective', 'Challenge wave active', 1800);
-    this.showEncounterBanner(
-      'CHALLENGE WAVE',
-      'A short surge is closing in. Outlast it or clear it for a bonus upgrade.',
-      0xfbbf24,
-      2200,
-    );
+    this.registry.set('run.instructions', 'Challenge wave active.');
+    this.setAlert('objective', 'Challenge wave', 1300);
+    this.showEncounterBanner('CHALLENGE', 'Clear or outlast', 0xfbbf24, 1300);
     this.cameras.main.shake(100, 0.0015);
     this.cameras.main.flash(100, 255, 210, 120, false);
     playCue('elite-arrival');
@@ -1171,7 +1173,7 @@ export class RunScene extends Phaser.Scene {
     this.activeRunEvent = {
       type: 'reward-target',
       title: 'Reward Target',
-      objective: 'Hunt down the Cache Runner before it slips away.',
+      objective: 'Hunt the target.',
       startedAtMs: this.runElapsedMs,
       endsAtMs: this.runElapsedMs + REWARD_TARGET_EVENT_DURATION_MS,
       targetEnemy,
@@ -1179,15 +1181,10 @@ export class RunScene extends Phaser.Scene {
       rewardXp: 24,
     };
     this.rewardTargetEventConsumed = true;
-    this.registry.set('run.instructions', 'Reward target active. Chase it down before it escapes.');
-    this.setAlert('objective', 'Reward target active', 1800);
+    this.registry.set('run.instructions', 'Reward target active.');
+    this.setAlert('objective', 'Reward target', 1300);
     this.showSpawnIndicator(targetEnemy.x, targetEnemy.y, 'TARGET', 0xfbbf24);
-    this.showEncounterBanner(
-      'REWARD TARGET',
-      'A Cache Runner has entered the arena. Chase it down before the timer expires.',
-      0xfbbf24,
-      2200,
-    );
+    this.showEncounterBanner('TARGET', 'Hunt it down', 0xfbbf24, 1300);
     this.cameras.main.flash(100, 255, 225, 140, false);
     playCue('elite-arrival');
     return true;
@@ -1806,14 +1803,14 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.instructions', `${hero.name}: ${hero.passiveLabel}`);
     this.registry.set('run.heroName', hero.name);
     this.registry.set('run.heroPassive', hero.passiveLabel);
-    this.setAlert('hero', `${hero.name} deployed`, 2400);
-    this.showEncounterBanner(hero.name, `${startingWeapon.name} online. ${hero.passiveLabel}`, startingWeapon.projectileColor, 2200);
+    this.setAlert('hero', `${hero.name} ready`, 1300);
+    this.showEncounterBanner(hero.name, `${startingWeapon.name} online`, startingWeapon.projectileColor, 1300);
     this.showFloatingText(this.player.x, this.player.y - 78, `${startingWeapon.name} ready`, '#dbeafe', 18);
     playHeroIntroCue(hero, startingWeapon);
 
     this.time.delayedCall(2600, () => {
       if (!this.isEnded && !this.isLevelingUp && !this.isSystemPaused && !this.isTransitioningToMenu) {
-        this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
+        this.registry.set('run.instructions', '');
       }
     });
   }
@@ -1821,26 +1818,26 @@ export class RunScene extends Phaser.Scene {
   private handleEnemyAttackSignal(enemy: Enemy, signal: EnemyAttackSignal): void {
     switch (signal.type) {
       case 'miniboss-line-telegraph':
-        this.registry.set('run.instructions', 'Miniboss charge lane forming. Step sideways before it fires.');
-        this.setAlert('miniboss', 'Miniboss charge lane', 900);
+        this.registry.set('run.instructions', 'Lane forming. Move aside.');
+        this.setAlert('miniboss', 'Charge lane', 800);
         this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, signal.length, 58, 0xfda4af, 420, 'warning');
         playCue('dash-warning');
         break;
       case 'miniboss-line-execute':
-        this.registry.set('run.instructions', 'Dreadnought line charge released. Reposition and punish the recovery.');
-        this.setAlert('miniboss', 'Line charge live', 900);
+        this.registry.set('run.instructions', 'Line charge. Reposition.');
+        this.setAlert('miniboss', 'Charge live', 800);
         this.executeMinibossLineStrike(enemy, signal.x, signal.y, signal.direction, signal.length);
         playCue('miniboss-release');
         break;
       case 'boss-shockwave-telegraph':
-        this.registry.set('run.instructions', 'Behemoth is winding up a shockwave. Back out before the ring expands.');
-        this.setAlert('boss', 'Shockwave winding up', 980);
+        this.registry.set('run.instructions', 'Shockwave charging. Back out.');
+        this.setAlert('boss', 'Shockwave charging', 900);
         this.showBossShockwaveTelegraph(signal.x, signal.y, signal.radius);
         playCue('dash-warning');
         break;
       case 'boss-shockwave-execute':
-        this.registry.set('run.instructions', 'Shockwave released. Keep clear of the expanding ring.');
-        this.setAlert('boss', 'Shockwave live', 1100);
+        this.registry.set('run.instructions', 'Shockwave live. Keep clear.');
+        this.setAlert('boss', 'Shockwave live', 900);
         this.spawnBossShockwave(signal.x, signal.y, signal.radius, signal.damage, signal.durationMs ?? 980);
         playCue('boss-release');
         break;
@@ -2177,10 +2174,10 @@ export class RunScene extends Phaser.Scene {
       this.registry.set('run.levelUpChoiceCount', 0);
       this.registry.set('run.levelUpRemainingMs', 0);
       this.registry.set('run.upgradePoolExhausted', true);
-      this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
+      this.registry.set('run.instructions', '');
       this.showRewardToast('Upgrade pool empty', '#bfdbfe');
       if (!this.isSystemPaused) {
-        this.resumeGameplaySystems('Survive the full timer or kill the final boss.');
+        this.resumeGameplaySystems('');
       }
       if (this.pendingLevelUps > 0) {
         this.queueLevelUpStart();
@@ -2240,13 +2237,13 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.levelUpChoiceCount', 0);
     this.registry.set('run.levelUpRemainingMs', 0);
     this.registry.set('run.upgradePoolExhausted', false);
-    this.registry.set('run.instructions', 'Survive the full timer or kill the final boss.');
+    this.registry.set('run.instructions', '');
 
     if (!this.isSystemPaused) {
-      this.resumeGameplaySystems('Survive the full timer or kill the final boss.');
+      this.resumeGameplaySystems('');
     }
 
-    this.setAlert('objective', 'Objective active');
+    this.setAlert('objective', 'Back in', 900);
     this.publishHudState();
   }
 
@@ -2490,21 +2487,35 @@ export class RunScene extends Phaser.Scene {
     this.isSystemPaused = shouldPause;
 
     if (shouldPause) {
+      const mobileCopy = this.shouldUseMobileCopy();
       const message = this.isChoosingTankClass
-        ? 'Tab inactive. Class choice paused.'
+        ? mobileCopy
+          ? 'Class choice paused.'
+          : 'Tab inactive. Class choice paused.'
         : this.isLevelingUp
-          ? 'Tab inactive. Upgrade choice paused.'
-          : 'Tab inactive. Run paused.';
+          ? mobileCopy
+            ? 'Upgrade choice paused.'
+            : 'Tab inactive. Upgrade choice paused.'
+          : mobileCopy
+            ? 'Run paused.'
+            : 'Tab inactive. Run paused.';
       this.pauseGameplaySystems(message);
     } else if (this.isChoosingTankClass) {
       this.registry.set('run.instructions', 'Choose a tank class branch.');
     } else if (this.isLevelingUp) {
       this.registry.set('run.instructions', 'Choose an upgrade. Auto-pick starts in 15 seconds.');
     } else {
-      this.resumeGameplaySystems('Survive the full timer or kill the final boss.');
+      this.registry.set('run.instructions', '');
+      this.resumeGameplaySystems();
     }
 
     this.publishHudState();
+  }
+
+  private shouldUseMobileCopy(): boolean {
+    const viewportWidth = window.innerWidth || this.scale.displaySize.width;
+    const viewportHeight = window.innerHeight || this.scale.displaySize.height;
+    return viewportWidth <= 960 || viewportHeight <= 540;
   }
 
   private pauseGameplaySystems(instructionText?: string): void {
@@ -2589,6 +2600,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.eventRemainingMs', this.activeRunEvent ? Math.max(0, this.activeRunEvent.endsAtMs - this.runElapsedMs) : 0);
     this.registry.set('run.controlGuideMode', this.saveData.controlGuideMode);
     this.registry.set('run.controlHintVisible', this.controlHintVisible);
+    this.registry.set('run.controlJoysticks', this.movementInput.getPointerGuideState());
     this.maybeShowStatsMaxedToast();
   }
 
@@ -2835,26 +2847,34 @@ export class RunScene extends Phaser.Scene {
   }
 
   private showEncounterBanner(title: string, subtitle: string, color: number, duration: number): void {
-    const bannerY = 86;
-    const backdrop = this.add.rectangle(GAME_WIDTH / 2, bannerY, 620, 92, 0x020617, 0.86).setDepth(30).setScrollFactor(0);
+    const mobileCopy = this.shouldUseMobileCopy();
+    const bannerY = mobileCopy ? 76 : 86;
+    const bannerWidth = mobileCopy ? 460 : 620;
+    const bannerHeight = mobileCopy ? 58 : 92;
+    const accentWidth = mobileCopy ? 390 : 560;
+    const titleSize = mobileCopy ? '22px' : '30px';
+    const subtitleSize = mobileCopy ? '13px' : '16px';
+    const subtitleWrapWidth = mobileCopy ? 390 : 540;
+    const holdDuration = mobileCopy ? Math.min(duration, 1000) : duration;
+    const backdrop = this.add.rectangle(GAME_WIDTH / 2, bannerY, bannerWidth, bannerHeight, 0x020617, 0.8).setDepth(30).setScrollFactor(0);
     backdrop.setStrokeStyle(2, color, 0.95);
-    const accent = this.add.rectangle(GAME_WIDTH / 2, bannerY - 38, 560, 4, color, 0.9).setDepth(31).setScrollFactor(0);
+    const accent = this.add.rectangle(GAME_WIDTH / 2, bannerY - bannerHeight / 2 + 6, accentWidth, 3, color, 0.9).setDepth(31).setScrollFactor(0);
     const titleText = this.add
-      .text(GAME_WIDTH / 2, bannerY - 10, title, {
+      .text(GAME_WIDTH / 2, bannerY - (mobileCopy ? 7 : 10), title, {
         fontFamily: 'Georgia, serif',
-        fontSize: '30px',
+        fontSize: titleSize,
         color: '#f8fafc',
       })
       .setOrigin(0.5)
       .setDepth(31)
       .setScrollFactor(0);
     const subtitleText = this.add
-      .text(GAME_WIDTH / 2, bannerY + 22, subtitle, {
+      .text(GAME_WIDTH / 2, bannerY + (mobileCopy ? 15 : 22), subtitle, {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
+        fontSize: subtitleSize,
         color: '#dbeafe',
         align: 'center',
-        wordWrap: { width: 540 },
+        wordWrap: { width: subtitleWrapWidth },
       })
       .setOrigin(0.5)
       .setDepth(31)
@@ -2871,7 +2891,7 @@ export class RunScene extends Phaser.Scene {
       y: `+=18`,
       duration: 180,
       ease: 'Quad.Out',
-      hold: duration,
+      hold: holdDuration,
       yoyo: true,
       onComplete: () => {
         backdrop.destroy();

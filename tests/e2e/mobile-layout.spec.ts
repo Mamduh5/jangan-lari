@@ -34,7 +34,8 @@ test.describe('mobile landscape layout', () => {
     const canvas = page.locator('canvas');
     await expect(canvas).toBeVisible();
     const menuCanvasBox = await canvas.boundingBox();
-    expect(menuCanvasBox?.height ?? 0).toBeGreaterThanOrEqual(380);
+    expect(menuCanvasBox?.width ?? 0).toBeGreaterThanOrEqual(830);
+    expect(menuCanvasBox?.height ?? 0).toBeGreaterThanOrEqual(370);
 
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => {
@@ -43,7 +44,8 @@ test.describe('mobile landscape layout', () => {
     });
 
     const runCanvasBox = await canvas.boundingBox();
-    expect(runCanvasBox?.height ?? 0).toBeGreaterThanOrEqual(380);
+    expect(runCanvasBox?.width ?? 0).toBeGreaterThanOrEqual(830);
+    expect(runCanvasBox?.height ?? 0).toBeGreaterThanOrEqual(370);
 
     const initialHud = await getHudSnapshot(page);
     expect(initialHud.hp).toMatch(/^HP \d+\/\d+$/);

@@ -40,19 +40,18 @@ async function clickMenuButton(
       throw new Error(`Game canvas is not available for ${buttonKey} click.`);
     }
 
-    const gameWidth = 1280;
-    const gameHeight = 720;
+    const virtualSize = await getVirtualSize(page);
     const buttonPositions = {
       startButton: {
-        x: 560,
+        x: virtualSize.width / 2 - 250,
         y: 82,
       },
       metaButton: {
-        x: 726,
+        x: virtualSize.width / 2 - 84,
         y: 82,
       },
       codexButton: {
-        x: 892,
+        x: virtualSize.width / 2 + 82,
         y: 82,
       },
     } as const;
@@ -60,8 +59,8 @@ async function clickMenuButton(
 
     await canvas.click({
       position: {
-        x: (buttonPosition.x / gameWidth) * box.width,
-        y: (buttonPosition.y / gameHeight) * box.height,
+        x: (buttonPosition.x / virtualSize.width) * box.width,
+        y: (buttonPosition.y / virtualSize.height) * box.height,
       },
     });
     return;
@@ -72,6 +71,13 @@ async function clickMenuButton(
     const menuScene = game.scene.getScene('MenuScene') as Record<string, { emit: (eventName: string) => void }>;
     menuScene[key].emit('pointerdown');
   }, buttonKey);
+}
+
+async function getVirtualSize(page: import('@playwright/test').Page): Promise<{ width: number; height: number }> {
+  return page.evaluate(() => ({
+    width: Number(window.__JANGAN_LARI_GAME__?.scale.width ?? 1600),
+    height: Number(window.__JANGAN_LARI_GAME__?.scale.height ?? 720),
+  }));
 }
 
 async function clickMetaBackButton(page: import('@playwright/test').Page): Promise<void> {

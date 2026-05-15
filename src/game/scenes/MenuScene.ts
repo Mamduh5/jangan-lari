@@ -4,7 +4,13 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { ENEMY_ARCHETYPES } from '../data/enemies';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
 import { WEAPON_DEFINITIONS } from '../data/weapons';
-import { loadGameSave, type GameSaveData } from '../save/saveData';
+import {
+  CONTROL_GUIDE_MODES,
+  loadGameSave,
+  updateControlGuideMode,
+  type ControlGuideMode,
+  type GameSaveData,
+} from '../save/saveData';
 import { isHeroUnlocked, selectHero, unlockHero } from '../save/saveHeroes';
 
 type CodexSection = 'runner' | 'weapon' | 'threats';
@@ -20,6 +26,7 @@ export class MenuScene extends Phaser.Scene {
   private startButton!: Phaser.GameObjects.Text;
   private metaButton!: Phaser.GameObjects.Text;
   private codexButton!: Phaser.GameObjects.Text;
+  private guideButton!: Phaser.GameObjects.Text;
   private codexCloseButton!: Phaser.GameObjects.Text;
   private codexOverlay!: Phaser.GameObjects.Container;
   private codexOverlayVisible = false;
@@ -101,11 +108,15 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5);
 
-    this.startButton = this.createMenuButton(560, 82, 'Start Run', () => this.startRun());
-    this.metaButton = this.createMenuButton(726, 82, 'Meta', () => this.openMeta());
-    this.codexButton = this.createMenuButton(892, 82, 'Codex', () => this.openCodex());
+    this.startButton = this.createMenuButton(centerX - 250, 82, 'Start Run', () => this.startRun());
+    this.metaButton = this.createMenuButton(centerX - 84, 82, 'Meta', () => this.openMeta());
+    this.codexButton = this.createMenuButton(centerX + 82, 82, 'Codex', () => this.openCodex());
     this.codexButton.setFontSize('24px');
     this.codexButton.setPadding(20, 10, 20, 10);
+    this.guideButton = this.createMenuButton(centerX + 270, 82, '', () => this.cycleControlGuideMode());
+    this.guideButton.setFontSize('20px');
+    this.guideButton.setPadding(16, 9, 16, 9);
+    this.refreshGuideButton();
 
     this.add
       .text(rosterLeft, 162, 'Roster', {
@@ -470,6 +481,24 @@ export class MenuScene extends Phaser.Scene {
     this.codexOverlay.setVisible(false);
   }
 
+  public getMenuSnapshot(): {
+    gameWidth: number;
+    gameHeight: number;
+    controlGuideMode: ControlGuideMode;
+    guideButtonText: string;
+    startButton: { x: number; y: number };
+    guideButton: { x: number; y: number };
+  } {
+    return {
+      gameWidth: GAME_WIDTH,
+      gameHeight: GAME_HEIGHT,
+      controlGuideMode: this.saveData.controlGuideMode,
+      guideButtonText: this.guideButton.text,
+      startButton: { x: this.startButton.x, y: this.startButton.y },
+      guideButton: { x: this.guideButton.x, y: this.guideButton.y },
+    };
+  }
+
   private handleStartShortcut(): void {
     if (this.codexOverlayVisible) {
       return;
@@ -522,6 +551,34 @@ export class MenuScene extends Phaser.Scene {
     this.saveData = nextSave;
     this.statusText.setText(`${hero.name} unlocked and selected.`);
     this.refreshHeroView();
+  }
+
+  private cycleControlGuideMode(): void {
+    const currentIndex = CONTROL_GUIDE_MODES.indexOf(this.saveData.controlGuideMode);
+    const nextMode = CONTROL_GUIDE_MODES[(currentIndex + 1) % CONTROL_GUIDE_MODES.length];
+    this.saveData = updateControlGuideMode(this.saveData, nextMode);
+    this.statusText.setText(`Control guide: ${this.getControlGuideModeLabel(nextMode)}.`);
+    this.refreshGuideButton();
+  }
+
+  private refreshGuideButton(): void {
+    this.guideButton.setText(`Guide ${this.getControlGuideModeLabel(this.saveData.controlGuideMode)}`);
+    this.guideButton.setStyle({
+      color: this.saveData.controlGuideMode === 'hidden' ? '#94a3b8' : '#dbeafe',
+      backgroundColor: this.saveData.controlGuideMode === 'visible' ? '#1e3a5f' : '#172036',
+    });
+  }
+
+  private getControlGuideModeLabel(mode: ControlGuideMode): string {
+    switch (mode) {
+      case 'hidden':
+        return 'Hidden';
+      case 'visible':
+        return 'Visible';
+      case 'subtle':
+      default:
+        return 'Subtle';
+    }
   }
 
   private refreshHeroView(): void {

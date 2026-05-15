@@ -5,8 +5,12 @@ type ControlGuideMode = 'hidden' | 'subtle' | 'visible';
 type HudSnapshot = {
   controlGuideMode: ControlGuideMode;
   controlGuidesVisible: boolean;
+  joystickGuidesVisible: boolean;
+  movementJoystickKnob: { x: number; y: number };
+  aimJoystickKnob: { x: number; y: number };
   controlHintVisible: boolean;
   controlGuideToggleText: string;
+  controlGuideToggleVisible: boolean;
 };
 
 type RunSnapshot = {
@@ -30,7 +34,7 @@ type RunSnapshot = {
 };
 
 test.describe('mobile control guides', () => {
-  test('guides can be toggled while movement and aim remain playable', async ({ page }) => {
+  test('joystick guides render while movement and aim remain playable', async ({ page }) => {
     test.setTimeout(45_000);
     await page.setViewportSize({ width: 844, height: 390 });
     const runtimeErrors = trackRuntimeErrors(page);
@@ -49,35 +53,11 @@ test.describe('mobile control guides', () => {
     let run = await getRunSnapshot(page);
     expect(hud.controlGuideMode).toBe('subtle');
     expect(hud.controlGuidesVisible).toBe(true);
+    expect(hud.joystickGuidesVisible).toBe(true);
     expect(hud.controlHintVisible).toBe(true);
+    expect(hud.controlGuideToggleVisible).toBe(false);
     expect(run.controlGuideMode).toBe('subtle');
     expect(run.controlHintVisible).toBe(true);
-
-    await clickCanvasPoint(page, 1190, 194);
-    await page.waitForFunction(() => {
-      const uiScene = window.__JANGAN_LARI_GAME__?.scene.getScene('UIScene') as { getHudSnapshot?: () => HudSnapshot } | undefined;
-      return uiScene?.getHudSnapshot?.().controlGuideMode === 'visible';
-    });
-    hud = await getHudSnapshot(page);
-    expect(hud.controlGuidesVisible).toBe(true);
-    expect(hud.controlGuideToggleText).toBe('Guide: Visible');
-
-    await clickCanvasPoint(page, 1190, 194);
-    await page.waitForFunction(() => {
-      const uiScene = window.__JANGAN_LARI_GAME__?.scene.getScene('UIScene') as { getHudSnapshot?: () => HudSnapshot } | undefined;
-      return uiScene?.getHudSnapshot?.().controlGuideMode === 'hidden';
-    });
-    hud = await getHudSnapshot(page);
-    run = await getRunSnapshot(page);
-    expect(hud.controlGuidesVisible).toBe(false);
-    expect(hud.controlHintVisible).toBe(false);
-    expect(run.controlGuideMode).toBe('hidden');
-
-    const persistedMode = await page.evaluate(() => {
-      const save = JSON.parse(window.localStorage.getItem('jangan-lari-save-v1') ?? '{}') as { controlGuideMode?: string };
-      return save.controlGuideMode;
-    });
-    expect(persistedMode).toBe('hidden');
 
     const beforeMove = (await getRunSnapshot(page)).player;
     await movePointer(page, 140, 300, 240, 300);
@@ -92,9 +72,13 @@ test.describe('mobile control guides', () => {
     const movedRun = await getRunSnapshot(page);
     expect(movedRun.input.movementSource).toBe('pointer');
     expect(movedRun.input.movement.x).toBeGreaterThan(0.8);
+    hud = await getHudSnapshot(page);
+    expect(hud.movementJoystickKnob.x).toBeGreaterThan(360);
     await page.mouse.up();
 
-    await movePointer(page, 690, 300, 690, 220);
+    const virtualSize = await getVirtualSize(page);
+    const aimX = virtualSize.width - 260;
+    await movePointer(page, aimX, 300, aimX, 220);
     await page.waitForFunction(() => {
       const snapshot = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
       return Boolean(snapshot && snapshot.player.facingY < -0.7 && snapshot.input.aimSource === 'pointer');
@@ -107,6 +91,8 @@ test.describe('mobile control guides', () => {
     const aimedRun = await getRunSnapshot(page);
     expect(aimedRun.input.aim.y).toBeLessThan(-0.7);
     expect(aimedRun.primaryWeapon?.latestProjectileDirection.y).toBeLessThan(-0.7);
+    hud = await getHudSnapshot(page);
+    expect(hud.aimJoystickKnob.y).toBeLessThan(552);
     await page.mouse.up();
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
@@ -173,11 +159,18 @@ async function getCanvasAbsolutePoint(
   }
 
   return {
-    x: box.x + (gameX / 1280) * box.width,
-    y: box.y + (gameY / 720) * box.height,
+    x: box.x + (gameX / (await getVirtualSize(page)).width) * box.width,
+    y: box.y + (gameY / (await getVirtualSize(page)).height) * box.height,
     canvasX: box.x,
     canvasY: box.y,
   };
+}
+
+async function getVirtualSize(page: import('@playwright/test').Page): Promise<{ width: number; height: number }> {
+  return page.evaluate(() => ({
+    width: Number(window.__JANGAN_LARI_GAME__?.scale.width ?? 1600),
+    height: Number(window.__JANGAN_LARI_GAME__?.scale.height ?? 720),
+  }));
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {

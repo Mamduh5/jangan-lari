@@ -31,6 +31,7 @@ test.describe('mobile dual-stick aim', () => {
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run));
 
     const initialRun = await getRunSnapshot(page);
+    const virtualSize = await getVirtualSize(page);
 
     const moveStart = await getCanvasAbsolutePoint(page, 140, 300);
     const moveEnd = await getCanvasAbsolutePoint(page, 240, 300);
@@ -53,8 +54,9 @@ test.describe('mobile dual-stick aim', () => {
 
     await page.mouse.up();
 
-    const aimStart = await getCanvasAbsolutePoint(page, 690, 300);
-    const aimEnd = await getCanvasAbsolutePoint(page, 690, 220);
+    const aimX = virtualSize.width - 260;
+    const aimStart = await getCanvasAbsolutePoint(page, aimX, 300);
+    const aimEnd = await getCanvasAbsolutePoint(page, aimX, 220);
 
     await page.mouse.move(aimStart.x, aimStart.y);
     await page.mouse.down();
@@ -128,9 +130,11 @@ async function getCanvasPosition(page: import('@playwright/test').Page, gameX: n
     throw new Error('Game canvas is not available.');
   }
 
+  const virtualSize = await getVirtualSize(page);
+
   return {
-    x: (gameX / 1280) * box.width,
-    y: (gameY / 720) * box.height,
+    x: (gameX / virtualSize.width) * box.width,
+    y: (gameY / virtualSize.height) * box.height,
   };
 }
 
@@ -143,10 +147,19 @@ async function getCanvasAbsolutePoint(page: import('@playwright/test').Page, x: 
     throw new Error('Game canvas is not available.');
   }
 
+  const virtualSize = await getVirtualSize(page);
+
   return {
-    x: box.x + Math.max(1, Math.min(box.width - 1, (x / 1280) * box.width)),
-    y: box.y + Math.max(1, Math.min(box.height - 1, (y / 720) * box.height)),
+    x: box.x + Math.max(1, Math.min(box.width - 1, (x / virtualSize.width) * box.width)),
+    y: box.y + Math.max(1, Math.min(box.height - 1, (y / virtualSize.height) * box.height)),
   };
+}
+
+async function getVirtualSize(page: import('@playwright/test').Page): Promise<{ width: number; height: number }> {
+  return page.evaluate(() => ({
+    width: Number(window.__JANGAN_LARI_GAME__?.scale.width ?? 1600),
+    height: Number(window.__JANGAN_LARI_GAME__?.scale.height ?? 720),
+  }));
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {

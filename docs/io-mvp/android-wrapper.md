@@ -114,7 +114,7 @@ Important limitations:
 - Android system bars can temporarily reappear after edge gestures.
 - Some devices, OEM skins, gesture navigation modes, cutouts, and Android versions may reserve safe areas or show transient bars.
 - True edge-to-edge/cutout behavior may need a later native pass after physical-device screenshots.
-- This spike does not change Phaser scaling, so FIT side letterboxing can still exist inside the APK.
+- Phaser still uses FIT scaling, so letterboxing can still exist inside the APK when the device aspect ratio does not match the current product virtual size.
 
 ## Web Runtime Contract
 
@@ -131,6 +131,8 @@ This spike deliberately does not change:
 
 A normal Chrome tab owns its browser UI. The web app can request viewport behavior and prevent page scrolling, but it cannot permanently remove Chrome's address/header UI. A native wrapper helps because the game runs in an app-owned WebView instead of a browser tab.
 
-## Why Letterboxing May Remain
+## Product Branch Screen Usage
 
-The game currently preserves a fixed 1280x720 virtual coordinate system with Phaser FIT scaling. FIT keeps the full 16:9 game visible and centered, which can create side or top/bottom letterboxing when the device aspect ratio differs. Removing that requires a later aspect-ratio/layout pass, not just an APK wrapper.
+The frozen foundation preserves a fixed 1280x720 virtual coordinate system with Phaser FIT scaling. `io/mobile-alpha` keeps the same FIT strategy but can use a wider fixed baseline, currently 1600x720, to reduce side letterboxing on wide landscape phones without switching to Phaser RESIZE.
+
+FIT still keeps the full game visible and centered. Devices narrower or wider than the chosen product baseline can still show top/bottom or side letterboxing. Removing that completely requires a later aspect-ratio/layout pass, not just an APK wrapper.

@@ -24,6 +24,18 @@ export type MovementChannelInput = {
   active: boolean;
 };
 
+export type PointerGuideChannel = {
+  active: boolean;
+  start: MovementVector;
+  current: MovementVector;
+  vector: MovementVector;
+};
+
+export type PointerGuideState = {
+  movement: PointerGuideChannel;
+  aim: PointerGuideChannel;
+};
+
 export type ResolveMovementInputOptions = {
   keyboard: MovementChannelInput;
   pointer: MovementChannelInput;
@@ -194,6 +206,17 @@ export class MovementInputController {
     this.resetAimPointer();
   }
 
+  getPointerGuideState(): PointerGuideState {
+    return {
+      movement: this.createPointerGuideChannel(
+        this.movementPointerId !== null,
+        this.movementPointerStart,
+        this.movementPointerCurrent,
+      ),
+      aim: this.createPointerGuideChannel(this.aimPointerId !== null, this.aimPointerStart, this.aimPointerCurrent),
+    };
+  }
+
   destroy(): void {
     this.scene.input.off('pointerdown', this.handlePointerDown);
     this.scene.input.off('pointermove', this.handlePointerMove);
@@ -235,6 +258,18 @@ export class MovementInputController {
         y: this.aimPointerCurrent.y - this.aimPointerStart.y,
       },
       active: this.aimPointerId !== null,
+    };
+  }
+
+  private createPointerGuideChannel(active: boolean, start: MovementVector, current: MovementVector): PointerGuideChannel {
+    return {
+      active,
+      start: { ...start },
+      current: { ...current },
+      vector: {
+        x: active ? current.x - start.x : 0,
+        y: active ? current.y - start.y : 0,
+      },
     };
   }
 

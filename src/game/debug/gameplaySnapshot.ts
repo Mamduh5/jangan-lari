@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { getCombatResponseTuningSnapshot, type CombatResponseTuningSnapshot } from '../combat/combatResponse';
 import type { EnemyArchetypeId } from '../data/enemies';
+import type { PointerGuideState } from '../input/MovementInputController';
 import type { ControlGuideMode } from '../save/saveData';
 import type { TankClassId } from '../data/tankClasses';
 import type { TankStatEffectSnapshot, TankStatLevels } from '../data/tankStats';
@@ -53,6 +54,11 @@ export type GameplayBotEventSnapshot = {
 };
 
 export type GameplayBotRunSnapshot = {
+  config: {
+    gameWidth: number;
+    gameHeight: number;
+    scaleMode: 'FIT';
+  };
   elapsedMs: number;
   hp: number;
   maxHp: number;
@@ -114,6 +120,7 @@ export type GameplayBotRunSnapshot = {
   };
   controlGuideMode: ControlGuideMode;
   controlHintVisible: boolean;
+  controlJoysticks: PointerGuideState;
   tankStats: {
     availablePoints: number;
     canSpend: boolean;

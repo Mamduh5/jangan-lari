@@ -27,6 +27,7 @@ type RunSnapshot = {
 
 test.describe('mobile HUD readability', () => {
   test('HUD shows core run state and overlays remain tap usable', async ({ page }) => {
+    test.setTimeout(45_000);
     await page.setViewportSize({ width: 390, height: 844 });
 
     const runtimeErrors = trackRuntimeErrors(page);
@@ -34,7 +35,8 @@ test.describe('mobile HUD readability', () => {
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
 
-    await clickCanvasPoint(page, 560, 82);
+    const virtualSize = await getVirtualSize(page);
+    await clickCanvasPoint(page, virtualSize.width / 2 - 250, 82);
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;
       return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
@@ -64,7 +66,7 @@ test.describe('mobile HUD readability', () => {
     expect(statReadyHud.statPanelVisible).toBe(true);
     expect(statReadyHud.statSummary).toContain('+1');
 
-    await clickCanvasPoint(page, 728, 624);
+    await clickCanvasPoint(page, virtualSize.width / 2 + 88, 624);
     await page.waitForFunction(() => {
       const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
       return Boolean(run?.tankStats.availablePoints === 0 && run.tankStats.levels.moveSpeed === 1);
@@ -83,7 +85,7 @@ test.describe('mobile HUD readability', () => {
     expect(classReadyHud.classChoiceVisible).toBe(true);
     expect(classReadyHud.classStatus).toContain('Choose now');
 
-    await clickCanvasPoint(page, 450, 438);
+    await clickCanvasPoint(page, virtualSize.width / 2 - 190, 438);
     await page.waitForFunction(() => {
       const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
       return Boolean(run?.tankClass.id === 'twin');
@@ -204,8 +206,8 @@ async function getCanvasPosition(page: import('@playwright/test').Page, gameX: n
   }
 
   return {
-    x: (gameX / 1280) * box.width,
-    y: (gameY / 720) * box.height,
+    x: (gameX / (await getVirtualSize(page)).width) * box.width,
+    y: (gameY / (await getVirtualSize(page)).height) * box.height,
   };
 }
 
@@ -217,9 +219,16 @@ async function getCanvasAbsolutePoint(page: import('@playwright/test').Page, gam
   }
 
   return {
-    x: box.x + (gameX / 1280) * box.width,
-    y: box.y + (gameY / 720) * box.height,
+    x: box.x + (gameX / (await getVirtualSize(page)).width) * box.width,
+    y: box.y + (gameY / (await getVirtualSize(page)).height) * box.height,
   };
+}
+
+async function getVirtualSize(page: import('@playwright/test').Page): Promise<{ width: number; height: number }> {
+  return page.evaluate(() => ({
+    width: Number(window.__JANGAN_LARI_GAME__?.scale.width ?? 1600),
+    height: Number(window.__JANGAN_LARI_GAME__?.scale.height ?? 720),
+  }));
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {

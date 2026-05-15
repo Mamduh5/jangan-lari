@@ -2,7 +2,7 @@
 
 This document records the intended direction for the `.io` MVP without importing a new architecture.
 
-Sprint 14 freezes `io/mvp-foundation` as a reusable mobile `.io` foundation branch. Product-specific iteration should branch from it, with `io/mobile-alpha` as the recommended next branch.
+Sprint 14 freezes `io/mvp-foundation` as a reusable mobile `.io` foundation branch. Product-specific iteration now belongs on `io/mobile-alpha`.
 
 ## Keep And Reuse
 
@@ -23,8 +23,9 @@ Sprint 14 freezes `io/mvp-foundation` as a reusable mobile `.io` foundation bran
 - Keep debug and bot-facing state explicit so future QA tooling can observe player stats, tank class, shapes, XP, score, and restart state.
 - Keep score pressure local-only for the MVP: run score math stays in a pure helper, and best-score/top-five history stays in browser localStorage until a later backend task exists.
 - Treat mobile-browser landscape readability as the runtime baseline before APK/PWA wrapper work.
-- Preserve Phaser `FIT` scaling and the fixed 1280x720 virtual coordinate contract until a dedicated aspect-ratio or wrapper sprint proves a broader layout change.
+- Preserve Phaser `FIT` scaling and a fixed virtual coordinate contract unless a dedicated aspect-ratio sprint proves a broader layout change. The frozen foundation uses 1280x720; `io/mobile-alpha` may use a wider fixed baseline for product APK testing as long as scenes remain internally consistent.
 - Keep mobile control guidance optional and browser-local: guide visibility belongs in local save data, while the dual-zone input model remains the gameplay contract.
+- Keep normal run HUD free of developer-like settings controls. Product control guide settings should live in menu/settings or a pause/settings surface, while joystick visuals can appear in-run based on the saved mode.
 - Treat the Android wrapper as a packaging shell around the web runtime. Native changes should stay limited to wrapper concerns such as orientation, system UI, signing, and device deployment until the web game contract changes deliberately.
 - Keep APK/mobile run UI touch-first: browser keyboard hints can remain for desktop, but mobile-facing overlays should use tap/menu/resume copy and avoid blocking play when no action is available.
 - Treat exhausted progression as non-blocking. If stat points cannot be spent because stats are maxed, or if the legacy bonus pool is empty, gameplay should continue with a small status toast at most.
@@ -54,7 +55,7 @@ Sprint 14 freezes `io/mvp-foundation` as a reusable mobile `.io` foundation bran
 - Matchmaking.
 - Large content expansion.
 - Full game rename.
-- Aspect-ratio-specific layout work beyond the initial APK/WebView wrapper spike.
+- Full aspect-ratio refactors beyond the product branch's fixed-wide baseline.
 - Endless/infinite upgrade mode and late-run boss scaling changes.
 - Multiplayer/bot-mode rules, including player-like bot tanks and multiplayer level caps.
 - Full gameplay-bot recalibration outside focused feature validation.

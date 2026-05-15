@@ -338,3 +338,27 @@ Deliverables:
 Acceptance checks:
 - `npm test`, `npm run build`, focused e2e smoke/mobile-layout/aim/controls/upgrade-exhaustion, and `git diff --check` pass.
 - Full `npm run test:e2e`, `npm run test:all`, and whole `gameplay-bot.spec.ts` are not part of the freeze checkpoint.
+
+## Sprint A1: APK Screen Usage And Mobile Controls UX Polish
+
+Goal: Start product work on `io/mobile-alpha` without changing the frozen `io/mvp-foundation` branch.
+
+Status note:
+- Kept Phaser `FIT` scaling and avoided the previous mixed-coordinate `RESIZE` failure mode.
+- Widened the product branch fixed virtual layout to 1600x720 so APK/mobile landscape uses more horizontal screen space while scenes still share one fixed coordinate system.
+- Moved control guide visibility from the normal in-run HUD to the main menu guide button.
+- Replaced hint-like MOVE/AIM guides with joystick-style bases and movable knobs driven by the active movement/aim pointers.
+- Reduced boss, elite, event, and objective notices into shorter mobile-friendly alerts/banners.
+- Deferred true aspect-ratio refactor, side-letterbox elimination on every device, endless/boss scaling, bot tanks, multiplayer, product identity, and art/audio polish.
+
+Deliverables:
+- Product-branch screen-usage improvement.
+- Menu-owned control guide setting.
+- Joystick-style guide visuals for hidden/subtle/visible modes.
+- Focused mobile-alpha UI e2e coverage.
+
+Acceptance checks:
+- Menu and Start Run remain playable.
+- In-run guide toggle is no longer permanently visible in the HUD.
+- Hidden mode preserves invisible controls, while subtle/visible modes show joystick guides.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/upgrade-exhaustion/mobile-alpha-ui e2e, and diff check.

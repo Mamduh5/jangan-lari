@@ -9,17 +9,23 @@ async function clickStartRun(page: import('@playwright/test').Page): Promise<voi
     throw new Error('Game canvas is not available for Start Run click.');
   }
 
-  const gameWidth = 1280;
-  const gameHeight = 720;
-  const startButtonX = 560;
+  const virtualSize = await getVirtualSize(page);
+  const startButtonX = virtualSize.width / 2 - 250;
   const startButtonY = 82;
 
   await canvas.click({
     position: {
-      x: (startButtonX / gameWidth) * box.width,
-      y: (startButtonY / gameHeight) * box.height,
+      x: (startButtonX / virtualSize.width) * box.width,
+      y: (startButtonY / virtualSize.height) * box.height,
     },
   });
+}
+
+async function getVirtualSize(page: import('@playwright/test').Page): Promise<{ width: number; height: number }> {
+  return page.evaluate(() => ({
+    width: Number(window.__JANGAN_LARI_GAME__?.scale.width ?? 1600),
+    height: Number(window.__JANGAN_LARI_GAME__?.scale.height ?? 720),
+  }));
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {

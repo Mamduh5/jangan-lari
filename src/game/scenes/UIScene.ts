@@ -13,6 +13,18 @@ import {
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { RunScene } from './RunScene';
 
+type ControlJoystickChannel = {
+  active: boolean;
+  start: { x: number; y: number };
+  current: { x: number; y: number };
+  vector: { x: number; y: number };
+};
+
+type ControlJoystickState = {
+  movement: ControlJoystickChannel;
+  aim: ControlJoystickChannel;
+};
+
 export class UIScene extends Phaser.Scene {
   private heroText!: Phaser.GameObjects.Text;
   private hpValueText!: Phaser.GameObjects.Text;
@@ -67,6 +79,7 @@ export class UIScene extends Phaser.Scene {
   private controlGuideMode: ControlGuideMode = 'subtle';
   private controlGuideVisualContainer!: Phaser.GameObjects.Container;
   private controlGuideZones: Phaser.GameObjects.Arc[] = [];
+  private controlGuideKnobs: Phaser.GameObjects.Arc[] = [];
   private controlGuideLabels: Phaser.GameObjects.Text[] = [];
   private controlGuideSubLabels: Phaser.GameObjects.Text[] = [];
   private controlHintContainer!: Phaser.GameObjects.Container;
@@ -104,6 +117,7 @@ export class UIScene extends Phaser.Scene {
     this.statButtons = {};
     this.statButtonLabels = {};
     this.controlGuideZones = [];
+    this.controlGuideKnobs = [];
     this.controlGuideLabels = [];
     this.controlGuideSubLabels = [];
     this.controlGuideMode = this.readControlGuideMode();
@@ -459,8 +473,12 @@ export class UIScene extends Phaser.Scene {
     orientationHintVisible: boolean;
     controlGuideMode: ControlGuideMode;
     controlGuidesVisible: boolean;
+    joystickGuidesVisible: boolean;
+    movementJoystickKnob: { x: number; y: number };
+    aimJoystickKnob: { x: number; y: number };
     controlHintVisible: boolean;
     controlGuideToggleText: string;
+    controlGuideToggleVisible: boolean;
   } {
     return {
       hero: this.heroText.text,
@@ -487,8 +505,18 @@ export class UIScene extends Phaser.Scene {
       orientationHintVisible: this.orientationHintContainer.visible,
       controlGuideMode: this.controlGuideMode,
       controlGuidesVisible: this.controlGuideVisualContainer.visible,
+      joystickGuidesVisible: this.controlGuideVisualContainer.visible,
+      movementJoystickKnob: {
+        x: this.controlGuideKnobs[0]?.x ?? 0,
+        y: this.controlGuideKnobs[0]?.y ?? 0,
+      },
+      aimJoystickKnob: {
+        x: this.controlGuideKnobs[1]?.x ?? 0,
+        y: this.controlGuideKnobs[1]?.y ?? 0,
+      },
       controlHintVisible: this.controlHintContainer.visible,
       controlGuideToggleText: this.controlGuideToggleButton.text,
+      controlGuideToggleVisible: this.controlGuideToggleButton.visible,
     };
   }
 
@@ -849,18 +877,22 @@ export class UIScene extends Phaser.Scene {
 
   private createControlGuideVisuals(): Phaser.GameObjects.Container {
     const zoneConfigs = [
-      { x: 164, y: 552, color: 0x38bdf8, label: 'MOVE', subLabel: 'LEFT SIDE' },
-      { x: GAME_WIDTH - 164, y: 552, color: 0xfacc15, label: 'AIM', subLabel: 'RIGHT SIDE' },
+      { x: GAME_WIDTH * 0.22, y: 552, color: 0x38bdf8, label: 'MOVE', subLabel: 'LEFT SIDE' },
+      { x: GAME_WIDTH * 0.78, y: 552, color: 0xfacc15, label: 'AIM', subLabel: 'RIGHT SIDE' },
     ];
     const children: Phaser.GameObjects.GameObject[] = [];
 
     for (const config of zoneConfigs) {
-      const zone = this.add.circle(config.x, config.y, 84, config.color, 0.08);
+      const zone = this.add.circle(config.x, config.y, 92, config.color, 0.08);
       zone.setStrokeStyle(3, config.color, 0.3);
       zone.setScrollFactor(0);
 
+      const knob = this.add.circle(config.x, config.y, 28, config.color, 0.24);
+      knob.setStrokeStyle(2, 0xf8fafc, 0.58);
+      knob.setScrollFactor(0);
+
       const label = this.add
-        .text(config.x, config.y - 10, config.label, {
+        .text(config.x, config.y - 124, config.label, {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '19px',
           color: '#f8fafc',
@@ -869,7 +901,7 @@ export class UIScene extends Phaser.Scene {
         .setScrollFactor(0);
 
       const subLabel = this.add
-        .text(config.x, config.y + 18, config.subLabel, {
+        .text(config.x, config.y - 101, config.subLabel, {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '11px',
           color: '#cbd5e1',
@@ -878,9 +910,10 @@ export class UIScene extends Phaser.Scene {
         .setScrollFactor(0);
 
       this.controlGuideZones.push(zone);
+      this.controlGuideKnobs.push(knob);
       this.controlGuideLabels.push(label);
       this.controlGuideSubLabels.push(subLabel);
-      children.push(zone, label, subLabel);
+      children.push(zone, knob, label, subLabel);
     }
 
     const container = this.add.container(0, 0, children);
@@ -949,25 +982,89 @@ export class UIScene extends Phaser.Scene {
 
     this.controlGuideVisualContainer.setVisible(guidesVisible);
     this.controlHintContainer.setVisible(hintVisible);
-    this.controlGuideToggleButton.setVisible(mobileControlUi && !modalOverlayActive);
+    this.controlGuideToggleButton.setVisible(false);
+    this.controlGuideToggleButton.disableInteractive();
     this.refreshControlGuideButton();
+    this.refreshControlJoystickPositions();
     this.applyControlGuidePresentation();
   }
 
   private applyControlGuidePresentation(): void {
     const presentation =
       this.controlGuideMode === 'visible'
-        ? { fillAlpha: 0.18, strokeAlpha: 0.72, labelAlpha: 0.92, subLabelAlpha: 0.78 }
-        : { fillAlpha: 0.08, strokeAlpha: 0.3, labelAlpha: 0.5, subLabelAlpha: 0.42 };
+        ? { fillAlpha: 0.16, strokeAlpha: 0.72, knobAlpha: 0.54, labelAlpha: 0.9, subLabelAlpha: 0.72 }
+        : { fillAlpha: 0.05, strokeAlpha: 0.26, knobAlpha: 0.26, labelAlpha: 0.44, subLabelAlpha: 0.34 };
 
     for (let index = 0; index < this.controlGuideZones.length; index += 1) {
       const zone = this.controlGuideZones[index];
       const color = index === 0 ? 0x38bdf8 : 0xfacc15;
       zone.setFillStyle(color, presentation.fillAlpha);
       zone.setStrokeStyle(this.controlGuideMode === 'visible' ? 3 : 2, color, presentation.strokeAlpha);
+      this.controlGuideKnobs[index].setFillStyle(color, presentation.knobAlpha);
+      this.controlGuideKnobs[index].setStrokeStyle(this.controlGuideMode === 'visible' ? 2 : 1, 0xf8fafc, presentation.strokeAlpha);
       this.controlGuideLabels[index].setAlpha(presentation.labelAlpha);
       this.controlGuideSubLabels[index].setAlpha(presentation.subLabelAlpha);
     }
+  }
+
+  private refreshControlJoystickPositions(): void {
+    const joystickState = this.readControlJoystickState();
+    this.positionControlGuideKnob(0, joystickState.movement);
+    this.positionControlGuideKnob(1, joystickState.aim);
+  }
+
+  private positionControlGuideKnob(index: number, channel: ControlJoystickChannel): void {
+    const zone = this.controlGuideZones[index];
+    const knob = this.controlGuideKnobs[index];
+    if (!zone || !knob) {
+      return;
+    }
+
+    if (!channel.active) {
+      knob.setPosition(zone.x, zone.y);
+      return;
+    }
+
+    const radius = 62;
+    const distance = Math.hypot(channel.vector.x, channel.vector.y);
+    const scale = distance > radius && distance > 0 ? radius / distance : 1;
+    knob.setPosition(zone.x + channel.vector.x * scale, zone.y + channel.vector.y * scale);
+  }
+
+  private readControlJoystickState(): ControlJoystickState {
+    const fallbackChannel: ControlJoystickChannel = {
+      active: false,
+      start: { x: 0, y: 0 },
+      current: { x: 0, y: 0 },
+      vector: { x: 0, y: 0 },
+    };
+    const fallback: ControlJoystickState = { movement: fallbackChannel, aim: fallbackChannel };
+    const value = this.registry.get('run.controlJoysticks') as Partial<ControlJoystickState> | undefined;
+    return {
+      movement: this.sanitizeControlJoystickChannel(value?.movement, fallbackChannel),
+      aim: this.sanitizeControlJoystickChannel(value?.aim, fallbackChannel),
+    };
+  }
+
+  private sanitizeControlJoystickChannel(
+    value: Partial<ControlJoystickChannel> | undefined,
+    fallback: ControlJoystickChannel,
+  ): ControlJoystickChannel {
+    return {
+      active: Boolean(value?.active),
+      start: this.sanitizePoint(value?.start, fallback.start),
+      current: this.sanitizePoint(value?.current, fallback.current),
+      vector: this.sanitizePoint(value?.vector, fallback.vector),
+    };
+  }
+
+  private sanitizePoint(value: { x?: number; y?: number } | undefined, fallback: { x: number; y: number }): { x: number; y: number } {
+    const x = Number(value?.x ?? fallback.x);
+    const y = Number(value?.y ?? fallback.y);
+    return {
+      x: Number.isFinite(x) ? x : fallback.x,
+      y: Number.isFinite(y) ? y : fallback.y,
+    };
   }
 
   private cycleControlGuideMode(): void {
