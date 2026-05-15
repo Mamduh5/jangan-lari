@@ -58,7 +58,7 @@ import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 import { XPGem } from '../entities/XPGem';
 import { createMovementKeys } from '../input/createMovementKeys';
-import { MovementInputController, type MovementInputSnapshot } from '../input/MovementInputController';
+import { MovementInputController, type ActivePointerLike, type MovementInputSnapshot } from '../input/MovementInputController';
 import type { GameplayBotRunSnapshot } from '../debug/gameplaySnapshot';
 import { TANK_STAT_IDS, getTankStatDefinition, type TankStatId } from '../data/tankStats';
 import type { ControlGuideMode, GameSaveData } from '../save/saveData';
@@ -596,6 +596,9 @@ export class RunScene extends Phaser.Scene {
         aimSource: this.lastMovementInput.aimSource,
         movementSource: this.lastMovementInput.source,
         hasExplicitAim: this.lastMovementInput.hasExplicitAim,
+        suppressed: this.movementInput.isSuppressed(),
+        movementPointerActive: this.movementInput.getPointerGuideState().movement.active,
+        aimPointerActive: this.movementInput.getPointerGuideState().aim.active,
       },
       controlGuideMode: String(this.registry.get('run.controlGuideMode') ?? this.saveData.controlGuideMode) as ControlGuideMode,
       controlHintVisible: Boolean(this.registry.get('run.controlHintVisible')),
@@ -656,7 +659,7 @@ export class RunScene extends Phaser.Scene {
     };
   }
 
-  selectLevelUp(index: number): void {
+  selectLevelUp(index: number, overlayPointer?: ActivePointerLike): void {
     if (!this.isLevelingUp || this.isEnded || this.isResolvingLevelUpChoice) {
       return;
     }
@@ -665,6 +668,10 @@ export class RunScene extends Phaser.Scene {
     const selectedUpgrade = choices?.[index];
     if (!selectedUpgrade) {
       return;
+    }
+
+    if (overlayPointer) {
+      this.movementInput.ignoreOverlaySelectionPointer(overlayPointer);
     }
 
     this.isResolvingLevelUpChoice = true;
@@ -681,15 +688,18 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    this.finishLevelUpSelection();
+    this.finishLevelUpSelection(overlayPointer);
   }
 
-  public allocateTankStat(statId: TankStatId): boolean {
+  public allocateTankStat(statId: TankStatId, overlayPointer?: ActivePointerLike): boolean {
     if (this.isEnded || this.isTransitioningToMenu || !this.tankStats.canSpend(statId)) {
       return false;
     }
 
-    this.movementInput?.resetPointer();
+    if (overlayPointer) {
+      this.movementInput?.clearOverlaySelectionPointer(overlayPointer);
+    }
+
     const result = this.tankStats.spendPoint(statId);
     if (!result.spent) {
       return false;
@@ -711,7 +721,7 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
   }
 
-  public selectTankClass(classId: TankClassId): boolean {
+  public selectTankClass(classId: TankClassId, overlayPointer?: ActivePointerLike): boolean {
     if (
       !this.isChoosingTankClass ||
       this.isEnded ||
@@ -726,6 +736,10 @@ export class RunScene extends Phaser.Scene {
       return false;
     }
 
+    if (overlayPointer) {
+      this.movementInput.ignoreOverlaySelectionPointer(overlayPointer);
+    }
+
     this.applyTankClass(getTankClassDefinition(classId));
     this.isChoosingTankClass = false;
     this.isTankClassChoiceForced = false;
@@ -735,7 +749,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.instructions', 'Class selected. Continue shaping your tank.');
 
     if (!this.isSystemPaused) {
-      this.resumeGameplaySystems('Class selected. Continue shaping your tank.');
+      this.resumeGameplaySystems('Class selected. Continue shaping your tank.', overlayPointer);
     }
 
     this.publishHudState();
@@ -2227,7 +2241,7 @@ export class RunScene extends Phaser.Scene {
     this.selectLevelUp(randomIndex);
   }
 
-  private finishLevelUpSelection(): void {
+  private finishLevelUpSelection(overlayPointer?: ActivePointerLike): void {
     this.isLevelingUp = false;
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = 0;
@@ -2240,7 +2254,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.instructions', '');
 
     if (!this.isSystemPaused) {
-      this.resumeGameplaySystems('');
+      this.resumeGameplaySystems('', overlayPointer);
     }
 
     this.setAlert('objective', 'Back in', 900);
@@ -2519,7 +2533,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   private pauseGameplaySystems(instructionText?: string): void {
-    this.movementInput?.resetPointer();
+    this.movementInput?.suspendForOverlay();
 
     if (this.player?.active) {
       this.player.move(new Phaser.Math.Vector2(0, 0));
@@ -2538,11 +2552,12 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  private resumeGameplaySystems(instructionText?: string): void {
+  private resumeGameplaySystems(instructionText?: string, ignoredPointer?: ActivePointerLike): void {
     if (this.isEnded || this.isSystemPaused || this.isLevelingUp || this.isChoosingTankClass || this.isTransitioningToMenu) {
       return;
     }
 
+    this.movementInput?.resumeAfterOverlay({ ignoredPointer });
     this.physics.resume();
     if (this.spawnTimer) {
       this.spawnTimer.paused = false;
@@ -2601,6 +2616,7 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.controlGuideMode', this.saveData.controlGuideMode);
     this.registry.set('run.controlHintVisible', this.controlHintVisible);
     this.registry.set('run.controlJoysticks', this.movementInput.getPointerGuideState());
+    this.registry.set('run.inputSuppressed', this.movementInput.isSuppressed());
     this.maybeShowStatsMaxedToast();
   }
 

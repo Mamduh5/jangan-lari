@@ -3,6 +3,7 @@ import type { UpgradeDefinition } from '../data/upgrades';
 import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
+import type { ActivePointerLike } from '../input/MovementInputController';
 import {
   CONTROL_GUIDE_MODES,
   loadGameSave,
@@ -655,7 +656,7 @@ export class UIScene extends Phaser.Scene {
       const card = this.add.rectangle(x, 372, 286, 166, 0x111827, 0.99).setOrigin(0.5).setScrollFactor(0);
       card.setStrokeStyle(2, 0x334155, 1);
       card.setInteractive({ useHandCursor: true });
-      card.on('pointerdown', () => this.selectUpgrade(index));
+      card.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.selectUpgrade(index, pointer));
       card.on('pointerover', () => this.applyLevelUpCardHover(index, true));
       card.on('pointerout', () => this.applyLevelUpCardHover(index, false));
 
@@ -736,7 +737,7 @@ export class UIScene extends Phaser.Scene {
       const card = this.add.rectangle(x, 378, 310, 170, 0x101827, 0.99).setScrollFactor(0);
       card.setStrokeStyle(2, 0x38bdf8, 0.9);
       card.setInteractive({ useHandCursor: true });
-      card.on('pointerdown', () => this.selectTankClass(index));
+      card.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.selectTankClass(index, pointer));
       card.on('pointerover', () => this.applyClassChoiceCardHover(index, true));
       card.on('pointerout', () => this.applyClassChoiceCardHover(index, false));
 
@@ -820,7 +821,7 @@ export class UIScene extends Phaser.Scene {
       const button = this.add.rectangle(x, viewHeight - 96, 162, 62, 0x132033, 0.98).setScrollFactor(0);
       button.setStrokeStyle(1, 0x334155, 0.95);
       button.setInteractive({ useHandCursor: true });
-      button.on('pointerdown', () => this.allocateTankStat(statId));
+      button.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.allocateTankStat(statId, pointer));
       button.on('pointerover', () => this.applyStatButtonHover(statId, true));
       button.on('pointerout', () => this.applyStatButtonHover(statId, false));
 
@@ -1273,25 +1274,25 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
-  private selectUpgrade(index: number): void {
+  private selectUpgrade(index: number, pointer?: ActivePointerLike): void {
     if (!this.registry.get('run.levelUpActive') || this.registry.get('run.endActive') || !this.scene.isActive('RunScene')) {
       return;
     }
 
     const runScene = this.scene.get('RunScene') as RunScene;
-    runScene.selectLevelUp(index);
+    runScene.selectLevelUp(index, pointer);
   }
 
-  private allocateTankStat(statId: TankStatId): void {
+  private allocateTankStat(statId: TankStatId, pointer?: ActivePointerLike): void {
     if (this.registry.get('run.endActive') || !this.scene.isActive('RunScene')) {
       return;
     }
 
     const runScene = this.scene.get('RunScene') as RunScene;
-    runScene.allocateTankStat(statId);
+    runScene.allocateTankStat(statId, pointer);
   }
 
-  private selectTankClass(index: number): void {
+  private selectTankClass(index: number, pointer?: ActivePointerLike): void {
     if (!this.registry.get('run.classChoiceActive') || this.registry.get('run.endActive') || !this.scene.isActive('RunScene')) {
       return;
     }
@@ -1303,7 +1304,7 @@ export class UIScene extends Phaser.Scene {
     }
 
     const runScene = this.scene.get('RunScene') as RunScene;
-    runScene.selectTankClass(choice.id);
+    runScene.selectTankClass(choice.id, pointer);
   }
 
   private handleConfirmInput(): void {

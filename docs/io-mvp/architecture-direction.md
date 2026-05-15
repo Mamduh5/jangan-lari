@@ -29,6 +29,7 @@ Sprint 14 freezes `io/mvp-foundation` as a reusable mobile `.io` foundation bran
 - Treat the Android wrapper as a packaging shell around the web runtime. Native changes should stay limited to wrapper concerns such as orientation, system UI, signing, and device deployment until the web game contract changes deliberately.
 - Keep APK/mobile run UI touch-first: browser keyboard hints can remain for desktop, but mobile-facing overlays should use tap/menu/resume copy and avoid blocking play when no action is available.
 - Treat exhausted progression as non-blocking. If stat points cannot be spent because stats are maxed, or if the legacy bonus pool is empty, gameplay should continue with a small status toast at most.
+- Treat blocking progression overlays as an explicit input lifecycle: gameplay movement/aim may pause while choosing, then mobile controls should reconcile currently-held Phaser pointers before gameplay resumes.
 - Preserve fast restart and scene cleanup as first-class architecture concerns.
 - Keep `io/mvp-foundation` reusable: changes after the freeze should favor docs, verification, and reusable seams unless a later task explicitly reopens foundation work.
 

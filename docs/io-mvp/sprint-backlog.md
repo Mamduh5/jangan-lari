@@ -362,3 +362,24 @@ Acceptance checks:
 - In-run guide toggle is no longer permanently visible in the HUD.
 - Hidden mode preserves invisible controls, while subtle/visible modes show joystick guides.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/upgrade-exhaustion/mobile-alpha-ui e2e, and diff check.
+
+## Sprint A2: Mobile Overlay Input Resume
+
+Goal: Fix mobile controls after blocking progression overlays on `io/mobile-alpha`.
+
+Status note:
+- Fixed mobile overlay input resume after level-up bonus picks and class choices.
+- Overlay choices intentionally pause gameplay, but active left/right touches are reconciled when the overlay closes so movement and aim can resume cleanly.
+- Stat allocation taps no longer clear unrelated held controls or become unintended gameplay input.
+- Added focused controller coverage for held-touch resume and overlay selection pointer filtering.
+- Added focused `test:e2e:overlay-input` coverage for fresh movement/aim immediately after level-up, stat, and class UI interactions.
+- Aspect-ratio polish remains skipped for now because the 1600x720 APK screen usage is acceptable enough for this branch.
+- Future manual APK retest is still required for true held-thumb behavior on device hardware.
+
+Acceptance checks:
+- Overlay selection does not leave controls dead.
+- Held left/right touches are reconciled from Phaser pointers when available.
+- Fresh touch after overlay close works immediately.
+- Joystick visuals reset or resume from the reconciled pointer state.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/upgrade-exhaustion/mobile-alpha-ui/overlay-input e2e, and diff check.

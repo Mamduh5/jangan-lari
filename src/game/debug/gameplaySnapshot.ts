@@ -117,6 +117,9 @@ export type GameplayBotRunSnapshot = {
     aimSource: 'pointer' | 'movement' | 'idle';
     movementSource: 'keyboard' | 'pointer' | 'idle';
     hasExplicitAim: boolean;
+    suppressed: boolean;
+    movementPointerActive: boolean;
+    aimPointerActive: boolean;
   };
   controlGuideMode: ControlGuideMode;
   controlHintVisible: boolean;
