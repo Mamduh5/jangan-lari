@@ -23,7 +23,7 @@ Use this loop for future `.io` MVP implementation tasks in this repo.
 4. Test
    - Run the smallest meaningful test set first.
    - Prefer focused unit tests for pure logic.
-   - Use Playwright for browser flow, restart, mobile layout, and regression behavior.
+   - Use focused Playwright specs for browser flow, restart, mobile layout, and regression behavior.
    - Run `npm run build` before closing implementation work when TypeScript or runtime code changed.
 
 5. Summarize
@@ -53,3 +53,16 @@ Each future task should include acceptance criteria in this shape:
 - Phaser scene, input, HUD, restart, and mobile behavior should include Playwright coverage where practical.
 - Performance-sensitive work should include a basic browser smoke check and a note about frame-rate or object-count risk.
 - Existing tests should not be modified just to make a failing behavior pass unless the product contract truly changed.
+
+## Testing Ladder
+
+For a normal feature sprint, use this ladder:
+
+1. `npm test`
+2. `npm run build`
+3. `git diff --check`
+4. One focused e2e command for the feature under change, when browser coverage is needed.
+
+Do not run the full Playwright suite during normal feature work. `npm run test:e2e` is reserved for milestone validation, pre-merge validation, or explicit test-maintenance tasks.
+
+If a full e2e run is explicitly requested and fails, stop after the first failure. Report the failing spec, the likely product or test-maintenance root cause, and the smallest recommended follow-up. Do not loop on unrelated legacy specs, increase timeouts broadly, or rewrite deterministic loadout tests as part of a feature sprint.

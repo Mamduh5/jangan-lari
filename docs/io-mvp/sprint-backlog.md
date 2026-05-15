@@ -46,6 +46,8 @@ Status note:
 - Added a first-pass neutral shape foundation with destructible square, triangle, and pentagon targets.
 - Shapes spawn at run start, refill under a cap, can be targeted by player projectiles, and drop XP gems through the existing XP/level-up flow.
 - Debug snapshots expose neutral shape count and nearby shape state for e2e coverage.
+- Controlled checkpoint validation is limited to unit tests, build, whitespace diff check, and the focused neutral-shapes e2e.
+- Full-suite Playwright recalibration is deferred because neutral shape farming can change long-run survival, XP pacing, and deterministic loadout timing.
 - Deferred stat allocation, tank class branching, real PvP players, leaderboard pressure, multiplayer, and backend work.
 
 Deliverables:
@@ -58,6 +60,9 @@ Acceptance checks:
 - XP gain and level progression work after restart.
 - Object counts remain reasonable for mobile browser performance.
 - Focused tests cover XP math or shape lifecycle where practical.
+
+Known follow-up:
+- Revisit legacy full-suite gameplay-bot expectations during a milestone or test-maintenance pass. Do not solve those by broad timeout increases during Sprint 2 feature work.
 
 ## Sprint 3: Stat Allocation
 
