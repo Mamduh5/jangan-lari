@@ -216,3 +216,28 @@ Acceptance checks:
 - In-run gold shows run-earned gold, not total account/session gold.
 - Stat/class progression remains clear.
 - Existing focused smoke and HUD checks pass.
+
+## Sprint 10: Dual-Stick Manual Aim And Auto-Fire-Forward
+
+Goal: Replace player weapon auto-aim with mobile-friendly manual aim while keeping weapons auto-firing.
+
+Status note:
+- Added dual-zone pointer input: left side controls movement and right side controls aim.
+- Player facing now follows explicit aim, while movement can initialize facing before any aim input exists.
+- Player weapons auto-fire toward the current aim/facing direction instead of rotating shots toward the nearest enemy or shape.
+- Releasing aim preserves the last aim direction for forward auto-fire.
+- Visible joystick art and control settings remain deferred to Sprint 11.
+- APK/PWA wrapper work remains deferred.
+
+Deliverables:
+- Independent movement and aim input vectors.
+- Auto-fire using player-facing direction.
+- Debug snapshot fields for aim state and latest projectile direction.
+- Focused dual-stick/mobile aim e2e coverage.
+
+Acceptance checks:
+- Left-side drag moves the player.
+- Right-side drag aims the turret/barrel.
+- Weapon fire follows aim/facing direction.
+- Keyboard movement still works without overriding explicit aim.
+- Existing mobile layout and focused smoke checks pass.

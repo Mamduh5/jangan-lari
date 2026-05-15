@@ -14,6 +14,7 @@
     "test:e2e:menu": "playwright test tests/e2e/menu-flow.spec.ts",
     "test:e2e:special": "playwright test tests/e2e/special-attacks.spec.ts",
     "test:e2e:hud": "playwright test tests/e2e/mobile-hud.spec.ts",
+    "test:e2e:aim": "playwright test tests/e2e/mobile-aim.spec.ts",
     "test:e2e:neutral-shapes": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"neutral shapes\"",
     "test:e2e:stat-allocation": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"stat allocation\"",
     "test:e2e:class-branching": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"class branching\"",

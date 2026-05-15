@@ -107,7 +107,7 @@ test.describe('mobile HUD readability', () => {
     );
 
     const beforeMove = (await getRunSnapshot(page)).player;
-    await dragCanvas(page, 640, 360, 720, 360, 320);
+    await dragCanvas(page, 220, 360, 320, 360, 320);
     await page.waitForFunction(
       (start) => {
         const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;

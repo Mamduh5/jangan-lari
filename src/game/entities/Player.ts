@@ -255,7 +255,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
     };
   }
 
-  move(direction: Phaser.Math.Vector2): void {
+  move(direction: Phaser.Math.Vector2, updateFacing = true): void {
     if (!this.isAlive()) {
       this.body.setVelocity(0, 0);
       return;
@@ -268,7 +268,9 @@ export class Player extends Phaser.GameObjects.Rectangle {
     }
 
     direction.normalize();
-    this.setFacingDirection(direction);
+    if (updateFacing) {
+      this.setFacingDirection(direction);
+    }
     this.body.setVelocity(direction.x * this.speed, direction.y * this.speed);
   }
 

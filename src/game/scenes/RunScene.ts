@@ -57,7 +57,7 @@ import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 import { XPGem } from '../entities/XPGem';
 import { createMovementKeys } from '../input/createMovementKeys';
-import { MovementInputController } from '../input/MovementInputController';
+import { MovementInputController, type MovementInputSnapshot } from '../input/MovementInputController';
 import type { GameplayBotRunSnapshot } from '../debug/gameplaySnapshot';
 import { getTankStatDefinition, type TankStatId } from '../data/tankStats';
 import type { GameSaveData } from '../save/saveData';
@@ -119,6 +119,15 @@ export class RunScene extends Phaser.Scene {
   private spawnDirector!: SpawnDirector;
   private saveData!: GameSaveData;
   private movementInput!: MovementInputController;
+  private lastMovementInput: MovementInputSnapshot = {
+    movement: { x: 0, y: 0 },
+    facing: { x: 1, y: 0 },
+    source: 'idle',
+    aim: { x: 1, y: 0 },
+    aimActive: false,
+    aimSource: 'idle',
+    hasExplicitAim: false,
+  };
   private tankStats!: TankStatRuntime;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private neutralShapeSpawnTimer?: Phaser.Time.TimerEvent;
@@ -301,6 +310,15 @@ export class RunScene extends Phaser.Scene {
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
     this.spawnDirector = new SpawnDirector();
     this.movementInput = new MovementInputController(this, createMovementKeys(this));
+    this.lastMovementInput = {
+      movement: { x: 0, y: 0 },
+      facing: { x: 1, y: 0 },
+      source: 'idle',
+      aim: { x: 1, y: 0 },
+      aimActive: false,
+      aimSource: 'idle',
+      hasExplicitAim: false,
+    };
     this.tankStats = new TankStatRuntime();
     this.combatResponse = new CombatResponseController({
       onHitStopStart: () => this.pauseCombatResponseSystems(),
@@ -426,8 +444,9 @@ export class RunScene extends Phaser.Scene {
     }
 
     const movementInput = this.movementInput.getMovementInput();
+    this.lastMovementInput = movementInput;
     this.player.setFacingDirection(new Phaser.Math.Vector2(movementInput.facing.x, movementInput.facing.y));
-    this.player.move(new Phaser.Math.Vector2(movementInput.movement.x, movementInput.movement.y));
+    this.player.move(new Phaser.Math.Vector2(movementInput.movement.x, movementInput.movement.y), false);
     this.updateNeutralShapes();
     this.updateEnemies();
     this.updateLineStrikeAttacks(delta);
@@ -533,6 +552,7 @@ export class RunScene extends Phaser.Scene {
             range: primaryWeaponStats.range,
             burstCount: primaryWeaponStats.burstCount ?? 1,
             spreadDegrees: primaryWeaponStats.spreadDegrees ?? 0,
+            latestProjectileDirection: this.weapons[0]?.getLastFireDirection() ?? { x: 1, y: 0 },
           }
         : null,
       goldEarned: this.goldEarned,
@@ -554,6 +574,14 @@ export class RunScene extends Phaser.Scene {
         facingY: this.player.getFacingDirection().y,
         moveSpeed: this.player.getMoveSpeed(),
         pickupRange: this.player.getPickupRange(),
+      },
+      input: {
+        movement: { ...this.lastMovementInput.movement },
+        aim: { ...this.lastMovementInput.aim },
+        aimActive: this.lastMovementInput.aimActive,
+        aimSource: this.lastMovementInput.aimSource,
+        movementSource: this.lastMovementInput.source,
+        hasExplicitAim: this.lastMovementInput.hasExplicitAim,
       },
       tankStats: {
         availablePoints: this.tankStats.getAvailablePoints(),
@@ -739,7 +767,9 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    const weapon = new AutoFireWeapon(this, this.player, this.enemies, this.neutralShapes, definition);
+    const weapon = new AutoFireWeapon(this, this.player, this.enemies, this.neutralShapes, definition, () =>
+      this.player.getFacingDirection(),
+    );
     this.applyWeaponModifiersTo(weapon);
     if (this.currentTankClassId !== BASIC_TANK_CLASS_ID) {
       weapon.applyStatPatch(this.currentTankClass.weaponPatch);

@@ -7,11 +7,16 @@ export type MovementVector = {
 };
 
 export type MovementSource = 'keyboard' | 'pointer' | 'idle';
+export type AimSource = 'pointer' | 'movement' | 'idle';
 
 export type MovementInputSnapshot = {
   movement: MovementVector;
   facing: MovementVector;
   source: MovementSource;
+  aim: MovementVector;
+  aimActive: boolean;
+  aimSource: AimSource;
+  hasExplicitAim: boolean;
 };
 
 export type MovementChannelInput = {
@@ -22,12 +27,15 @@ export type MovementChannelInput = {
 export type ResolveMovementInputOptions = {
   keyboard: MovementChannelInput;
   pointer: MovementChannelInput;
+  aimPointer?: MovementChannelInput;
   previousFacing: MovementVector;
+  hasExplicitAim?: boolean;
   deadzone?: number;
 };
 
 const DEFAULT_FACING: MovementVector = { x: 1, y: 0 };
 const POINTER_DEADZONE_PX = 12;
+export type PointerControlZone = 'movement' | 'aim';
 
 export function normalizeMovementVector(vector: MovementVector): MovementVector {
   const length = Math.hypot(vector.x, vector.y);
@@ -42,70 +50,118 @@ export function normalizeMovementVector(vector: MovementVector): MovementVector 
   };
 }
 
+export function getPointerControlZone(pointerX: number, viewportWidth: number): PointerControlZone {
+  return pointerX < viewportWidth / 2 ? 'movement' : 'aim';
+}
+
 export function resolveMovementInput({
   keyboard,
   pointer,
+  aimPointer = { vector: { x: 0, y: 0 }, active: false },
   previousFacing,
+  hasExplicitAim = false,
   deadzone = POINTER_DEADZONE_PX,
 }: ResolveMovementInputOptions): MovementInputSnapshot {
   const stableFacing = normalizeMovementVector(previousFacing);
   const fallbackFacing = stableFacing.x === 0 && stableFacing.y === 0 ? DEFAULT_FACING : stableFacing;
+  let movement: MovementVector = { x: 0, y: 0 };
+  let source: MovementSource = 'idle';
 
   if (keyboard.active) {
-    const movement = normalizeMovementVector(keyboard.vector);
+    movement = normalizeMovementVector(keyboard.vector);
+    source = 'keyboard';
+  } else if (pointer.active && Math.hypot(pointer.vector.x, pointer.vector.y) >= deadzone) {
+    movement = normalizeMovementVector(pointer.vector);
+    source = 'pointer';
+  }
+
+  if (aimPointer.active && Math.hypot(aimPointer.vector.x, aimPointer.vector.y) >= deadzone) {
+    const aim = normalizeMovementVector(aimPointer.vector);
     return {
       movement,
-      facing: movement.x === 0 && movement.y === 0 ? fallbackFacing : movement,
-      source: 'keyboard',
+      facing: aim,
+      source,
+      aim,
+      aimActive: true,
+      aimSource: 'pointer',
+      hasExplicitAim: true,
     };
   }
 
-  if (pointer.active && Math.hypot(pointer.vector.x, pointer.vector.y) >= deadzone) {
-    const movement = normalizeMovementVector(pointer.vector);
+  if (!hasExplicitAim && (movement.x !== 0 || movement.y !== 0)) {
     return {
       movement,
       facing: movement,
-      source: 'pointer',
+      source,
+      aim: movement,
+      aimActive: false,
+      aimSource: 'movement',
+      hasExplicitAim: false,
     };
   }
 
   return {
-    movement: { x: 0, y: 0 },
+    movement,
     facing: fallbackFacing,
-    source: 'idle',
+    source,
+    aim: fallbackFacing,
+    aimActive: false,
+    aimSource: 'idle',
+    hasExplicitAim,
   };
 }
 
 export class MovementInputController {
-  private activePointerId: number | null = null;
-  private pointerStart: MovementVector = { x: 0, y: 0 };
-  private pointerCurrent: MovementVector = { x: 0, y: 0 };
+  private movementPointerId: number | null = null;
+  private movementPointerStart: MovementVector = { x: 0, y: 0 };
+  private movementPointerCurrent: MovementVector = { x: 0, y: 0 };
+  private aimPointerId: number | null = null;
+  private aimPointerStart: MovementVector = { x: 0, y: 0 };
+  private aimPointerCurrent: MovementVector = { x: 0, y: 0 };
   private lastFacing: MovementVector = DEFAULT_FACING;
+  private hasExplicitAim = false;
 
   private readonly handlePointerDown = (pointer: Phaser.Input.Pointer): void => {
-    if (this.activePointerId !== null) {
+    const zone = getPointerControlZone(pointer.x, this.scene.scale.width);
+
+    if (zone === 'movement') {
+      if (this.movementPointerId !== null) {
+        return;
+      }
+
+      this.movementPointerId = pointer.id;
+      this.movementPointerStart = { x: pointer.x, y: pointer.y };
+      this.movementPointerCurrent = { x: pointer.x, y: pointer.y };
       return;
     }
 
-    this.activePointerId = pointer.id;
-    this.pointerStart = { x: pointer.x, y: pointer.y };
-    this.pointerCurrent = { x: pointer.x, y: pointer.y };
+    if (this.aimPointerId !== null) {
+      return;
+    }
+
+    this.aimPointerId = pointer.id;
+    this.aimPointerStart = { x: pointer.x, y: pointer.y };
+    this.aimPointerCurrent = { x: pointer.x, y: pointer.y };
   };
 
   private readonly handlePointerMove = (pointer: Phaser.Input.Pointer): void => {
-    if (pointer.id !== this.activePointerId) {
-      return;
+    if (pointer.id === this.movementPointerId) {
+      this.movementPointerCurrent = { x: pointer.x, y: pointer.y };
     }
 
-    this.pointerCurrent = { x: pointer.x, y: pointer.y };
+    if (pointer.id === this.aimPointerId) {
+      this.aimPointerCurrent = { x: pointer.x, y: pointer.y };
+    }
   };
 
   private readonly handlePointerUp = (pointer: Phaser.Input.Pointer): void => {
-    if (pointer.id !== this.activePointerId) {
-      return;
+    if (pointer.id === this.movementPointerId) {
+      this.resetMovementPointer();
     }
 
-    this.resetPointer();
+    if (pointer.id === this.aimPointerId) {
+      this.resetAimPointer();
+    }
   };
 
   constructor(
@@ -122,18 +178,20 @@ export class MovementInputController {
   getMovementInput(): MovementInputSnapshot {
     const snapshot = resolveMovementInput({
       keyboard: this.readKeyboardInput(),
-      pointer: this.readPointerInput(),
+      pointer: this.readMovementPointerInput(),
+      aimPointer: this.readAimPointerInput(),
       previousFacing: this.lastFacing,
+      hasExplicitAim: this.hasExplicitAim,
     });
 
     this.lastFacing = snapshot.facing;
+    this.hasExplicitAim = snapshot.hasExplicitAim;
     return snapshot;
   }
 
   resetPointer(): void {
-    this.activePointerId = null;
-    this.pointerStart = { x: 0, y: 0 };
-    this.pointerCurrent = { x: 0, y: 0 };
+    this.resetMovementPointer();
+    this.resetAimPointer();
   }
 
   destroy(): void {
@@ -160,13 +218,35 @@ export class MovementInputController {
     };
   }
 
-  private readPointerInput(): MovementChannelInput {
+  private readMovementPointerInput(): MovementChannelInput {
     return {
       vector: {
-        x: this.pointerCurrent.x - this.pointerStart.x,
-        y: this.pointerCurrent.y - this.pointerStart.y,
+        x: this.movementPointerCurrent.x - this.movementPointerStart.x,
+        y: this.movementPointerCurrent.y - this.movementPointerStart.y,
       },
-      active: this.activePointerId !== null,
+      active: this.movementPointerId !== null,
     };
+  }
+
+  private readAimPointerInput(): MovementChannelInput {
+    return {
+      vector: {
+        x: this.aimPointerCurrent.x - this.aimPointerStart.x,
+        y: this.aimPointerCurrent.y - this.aimPointerStart.y,
+      },
+      active: this.aimPointerId !== null,
+    };
+  }
+
+  private resetMovementPointer(): void {
+    this.movementPointerId = null;
+    this.movementPointerStart = { x: 0, y: 0 };
+    this.movementPointerCurrent = { x: 0, y: 0 };
+  }
+
+  private resetAimPointer(): void {
+    this.aimPointerId = null;
+    this.aimPointerStart = { x: 0, y: 0 };
+    this.aimPointerCurrent = { x: 0, y: 0 };
   }
 }

@@ -28,6 +28,7 @@ This document records the intended direction for the `.io` MVP without importing
 - Replace hero selection with tank identity and class progression over time.
 - Replace enemy-centered survival waves with neutral shape farming plus simple arena threats.
 - Replace auto-targeting survivor weapons with tank projectile firing and stat-influenced bullet behavior.
+- Use player aim/facing as the primary player weapon direction; enemy auto-targeting should not steer player shots in the `.io` branch.
 - Simplify level-up card choices into stat allocation suitable for mobile.
 - Simplify HUD density: prioritize health, level, XP, score, available stat points, class state, and leaderboard pressure.
 - Treat gold, quests, permanent upgrades, mid-run events, elites, minibosses, and bosses as legacy systems unless a later sprint reintroduces them deliberately.

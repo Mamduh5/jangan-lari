@@ -11,10 +11,13 @@ type WeaponTarget = {
   y: number;
 };
 
+type FireDirectionProvider = () => { x: number; y: number };
+
 export class AutoFireWeapon {
   private readonly projectileGroup: Phaser.Physics.Arcade.Group;
   private readonly stats: WeaponStats;
   private nextFireTime = 0;
+  private lastFireDirection = { x: 1, y: 0 };
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -22,6 +25,7 @@ export class AutoFireWeapon {
     private readonly enemies: Phaser.Physics.Arcade.Group,
     private readonly neutralShapes: Phaser.Physics.Arcade.Group | null,
     weapon: WeaponDefinition,
+    private readonly getFireDirection: FireDirectionProvider = () => owner.getFacingDirection(),
   ) {
     this.projectileGroup = this.scene.physics.add.group({ runChildUpdate: false });
     this.stats = { ...weapon };
@@ -37,6 +41,10 @@ export class AutoFireWeapon {
 
   getStats(): WeaponStats {
     return { ...this.stats };
+  }
+
+  getLastFireDirection(): { x: number; y: number } {
+    return { ...this.lastFireDirection };
   }
 
   addDamage(amount: number): void {
@@ -113,15 +121,16 @@ export class AutoFireWeapon {
       return;
     }
 
-    const target = this.findNearestTarget();
-    if (!target) {
+    const fireDirection = this.resolveFireDirection();
+    if (!fireDirection) {
       return;
     }
 
     if (this.stats.firePattern === 'radial') {
+      this.lastFireDirection = { x: fireDirection.x, y: fireDirection.y };
       this.fireRadialBurst();
     } else {
-      this.fireAt(target);
+      this.fireInDirection(fireDirection);
     }
 
     this.createMuzzleFlash();
@@ -225,6 +234,21 @@ export class AutoFireWeapon {
     }
   }
 
+  private fireInDirection(direction: Phaser.Math.Vector2): void {
+    const burstCount = this.stats.burstCount ?? 1;
+    const totalSpread = this.stats.spreadDegrees ?? 0;
+    const baseDirection = direction.clone().normalize();
+    this.lastFireDirection = { x: baseDirection.x, y: baseDirection.y };
+
+    for (let index = 0; index < burstCount; index += 1) {
+      const spreadOffset =
+        burstCount === 1 ? 0 : Phaser.Math.Linear(-totalSpread / 2, totalSpread / 2, index / (burstCount - 1));
+      const shotDirection = baseDirection.clone().rotate(Phaser.Math.DegToRad(spreadOffset));
+      const projectile = this.getInactiveProjectile() ?? this.createProjectile();
+      projectile.fire(this.owner.x, this.owner.y, shotDirection, this.stats);
+    }
+  }
+
   private fireRadialBurst(): void {
     const radialCount = Math.max(3, this.stats.radialCount ?? this.stats.burstCount ?? 6);
 
@@ -252,6 +276,16 @@ export class AutoFireWeapon {
     const projectile = new Projectile(this.scene);
     this.projectileGroup.add(projectile);
     return projectile;
+  }
+
+  private resolveFireDirection(): Phaser.Math.Vector2 | null {
+    const direction = this.getFireDirection();
+    const vector = new Phaser.Math.Vector2(direction.x, direction.y);
+    if (vector.lengthSq() === 0) {
+      return null;
+    }
+
+    return vector.normalize();
   }
 
   private createMuzzleFlash(): void {

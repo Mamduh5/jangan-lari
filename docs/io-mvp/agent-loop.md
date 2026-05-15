@@ -68,6 +68,7 @@ Use the focused e2e scripts in `package.json` for normal sprint browser checks:
 - `npm run test:e2e:menu`
 - `npm run test:e2e:special`
 - `npm run test:e2e:hud`
+- `npm run test:e2e:aim`
 - `npm run test:e2e:neutral-shapes`
 - `npm run test:e2e:stat-allocation`
 - `npm run test:e2e:class-branching`

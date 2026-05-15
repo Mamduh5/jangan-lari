@@ -27,6 +27,7 @@ function createRunSnapshot(overrides: Partial<GameplayBotRunSnapshot> = {}): Gam
       range: 320,
       burstCount: 1,
       spreadDegrees: 0,
+      latestProjectileDirection: { x: 1, y: 0 },
     },
     levelUpActive: false,
     endActive: false,
@@ -40,6 +41,14 @@ function createRunSnapshot(overrides: Partial<GameplayBotRunSnapshot> = {}): Gam
       facingY: 0,
       moveSpeed: 240,
       pickupRange: 76,
+    },
+    input: {
+      movement: { x: 0, y: 0 },
+      aim: { x: 1, y: 0 },
+      aimActive: false,
+      aimSource: 'idle',
+      movementSource: 'idle',
+      hasExplicitAim: false,
     },
     tankStats: {
       availablePoints: 1,

@@ -76,6 +76,10 @@ export type GameplayBotRunSnapshot = {
     range: number;
     burstCount: number;
     spreadDegrees: number;
+    latestProjectileDirection: {
+      x: number;
+      y: number;
+    };
   } | null;
   levelUpActive: boolean;
   endActive: boolean;
@@ -89,6 +93,20 @@ export type GameplayBotRunSnapshot = {
     facingY: number;
     moveSpeed: number;
     pickupRange: number;
+  };
+  input: {
+    movement: {
+      x: number;
+      y: number;
+    };
+    aim: {
+      x: number;
+      y: number;
+    };
+    aimActive: boolean;
+    aimSource: 'pointer' | 'movement' | 'idle';
+    movementSource: 'keyboard' | 'pointer' | 'idle';
+    hasExplicitAim: boolean;
   };
   tankStats: {
     availablePoints: number;
