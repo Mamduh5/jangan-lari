@@ -73,6 +73,7 @@ import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 import { SpawnDirector } from '../systems/SpawnDirector';
+import { getEnemyProjectileVisual, getEnemyXpReward, getXpGemVisual, type ProjectileVisual } from '../systems/readabilityVisuals';
 import { chooseSafeSpawnPoint } from '../systems/spawnSafety';
 import { TankStatRuntime } from '../systems/TankStatRuntime';
 import type { EnemyArchetypeId } from '../data/enemies';
@@ -177,6 +178,7 @@ export class RunScene extends Phaser.Scene {
     elapsedMs: number;
     lifetimeMs: number;
     hasHitPlayer: boolean;
+    visual: ProjectileVisual;
   }> = [];
   private runElapsedMs = 0;
   private pendingLevelUps = 0;
@@ -519,6 +521,10 @@ export class RunScene extends Phaser.Scene {
         y: enemy.y,
         distance: Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y),
         contactDamage: enemy.contactDamage,
+        behavior: enemy.getBehavior(),
+        xpValue: getEnemyXpReward(enemy.archetype),
+        isRanged: enemy.isRangedShooter(),
+        hasRangedWeapon: enemy.isRangedShooter(),
         isElite: enemy.isElite() || enemy.isMiniboss(),
         isBoss: enemy.isBoss(),
         isEventTarget: enemy.isEventMarked(),
@@ -546,9 +552,26 @@ export class RunScene extends Phaser.Scene {
         y: gem.y,
         distance: Phaser.Math.Distance.Between(this.player.x, this.player.y, gem.x, gem.y),
         value: gem.getValue(),
+        tier: gem.getTier(),
+        fillColor: gem.getFillColor(),
+        strokeColor: gem.getStrokeColor(),
+        glowColor: gem.getGlowColor(),
       }))
       .sort((left, right) => left.distance - right.distance)
       .slice(0, 10);
+    const enemyProjectiles = this.enemyBolts
+      .filter((bolt) => bolt.orb.active && bolt.orb.visible)
+      .map((bolt) => ({
+        x: bolt.orb.x,
+        y: bolt.orb.y,
+        radius: bolt.radius,
+        owner: 'enemy' as const,
+        fillColor: bolt.visual.fillColor,
+        strokeColor: bolt.visual.strokeColor,
+        dangerColor: bolt.visual.dangerColor,
+        containsRed: bolt.visual.containsRed,
+      }))
+      .slice(0, 12);
     const combatResponseMetrics = this.combatResponse.getMetrics();
 
     return {
@@ -640,6 +663,7 @@ export class RunScene extends Phaser.Scene {
       neutralShapeCount: neutralShapes.length,
       neutralShapes: neutralShapes.slice(0, 16),
       xpGems,
+      enemyProjectiles,
       upgradeChoices: levelUpChoices.map((choice) => ({
         id: choice.id,
         title: choice.title,
@@ -848,6 +872,38 @@ export class RunScene extends Phaser.Scene {
     for (const enemy of this.enemies.getChildren() as Enemy[]) {
       enemy.despawnSilently();
     }
+    this.publishHudState();
+  }
+
+  public debugSpawnEnemyForReadability(archetypeId: EnemyArchetypeId = 'hexcaster'): void {
+    if (this.isEnded || this.isTransitioningToMenu || !this.enemies?.active) {
+      return;
+    }
+
+    const archetype = ENEMY_ARCHETYPES[archetypeId] ?? ENEMY_ARCHETYPES.hexcaster;
+    this.spawnEnemyFromArchetype(archetype, this.getSpawnPoint(520, this.getEnemySpawnSafeRadius(archetype)));
+    this.publishHudState();
+  }
+
+  public debugSpawnEnemyProjectile(): void {
+    if (!this.player?.active || this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    const originX = Phaser.Math.Clamp(this.player.x - 260, 40, WORLD_WIDTH - 40);
+    const originY = this.player.y;
+    this.spawnEnemyBolt(originX, originY, { x: 1, y: 0 }, 260, 1, ENEMY_ARCHETYPES.hexcaster.color, 8);
+    this.publishHudState();
+  }
+
+  public debugDropXpGem(value = 12): void {
+    if (!this.xpGems?.active || this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    const x = Phaser.Math.Clamp(this.player.x + 120, 40, WORLD_WIDTH - 40);
+    const y = Phaser.Math.Clamp(this.player.y, 40, WORLD_HEIGHT - 40);
+    this.xpGems.add(new XPGem(this, x, y, Math.max(1, Math.floor(value))));
     this.publishHudState();
   }
 
@@ -1582,13 +1638,13 @@ export class RunScene extends Phaser.Scene {
         if (distanceToPlayer <= playerRadius + bolt.radius) {
           bolt.hasHitPlayer = true;
           const tookDamage = this.player.takeDamage(bolt.damage, this.time.now);
-          this.createBurstCircle(bolt.orb.x, bolt.orb.y, 0xe0f2fe, 8, 30, 170, 0.8);
+          this.createBurstCircle(bolt.orb.x, bolt.orb.y, bolt.visual.trailColor, 8, 30, 170, 0.8);
           bolt.orb.destroy();
           bolt.halo.destroy();
 
           if (tookDamage) {
             this.cameras.main.shake(85, PLAYER_HIT_SHAKE_INTENSITY * 0.85);
-            this.showFloatingText(this.player.x, this.player.y - 26, `${bolt.damage}`, '#bfdbfe', 17);
+            this.showFloatingText(this.player.x, this.player.y - 26, `${bolt.damage}`, '#fecaca', 17);
             if (!this.player.isAlive()) {
               this.enemyBolts = [];
               this.endRun(false, 'Defeat', 'You were picked apart at range.');
@@ -1643,7 +1699,7 @@ export class RunScene extends Phaser.Scene {
 
     const enemyX = enemy.x;
     const enemyY = enemy.y;
-    const xpValue = enemy.getXpValue();
+    const xpValue = getEnemyXpReward(enemy.archetype);
     const wasBoss = enemy.isBoss();
     const wasMiniboss = enemy.isMiniboss();
     const wasElite = enemy.isElite();
@@ -1698,9 +1754,10 @@ export class RunScene extends Phaser.Scene {
     this.createBurstCircle(shapeX, shapeY, 0xffffff, Math.max(3, impactRadius * 0.22), Math.max(8, impactRadius), 65, 0.14);
 
     if (shapeDestroyed) {
+      const xpVisual = getXpGemVisual(xpValue);
       this.neutralShapesDestroyed += 1;
-      this.showFloatingText(shapeX, shapeY - 18, `+${xpValue} XP`, '#bfdbfe', 15);
-      this.createBurstCircle(shapeX, shapeY, impactColor, 8, 34, 180, 0.72);
+      this.showFloatingText(shapeX, shapeY - 18, `+${xpValue} XP`, xpVisual.textColor, 15);
+      this.createBurstCircle(shapeX, shapeY, xpVisual.glowColor, 8, 34, 180, 0.72);
       this.createBurstCircle(shapeX, shapeY, 0xffffff, 4, 24, 130, 0.22);
       const gem = new XPGem(this, shapeX, shapeY, xpValue);
       this.xpGems.add(gem);
@@ -1750,6 +1807,8 @@ export class RunScene extends Phaser.Scene {
 
     const gem = new XPGem(this, x, y, xpValue);
     this.xpGems.add(gem);
+    const xpVisual = getXpGemVisual(xpValue);
+    this.createBurstCircle(x, y, xpVisual.glowColor, 10, xpVisual.radius * 4.2, 190, xpValue >= 24 ? 0.64 : 0.42);
 
     const rewardOutcome = this.grantEncounterRewards(enemy, x, y);
     this.handleRunEventEnemyDefeated(enemy);
@@ -1831,7 +1890,7 @@ export class RunScene extends Phaser.Scene {
         enemy,
         enemy.x,
         enemy.y,
-        enemy.getXpValue(),
+        getEnemyXpReward(enemy.archetype),
         enemy.isBoss(),
         enemy.isMiniboss(),
         enemy.isElite(),
@@ -1996,11 +2055,12 @@ export class RunScene extends Phaser.Scene {
     color: number,
     radius: number,
   ): void {
-    const orb = this.add.circle(x, y, radius, color, 0.95).setDepth(8.5);
-    orb.setStrokeStyle(2, 0xecfeff, 0.95);
-    const halo = this.add.circle(x, y, radius * 1.9, color, 0.16).setDepth(8.4);
-    halo.setStrokeStyle(2, color, 0.4);
-    this.createBurstCircle(x, y, color, Math.max(5, radius * 0.9), Math.max(14, radius * 2.6), 120, 0.34);
+    const visual = getEnemyProjectileVisual(color);
+    const orb = this.add.circle(x, y, radius, visual.fillColor, 0.96).setDepth(8.5);
+    orb.setStrokeStyle(3, visual.strokeColor, 0.98);
+    const halo = this.add.circle(x, y, radius * 2.05, visual.trailColor, 0.2).setDepth(8.4);
+    halo.setStrokeStyle(2, visual.dangerColor ?? visual.fillColor, 0.55);
+    this.createBurstCircle(x, y, visual.trailColor, Math.max(5, radius * 0.9), Math.max(14, radius * 2.8), 120, 0.38);
 
     this.enemyBolts.push({
       orb,
@@ -2012,6 +2072,7 @@ export class RunScene extends Phaser.Scene {
       elapsedMs: 0,
       lifetimeMs: 2600,
       hasHitPlayer: false,
+      visual,
     });
   }
 
@@ -2171,10 +2232,10 @@ export class RunScene extends Phaser.Scene {
 
     const gemValue = gem.getValue();
     gem.playCollectFeedback();
-    this.createBurstCircle(gem.x, gem.y, 0x93c5fd, 8, 26, 150, 0.9);
-    this.createBurstCircle(this.player.x, this.player.y, 0x60a5fa, 6, 24, 130, 0.2);
+    this.createBurstCircle(gem.x, gem.y, gem.getGlowColor(), 8, 26, 150, 0.9);
+    this.createBurstCircle(this.player.x, this.player.y, gem.getFillColor(), 6, 24, 130, 0.2);
     if (gemValue >= 8) {
-      this.showFloatingText(this.player.x, this.player.y - 22, `+${gemValue} XP`, '#bfdbfe', 14);
+      this.showFloatingText(this.player.x, this.player.y - 22, `+${gemValue} XP`, getXpGemVisual(gemValue).textColor, 14);
     }
     const levelsGained = this.player.gainExperience(gemValue);
     gem.destroy();

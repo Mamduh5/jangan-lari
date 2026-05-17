@@ -56,6 +56,12 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private readonly responseScale = { x: 1, y: 1 };
   private deathPresentationActive = false;
   private eventMarkerColor: number | null = null;
+  private readonly roleVisuals: Array<{
+    object: Phaser.GameObjects.Shape;
+    forward: number;
+    side: number;
+    angleOffset: number;
+  }> = [];
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -86,6 +92,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const bodySize = Math.max(16, archetype.size - 6);
     this.body.setSize(bodySize, bodySize);
     this.body.setMaxVelocity(this.speed * 3, this.speed * 3);
+    this.createRoleVisuals(scene);
   }
 
   isAlive(): boolean {
@@ -106,6 +113,14 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   getXpValue(): number {
     return this.xpValue;
+  }
+
+  getBehavior(): EnemyArchetype['behavior'] {
+    return this.archetype.behavior;
+  }
+
+  isRangedShooter(): boolean {
+    return this.archetype.behavior === 'ranged';
   }
 
   getRewardGold(): number {
@@ -179,6 +194,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     if (velocity.lengthSq() > 0) {
       this.setAngle(Phaser.Math.RadToDeg(Math.atan2(velocity.y, velocity.x)) + 90);
     }
+    this.syncRoleVisuals();
 
     if (this.deathPresentationActive) {
       this.setScale(this.responseScale.x, this.responseScale.y);
@@ -543,10 +559,63 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   destroy(fromScene?: boolean): void {
     this.scene.tweens.killTweensOf(this);
     this.scene.tweens.killTweensOf(this.responseScale);
+    for (const visual of this.roleVisuals) {
+      visual.object.destroy();
+    }
+    this.roleVisuals.length = 0;
     this.responseScale.x = 1;
     this.responseScale.y = 1;
     this.deathPresentationActive = false;
     this.hitReactionUntil = 0;
     super.destroy(fromScene);
+  }
+
+  private createRoleVisuals(scene: Phaser.Scene): void {
+    const size = this.archetype.size;
+    const depth = this.depth + 0.2;
+
+    if (this.archetype.behavior === 'ranged') {
+      this.addRoleVisual(scene.add.rectangle(this.x, this.y, size * 0.2, size * 0.78, 0xff3344, 0.96), size * 0.48, 0, 0);
+      this.addRoleVisual(scene.add.circle(this.x, this.y, Math.max(4, size * 0.14), 0xffc4c4, 0.95), size * 0.9, 0, 0);
+    } else if (this.archetype.behavior === 'strafe') {
+      this.addRoleVisual(scene.add.triangle(this.x, this.y, 0, size * 0.34, size * 0.5, 0, size * 0.5, size * 0.68, 0xe0f2fe, 0.75), 0, -size * 0.52, 0);
+      this.addRoleVisual(scene.add.triangle(this.x, this.y, 0, 0, size * 0.5, size * 0.34, 0, size * 0.68, 0xe0f2fe, 0.75), 0, size * 0.52, 0);
+    } else if (this.archetype.behavior === 'dash') {
+      this.addRoleVisual(scene.add.triangle(this.x, this.y, 0, size * 0.5, size * 0.44, 0, size * 0.88, size * 0.5, 0xffedd5, 0.86), size * 0.42, 0, 0);
+    } else {
+      this.addRoleVisual(scene.add.rectangle(this.x, this.y, size * 0.28, size * 0.12, this.archetype.strokeColor, 0.9), size * 0.44, 0, 0);
+    }
+
+    if (this.isElite() || this.isMiniboss() || this.isBoss()) {
+      this.addRoleVisual(scene.add.circle(this.x, this.y, size * 0.56, this.archetype.strokeColor, 0.08), 0, 0, 0);
+    }
+
+    for (const visual of this.roleVisuals) {
+      visual.object.setDepth(depth);
+      visual.object.setBlendMode(Phaser.BlendModes.ADD);
+    }
+  }
+
+  private addRoleVisual(object: Phaser.GameObjects.Shape, forward: number, side: number, angleOffset: number): void {
+    this.roleVisuals.push({ object, forward, side, angleOffset });
+  }
+
+  private syncRoleVisuals(): void {
+    if (this.roleVisuals.length === 0) {
+      return;
+    }
+
+    const angle = Phaser.Math.DegToRad(this.angle - 90);
+    const forwardX = Math.cos(angle);
+    const forwardY = Math.sin(angle);
+    const sideX = -forwardY;
+    const sideY = forwardX;
+
+    for (const visual of this.roleVisuals) {
+      visual.object.setPosition(this.x + forwardX * visual.forward + sideX * visual.side, this.y + forwardY * visual.forward + sideY * visual.side);
+      visual.object.setAngle(this.angle + visual.angleOffset);
+      visual.object.setVisible(this.visible && this.active);
+      visual.object.setAlpha(this.alpha);
+    }
   }
 }

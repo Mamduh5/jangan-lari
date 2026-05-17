@@ -402,3 +402,23 @@ Acceptance checks:
 - Enemy spawns respect a minimum player safe radius where the world has valid space.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/camera-spawn e2e, and diff check.
+
+## Sprint A4: Enemy, Projectile, And XP Readability
+
+Goal: Address mobile/APK readability feedback without changing count scaling, regen, aspect ratio, multiplayer, or backend scope.
+
+Status note:
+- Enemy ranged projectiles now use a shared enemy-danger visual contract that includes clear red fill, red trail/halo, and red debug metadata while player projectiles keep their own weapon colors.
+- Enemy silhouettes now add lightweight Phaser-shape role markers: ranged enemies carry a visible red barrel/muzzle, strafers get side fins, dash enemies get a forward wedge, and major enemies keep a heavier aura marker.
+- Enemy XP rewards remain archetype data, with conservative tier refinement for ranged/elite/boss rewards.
+- XP gems now use value tiers with distinct non-red colors, sizes, glow, and debug metadata so higher-value drops read differently on mobile.
+- Added debug snapshot fields for enemy behavior/ranged identity, enemy projectile danger metadata, and XP gem tier/color.
+- Deferred enemy count reduction/time scaling to Sprint A5, HP regen/max-HP replacement to Sprint A6, and multiplayer/backend to later work.
+
+Acceptance checks:
+- Enemy projectiles visibly include red.
+- Player projectiles remain visually distinct.
+- Ranged enemies are identifiable by barrel/launcher silhouette before they fire.
+- Different enemy XP rewards produce different XP gem tiers/colors.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/camera-spawn/readability e2e, and diff check.

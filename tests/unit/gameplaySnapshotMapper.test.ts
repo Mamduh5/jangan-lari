@@ -82,6 +82,10 @@ function createRunSnapshot(overrides: Partial<GameplayBotRunSnapshot> = {}): Gam
         y: 520,
         distance: 72,
         contactDamage: 8,
+        behavior: 'strafe',
+        xpValue: 7,
+        isRanged: false,
+        hasRangedWeapon: false,
         isElite: false,
         isBoss: false,
         isEventTarget: true,
@@ -100,6 +104,7 @@ function createRunSnapshot(overrides: Partial<GameplayBotRunSnapshot> = {}): Gam
       },
     ],
     xpGems: [],
+    enemyProjectiles: [],
     upgradeChoices: [],
     camera: {
       scrollX: -160,

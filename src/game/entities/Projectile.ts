@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getWeaponCombatResponseProfile } from '../combat/combatResponse';
 import type { WeaponDefinition } from '../data/weapons';
+import { resolveProjectileVisual, type ProjectileFaction, type ProjectileVisual } from '../systems/readabilityVisuals';
 
 export class Projectile extends Phaser.GameObjects.Arc {
   declare body: Phaser.Physics.Arcade.Body;
@@ -13,7 +14,14 @@ export class Projectile extends Phaser.GameObjects.Arc {
   private explosionRadius = 0;
   private explosionDamageMultiplier = 0;
   private visualColor = 0xfacc15;
+  private visualStrokeColor = 0xfef3c7;
   private visualRadius = 5;
+  private faction: ProjectileFaction = 'player';
+  private visual: ProjectileVisual = resolveProjectileVisual({
+    faction: 'player',
+    baseColor: 0xfacc15,
+    strokeColor: 0xfef3c7,
+  });
   private firePattern: WeaponDefinition['firePattern'] = 'targeted';
   private trailAccumulatorMs = 0;
   private travelScale = 0.9;
@@ -31,17 +39,24 @@ export class Projectile extends Phaser.GameObjects.Arc {
     this.deactivate();
   }
 
-  fire(x: number, y: number, direction: Phaser.Math.Vector2, weapon: WeaponDefinition): void {
+  fire(x: number, y: number, direction: Phaser.Math.Vector2, weapon: WeaponDefinition, faction: ProjectileFaction = 'player'): void {
     const normalizedDirection = direction.clone().normalize();
 
     this.weaponId = weapon.id;
+    this.faction = faction;
     this.damage = weapon.damage;
     this.maxDistance = weapon.range;
     this.traveledDistance = 0;
     this.remainingPierces = weapon.pierceCount ?? 0;
     this.explosionRadius = weapon.explosionRadius ?? 0;
     this.explosionDamageMultiplier = weapon.explosionDamageMultiplier ?? 0;
-    this.visualColor = weapon.projectileColor;
+    this.visual = resolveProjectileVisual({
+      faction,
+      baseColor: weapon.projectileColor,
+      strokeColor: weapon.projectileStrokeColor,
+    });
+    this.visualColor = this.visual.fillColor;
+    this.visualStrokeColor = this.visual.strokeColor;
     this.visualRadius = weapon.projectileRadius;
     this.firePattern = weapon.firePattern ?? 'targeted';
     this.trailAccumulatorMs = 0;
@@ -51,8 +66,8 @@ export class Projectile extends Phaser.GameObjects.Arc {
     this.responseScale.y = 1;
 
     this.setRadius(weapon.projectileRadius);
-    this.setFillStyle(weapon.projectileColor);
-    this.setStrokeStyle(weapon.explosionRadius ? 4 : weapon.pierceCount ? 3 : 2, weapon.projectileStrokeColor, 0.95);
+    this.setFillStyle(this.visual.fillColor);
+    this.setStrokeStyle(weapon.explosionRadius ? 4 : weapon.pierceCount ? 3 : 2, this.visual.strokeColor, 0.95);
     this.setAlpha(weapon.projectileAlpha ?? 1);
     this.setScale(weapon.firePattern === 'radial' ? 1.08 : weapon.pierceCount ? 1.12 : 0.9);
     this.setBlendMode(
@@ -88,6 +103,18 @@ export class Projectile extends Phaser.GameObjects.Arc {
 
   getVisualColor(): number {
     return this.visualColor;
+  }
+
+  getVisualStrokeColor(): number {
+    return this.visualStrokeColor;
+  }
+
+  getFaction(): ProjectileFaction {
+    return this.faction;
+  }
+
+  getVisualMetadata(): ProjectileVisual {
+    return { ...this.visual };
   }
 
   getVisualRadius(): number {
@@ -158,7 +185,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
 
   private emitTrail(): void {
     const trail = this.scene.add
-      .circle(this.x, this.y, Math.max(3, this.visualRadius * 0.72), this.visualColor, this.firePattern === 'radial' ? 0.16 : 0.2)
+      .circle(this.x, this.y, Math.max(3, this.visualRadius * 0.72), this.visual.trailColor, this.firePattern === 'radial' ? 0.16 : 0.2)
       .setDepth(6);
     trail.setBlendMode(Phaser.BlendModes.ADD);
 

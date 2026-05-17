@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { getCombatResponseTuningSnapshot, type CombatResponseTuningSnapshot } from '../combat/combatResponse';
-import type { EnemyArchetypeId } from '../data/enemies';
+import type { EnemyArchetypeId, EnemyBehavior } from '../data/enemies';
 import type { PointerGuideState } from '../input/MovementInputController';
 import type { ControlGuideMode } from '../save/saveData';
 import type { TankClassId } from '../data/tankClasses';
@@ -14,6 +14,10 @@ export type GameplayBotEnemySummary = {
   y: number;
   distance: number;
   contactDamage: number;
+  behavior: EnemyBehavior;
+  xpValue: number;
+  isRanged: boolean;
+  hasRangedWeapon: boolean;
   isElite: boolean;
   isBoss: boolean;
   isEventTarget: boolean;
@@ -24,6 +28,10 @@ export type GameplayBotGemSummary = {
   y: number;
   distance: number;
   value: number;
+  tier: 'small' | 'medium' | 'large' | 'huge';
+  fillColor: number;
+  strokeColor: number;
+  glowColor: number;
 };
 
 export type GameplayBotNeutralShapeSummary = {
@@ -39,6 +47,17 @@ export type GameplayBotNeutralShapeSummary = {
 export type GameplayBotUpgradeChoice = {
   id: UpgradeId;
   title: string;
+};
+
+export type GameplayBotEnemyProjectileSummary = {
+  x: number;
+  y: number;
+  radius: number;
+  owner: 'enemy';
+  fillColor: number;
+  strokeColor: number;
+  dangerColor: number | null;
+  containsRed: boolean;
 };
 
 export type GameplayBotEventSnapshot = {
@@ -149,6 +168,7 @@ export type GameplayBotRunSnapshot = {
   neutralShapeCount: number;
   neutralShapes: GameplayBotNeutralShapeSummary[];
   xpGems: GameplayBotGemSummary[];
+  enemyProjectiles: GameplayBotEnemyProjectileSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
   camera: {
     scrollX: number;
