@@ -1,3 +1,5 @@
+import { BOSS_FIRST_PASS_MAX_HEALTH } from '../config/constants';
+
 export type EnemyArchetypeId =
   | 'scuttler'
   | 'skimmer'
@@ -195,7 +197,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     size: 72,
     color: 0xdc2626,
     strokeColor: 0xfee2e2,
-    maxHealth: 1900,
+    maxHealth: BOSS_FIRST_PASS_MAX_HEALTH,
     speed: 78,
     contactDamage: 42,
     xpValue: 96,

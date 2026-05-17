@@ -42,7 +42,7 @@ describe('enemy scaling', () => {
     expect(getEnemyMajorEncounterFactor(ENEMY_ARCHETYPES.behemoth)).toBe(0.5);
     expect(hexcaster.maxHealth).toBe(55);
     expect(hexcaster.shotCooldownMs).toBe(1575);
-    expect(boss.maxHealth).toBe(2204);
+    expect(boss.maxHealth).toBe(13920);
   });
 
   test('reports scaling snapshot and active cap slots', () => {

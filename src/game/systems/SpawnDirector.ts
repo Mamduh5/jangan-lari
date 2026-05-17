@@ -4,7 +4,6 @@ import {
   ELITE_SPAWN_INTERVAL_MS,
   MINIBOSS_SPAWN_INTERVAL_MS,
   MINIBOSS_SPAWN_TIME_MS,
-  RUN_TARGET_DURATION_MS,
 } from '../config/constants';
 import { ENEMY_ARCHETYPES, type EnemyArchetype } from '../data/enemies';
 
@@ -301,7 +300,7 @@ const STAGE_RULES: StageRule[] = [
     templates: ENDGAME_TEMPLATES,
   },
   {
-    untilMs: RUN_TARGET_DURATION_MS,
+    untilMs: BOSS_SPAWN_TIME_MS,
     minCount: 5,
     maxCount: 6,
     fallbackPool: [
@@ -340,6 +339,10 @@ export class SpawnDirector {
     return this.bossSpawned;
   }
 
+  markBossSpawned(): void {
+    this.bossSpawned = true;
+  }
+
   getLastWaveTemplateId(): string {
     return this.lastWaveTemplateId;
   }
@@ -353,7 +356,10 @@ export class SpawnDirector {
   }
 
   nextWave(elapsedMs: number): SpawnWaveResult {
-    if (elapsedMs >= RUN_TARGET_DURATION_MS) {
+    if (elapsedMs >= BOSS_SPAWN_TIME_MS) {
+      this.lastWaveTemplateId = '';
+      this.lastWaveTemplateLabel = '';
+      this.lastWaveTemplateHighlight = false;
       return { wave: [], templateId: '', templateLabel: '', templateHighlight: false };
     }
 
@@ -374,11 +380,6 @@ export class SpawnDirector {
     if (elapsedMs >= this.nextMinibossSpawnAtMs && elapsedMs < BOSS_SPAWN_TIME_MS) {
       wave.push(ENEMY_ARCHETYPES.dreadnought);
       this.nextMinibossSpawnAtMs += MINIBOSS_SPAWN_INTERVAL_MS;
-    }
-
-    if (!this.bossSpawned && elapsedMs >= BOSS_SPAWN_TIME_MS) {
-      wave.push(ENEMY_ARCHETYPES.behemoth);
-      this.bossSpawned = true;
     }
 
     return {

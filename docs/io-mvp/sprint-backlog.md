@@ -498,3 +498,25 @@ Acceptance checks:
 - Reward selection and upgrade exhaustion continue to work.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/controls/upgrade-exhaustion/reward-visibility e2e, and diff check.
+
+## Sprint A9: Stage Boss Win Condition Foundation
+
+Goal: Change normal runs from timer-survival victory to a boss-focused stage finish.
+
+Status note:
+- Added explicit stage phases: `preBoss`, `boss`, `victory`, and `defeat`.
+- The stage boss now spawns at 15:00; reaching 15:00 starts the boss phase instead of ending the run.
+- Boss phase clears existing normal enemies and neutral shapes, clears unrelated enemy attacks/projectiles, suppresses normal wave/event spawns, and leaves XP gems/player projectiles active.
+- HUD timer copy now shows boss arrival before 15:00 and boss HP/objective copy during the boss phase instead of a countdown-to-win.
+- Killing the boss triggers victory and local score/gold/leaderboard recording; player death still records defeat.
+- Behemoth HP received a narrow first-pass durability increase to make instant kills unlikely while leaving full phase/skill/balance redesign for A10.
+- Deferred boss phase 2, new boss skills, miniboss skill changes, event/miniboss/boss full rebalance, endless mode, bot tanks, multiplayer, and backend work.
+
+Acceptance checks:
+- Boss spawns at 15:00.
+- Timer reaching 15:00 does not auto-win.
+- Victory requires boss defeat.
+- Normal enemies/events are suppressed during boss phase and existing normal enemies are cleared.
+- Boss durability is data-driven and significantly higher than the previous instant-kill-prone value.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/controls/camera-spawn/enemy-scaling/readability/boss-stage e2e, and diff check.

@@ -378,6 +378,10 @@ export class UIScene extends Phaser.Scene {
     const xpNext = Number(this.registry.get('run.xpNext') ?? 1);
     const elapsedMs = Number(this.registry.get('run.elapsedMs') ?? 0);
     const targetMs = Number(this.registry.get('run.targetMs') ?? 0);
+    const stagePhase = String(this.registry.get('run.stagePhase') ?? 'preBoss');
+    const bossSpawnTimeMs = Number(this.registry.get('run.bossSpawnTimeMs') ?? targetMs);
+    const bossHp = Number(this.registry.get('run.bossHp') ?? 0);
+    const bossMaxHp = Number(this.registry.get('run.bossMaxHp') ?? 0);
     const score = Number(this.registry.get('run.score') ?? 0);
     const bestScore = Number(this.registry.get('run.bestScore') ?? 0);
     const finalScore = Number(this.registry.get('run.finalScore') ?? 0);
@@ -423,7 +427,10 @@ export class UIScene extends Phaser.Scene {
     this.classStatusText.setColor(classChoiceActive ? '#fef08a' : '#bae6fd');
     this.setTextIfChanged(this.statSummaryText, `Stats ${statSummary}${statPoints > 0 ? `  +${statPoints}` : ''}`);
     this.statSummaryText.setColor(statPoints > 0 ? '#fef08a' : '#cbd5e1');
-    this.setTextIfChanged(this.timerText, this.formatTime(Math.max(0, targetMs - elapsedMs)));
+    this.setTextIfChanged(
+      this.timerText,
+      this.formatStageTimer(stagePhase, elapsedMs, bossSpawnTimeMs || targetMs, bossHp, bossMaxHp),
+    );
     this.setTextIfChanged(this.goldText, `Run Gold ${runGold}`);
     this.setTextIfChanged(this.killsText, `Kills ${kills}`);
     this.setTextIfChanged(this.scoreText, `Score ${score}`);
@@ -468,6 +475,7 @@ export class UIScene extends Phaser.Scene {
     gold: string;
     kills: string;
     score: string;
+    timer: string;
     statPanelVisible: boolean;
     levelUpVisible: boolean;
     levelUpChoiceCount: number;
@@ -500,6 +508,7 @@ export class UIScene extends Phaser.Scene {
       gold: this.goldText.text,
       kills: this.killsText.text,
       score: this.scoreText.text,
+      timer: this.timerText.text,
       statPanelVisible: this.statAllocationContainer.visible,
       levelUpVisible: this.levelUpContainer.visible,
       levelUpChoiceCount: Number(this.registry.get('run.levelUpChoiceCount') ?? 0),
@@ -1363,6 +1372,28 @@ export class UIScene extends Phaser.Scene {
     const seconds = totalSeconds % 60;
 
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+
+  private formatStageTimer(
+    stagePhase: string,
+    elapsedMs: number,
+    bossSpawnTimeMs: number,
+    bossHp: number,
+    bossMaxHp: number,
+  ): string {
+    if (stagePhase === 'boss') {
+      if (bossMaxHp > 0) {
+        return `Boss HP ${Math.max(0, Math.ceil(bossHp))}/${Math.ceil(bossMaxHp)}`;
+      }
+
+      return 'Defeat boss';
+    }
+
+    if (stagePhase === 'victory' || stagePhase === 'defeat') {
+      return `Time ${this.formatTime(elapsedMs)}`;
+    }
+
+    return `Boss in ${this.formatTime(Math.max(0, bossSpawnTimeMs - elapsedMs))}`;
   }
 
   private formatLeaderboard(entries: LocalLeaderboardEntry[]): string {

@@ -222,8 +222,8 @@ test.describe('menu and run scene flow', () => {
 
     await page.evaluate(() => {
       const game = window.__JANGAN_LARI_GAME__!;
-      const runScene = game.scene.getScene('RunScene') as { runElapsedMs: number };
-      runScene.runElapsedMs = Number(game.registry.get('run.targetMs') ?? 120000);
+      const runScene = game.scene.getScene('RunScene') as { debugEndRun?: (victory?: boolean) => void };
+      runScene.debugEndRun?.(true);
     });
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.registry.get('run.endActive')));
 

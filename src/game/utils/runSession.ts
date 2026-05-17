@@ -1,11 +1,11 @@
 ﻿import {
+  BOSS_SPAWN_TIME_MS,
   GOLD_REWARD_BASE,
   GOLD_REWARD_PER_KILL_STEP,
   GOLD_REWARD_PER_LEVEL,
   GOLD_REWARD_VICTORY_BONUS,
   LEVEL_UP_AUTO_PICK_MS,
   RUN_ACTIVE_DELTA_CAP_MS,
-  RUN_TARGET_DURATION_MS,
 } from '../config/constants';
 
 export type RunSessionState = {
@@ -57,7 +57,7 @@ export function accumulateRunElapsedMs(
   deltaMs: number,
   canAdvance: boolean,
   maxDeltaMs = RUN_ACTIVE_DELTA_CAP_MS,
-  targetMs = RUN_TARGET_DURATION_MS,
+  targetMs = Number.POSITIVE_INFINITY,
 ): number {
   if (!canAdvance) {
     return currentElapsedMs;
@@ -175,6 +175,13 @@ export function writeFreshRunRegistryState(registry: RegistryLike, selectedHeroN
     'run.rewardText': '',
     'run.rewardColor': '#fcd34d',
     'run.instructions': `Selected Hero: ${selectedHeroName}`,
+    'run.stagePhase': 'preBoss',
+    'run.bossSpawnTimeMs': BOSS_SPAWN_TIME_MS,
+    'run.bossActive': false,
+    'run.bossHp': null,
+    'run.bossMaxHp': null,
+    'run.normalSpawnsSuppressed': false,
+    'run.victoryCondition': 'pendingBoss',
     'run.elapsedMs': 0,
     'run.score': 0,
     'run.bestScore': 0,
@@ -237,6 +244,13 @@ export function clearRunRegistryState(registry: RegistryLike, totalGold: number)
     'run.rewardText': '',
     'run.rewardColor': '#fcd34d',
     'run.instructions': 'Return to menu complete.',
+    'run.stagePhase': 'preBoss',
+    'run.bossSpawnTimeMs': BOSS_SPAWN_TIME_MS,
+    'run.bossActive': false,
+    'run.bossHp': null,
+    'run.bossMaxHp': null,
+    'run.normalSpawnsSuppressed': false,
+    'run.victoryCondition': 'pendingBoss',
     'run.elapsedMs': 0,
     'run.score': 0,
     'run.bestScore': 0,

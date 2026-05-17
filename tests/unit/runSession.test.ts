@@ -46,7 +46,10 @@ describe('runSession helpers', () => {
   test('accumulateRunElapsedMs only advances active run time and clamps large deltas', () => {
     expect(accumulateRunElapsedMs(2500, 8000, false)).toBe(2500);
     expect(accumulateRunElapsedMs(2500, 8000, true)).toBe(2600);
-    expect(accumulateRunElapsedMs(RUN_TARGET_DURATION_MS - 50, 1000, true)).toBe(RUN_TARGET_DURATION_MS);
+    expect(accumulateRunElapsedMs(RUN_TARGET_DURATION_MS - 50, 1000, true)).toBe(RUN_TARGET_DURATION_MS + 50);
+    expect(accumulateRunElapsedMs(RUN_TARGET_DURATION_MS - 50, 1000, true, 100, RUN_TARGET_DURATION_MS)).toBe(
+      RUN_TARGET_DURATION_MS,
+    );
   });
 
   test('tickLevelUpCountdown counts down and expires cleanly', () => {

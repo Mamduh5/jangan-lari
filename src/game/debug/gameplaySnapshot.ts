@@ -8,6 +8,7 @@ import type { TankStatEffectSnapshot, TankStatLevels } from '../data/tankStats';
 import type { UpgradeId } from '../data/upgrades';
 import type { UpgradeRewardType } from '../systems/rewardClassification';
 import type { WeaponId } from '../data/weapons';
+import type { StagePhase, StageVictoryCondition } from '../utils/stagePhase';
 
 export type GameplayBotEnemySummary = {
   id: EnemyArchetypeId;
@@ -101,7 +102,14 @@ export type GameplayBotRunSnapshot = {
     gameHeight: number;
     scaleMode: 'FIT';
   };
+  stagePhase: StagePhase;
   elapsedMs: number;
+  bossSpawnTimeMs: number;
+  bossActive: boolean;
+  bossHp: number | null;
+  bossMaxHp: number | null;
+  normalSpawnsSuppressed: boolean;
+  victoryCondition: StageVictoryCondition;
   hp: number;
   maxHp: number;
   level: number;

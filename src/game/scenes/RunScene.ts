@@ -34,7 +34,6 @@ import {
   REWARD_TARGET_EVENT_WINDOW_END_MS,
   REWARD_TARGET_EVENT_WINDOW_START_MS,
   RUN_EVENT_ENCOUNTER_BUFFER_MS,
-  RUN_TARGET_DURATION_MS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
@@ -99,6 +98,12 @@ import {
   writeFreshRunRegistryState,
 } from '../utils/runSession';
 import { calculateRunScore } from '../utils/runScore';
+import {
+  areNormalSpawnsSuppressed,
+  getStagePhaseForRunState,
+  getStageVictoryCondition,
+  type StagePhase,
+} from '../utils/stagePhase';
 
 type RunEventType = 'challenge-wave' | 'reward-target';
 
@@ -150,6 +155,8 @@ export class RunScene extends Phaser.Scene {
   private tankStats!: TankStatRuntime;
   private spawnTimer?: Phaser.Time.TimerEvent;
   private neutralShapeSpawnTimer?: Phaser.Time.TimerEvent;
+  private stagePhase: StagePhase = 'preBoss';
+  private bossEnemy: Enemy | null = null;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private combatResponse!: CombatResponseController;
   private combatResponseImpactCounts: Partial<Record<WeaponId, number>> = {};
@@ -341,6 +348,8 @@ export class RunScene extends Phaser.Scene {
     this.neutralShapes = this.physics.add.group({ runChildUpdate: false });
     this.xpGems = this.physics.add.group({ runChildUpdate: false });
     this.spawnDirector = new SpawnDirector();
+    this.stagePhase = 'preBoss';
+    this.bossEnemy = null;
     this.movementInput = new MovementInputController(this, createMovementKeys(this));
     this.lastMovementInput = {
       movement: { x: 0, y: 0 },
@@ -475,10 +484,8 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.runElapsedMs = accumulateRunElapsedMs(this.runElapsedMs, delta, true);
-    if (this.runElapsedMs >= RUN_TARGET_DURATION_MS) {
-      this.endRun(true, 'Victory', 'You survived until extraction.');
-      return;
-    }
+    this.syncStagePhase();
+    this.enforceBossPhaseEnemyFocus();
 
     const movementInput = this.movementInput.getMovementInput();
     this.lastMovementInput = movementInput;
@@ -626,6 +633,8 @@ export class RunScene extends Phaser.Scene {
       })),
     ];
     const combatResponseMetrics = this.combatResponse.getMetrics();
+    const activeBoss = this.getActiveBossEnemy();
+    const stagePhase = this.getCurrentStagePhase();
 
     return {
       config: {
@@ -633,7 +642,14 @@ export class RunScene extends Phaser.Scene {
         gameHeight: GAME_HEIGHT,
         scaleMode: 'FIT',
       },
+      stagePhase,
       elapsedMs: this.runElapsedMs,
+      bossSpawnTimeMs: BOSS_SPAWN_TIME_MS,
+      bossActive: Boolean(activeBoss),
+      bossHp: activeBoss?.getCurrentHealth() ?? null,
+      bossMaxHp: activeBoss?.getMaxHealth() ?? null,
+      normalSpawnsSuppressed: this.areNormalSpawnsSuppressed(),
+      victoryCondition: getStageVictoryCondition(stagePhase),
       hp: this.player.getCurrentHealth(),
       maxHp: this.player.getMaxHealth(),
       level: this.player.getLevel(),
@@ -745,7 +761,7 @@ export class RunScene extends Phaser.Scene {
       enemyPopulation: {
         activeCount: this.getActiveEnemyCount(),
         activeCap: ENEMY_ACTIVE_CAP,
-        normalSpawnSlots: getAvailableEnemySpawnSlots(this.getActiveEnemyCount()),
+        normalSpawnSlots: this.areNormalSpawnsSuppressed() ? 0 : getAvailableEnemySpawnSlots(this.getActiveEnemyCount()),
         enemyEnemyPhysicalCollision: false,
       },
       enemyScaling,
@@ -884,7 +900,7 @@ export class RunScene extends Phaser.Scene {
   }
 
   public debugForceRunEvent(type: RunEventType): boolean {
-    if (this.isEnded || this.isTransitioningToMenu || this.isLevelingUp || this.activeRunEvent) {
+    if (this.isEnded || this.isTransitioningToMenu || this.isLevelingUp || this.activeRunEvent || this.areNormalSpawnsSuppressed()) {
       return false;
     }
 
@@ -898,10 +914,9 @@ export class RunScene extends Phaser.Scene {
 
     this.neutralShapesDestroyed += Math.max(0, Math.floor(options.neutralShapesDestroyed ?? 0));
     this.killCount += Math.max(0, Math.floor(options.enemyKills ?? 0));
-    this.runElapsedMs = Math.min(
-      RUN_TARGET_DURATION_MS,
-      this.runElapsedMs + Math.max(0, Math.floor(options.elapsedMs ?? 0)),
-    );
+    this.runElapsedMs += Math.max(0, Math.floor(options.elapsedMs ?? 0));
+    this.syncStagePhase();
+    this.enforceBossPhaseEnemyFocus();
     this.publishHudState();
   }
 
@@ -944,7 +959,9 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    this.runElapsedMs = Phaser.Math.Clamp(elapsedMs, 0, RUN_TARGET_DURATION_MS);
+    this.runElapsedMs = Math.max(0, Math.floor(elapsedMs));
+    this.syncStagePhase();
+    this.enforceBossPhaseEnemyFocus();
     this.spawnEnemyWave();
     this.publishHudState();
   }
@@ -954,7 +971,9 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
-    this.runElapsedMs = Phaser.Math.Clamp(elapsedMs, 0, RUN_TARGET_DURATION_MS);
+    this.runElapsedMs = Math.max(0, Math.floor(elapsedMs));
+    this.syncStagePhase();
+    this.enforceBossPhaseEnemyFocus();
     this.publishHudState();
   }
 
@@ -975,8 +994,29 @@ export class RunScene extends Phaser.Scene {
     }
 
     const archetype = ENEMY_ARCHETYPES[archetypeId] ?? ENEMY_ARCHETYPES.hexcaster;
+    if (this.areNormalSpawnsSuppressed() && !archetype.isBoss) {
+      return;
+    }
     this.spawnEnemyFromArchetype(archetype, this.getSpawnPoint(520, this.getEnemySpawnSafeRadius(archetype)));
     this.publishHudState();
+  }
+
+  public debugDefeatBoss(): boolean {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return false;
+    }
+
+    const boss = this.getActiveBossEnemy();
+    if (!boss) {
+      return false;
+    }
+
+    const bossX = boss.x;
+    const bossY = boss.y;
+    const xpValue = getEnemyXpReward(boss.archetype);
+    boss.takeDamage(boss.getCurrentHealth(), { x: bossX, y: bossY });
+    this.handleEnemyDefeated(boss, bossX, bossY, xpValue, true, false, false);
+    return true;
   }
 
   public debugSpawnEnemyProjectile(): void {
@@ -1201,8 +1241,122 @@ export class RunScene extends Phaser.Scene {
     arenaCenter.setStrokeStyle(4, 0x93c5fd, 0.5);
   }
 
+  private syncStagePhase(): void {
+    const nextPhase = getStagePhaseForRunState({
+      elapsedMs: this.runElapsedMs,
+      bossSpawnTimeMs: BOSS_SPAWN_TIME_MS,
+      bossActive: Boolean(this.getActiveBossEnemy()),
+      ended: this.isEnded,
+      victory: Boolean(this.registry.get('run.victory')),
+    });
+
+    if (nextPhase === 'boss' && this.stagePhase === 'preBoss') {
+      this.enterBossPhase();
+      return;
+    }
+
+    this.stagePhase = nextPhase;
+  }
+
+  private enterBossPhase(): void {
+    if (this.isEnded || this.stagePhase === 'boss') {
+      return;
+    }
+
+    this.stagePhase = 'boss';
+    this.spawnDirector.markBossSpawned();
+    this.clearBossPhaseClutter();
+
+    const existingBoss = this.getActiveBossEnemy();
+    if (!existingBoss) {
+      const spawnPoint = this.getSpawnPoint(700, BOSS_SPAWN_PLAYER_SAFE_RADIUS);
+      this.bossEnemy = this.spawnEnemyFromArchetype(ENEMY_ARCHETYPES.behemoth, spawnPoint);
+      this.presentEncounterSpawn(ENEMY_ARCHETYPES.behemoth, spawnPoint);
+    }
+
+    this.registry.set('run.instructions', 'Defeat the boss.');
+    this.setAlert('boss', 'Defeat boss', 1800);
+    this.publishHudState();
+  }
+
+  private clearBossPhaseClutter(): void {
+    this.clearActiveRunEvent();
+
+    for (const enemy of (this.enemies?.getChildren() as Enemy[] | undefined) ?? []) {
+      if (enemy.active && !enemy.isBoss()) {
+        enemy.despawnSilently();
+      }
+    }
+
+    for (const neutralShape of (this.neutralShapes?.getChildren() as NeutralShape[] | undefined) ?? []) {
+      if (neutralShape.active) {
+        neutralShape.destroy();
+      }
+    }
+
+    this.lineStrikeAttacks = [];
+    for (const attack of this.shockwaveAttacks) {
+      attack.ring.destroy();
+      attack.halo.destroy();
+    }
+    this.shockwaveAttacks = [];
+    for (const bolt of this.enemyBolts) {
+      bolt.orb.destroy();
+      bolt.halo.destroy();
+    }
+    this.enemyBolts = [];
+  }
+
+  private getCurrentStagePhase(): StagePhase {
+    return getStagePhaseForRunState({
+      elapsedMs: this.runElapsedMs,
+      bossSpawnTimeMs: BOSS_SPAWN_TIME_MS,
+      bossActive: Boolean(this.getActiveBossEnemy()),
+      ended: this.isEnded,
+      victory: Boolean(this.registry.get('run.victory')),
+    });
+  }
+
+  private getActiveBossEnemy(): Enemy | null {
+    if (this.bossEnemy?.active && this.bossEnemy.isAlive()) {
+      return this.bossEnemy;
+    }
+
+    const boss = ((this.enemies?.getChildren() as Enemy[] | undefined) ?? []).find(
+      (enemy) => enemy.active && enemy.isAlive() && enemy.isBoss(),
+    );
+    this.bossEnemy = boss ?? null;
+    return this.bossEnemy;
+  }
+
+  private areNormalSpawnsSuppressed(): boolean {
+    return areNormalSpawnsSuppressed(this.stagePhase) || (!this.isEnded && this.runElapsedMs >= BOSS_SPAWN_TIME_MS);
+  }
+
+  private enforceBossPhaseEnemyFocus(): void {
+    if (!this.areNormalSpawnsSuppressed()) {
+      return;
+    }
+
+    for (const enemy of (this.enemies?.getChildren() as Enemy[] | undefined) ?? []) {
+      if (enemy.active && !enemy.isBoss()) {
+        enemy.despawnSilently();
+      }
+    }
+
+    for (const neutralShape of (this.neutralShapes?.getChildren() as NeutralShape[] | undefined) ?? []) {
+      if (neutralShape.active) {
+        neutralShape.destroy();
+      }
+    }
+  }
+
   private spawnEnemyWave(): void {
     if (this.isEnded || this.isLevelingUp || this.isSystemPaused || !this.enemies?.active) {
+      return;
+    }
+
+    if (this.areNormalSpawnsSuppressed()) {
       return;
     }
 
@@ -1236,6 +1390,9 @@ export class RunScene extends Phaser.Scene {
     const scaledArchetype = applyEnemyScaling(archetype, this.runElapsedMs);
     const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, scaledArchetype);
     this.enemies.add(enemy);
+    if (enemy.isBoss()) {
+      this.bossEnemy = enemy;
+    }
     return enemy;
   }
 
@@ -1247,6 +1404,10 @@ export class RunScene extends Phaser.Scene {
 
   private refillNeutralShapes(): void {
     if (this.isEnded || this.isLevelingUp || this.isSystemPaused || !this.neutralShapes?.active) {
+      return;
+    }
+
+    if (this.areNormalSpawnsSuppressed()) {
       return;
     }
 
@@ -1382,6 +1543,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   private tryStartScheduledRunEvent(): void {
+    if (this.areNormalSpawnsSuppressed()) {
+      return;
+    }
+
     if (
       !this.rewardTargetEventConsumed &&
       this.runElapsedMs >= REWARD_TARGET_EVENT_WINDOW_START_MS &&
@@ -1407,6 +1572,10 @@ export class RunScene extends Phaser.Scene {
       return false;
     }
 
+    if (this.areNormalSpawnsSuppressed()) {
+      return false;
+    }
+
     if (this.hasActiveMajorEncounterEnemy()) {
       return false;
     }
@@ -1429,6 +1598,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   private startChallengeWaveEvent(force = false): boolean {
+    if (this.areNormalSpawnsSuppressed()) {
+      return false;
+    }
+
     if (!force && !this.canStartRunEvent(CHALLENGE_WAVE_EVENT_DURATION_MS)) {
       return false;
     }
@@ -1463,6 +1636,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   private startRewardTargetEvent(force = false): boolean {
+    if (this.areNormalSpawnsSuppressed()) {
+      return false;
+    }
+
     if (!force && !this.canStartRunEvent(REWARD_TARGET_EVENT_DURATION_MS)) {
       return false;
     }
@@ -2911,6 +3088,8 @@ export class RunScene extends Phaser.Scene {
     }
 
     const score = this.calculateCurrentRunScore();
+    const stagePhase = this.getCurrentStagePhase();
+    const activeBoss = this.getActiveBossEnemy();
     this.registry.set('run.hp', this.player.getCurrentHealth());
     this.registry.set('run.maxHp', this.player.getMaxHealth());
     this.registry.set('run.level', this.player.getLevel());
@@ -2935,7 +3114,14 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.classChoiceAvailable', this.isChoosingTankClass || this.shouldQueueTankClassChoice());
     this.registry.set('run.classChoiceActive', this.isChoosingTankClass);
     this.registry.set('run.classChoiceChoices', this.isChoosingTankClass ? this.getAvailableTankClassChoices() : []);
-    this.registry.set('run.targetMs', RUN_TARGET_DURATION_MS);
+    this.registry.set('run.targetMs', BOSS_SPAWN_TIME_MS);
+    this.registry.set('run.stagePhase', stagePhase);
+    this.registry.set('run.bossSpawnTimeMs', BOSS_SPAWN_TIME_MS);
+    this.registry.set('run.bossActive', Boolean(activeBoss));
+    this.registry.set('run.bossHp', activeBoss?.getCurrentHealth() ?? null);
+    this.registry.set('run.bossMaxHp', activeBoss?.getMaxHealth() ?? null);
+    this.registry.set('run.normalSpawnsSuppressed', this.areNormalSpawnsSuppressed());
+    this.registry.set('run.victoryCondition', getStageVictoryCondition(stagePhase));
     this.registry.set('run.goldEarned', this.goldEarned);
     this.registry.set('run.totalGold', this.saveData.totalGold);
     this.registry.set('run.elapsedMs', this.runElapsedMs);
@@ -3021,6 +3207,7 @@ export class RunScene extends Phaser.Scene {
     this.isChoosingTankClass = false;
     this.isResolvingLevelUpChoice = false;
     this.levelUpRemainingMs = 0;
+    this.stagePhase = victory ? 'victory' : 'defeat';
     this.clearActiveRunEvent();
     this.combatResponse.clear({ suppressCallbacks: true });
     this.goldEarned += calculateRunGoldReward(this.player.getLevel(), this.killCount, victory);
