@@ -29,6 +29,7 @@ export type GameplayBotEnemySummary = {
   hasRangedWeapon: boolean;
   isElite: boolean;
   isBoss: boolean;
+  isBossOwned: boolean;
   isEventTarget: boolean;
 };
 
@@ -110,6 +111,11 @@ export type GameplayBotRunSnapshot = {
   bossMaxHp: number | null;
   bossPhase: 1 | 2;
   bossPhaseTwoTriggered: boolean;
+  bossSummonActiveCount: number;
+  bossSummonCap: number;
+  bossTargetFastKillMs: number;
+  bossOwnedEnemyCount: number;
+  bossPhasePressure: string;
   activeBossSkill: string;
   bossSkillTelegraphActive: boolean;
   bossSkillDamageActive: boolean;

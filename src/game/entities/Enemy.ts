@@ -78,6 +78,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private readonly responseScale = { x: 1, y: 1 };
   private deathPresentationActive = false;
   private eventMarkerColor: number | null = null;
+  private bossOwned = false;
   private readonly roleVisuals: Array<{
     object: Phaser.GameObjects.Shape;
     forward: number;
@@ -127,6 +128,17 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   isBoss(): boolean {
     return Boolean(this.archetype.isBoss);
+  }
+
+  isBossOwned(): boolean {
+    return this.bossOwned;
+  }
+
+  setBossOwned(value = true): void {
+    this.bossOwned = value;
+    if (value) {
+      this.setStrokeStyle(this.baseStrokeWidth + 1, 0xfca5a5, 0.95);
+    }
   }
 
   isElite(): boolean {
@@ -335,6 +347,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setResponseScale((1 + Math.sin((currentTime + this.y) * 0.012) * 0.03) * (hitReactionActive ? 0.9 : 1));
       this.setStrokeStyle(this.baseStrokeWidth, this.archetype.strokeColor, 0.92);
       this.setAlpha(hitReactionActive ? 0.78 : 1);
+      return;
+    }
+
+    if (this.bossOwned) {
+      this.setResponseScale((1 + Math.sin((currentTime + this.x) * 0.014) * 0.04) * (hitReactionActive ? 0.9 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 1, 0xfca5a5, 0.95);
+      this.setAlpha(hitReactionActive ? 0.78 : 0.94);
       return;
     }
 

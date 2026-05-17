@@ -8,6 +8,11 @@ import {
 import {
   BOSS_SPAWN_TIME_MS,
   BOSS_SPAWN_PLAYER_SAFE_RADIUS,
+  BOSS_SUMMON_BATCH_SIZE,
+  BOSS_SUMMON_FIRST_DELAY_MS,
+  BOSS_SUMMON_INTERVAL_MS,
+  BOSS_SUMMON_MAX_ACTIVE,
+  BOSS_TARGET_FAST_KILL_MS,
   CAMERA_OVERSCROLL_PADDING_X,
   CAMERA_OVERSCROLL_PADDING_Y,
   CHALLENGE_WAVE_EVENT_DURATION_MS,
@@ -86,6 +91,12 @@ import {
   createMinibossVolleyContract,
 } from '../systems/dangerousEffectContracts';
 import { resolveBossPhase, type BossPhase } from '../systems/bossPhase';
+import {
+  createBossSummonArchetype,
+  getAvailableBossSummonSlots,
+  getBossPhasePressureState,
+  shouldSpawnBossSummons,
+} from '../systems/bossSummons';
 import { getUpgradeRewardType, upgradeHasWeaponRewardTag } from '../systems/rewardClassification';
 import { SpawnDirector } from '../systems/SpawnDirector';
 import { getEnemyProjectileVisual, getEnemyXpReward, getXpGemVisual, type ProjectileVisual } from '../systems/readabilityVisuals';
@@ -166,6 +177,7 @@ export class RunScene extends Phaser.Scene {
   private bossEnemy: Enemy | null = null;
   private bossPhase: BossPhase = 1;
   private bossPhaseTwoTriggered = false;
+  private nextBossSummonAtMs = Number.POSITIVE_INFINITY;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private combatResponse!: CombatResponseController;
   private combatResponseImpactCounts: Partial<Record<WeaponId, number>> = {};
@@ -356,6 +368,7 @@ export class RunScene extends Phaser.Scene {
     this.skillTelegraphs = [];
     this.bossPhase = 1;
     this.bossPhaseTwoTriggered = false;
+    this.nextBossSummonAtMs = Number.POSITIVE_INFINITY;
 
     const selectedHero = HEROES[this.saveData.selectedHero];
 
@@ -374,6 +387,7 @@ export class RunScene extends Phaser.Scene {
     this.bossEnemy = null;
     this.bossPhase = 1;
     this.bossPhaseTwoTriggered = false;
+    this.nextBossSummonAtMs = Number.POSITIVE_INFINITY;
     this.movementInput = new MovementInputController(this, createMovementKeys(this));
     this.lastMovementInput = {
       movement: { x: 0, y: 0 },
@@ -519,6 +533,7 @@ export class RunScene extends Phaser.Scene {
     this.updateNeutralShapes();
     this.updateEnemies();
     this.syncBossPhaseState();
+    this.updateBossSummons();
     this.updateSkillTelegraphs(delta);
     this.updateLineStrikeAttacks(delta);
     this.updateShockwaveAttacks(delta);
@@ -587,6 +602,7 @@ export class RunScene extends Phaser.Scene {
         hasRangedWeapon: enemy.isRangedShooter(),
         isElite: enemy.isElite() || enemy.isMiniboss(),
         isBoss: enemy.isBoss(),
+        isBossOwned: enemy.isBossOwned(),
         isEventTarget: enemy.isEventMarked(),
       }))
       .sort((left, right) => left.distance - right.distance)
@@ -677,6 +693,7 @@ export class RunScene extends Phaser.Scene {
     const bossSkillTelegraphActive = this.skillTelegraphs.some((telegraph) => telegraph.kind === 'boss-shockwave');
     const bossSkillDamageActive = this.shockwaveAttacks.some((attack) => attack.elapsedMs < attack.durationMs);
     const activeMinibossSkill = this.getActiveMinibossSkillName();
+    const bossSummonActiveCount = this.getActiveBossSummonCount();
 
     return {
       config: {
@@ -692,6 +709,15 @@ export class RunScene extends Phaser.Scene {
       bossMaxHp: activeBoss?.getMaxHealth() ?? null,
       bossPhase: this.bossPhase,
       bossPhaseTwoTriggered: this.bossPhaseTwoTriggered,
+      bossSummonActiveCount,
+      bossSummonCap: BOSS_SUMMON_MAX_ACTIVE,
+      bossTargetFastKillMs: BOSS_TARGET_FAST_KILL_MS,
+      bossOwnedEnemyCount: bossSummonActiveCount,
+      bossPhasePressure: getBossPhasePressureState({
+        stagePhase,
+        bossPhase: this.bossPhase,
+        bossActive: Boolean(activeBoss),
+      }),
       activeBossSkill,
       bossSkillTelegraphActive,
       bossSkillDamageActive,
@@ -1089,6 +1115,24 @@ export class RunScene extends Phaser.Scene {
     return true;
   }
 
+  public debugForceBossSummons(): boolean {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return false;
+    }
+
+    const boss = this.getActiveBossEnemy();
+    if (!boss) {
+      return false;
+    }
+
+    this.syncBossPhaseState();
+    if (this.bossPhase !== 2) {
+      return false;
+    }
+
+    return this.spawnBossSummonBatch(true) > 0;
+  }
+
   public debugTriggerBossShockwaveSkill(): boolean {
     if (this.isEnded || this.isTransitioningToMenu) {
       return false;
@@ -1377,6 +1421,7 @@ export class RunScene extends Phaser.Scene {
     this.stagePhase = 'boss';
     this.bossPhase = 1;
     this.bossPhaseTwoTriggered = false;
+    this.nextBossSummonAtMs = Number.POSITIVE_INFINITY;
     this.spawnDirector.markBossSpawned();
     this.clearBossPhaseClutter();
 
@@ -1399,7 +1444,7 @@ export class RunScene extends Phaser.Scene {
     this.clearActiveRunEvent();
 
     for (const enemy of (this.enemies?.getChildren() as Enemy[] | undefined) ?? []) {
-      if (enemy.active && !enemy.isBoss()) {
+      if (enemy.active && !enemy.isBoss() && !enemy.isBossOwned()) {
         enemy.despawnSilently();
       }
     }
@@ -1466,10 +1511,11 @@ export class RunScene extends Phaser.Scene {
 
     this.bossPhase = result.phase;
     this.bossPhaseTwoTriggered = result.phaseTwoTriggered;
+    this.nextBossSummonAtMs = this.runElapsedMs + BOSS_SUMMON_FIRST_DELAY_MS;
     boss.setBossPhase(result.phase);
-    this.registry.set('run.instructions', 'Boss phase 2. Shockwaves intensify.');
+    this.registry.set('run.instructions', 'Boss phase 2. Shockwaves and summons.');
     this.setAlert('boss', 'Boss phase 2', 1800);
-    this.showEncounterBanner('BOSS PHASE 2', 'Shockwaves intensify', 0xfca5a5, 1600);
+    this.showEncounterBanner('BOSS PHASE 2', 'Shockwaves and summons', 0xfca5a5, 1600);
     this.cameras.main.shake(160, 0.0024);
     this.cameras.main.flash(160, 255, 120, 120, false);
     playCue('boss-arrival');
@@ -1509,7 +1555,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     for (const enemy of (this.enemies?.getChildren() as Enemy[] | undefined) ?? []) {
-      if (enemy.active && !enemy.isBoss()) {
+      if (enemy.active && !enemy.isBoss() && !enemy.isBossOwned()) {
         enemy.despawnSilently();
       }
     }
@@ -1565,6 +1611,75 @@ export class RunScene extends Phaser.Scene {
       enemy.setBossPhase(this.bossPhase);
     }
     return enemy;
+  }
+
+  private updateBossSummons(): void {
+    const boss = this.getActiveBossEnemy();
+    const activeSummonCount = this.getActiveBossSummonCount();
+
+    if (
+      !shouldSpawnBossSummons({
+        stagePhase: this.stagePhase,
+        bossPhase: this.bossPhase,
+        bossActive: Boolean(boss),
+        elapsedMs: this.runElapsedMs,
+        nextSummonAtMs: this.nextBossSummonAtMs,
+        activeSummonCount,
+      })
+    ) {
+      return;
+    }
+
+    this.spawnBossSummonBatch(false);
+  }
+
+  private spawnBossSummonBatch(forced: boolean): number {
+    if (!this.enemies?.active || this.stagePhase !== 'boss' || this.bossPhase !== 2 || !this.getActiveBossEnemy()) {
+      return 0;
+    }
+
+    const availableSlots = getAvailableBossSummonSlots(this.getActiveBossSummonCount());
+    const summonCount = Math.min(BOSS_SUMMON_BATCH_SIZE, availableSlots);
+    if (summonCount <= 0) {
+      this.nextBossSummonAtMs = this.runElapsedMs + BOSS_SUMMON_INTERVAL_MS;
+      return 0;
+    }
+
+    const summonArchetype = createBossSummonArchetype(ENEMY_ARCHETYPES.scuttler);
+    for (let index = 0; index < summonCount; index += 1) {
+      const spawnPoint = this.getSpawnPoint(500 + index * 34, ENEMY_SPAWN_PLAYER_SAFE_RADIUS);
+      const summon = this.spawnEnemyFromArchetype(summonArchetype, spawnPoint);
+      summon.setBossOwned(true);
+      this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ADD', 0xfca5a5);
+    }
+
+    this.nextBossSummonAtMs = this.runElapsedMs + BOSS_SUMMON_INTERVAL_MS;
+    if (!forced) {
+      this.registry.set('run.instructions', 'Boss summons active. Keep space.');
+      this.setAlert('boss', 'Boss summons', 1200);
+    }
+    this.publishHudState();
+    return summonCount;
+  }
+
+  private getActiveBossSummonCount(): number {
+    if (!this.enemies?.active) {
+      return 0;
+    }
+
+    return (this.enemies.getChildren() as Enemy[]).filter(
+      (enemy) => enemy.active && enemy.isAlive() && enemy.isBossOwned(),
+    ).length;
+  }
+
+  private clearBossOwnedSummons(): void {
+    const enemies = [...((this.enemies?.getChildren() as Enemy[] | undefined) ?? [])];
+    for (const enemy of enemies) {
+      if (enemy.active && enemy.isBossOwned()) {
+        enemy.despawnSilently();
+      }
+    }
+    this.nextBossSummonAtMs = Number.POSITIVE_INFINITY;
   }
 
   private spawnInitialNeutralShapes(): void {
@@ -2343,6 +2458,7 @@ export class RunScene extends Phaser.Scene {
     this.handleRunEventEnemyDefeated(enemy);
 
     if (wasBoss) {
+      this.clearBossOwnedSummons();
       this.endRun(true, 'Victory', 'The Behemoth has fallen.');
       return;
     }
@@ -3405,6 +3521,15 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.bossMaxHp', activeBoss?.getMaxHealth() ?? null);
     this.registry.set('run.bossPhase', this.bossPhase);
     this.registry.set('run.bossPhaseTwoTriggered', this.bossPhaseTwoTriggered);
+    this.registry.set('run.bossSummonActiveCount', this.getActiveBossSummonCount());
+    this.registry.set('run.bossSummonCap', BOSS_SUMMON_MAX_ACTIVE);
+    this.registry.set('run.bossTargetFastKillMs', BOSS_TARGET_FAST_KILL_MS);
+    this.registry.set('run.bossOwnedEnemyCount', this.getActiveBossSummonCount());
+    this.registry.set('run.bossPhasePressure', getBossPhasePressureState({
+      stagePhase,
+      bossPhase: this.bossPhase,
+      bossActive: Boolean(activeBoss),
+    }));
     this.registry.set('run.activeBossSkill', this.getActiveBossSkillName());
     this.registry.set('run.bossSkillTelegraphActive', this.skillTelegraphs.some((telegraph) => telegraph.kind === 'boss-shockwave'));
     this.registry.set('run.bossSkillDamageActive', this.shockwaveAttacks.some((attack) => attack.elapsedMs < attack.durationMs));

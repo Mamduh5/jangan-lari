@@ -1,4 +1,9 @@
-import { ENEMY_ACTIVE_CAP, ENEMY_SCALING_INTERVAL_MS, ENEMY_SCALING_MAX_STACK } from '../../src/game/config/constants';
+import {
+  BOSS_FIRST_PASS_MAX_HEALTH,
+  ENEMY_ACTIVE_CAP,
+  ENEMY_SCALING_INTERVAL_MS,
+  ENEMY_SCALING_MAX_STACK,
+} from '../../src/game/config/constants';
 import { ENEMY_ARCHETYPES } from '../../src/game/data/enemies';
 import {
   applyEventEnemyStatMultiplier,
@@ -26,7 +31,7 @@ describe('enemy scaling', () => {
 
   test('calculates deterministic stat multipliers', () => {
     expect(getEnemyScalingMultipliers(2)).toEqual({
-      hp: 1.16,
+      hp: 1.4,
       speed: 1.05,
       damage: 1.12,
       projectileCooldown: 0.95,
@@ -41,9 +46,9 @@ describe('enemy scaling', () => {
 
     expect(getEnemyMajorEncounterFactor(ENEMY_ARCHETYPES.hexcaster)).toBe(1);
     expect(getEnemyMajorEncounterFactor(ENEMY_ARCHETYPES.behemoth)).toBe(0.5);
-    expect(hexcaster.maxHealth).toBe(55);
+    expect(hexcaster.maxHealth).toBe(76);
     expect(hexcaster.shotCooldownMs).toBe(1575);
-    expect(boss.maxHealth).toBe(13920);
+    expect(boss.maxHealth).toBe(Math.round(BOSS_FIRST_PASS_MAX_HEALTH * 1.4));
   });
 
   test('reports scaling snapshot and active cap slots', () => {

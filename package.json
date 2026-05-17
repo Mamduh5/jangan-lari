@@ -20,6 +20,7 @@
     "test:e2e:readability": "playwright test tests/e2e/readability.spec.ts",
     "test:e2e:boss-stage": "playwright test tests/e2e/boss-stage.spec.ts",
     "test:e2e:boss-phase": "playwright test tests/e2e/boss-phase.spec.ts",
+    "test:e2e:boss-balance": "playwright test tests/e2e/boss-balance.spec.ts",
     "test:e2e:enemy-scaling": "playwright test tests/e2e/enemy-scaling.spec.ts",
     "test:e2e:mobile-alpha-ui": "playwright test tests/e2e/mobile-alpha-ui.spec.ts",
     "test:e2e:overlay-input": "playwright test tests/e2e/overlay-input.spec.ts",

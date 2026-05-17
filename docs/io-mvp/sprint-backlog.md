@@ -541,3 +541,23 @@ Acceptance checks:
 - Event enemies are stronger through explicit constants, without globally multiplying normal enemies.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/controls/camera-spawn/enemy-scaling/readability/boss-stage/boss-phase e2e, and diff check.
+
+## Sprint A11: Boss Balance And Boss-Owned Summons Pass
+
+Goal: Move the Behemoth fight closer to a focused boss encounter without re-enabling normal waves.
+
+Status note:
+- Added explicit boss balance hooks for the target fastest-kill window and phase-2 summon pressure.
+- Kept Behemoth durability centralized in enemy data/constants, with the current first-pass boss HP tuned for manual validation toward a roughly one-minute fastest realistic kill.
+- Added one small boss-owned summon pattern in phase 2 using capped Scuttler-derived adds with reduced XP to avoid normal-wave clutter or farming loops.
+- Boss-owned summons spawn through the existing safe-spawn path, are tagged in runtime/debug snapshots, count against a dedicated summon cap, and clear when the boss dies.
+- Normal enemies, neutral shapes, events, and normal wave spawns remain suppressed during boss phase; only the boss and boss-owned summons are allowed.
+- Deferred manual APK balance tuning, more summon patterns, endless mode, multiplayer/backend, and bot tank work.
+
+Acceptance checks:
+- Boss tuning remains centralized in constants/data.
+- Phase 2 pressure comes from one capped boss-owned summon pattern plus the existing shockwave.
+- Boss death still triggers victory and clears boss-owned summons.
+- Player death still triggers defeat.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/controls/camera-spawn/enemy-scaling/readability/boss-stage/boss-phase/boss-balance e2e, and diff check.

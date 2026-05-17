@@ -48,7 +48,7 @@ test.describe('enemy population and scaling', () => {
     run = await getRunSnapshot(page);
     expect(run.enemyScaling.stack).toBe(2);
     expect(run.enemyScaling.multipliers).toMatchObject({
-      hp: 1.16,
+      hp: 1.4,
       speed: 1.05,
       damage: 1.12,
       projectileCooldown: 0.95,
@@ -64,7 +64,7 @@ test.describe('enemy population and scaling', () => {
     run = await getRunSnapshot(page);
     const hexcaster = run.enemies.find((enemy) => enemy.id === 'hexcaster');
     expect(hexcaster).toMatchObject({
-      maxHp: 49,
+      maxHp: 59,
       moveSpeed: 101,
       contactDamage: 10,
       shotDamage: 16,
