@@ -132,7 +132,7 @@ type ActiveRunEvent =
 export class RunScene extends Phaser.Scene {
   private static readonly FIRST_ELITE_XP_BONUS = 12;
   private static readonly WAVE_TEMPLATE_ALERT_COOLDOWN_MS = 7000;
-  private static readonly VITALITY_REGEN_PER_SECOND = 0.8;
+  private static readonly VITALITY_REGEN_PER_SECOND = 0.6;
 
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;

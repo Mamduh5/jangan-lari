@@ -9,7 +9,7 @@ export type PermanentUpgradeDefinition = {
   maxLevel: number;
 };
 
-export const PERMANENT_HP_REGEN_PER_LEVEL = 0.2;
+export const PERMANENT_HP_REGEN_PER_LEVEL = 0.15;
 
 export const PERMANENT_UPGRADES: PermanentUpgradeDefinition[] = [
   {

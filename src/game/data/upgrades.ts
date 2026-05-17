@@ -44,7 +44,7 @@ export const UPGRADE_POOL: UpgradeDefinition[] = [
   {
     id: 'vitality',
     title: 'Vitality',
-    description: '+0.8 HP/sec regeneration.',
+    description: '+0.6 HP/sec regeneration.',
     kind: 'core',
   },
   {
