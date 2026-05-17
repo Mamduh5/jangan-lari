@@ -1618,7 +1618,7 @@ export class UIScene extends Phaser.Scene {
           badgeColor: '#047857',
           cardColor: 0x12231c,
           title: 'Vitality',
-          summary: '+0.8 HP/sec regen',
+          summary: '+0.6 HP/sec regen',
         });
       case 'swiftness':
         return withClassification({
