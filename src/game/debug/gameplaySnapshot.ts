@@ -72,7 +72,7 @@ export type GameplayBotEnemyProjectileSummary = {
 };
 
 export type GameplayBotEnemyAttackSummary = {
-  kind: 'miniboss-line-strike' | 'boss-shockwave';
+  kind: 'miniboss-line-strike' | 'miniboss-volley' | 'boss-shockwave';
   damageRange: number;
   visualRange: number;
   damageWidth: number | null;
@@ -108,6 +108,13 @@ export type GameplayBotRunSnapshot = {
   bossActive: boolean;
   bossHp: number | null;
   bossMaxHp: number | null;
+  bossPhase: 1 | 2;
+  bossPhaseTwoTriggered: boolean;
+  activeBossSkill: string;
+  bossSkillTelegraphActive: boolean;
+  bossSkillDamageActive: boolean;
+  activeMinibossSkill: string;
+  eventEnemyMultiplier: number;
   normalSpawnsSuppressed: boolean;
   victoryCondition: StageVictoryCondition;
   hp: number;

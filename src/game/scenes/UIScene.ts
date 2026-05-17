@@ -382,6 +382,7 @@ export class UIScene extends Phaser.Scene {
     const bossSpawnTimeMs = Number(this.registry.get('run.bossSpawnTimeMs') ?? targetMs);
     const bossHp = Number(this.registry.get('run.bossHp') ?? 0);
     const bossMaxHp = Number(this.registry.get('run.bossMaxHp') ?? 0);
+    const bossPhase = Number(this.registry.get('run.bossPhase') ?? 1);
     const score = Number(this.registry.get('run.score') ?? 0);
     const bestScore = Number(this.registry.get('run.bestScore') ?? 0);
     const finalScore = Number(this.registry.get('run.finalScore') ?? 0);
@@ -429,7 +430,7 @@ export class UIScene extends Phaser.Scene {
     this.statSummaryText.setColor(statPoints > 0 ? '#fef08a' : '#cbd5e1');
     this.setTextIfChanged(
       this.timerText,
-      this.formatStageTimer(stagePhase, elapsedMs, bossSpawnTimeMs || targetMs, bossHp, bossMaxHp),
+      this.formatStageTimer(stagePhase, elapsedMs, bossSpawnTimeMs || targetMs, bossHp, bossMaxHp, bossPhase),
     );
     this.setTextIfChanged(this.goldText, `Run Gold ${runGold}`);
     this.setTextIfChanged(this.killsText, `Kills ${kills}`);
@@ -1380,10 +1381,11 @@ export class UIScene extends Phaser.Scene {
     bossSpawnTimeMs: number,
     bossHp: number,
     bossMaxHp: number,
+    bossPhase: number,
   ): string {
     if (stagePhase === 'boss') {
       if (bossMaxHp > 0) {
-        return `Boss HP ${Math.max(0, Math.ceil(bossHp))}/${Math.ceil(bossMaxHp)}`;
+        return `Boss HP P${bossPhase} ${Math.max(0, Math.ceil(bossHp))}/${Math.ceil(bossMaxHp)}`;
       }
 
       return 'Defeat boss';

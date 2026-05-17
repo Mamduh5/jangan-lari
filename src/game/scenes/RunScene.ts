@@ -20,6 +20,7 @@ import {
   ENEMY_SPAWN_SAFE_ATTEMPTS,
   ENDING_FLASH_MS,
   ENEMY_SPAWN_INTERVAL_MS,
+  EVENT_ENEMY_STAT_MULTIPLIER,
   GAME_HEIGHT,
   GAME_WIDTH,
   LEVEL_UP_FLASH_MS,
@@ -74,11 +75,17 @@ import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 import {
+  applyEventEnemyStatMultiplier,
   applyEnemyScaling,
   getAvailableEnemySpawnSlots,
   getEnemyScalingSnapshot,
 } from '../systems/enemyScaling';
-import { createMinibossLineAttackContract } from '../systems/dangerousEffectContracts';
+import {
+  createBossShockwaveContract,
+  createMinibossLineAttackContract,
+  createMinibossVolleyContract,
+} from '../systems/dangerousEffectContracts';
+import { resolveBossPhase, type BossPhase } from '../systems/bossPhase';
 import { getUpgradeRewardType, upgradeHasWeaponRewardTag } from '../systems/rewardClassification';
 import { SpawnDirector } from '../systems/SpawnDirector';
 import { getEnemyProjectileVisual, getEnemyXpReward, getXpGemVisual, type ProjectileVisual } from '../systems/readabilityVisuals';
@@ -157,6 +164,8 @@ export class RunScene extends Phaser.Scene {
   private neutralShapeSpawnTimer?: Phaser.Time.TimerEvent;
   private stagePhase: StagePhase = 'preBoss';
   private bossEnemy: Enemy | null = null;
+  private bossPhase: BossPhase = 1;
+  private bossPhaseTwoTriggered = false;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private combatResponse!: CombatResponseController;
   private combatResponseImpactCounts: Partial<Record<WeaponId, number>> = {};
@@ -184,10 +193,20 @@ export class RunScene extends Phaser.Scene {
     maxRadius: number;
     currentRadius: number;
     durationMs: number;
+    activeVisualMs: number;
     elapsedMs: number;
     thickness: number;
     damage: number;
     hasHitPlayer: boolean;
+  }> = [];
+  private skillTelegraphs: Array<{
+    kind: 'boss-shockwave' | 'miniboss-volley';
+    x: number;
+    y: number;
+    visualRadius: number;
+    damageRadius: number;
+    durationMs: number;
+    elapsedMs: number;
   }> = [];
   private enemyBolts: Array<{
     orb: Phaser.GameObjects.Arc;
@@ -334,6 +353,9 @@ export class RunScene extends Phaser.Scene {
     this.takenUniqueUpgradeIds.clear();
     this.combatResponseImpactCounts = {};
     this.combatResponseEnemyImpactCounts = {};
+    this.skillTelegraphs = [];
+    this.bossPhase = 1;
+    this.bossPhaseTwoTriggered = false;
 
     const selectedHero = HEROES[this.saveData.selectedHero];
 
@@ -350,6 +372,8 @@ export class RunScene extends Phaser.Scene {
     this.spawnDirector = new SpawnDirector();
     this.stagePhase = 'preBoss';
     this.bossEnemy = null;
+    this.bossPhase = 1;
+    this.bossPhaseTwoTriggered = false;
     this.movementInput = new MovementInputController(this, createMovementKeys(this));
     this.lastMovementInput = {
       movement: { x: 0, y: 0 },
@@ -494,6 +518,8 @@ export class RunScene extends Phaser.Scene {
     this.player.move(new Phaser.Math.Vector2(movementInput.movement.x, movementInput.movement.y), false);
     this.updateNeutralShapes();
     this.updateEnemies();
+    this.syncBossPhaseState();
+    this.updateSkillTelegraphs(delta);
     this.updateLineStrikeAttacks(delta);
     this.updateShockwaveAttacks(delta);
     this.updateEnemyBolts(delta);
@@ -607,6 +633,18 @@ export class RunScene extends Phaser.Scene {
       }))
       .slice(0, 12);
     const enemyAttacks = [
+      ...this.skillTelegraphs.map((telegraph) => ({
+        kind: telegraph.kind,
+        damageRange: telegraph.damageRadius,
+        visualRange: telegraph.visualRadius,
+        damageWidth: null,
+        visualWidth: null,
+        damageRadius: telegraph.damageRadius,
+        visualRadius: telegraph.visualRadius,
+        damageActive: false,
+        effectActive: telegraph.elapsedMs < telegraph.durationMs,
+        remainingMs: Math.max(0, telegraph.durationMs - telegraph.elapsedMs),
+      })),
       ...this.lineStrikeAttacks.map((attack) => ({
         kind: attack.kind,
         damageRange: attack.length,
@@ -628,13 +666,17 @@ export class RunScene extends Phaser.Scene {
         damageRadius: attack.currentRadius,
         visualRadius: attack.currentRadius,
         damageActive: attack.elapsedMs < attack.durationMs,
-        effectActive: attack.ring.active || attack.halo.active,
+        effectActive: attack.elapsedMs < attack.activeVisualMs,
         remainingMs: Math.max(0, attack.durationMs - attack.elapsedMs),
       })),
     ];
     const combatResponseMetrics = this.combatResponse.getMetrics();
     const activeBoss = this.getActiveBossEnemy();
     const stagePhase = this.getCurrentStagePhase();
+    const activeBossSkill = this.getActiveBossSkillName();
+    const bossSkillTelegraphActive = this.skillTelegraphs.some((telegraph) => telegraph.kind === 'boss-shockwave');
+    const bossSkillDamageActive = this.shockwaveAttacks.some((attack) => attack.elapsedMs < attack.durationMs);
+    const activeMinibossSkill = this.getActiveMinibossSkillName();
 
     return {
       config: {
@@ -648,6 +690,13 @@ export class RunScene extends Phaser.Scene {
       bossActive: Boolean(activeBoss),
       bossHp: activeBoss?.getCurrentHealth() ?? null,
       bossMaxHp: activeBoss?.getMaxHealth() ?? null,
+      bossPhase: this.bossPhase,
+      bossPhaseTwoTriggered: this.bossPhaseTwoTriggered,
+      activeBossSkill,
+      bossSkillTelegraphActive,
+      bossSkillDamageActive,
+      activeMinibossSkill,
+      eventEnemyMultiplier: EVENT_ENEMY_STAT_MULTIPLIER,
       normalSpawnsSuppressed: this.areNormalSpawnsSuppressed(),
       victoryCondition: getStageVictoryCondition(stagePhase),
       hp: this.player.getCurrentHealth(),
@@ -1019,6 +1068,68 @@ export class RunScene extends Phaser.Scene {
     return true;
   }
 
+  public debugSetBossHealthRatio(ratio: number): boolean {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return false;
+    }
+
+    const boss = this.getActiveBossEnemy();
+    if (!boss) {
+      return false;
+    }
+
+    const targetHealth = Math.max(1, Math.round(boss.getMaxHealth() * Phaser.Math.Clamp(ratio, 0.01, 1)));
+    const damage = Math.max(0, boss.getCurrentHealth() - targetHealth);
+    if (damage > 0) {
+      boss.takeDamage(damage, { x: boss.x, y: boss.y });
+    }
+
+    this.syncBossPhaseState();
+    this.publishHudState();
+    return true;
+  }
+
+  public debugTriggerBossShockwaveSkill(): boolean {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return false;
+    }
+
+    const boss = this.getActiveBossEnemy();
+    if (!boss) {
+      return false;
+    }
+
+    const contract = createBossShockwaveContract(this.bossPhase);
+    const damage = Math.round(Math.max(24, boss.contactDamage - 6) * contract.damageMultiplier);
+    this.showBossShockwaveTelegraph(boss.x, boss.y, contract.radius, contract.telegraphMs);
+    this.time.delayedCall(contract.telegraphMs, () => {
+      if (!this.isEnded && boss.active && boss.isAlive()) {
+        this.spawnBossShockwave(boss.x, boss.y, contract.radius, damage, contract.damageActiveMs, contract.thickness);
+      }
+    });
+    this.publishHudState();
+    return true;
+  }
+
+  public debugTriggerMinibossVolley(): boolean {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return false;
+    }
+
+    const direction = new Phaser.Math.Vector2(this.player.x - (this.player.x - 260), 0).normalize();
+    const x = Phaser.Math.Clamp(this.player.x - 260, 40, WORLD_WIDTH - 40);
+    const y = this.player.y;
+    this.showMinibossVolleyTelegraph(x, y, { x: direction.x, y: direction.y });
+    const contract = createMinibossVolleyContract();
+    this.time.delayedCall(contract.telegraphMs, () => {
+      if (!this.isEnded) {
+        this.spawnMinibossVolley(x, y, { x: direction.x, y: direction.y });
+      }
+    });
+    this.publishHudState();
+    return true;
+  }
+
   public debugSpawnEnemyProjectile(): void {
     if (!this.player?.active || this.isEnded || this.isTransitioningToMenu) {
       return;
@@ -1264,6 +1375,8 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.stagePhase = 'boss';
+    this.bossPhase = 1;
+    this.bossPhaseTwoTriggered = false;
     this.spawnDirector.markBossSpawned();
     this.clearBossPhaseClutter();
 
@@ -1271,7 +1384,10 @@ export class RunScene extends Phaser.Scene {
     if (!existingBoss) {
       const spawnPoint = this.getSpawnPoint(700, BOSS_SPAWN_PLAYER_SAFE_RADIUS);
       this.bossEnemy = this.spawnEnemyFromArchetype(ENEMY_ARCHETYPES.behemoth, spawnPoint);
+      this.bossEnemy.setBossPhase(this.bossPhase);
       this.presentEncounterSpawn(ENEMY_ARCHETYPES.behemoth, spawnPoint);
+    } else {
+      existingBoss.setBossPhase(this.bossPhase);
     }
 
     this.registry.set('run.instructions', 'Defeat the boss.');
@@ -1300,6 +1416,7 @@ export class RunScene extends Phaser.Scene {
       attack.halo.destroy();
     }
     this.shockwaveAttacks = [];
+    this.skillTelegraphs = [];
     for (const bolt of this.enemyBolts) {
       bolt.orb.destroy();
       bolt.halo.destroy();
@@ -1329,8 +1446,61 @@ export class RunScene extends Phaser.Scene {
     return this.bossEnemy;
   }
 
+  private syncBossPhaseState(): void {
+    const boss = this.getActiveBossEnemy();
+    if (!boss || this.isEnded) {
+      return;
+    }
+
+    const result = resolveBossPhase({
+      currentPhase: this.bossPhase,
+      phaseTwoTriggered: this.bossPhaseTwoTriggered,
+      hp: boss.getCurrentHealth(),
+      maxHp: boss.getMaxHealth(),
+    });
+
+    if (!result.changed) {
+      boss.setBossPhase(result.phase);
+      return;
+    }
+
+    this.bossPhase = result.phase;
+    this.bossPhaseTwoTriggered = result.phaseTwoTriggered;
+    boss.setBossPhase(result.phase);
+    this.registry.set('run.instructions', 'Boss phase 2. Shockwaves intensify.');
+    this.setAlert('boss', 'Boss phase 2', 1800);
+    this.showEncounterBanner('BOSS PHASE 2', 'Shockwaves intensify', 0xfca5a5, 1600);
+    this.cameras.main.shake(160, 0.0024);
+    this.cameras.main.flash(160, 255, 120, 120, false);
+    playCue('boss-arrival');
+  }
+
   private areNormalSpawnsSuppressed(): boolean {
     return areNormalSpawnsSuppressed(this.stagePhase) || (!this.isEnded && this.runElapsedMs >= BOSS_SPAWN_TIME_MS);
+  }
+
+  private getActiveBossSkillName(): string {
+    if (this.skillTelegraphs.some((telegraph) => telegraph.kind === 'boss-shockwave')) {
+      return 'shockwave-telegraph';
+    }
+
+    if (this.shockwaveAttacks.some((attack) => attack.elapsedMs < attack.durationMs)) {
+      return 'shockwave';
+    }
+
+    return '';
+  }
+
+  private getActiveMinibossSkillName(): string {
+    if (this.skillTelegraphs.some((telegraph) => telegraph.kind === 'miniboss-volley')) {
+      return 'volley-telegraph';
+    }
+
+    if (this.lineStrikeAttacks.some((attack) => attack.elapsedMs < attack.durationMs)) {
+      return 'line-strike';
+    }
+
+    return '';
   }
 
   private enforceBossPhaseEnemyFocus(): void {
@@ -1392,6 +1562,7 @@ export class RunScene extends Phaser.Scene {
     this.enemies.add(enemy);
     if (enemy.isBoss()) {
       this.bossEnemy = enemy;
+      enemy.setBossPhase(this.bossPhase);
     }
     return enemy;
   }
@@ -1612,7 +1783,10 @@ export class RunScene extends Phaser.Scene {
       ENEMY_ARCHETYPES.hexcaster,
       ENEMY_ARCHETYPES.harrier,
     ].map((archetype, index) =>
-      this.spawnEnemyFromArchetype(archetype, this.getSpawnPoint(index === 0 ? 460 : 420, this.getEnemySpawnSafeRadius(archetype))),
+      this.spawnEnemyFromArchetype(
+        applyEventEnemyStatMultiplier(archetype),
+        this.getSpawnPoint(index === 0 ? 460 : 420, this.getEnemySpawnSafeRadius(archetype)),
+      ),
     );
 
     this.activeRunEvent = {
@@ -1644,7 +1818,7 @@ export class RunScene extends Phaser.Scene {
       return false;
     }
 
-    const rewardTargetArchetype: EnemyArchetype = {
+    const rewardTargetArchetype: EnemyArchetype = applyEventEnemyStatMultiplier({
       ...ENEMY_ARCHETYPES.harrier,
       name: 'Cache Runner',
       maxHealth: 36,
@@ -1653,7 +1827,7 @@ export class RunScene extends Phaser.Scene {
       xpValue: 12,
       preferredDistance: 150,
       strafeStrength: 0.55,
-    };
+    });
     const targetEnemy = this.spawnEnemyFromArchetype(
       rewardTargetArchetype,
       this.getSpawnPoint(380, ENEMY_SPAWN_PLAYER_SAFE_RADIUS),
@@ -1915,6 +2089,22 @@ export class RunScene extends Phaser.Scene {
     this.shockwaveAttacks = nextAttacks;
   }
 
+  private updateSkillTelegraphs(deltaMs: number): void {
+    if (this.skillTelegraphs.length === 0) {
+      return;
+    }
+
+    const nextTelegraphs: typeof this.skillTelegraphs = [];
+    for (const telegraph of this.skillTelegraphs) {
+      telegraph.elapsedMs += deltaMs;
+      if (telegraph.elapsedMs < telegraph.durationMs) {
+        nextTelegraphs.push(telegraph);
+      }
+    }
+
+    this.skillTelegraphs = nextTelegraphs;
+  }
+
   private updateLineStrikeAttacks(deltaMs: number): void {
     if (this.lineStrikeAttacks.length === 0) {
       return;
@@ -2052,6 +2242,9 @@ export class RunScene extends Phaser.Scene {
     this.createBurstCircle(enemyX, enemyY, impactColor, Math.max(5, impactRadius * 0.7), impactFlashRadius, 90, 0.22);
     this.createBurstCircle(enemyX, enemyY, 0xffffff, Math.max(3, impactRadius * 0.28), Math.max(8, impactRadius * 1.15), 70, 0.18);
     this.applyCombatImpactResponse(projectile.getWeaponId(), enemy, enemyDied, enemyX, enemyY, impactColor, impactRadius, true);
+    if (wasBoss && !enemyDied) {
+      this.syncBossPhaseState();
+    }
 
     if (enemyDied) {
       this.showFloatingText(enemyX, enemyY - 16, `${damage}`, wasBoss ? '#fca5a5' : Phaser.Display.Color.IntegerToColor(impactColor).rgba, 18);
@@ -2218,6 +2411,9 @@ export class RunScene extends Phaser.Scene {
       const enemyDied = enemy.takeDamage(damage, { x, y });
       this.createBurstCircle(enemy.x, enemy.y, 0xffffff, 4, 14, 80, 0.16);
       this.applyCombatImpactResponse('shatterbell', enemy, enemyDied, x, y, color, Math.max(8, radius * 0.22), false);
+      if (enemy.isBoss() && !enemyDied) {
+        this.syncBossPhaseState();
+      }
       if (!enemyDied) {
         continue;
       }
@@ -2346,14 +2542,26 @@ export class RunScene extends Phaser.Scene {
       case 'boss-shockwave-telegraph':
         this.registry.set('run.instructions', 'Shockwave charging. Back out.');
         this.setAlert('boss', 'Shockwave charging', 900);
-        this.showBossShockwaveTelegraph(signal.x, signal.y, signal.radius);
+        this.showBossShockwaveTelegraph(signal.x, signal.y, signal.radius, signal.telegraphMs);
         playCue('dash-warning');
         break;
       case 'boss-shockwave-execute':
         this.registry.set('run.instructions', 'Shockwave live. Keep clear.');
         this.setAlert('boss', 'Shockwave live', 900);
-        this.spawnBossShockwave(signal.x, signal.y, signal.radius, signal.damage, signal.durationMs ?? 980);
+        this.spawnBossShockwave(signal.x, signal.y, signal.radius, signal.damage, signal.durationMs, signal.thickness);
         playCue('boss-release');
+        break;
+      case 'miniboss-volley-telegraph':
+        this.registry.set('run.instructions', 'Volley charging. Sidestep.');
+        this.setAlert('miniboss', 'Volley charging', 900);
+        this.showMinibossVolleyTelegraph(signal.x, signal.y, signal.direction);
+        playCue('dash-warning');
+        break;
+      case 'miniboss-volley-execute':
+        this.registry.set('run.instructions', 'Volley live. Keep moving.');
+        this.setAlert('miniboss', 'Volley live', 900);
+        this.spawnMinibossVolley(signal.x, signal.y, signal.direction);
+        playCue('miniboss-release');
         break;
       case 'ranged-shot':
         this.spawnEnemyBolt(signal.x, signal.y, signal.direction, signal.speed, signal.damage, signal.color, signal.radius);
@@ -2482,19 +2690,28 @@ export class RunScene extends Phaser.Scene {
     });
   }
 
-  private showBossShockwaveTelegraph(x: number, y: number, radius: number): void {
+  private showBossShockwaveTelegraph(x: number, y: number, radius: number, durationMs = createBossShockwaveContract(this.bossPhase).telegraphMs): void {
     const warningCore = this.add.circle(x, y, 48, 0xfca5a5, 0.14).setDepth(8);
     warningCore.setBlendMode(Phaser.BlendModes.ADD);
     const warning = this.add.circle(x, y, radius * 0.32, 0xfca5a5, 0.06).setDepth(8);
     warning.setStrokeStyle(4, 0xfca5a5, 0.98);
     const outerEdge = this.add.circle(x, y, radius * 0.32, 0xffffff, 0).setDepth(8);
     outerEdge.setStrokeStyle(2, 0xffffff, 0.95);
+    this.skillTelegraphs.push({
+      kind: 'boss-shockwave',
+      x,
+      y,
+      visualRadius: radius,
+      damageRadius: radius,
+      durationMs,
+      elapsedMs: 0,
+    });
 
     this.tweens.add({
       targets: [warning, outerEdge],
       radius,
       alpha: 0,
-      duration: 780,
+      duration: durationMs,
       ease: 'Cubic.Out',
       onComplete: () => {
         warning.destroy();
@@ -2506,15 +2723,22 @@ export class RunScene extends Phaser.Scene {
       targets: warningCore,
       scale: 2.4,
       alpha: 0,
-      duration: 780,
+      duration: durationMs,
       ease: 'Quad.Out',
       onComplete: () => warningCore.destroy(),
     });
   }
 
-  private spawnBossShockwave(x: number, y: number, radius: number, damage: number, durationMs: number): void {
+  private spawnBossShockwave(
+    x: number,
+    y: number,
+    radius: number,
+    damage: number,
+    durationMs = createBossShockwaveContract(this.bossPhase).damageActiveMs,
+    thickness = createBossShockwaveContract(this.bossPhase).thickness,
+  ): void {
     const ring = this.add.circle(x, y, 52, 0xfca5a5, 0).setDepth(8);
-    ring.setStrokeStyle(14, 0xffffff, 0.98);
+    ring.setStrokeStyle(Math.max(8, thickness - 2), 0xffffff, 0.98);
     const halo = this.add.circle(x, y, 52, 0xfca5a5, 0.12).setDepth(7);
     halo.setBlendMode(Phaser.BlendModes.ADD);
     this.createBurstCircle(x, y, 0xfca5a5, 28, 80, 260, 0.65);
@@ -2528,11 +2752,70 @@ export class RunScene extends Phaser.Scene {
       maxRadius: radius,
       currentRadius: 52,
       durationMs,
+      activeVisualMs: durationMs,
       elapsedMs: 0,
-      thickness: 16,
+      thickness,
       damage,
       hasHitPlayer: false,
     });
+  }
+
+  private showMinibossVolleyTelegraph(x: number, y: number, direction: { x: number; y: number }): void {
+    const contract = createMinibossVolleyContract();
+    const length = 340;
+    const width = contract.projectileVisualRadius * 2.8;
+    this.skillTelegraphs.push({
+      kind: 'miniboss-volley',
+      x,
+      y,
+      visualRadius: contract.projectileVisualRadius,
+      damageRadius: contract.projectileDamageRadius,
+      durationMs: contract.telegraphMs,
+      elapsedMs: 0,
+    });
+
+    const baseAngle = Math.atan2(direction.y, direction.x);
+    const startAngle = baseAngle - Phaser.Math.DegToRad(contract.spreadDegrees / 2);
+    const step =
+      contract.projectileCount <= 1 ? 0 : Phaser.Math.DegToRad(contract.spreadDegrees / (contract.projectileCount - 1));
+
+    for (let index = 0; index < contract.projectileCount; index += 1) {
+      const angle = startAngle + step * index;
+      this.showLineAttackTelegraph(
+        x,
+        y,
+        { x: Math.cos(angle), y: Math.sin(angle) },
+        length,
+        width,
+        0xfef08a,
+        contract.telegraphMs,
+        'warning',
+      );
+    }
+  }
+
+  private spawnMinibossVolley(x: number, y: number, direction: { x: number; y: number }): void {
+    const contract = createMinibossVolleyContract();
+    const baseAngle = Math.atan2(direction.y, direction.x);
+    const startAngle = baseAngle - Phaser.Math.DegToRad(contract.spreadDegrees / 2);
+    const step =
+      contract.projectileCount <= 1 ? 0 : Phaser.Math.DegToRad(contract.spreadDegrees / (contract.projectileCount - 1));
+
+    for (let index = 0; index < contract.projectileCount; index += 1) {
+      const angle = startAngle + step * index;
+      this.spawnEnemyBolt(
+        x,
+        y,
+        { x: Math.cos(angle), y: Math.sin(angle) },
+        contract.projectileSpeed,
+        contract.projectileDamage,
+        ENEMY_ARCHETYPES.dreadnought.color,
+        contract.projectileVisualRadius,
+      );
+    }
+
+    this.createBurstCircle(x, y, 0xfef08a, 18, 58, 220, 0.58);
+    this.cameras.main.shake(90, 0.0018);
   }
 
   private isPlayerInsideLineAttack(
@@ -3120,6 +3403,13 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.bossActive', Boolean(activeBoss));
     this.registry.set('run.bossHp', activeBoss?.getCurrentHealth() ?? null);
     this.registry.set('run.bossMaxHp', activeBoss?.getMaxHealth() ?? null);
+    this.registry.set('run.bossPhase', this.bossPhase);
+    this.registry.set('run.bossPhaseTwoTriggered', this.bossPhaseTwoTriggered);
+    this.registry.set('run.activeBossSkill', this.getActiveBossSkillName());
+    this.registry.set('run.bossSkillTelegraphActive', this.skillTelegraphs.some((telegraph) => telegraph.kind === 'boss-shockwave'));
+    this.registry.set('run.bossSkillDamageActive', this.shockwaveAttacks.some((attack) => attack.elapsedMs < attack.durationMs));
+    this.registry.set('run.activeMinibossSkill', this.getActiveMinibossSkillName());
+    this.registry.set('run.eventEnemyMultiplier', EVENT_ENEMY_STAT_MULTIPLIER);
     this.registry.set('run.normalSpawnsSuppressed', this.areNormalSpawnsSuppressed());
     this.registry.set('run.victoryCondition', getStageVictoryCondition(stagePhase));
     this.registry.set('run.goldEarned', this.goldEarned);
@@ -3244,6 +3534,7 @@ export class RunScene extends Phaser.Scene {
       attack.halo.destroy();
     }
     this.shockwaveAttacks = [];
+    this.skillTelegraphs = [];
     for (const bolt of this.enemyBolts) {
       bolt.orb.destroy();
       bolt.halo.destroy();

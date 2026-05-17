@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 type EnemyAttackSnapshot = {
-  kind: 'miniboss-line-strike' | 'boss-shockwave';
+  kind: 'miniboss-line-strike' | 'miniboss-volley' | 'boss-shockwave';
   damageRange: number;
   visualRange: number;
   damageWidth: number | null;

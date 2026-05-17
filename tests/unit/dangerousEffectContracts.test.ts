@@ -1,7 +1,11 @@
 import { MINIBOSS_LINE_STRIKE_DAMAGE_ACTIVE_MS, MINIBOSS_LINE_STRIKE_WIDTH } from '../../src/game/config/constants';
 import {
+  bossShockwaveDamageAndVisualMatch,
+  createBossShockwaveContract,
   createMinibossLineAttackContract,
+  createMinibossVolleyContract,
   lineAttackDamageAndVisualMatch,
+  minibossVolleyProjectileDamageAndVisualMatch,
 } from '../../src/game/systems/dangerousEffectContracts';
 
 describe('dangerous effect contracts', () => {
@@ -22,5 +26,24 @@ describe('dangerous effect contracts', () => {
     expect(contract.length).toBe(260);
     expect(contract.length).toBeGreaterThan(0);
     expect(lineAttackDamageAndVisualMatch(contract)).toBe(true);
+  });
+
+  test('boss shockwave keeps active visual and damage ring geometry matched across phases', () => {
+    const phaseOne = createBossShockwaveContract(1);
+    const phaseTwo = createBossShockwaveContract(2);
+
+    expect(bossShockwaveDamageAndVisualMatch(phaseOne)).toBe(true);
+    expect(bossShockwaveDamageAndVisualMatch(phaseTwo)).toBe(true);
+    expect(phaseTwo.radius).toBeGreaterThan(phaseOne.radius);
+    expect(phaseTwo.cooldownMaxMs).toBeLessThan(phaseOne.cooldownMaxMs);
+    expect(phaseTwo.damageMultiplier).toBeGreaterThan(phaseOne.damageMultiplier);
+  });
+
+  test('miniboss volley projectiles use the same visual and damage radius', () => {
+    const contract = createMinibossVolleyContract();
+
+    expect(contract.projectileCount).toBeGreaterThan(1);
+    expect(contract.projectileDamageRadius).toBe(contract.projectileVisualRadius);
+    expect(minibossVolleyProjectileDamageAndVisualMatch(contract)).toBe(true);
   });
 });

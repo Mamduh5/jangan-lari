@@ -78,7 +78,7 @@ describe('tank stat runtime', () => {
       bulletDamageBonus: 4,
       fireCooldownReductionMs: 60,
       moveSpeedBonus: 10,
-      hpRegenPerSecond: 1.4,
+      hpRegenPerSecond: 0.8,
     });
   });
 

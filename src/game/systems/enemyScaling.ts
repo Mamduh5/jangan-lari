@@ -6,6 +6,8 @@ import {
   ENEMY_SCALING_MAJOR_ENCOUNTER_FACTOR,
   ENEMY_SCALING_MAX_STACK,
   ENEMY_SCALING_SPEED_PER_STACK,
+  EVENT_ENEMY_SPEED_MULTIPLIER,
+  EVENT_ENEMY_STAT_MULTIPLIER,
 } from '../config/constants';
 import type { EnemyArchetype } from '../data/enemies';
 
@@ -77,6 +79,24 @@ export function applyEnemyScaling(archetype: EnemyArchetype, elapsedMs: number):
       archetype.shotCooldownMs === undefined
         ? undefined
         : Math.max(850, Math.round(archetype.shotCooldownMs * multipliers.projectileCooldown)),
+  };
+}
+
+export function applyEventEnemyStatMultiplier(
+  archetype: EnemyArchetype,
+  statMultiplier = EVENT_ENEMY_STAT_MULTIPLIER,
+  speedMultiplier = EVENT_ENEMY_SPEED_MULTIPLIER,
+): EnemyArchetype {
+  const safeStatMultiplier = Math.max(1, statMultiplier);
+  const safeSpeedMultiplier = Math.max(1, speedMultiplier);
+
+  return {
+    ...archetype,
+    maxHealth: Math.max(1, Math.round(archetype.maxHealth * safeStatMultiplier)),
+    speed: Math.max(1, Math.round(archetype.speed * safeSpeedMultiplier)),
+    contactDamage: Math.max(1, Math.round(archetype.contactDamage * safeStatMultiplier)),
+    shotDamage:
+      archetype.shotDamage === undefined ? undefined : Math.max(1, Math.round(archetype.shotDamage * safeStatMultiplier)),
   };
 }
 

@@ -1,7 +1,12 @@
 import Phaser from 'phaser';
 import { getEnemyCombatResponseProfile, type EnemyCombatResponseProfile } from '../combat/combatResponse';
-import { ENEMY_HIT_FLASH_MS, MINIBOSS_LINE_STRIKE_LENGTH, MINIBOSS_LINE_STRIKE_TELEGRAPH_MS } from '../config/constants';
+import { ENEMY_HIT_FLASH_MS } from '../config/constants';
 import type { EnemyArchetype } from '../data/enemies';
+import {
+  createBossShockwaveContract,
+  createMinibossLineAttackContract,
+  createMinibossVolleyContract,
+} from '../systems/dangerousEffectContracts';
 
 export type EnemyAttackSignal =
   | {
@@ -18,6 +23,15 @@ export type EnemyAttackSignal =
       radius: number;
       damage: number;
       durationMs?: number;
+      thickness?: number;
+      telegraphMs?: number;
+      phase?: 1 | 2;
+    }
+  | {
+      type: 'miniboss-volley-telegraph' | 'miniboss-volley-execute';
+      x: number;
+      y: number;
+      direction: { x: number; y: number };
     }
   | {
       type: 'ranged-shot';
@@ -50,7 +64,14 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private shockwaveWindupUntil = 0;
   private shockwaveRadius = 0;
   private shockwaveDamage = 0;
+  private shockwaveThickness = createBossShockwaveContract().thickness;
+  private shockwaveDurationMs = createBossShockwaveContract().damageActiveMs;
   private shockwaveQueued = false;
+  private bossPhase: 1 | 2 = 1;
+  private nextMinibossVolleyAt = 0;
+  private minibossVolleyWindupUntil = 0;
+  private minibossVolleyQueued = false;
+  private minibossVolleyDirection = new Phaser.Math.Vector2(1, 0);
   private nextRangedShotAt = 0;
   private hitReactionUntil = 0;
   private readonly responseProfile: EnemyCombatResponseProfile | null;
@@ -78,6 +99,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.nextDashAt = scene.time.now + Phaser.Math.Between(500, 1200);
     if (archetype.isBoss) {
       this.nextShockwaveAt = scene.time.now + Phaser.Math.Between(2600, 3400);
+    }
+    if (archetype.isMiniboss) {
+      this.nextMinibossVolleyAt = scene.time.now + Phaser.Math.Between(2200, 3200);
     }
     if (archetype.behavior === 'ranged') {
       this.nextRangedShotAt = scene.time.now + Phaser.Math.Between(1100, 1900);
@@ -133,6 +157,21 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     return this.archetype.behavior;
   }
 
+  getBossPhase(): 1 | 2 {
+    return this.bossPhase;
+  }
+
+  setBossPhase(phase: 1 | 2): void {
+    if (!this.isBoss() || this.bossPhase === phase) {
+      return;
+    }
+
+    this.bossPhase = phase;
+    if (phase === 2) {
+      this.nextShockwaveAt = Math.min(this.nextShockwaveAt, this.scene.time.now + 900);
+    }
+  }
+
   isRangedShooter(): boolean {
     return this.archetype.behavior === 'ranged';
   }
@@ -185,6 +224,11 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return this.consumePendingAttackSignal();
     }
 
+    if (this.isMiniboss() && this.minibossVolleyQueued && currentTime < this.minibossVolleyWindupUntil) {
+      this.body.setVelocity(0, 0);
+      return this.consumePendingAttackSignal();
+    }
+
     switch (this.archetype.behavior) {
       case 'ranged':
         this.applyRangedMovement(towardTarget, currentTime);
@@ -219,12 +263,17 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const pulse = 1 + Math.sin((currentTime + this.y) * 0.012) * 0.03;
     const hitReactionActive = currentTime < this.hitReactionUntil;
     const minibossChargePrimed = this.isMiniboss() && Boolean(this.primedMinibossCharge) && currentTime < this.nextDashAt;
+    const minibossVolleyCharging = this.isMiniboss() && this.minibossVolleyQueued && currentTime < this.minibossVolleyWindupUntil;
     const shockwaveCharging = this.isBoss() && this.shockwaveQueued && currentTime < this.shockwaveWindupUntil;
     const rangedCharging =
       this.archetype.behavior === 'ranged' && currentTime >= this.nextRangedShotAt - 260 && currentTime < this.nextRangedShotAt;
 
     if (shockwaveCharging) {
-      const windupProgress = Phaser.Math.Clamp(1 - (this.shockwaveWindupUntil - currentTime) / 780, 0, 1);
+      const windupProgress = Phaser.Math.Clamp(
+        1 - (this.shockwaveWindupUntil - currentTime) / createBossShockwaveContract(this.bossPhase).telegraphMs,
+        0,
+        1,
+      );
       const chargePulse = 1 + Math.sin((currentTime + this.x) * 0.015) * 0.04;
       this.setResponseScale((1.03 + windupProgress * 0.07) * chargePulse * (hitReactionActive ? 0.97 : 1));
       this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffedd5, 1);
@@ -233,11 +282,20 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
 
     if (minibossChargePrimed) {
-      const chargeWindowMs = 420;
+      const chargeWindowMs = createMinibossLineAttackContract().telegraphMs;
       const chargeProgress = Phaser.Math.Clamp(1 - (this.nextDashAt - currentTime) / chargeWindowMs, 0, 1);
       this.setResponseScale((1.02 + chargeProgress * 0.13) * (hitReactionActive ? 0.96 : 1));
       this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffe4e6, 0.98);
       this.setAlpha(hitReactionActive ? 0.84 : 0.92);
+      return;
+    }
+
+    if (minibossVolleyCharging) {
+      const contract = createMinibossVolleyContract();
+      const volleyProgress = Phaser.Math.Clamp(1 - (this.minibossVolleyWindupUntil - currentTime) / contract.telegraphMs, 0, 1);
+      this.setResponseScale((1.03 + volleyProgress * 0.11) * (hitReactionActive ? 0.95 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 1, 0xfef08a, 0.98);
+      this.setAlpha(hitReactionActive ? 0.82 : 0.93);
       return;
     }
 
@@ -389,12 +447,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.dashUntil = currentTime + (this.archetype.dashDurationMs ?? 240);
       this.nextDashAt = this.dashUntil + (this.archetype.dashCooldownMs ?? 1400);
       if (this.isMiniboss() && this.primedMinibossCharge) {
+        const contract = createMinibossLineAttackContract();
         this.pendingAttackSignal = {
           type: 'miniboss-line-execute',
           x: this.x,
           y: this.y,
           direction: { x: dashDirection.x, y: dashDirection.y },
-          length: MINIBOSS_LINE_STRIKE_LENGTH,
+          length: contract.length,
         };
         this.primedMinibossCharge = null;
       }
@@ -413,9 +472,12 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   private updateSignatureAttackState(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
     if (this.isMiniboss()) {
-      const chargeWindowMs = MINIBOSS_LINE_STRIKE_TELEGRAPH_MS;
+      const chargeContract = createMinibossLineAttackContract();
+      const chargeWindowMs = chargeContract.telegraphMs;
       if (
         !this.primedMinibossCharge &&
+        !this.minibossVolleyQueued &&
+        !this.pendingAttackSignal &&
         currentTime >= this.nextDashAt - chargeWindowMs &&
         currentTime < this.nextDashAt &&
         towardTarget.lengthSq() > 0
@@ -427,7 +489,39 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
           x: this.x,
           y: this.y,
           direction: { x: chargeDirection.x, y: chargeDirection.y },
-          length: MINIBOSS_LINE_STRIKE_LENGTH,
+          length: chargeContract.length,
+        };
+      }
+
+      const volleyContract = createMinibossVolleyContract();
+      if (
+        !this.minibossVolleyQueued &&
+        !this.primedMinibossCharge &&
+        !this.pendingAttackSignal &&
+        currentTime >= this.nextMinibossVolleyAt &&
+        currentTime >= this.dashUntil &&
+        towardTarget.lengthSq() > 0
+      ) {
+        const volleyDirection = towardTarget.clone().normalize();
+        this.minibossVolleyDirection = volleyDirection;
+        this.minibossVolleyQueued = true;
+        this.minibossVolleyWindupUntil = currentTime + volleyContract.telegraphMs;
+        this.pendingAttackSignal = {
+          type: 'miniboss-volley-telegraph',
+          x: this.x,
+          y: this.y,
+          direction: { x: volleyDirection.x, y: volleyDirection.y },
+        };
+      }
+
+      if (this.minibossVolleyQueued && currentTime >= this.minibossVolleyWindupUntil && !this.pendingAttackSignal) {
+        this.minibossVolleyQueued = false;
+        this.nextMinibossVolleyAt = currentTime + volleyContract.cooldownMs;
+        this.pendingAttackSignal = {
+          type: 'miniboss-volley-execute',
+          x: this.x,
+          y: this.y,
+          direction: { x: this.minibossVolleyDirection.x, y: this.minibossVolleyDirection.y },
         };
       }
     }
@@ -437,21 +531,28 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
 
     if (!this.shockwaveQueued && currentTime >= this.nextShockwaveAt) {
+      const contract = createBossShockwaveContract(this.bossPhase);
       this.shockwaveQueued = true;
-      this.shockwaveWindupUntil = currentTime + 780;
-      this.shockwaveRadius = 300;
-      this.shockwaveDamage = Math.max(24, this.contactDamage - 6);
+      this.shockwaveWindupUntil = currentTime + contract.telegraphMs;
+      this.shockwaveRadius = contract.radius;
+      this.shockwaveDamage = Math.round(Math.max(24, this.contactDamage - 6) * contract.damageMultiplier);
+      this.shockwaveThickness = contract.thickness;
+      this.shockwaveDurationMs = contract.damageActiveMs;
       this.pendingAttackSignal = {
         type: 'boss-shockwave-telegraph',
         x: this.x,
         y: this.y,
         radius: this.shockwaveRadius,
         damage: this.shockwaveDamage,
+        thickness: this.shockwaveThickness,
+        telegraphMs: contract.telegraphMs,
+        phase: this.bossPhase,
       };
       return;
     }
 
     if (this.shockwaveQueued && currentTime >= this.shockwaveWindupUntil) {
+      const contract = createBossShockwaveContract(this.bossPhase);
       this.shockwaveQueued = false;
       this.pendingAttackSignal = {
         type: 'boss-shockwave-execute',
@@ -459,9 +560,11 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
         y: this.y,
         radius: this.shockwaveRadius,
         damage: this.shockwaveDamage,
-        durationMs: 980,
+        durationMs: this.shockwaveDurationMs,
+        thickness: this.shockwaveThickness,
+        phase: this.bossPhase,
       };
-      this.nextShockwaveAt = currentTime + Phaser.Math.Between(3800, 5000);
+      this.nextShockwaveAt = currentTime + Phaser.Math.Between(contract.cooldownMinMs, contract.cooldownMaxMs);
     }
   }
 

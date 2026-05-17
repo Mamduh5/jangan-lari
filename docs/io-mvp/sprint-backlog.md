@@ -520,3 +520,24 @@ Acceptance checks:
 - Boss durability is data-driven and significantly higher than the previous instant-kill-prone value.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/controls/camera-spawn/enemy-scaling/readability/boss-stage e2e, and diff check.
+
+## Sprint A10: Boss/Miniboss Phase And Skill Pass
+
+Goal: Make the stage boss and miniboss read as authored encounters instead of only stat blocks.
+
+Status note:
+- Added a two-phase Behemoth model. Phase 1 starts on boss spawn; phase 2 triggers once at the configured HP threshold.
+- Upgraded Behemoth shockwave into a shared contract-backed boss skill with phase 2 tuning for radius, damage, and cooldown.
+- Added a Dreadnought volley skill with a telegraphed spread and projectile radius contract, distinct from the existing line charge.
+- Added tunable event enemy stat/speed multipliers and applied them only to reward-target and challenge-wave enemies.
+- Debug snapshots expose boss phase, phase-2 trigger state, active boss/miniboss skill state, boss skill telegraph/damage activity, and event multiplier.
+- Boss kill remains the stage win condition; normal spawns/events remain suppressed during boss phase.
+- Deferred final boss balance, boss summons/minions, endless mode, multiplayer/backend, and bot tank work.
+
+Acceptance checks:
+- Behemoth has exactly phase 1 and phase 2 for now.
+- Phase 2 triggers once at the configured HP threshold.
+- Boss and miniboss dangerous effects share visual/damage contract helpers.
+- Event enemies are stronger through explicit constants, without globally multiplying normal enemies.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/controls/camera-spawn/enemy-scaling/readability/boss-stage/boss-phase e2e, and diff check.

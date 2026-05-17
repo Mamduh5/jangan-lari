@@ -1,6 +1,7 @@
 import { ENEMY_ACTIVE_CAP, ENEMY_SCALING_INTERVAL_MS, ENEMY_SCALING_MAX_STACK } from '../../src/game/config/constants';
 import { ENEMY_ARCHETYPES } from '../../src/game/data/enemies';
 import {
+  applyEventEnemyStatMultiplier,
   applyEnemyScaling,
   getAvailableEnemySpawnSlots,
   getEnemyMajorEncounterFactor,
@@ -54,5 +55,16 @@ describe('enemy scaling', () => {
     expect(getAvailableEnemySpawnSlots(0)).toBe(ENEMY_ACTIVE_CAP);
     expect(getAvailableEnemySpawnSlots(ENEMY_ACTIVE_CAP - 2)).toBe(2);
     expect(getAvailableEnemySpawnSlots(ENEMY_ACTIVE_CAP + 5)).toBe(0);
+  });
+
+  test('event stat multiplier applies only when explicitly requested', () => {
+    const base = ENEMY_ARCHETYPES.harrier;
+    const eventEnemy = applyEventEnemyStatMultiplier(base);
+
+    expect(base.maxHealth).toBe(28);
+    expect(base.contactDamage).toBe(9);
+    expect(eventEnemy.maxHealth).toBe(140);
+    expect(eventEnemy.contactDamage).toBe(45);
+    expect(eventEnemy.speed).toBeGreaterThan(base.speed);
   });
 });
