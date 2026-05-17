@@ -3,6 +3,6 @@ powershell
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
 //C:\Program Files\Android\Android Studio\jbr
 $env:ANDROID_HOME='C:\Users\mamdu\AppData\Local\Android\Sdk'
-
+//C:\Users\THIRTH~1\AppData\Local\Android\Sdk
 npm run android:sync
 npm run apk:dev
