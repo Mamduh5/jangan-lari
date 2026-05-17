@@ -422,3 +422,23 @@ Acceptance checks:
 - Different enemy XP rewards produce different XP gem tiers/colors.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/camera-spawn/readability e2e, and diff check.
+
+## Sprint A5: Enemy Population And Time Scaling
+
+Goal: Reduce screen clutter while preserving threat through more meaningful enemy stats and capped normal-mode scaling.
+
+Status note:
+- Reduced normal enemy density with a slower spawn interval, lower wave counts, and a normal active enemy cap.
+- Kept boss, miniboss, elite, reward-target, and challenge systems intact while trimming challenge-wave clutter.
+- Tuned common enemy archetypes slightly upward so fewer enemies still carry clearer role pressure.
+- Added deterministic time-based enemy scaling stacks with a normal-mode max stack and partial scaling for major encounters.
+- New enemy spawns receive the current scaling stack; already-spawned enemies are not retroactively scaled.
+- Debug snapshots expose scaling stack, max stack, multipliers, active enemy count, cap, spawn slots, and scaled enemy stats.
+- Deferred endless mode, HP regen/max-HP replacement, bot tanks, multiplayer, backend, and full gameplay-bot recalibration.
+
+Acceptance checks:
+- Enemy count/density is reduced without emptying the arena.
+- Scaling is capped in normal/timed mode.
+- Spawn safety and A4 readability remain intact.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/camera-spawn/readability/enemy-scaling e2e, and diff check.

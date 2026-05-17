@@ -37,6 +37,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   readonly contactDamage: number;
   private readonly speed: number;
   private readonly xpValue: number;
+  private readonly maxHealth: number;
   private health: number;
   private readonly strafeDirection: number;
   private dashUntil = 0;
@@ -69,7 +70,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.archetype = archetype;
     this.speed = archetype.speed;
     this.contactDamage = archetype.contactDamage;
-    this.health = archetype.maxHealth;
+    this.maxHealth = archetype.maxHealth;
+    this.health = this.maxHealth;
     this.xpValue = archetype.xpValue;
     this.responseProfile = getEnemyCombatResponseProfile(archetype.id);
     this.strafeDirection = Phaser.Math.Between(0, 1) === 0 ? -1 : 1;
@@ -113,6 +115,18 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   getXpValue(): number {
     return this.xpValue;
+  }
+
+  getCurrentHealth(): number {
+    return this.health;
+  }
+
+  getMaxHealth(): number {
+    return this.maxHealth;
+  }
+
+  getMoveSpeed(): number {
+    return this.speed;
   }
 
   getBehavior(): EnemyArchetype['behavior'] {

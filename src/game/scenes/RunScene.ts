@@ -14,6 +14,7 @@ import {
   CHALLENGE_WAVE_EVENT_WINDOW_END_MS,
   CHALLENGE_WAVE_EVENT_WINDOW_START_MS,
   ELITE_SPAWN_PLAYER_SAFE_RADIUS,
+  ENEMY_ACTIVE_CAP,
   ELITE_SPAWN_INDICATOR_MS,
   ENEMY_SPAWN_PLAYER_SAFE_RADIUS,
   ENEMY_SPAWN_SAFE_ATTEMPTS,
@@ -72,6 +73,11 @@ import { loadGameSave, markControlHintDismissed, recordLocalLeaderboardEntry, up
 import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
+import {
+  applyEnemyScaling,
+  getAvailableEnemySpawnSlots,
+  getEnemyScalingSnapshot,
+} from '../systems/enemyScaling';
 import { SpawnDirector } from '../systems/SpawnDirector';
 import { getEnemyProjectileVisual, getEnemyXpReward, getXpGemVisual, type ProjectileVisual } from '../systems/readabilityVisuals';
 import { chooseSafeSpawnPoint } from '../systems/spawnSafety';
@@ -512,6 +518,7 @@ export class RunScene extends Phaser.Scene {
     const activeGems = this.xpGems?.active ? (this.xpGems.getChildren() as XPGem[]) : [];
     const primaryWeaponStats = this.weapons[0]?.getStats();
     const tankClassChoices = this.isChoosingTankClass ? this.getAvailableTankClassChoices() : [];
+    const enemyScaling = getEnemyScalingSnapshot(this.runElapsedMs);
 
     const enemies = activeEnemies
       .filter((enemy) => enemy.active && enemy.isAlive())
@@ -520,7 +527,14 @@ export class RunScene extends Phaser.Scene {
         x: enemy.x,
         y: enemy.y,
         distance: Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y),
+        hp: enemy.getCurrentHealth(),
+        maxHp: enemy.getMaxHealth(),
+        moveSpeed: enemy.getMoveSpeed(),
         contactDamage: enemy.contactDamage,
+        shotDamage: enemy.archetype.shotDamage ?? null,
+        shotCooldownMs: enemy.archetype.shotCooldownMs ?? null,
+        shotSpeed: enemy.archetype.shotSpeed ?? null,
+        scalingStack: enemyScaling.stack,
         behavior: enemy.getBehavior(),
         xpValue: getEnemyXpReward(enemy.archetype),
         isRanged: enemy.isRangedShooter(),
@@ -682,6 +696,12 @@ export class RunScene extends Phaser.Scene {
         bossSafeRadius: BOSS_SPAWN_PLAYER_SAFE_RADIUS,
         nearestEnemyDistance: enemies[0]?.distance ?? null,
       },
+      enemyPopulation: {
+        activeCount: this.getActiveEnemyCount(),
+        activeCap: ENEMY_ACTIVE_CAP,
+        normalSpawnSlots: getAvailableEnemySpawnSlots(this.getActiveEnemyCount()),
+      },
+      enemyScaling,
       waveTemplate: {
         id: this.spawnDirector?.getLastWaveTemplateId() ?? '',
         label: this.spawnDirector?.getLastWaveTemplateLabel() ?? '',
@@ -861,6 +881,15 @@ export class RunScene extends Phaser.Scene {
 
     this.runElapsedMs = Phaser.Math.Clamp(elapsedMs, 0, RUN_TARGET_DURATION_MS);
     this.spawnEnemyWave();
+    this.publishHudState();
+  }
+
+  public debugSetRunElapsedMs(elapsedMs: number): void {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.runElapsedMs = Phaser.Math.Clamp(elapsedMs, 0, RUN_TARGET_DURATION_MS);
     this.publishHudState();
   }
 
@@ -1069,8 +1098,18 @@ export class RunScene extends Phaser.Scene {
     const hasMajorEncounter = waveResult.wave.some(
       (archetype) => archetype.isElite || archetype.isMiniboss || archetype.isBoss,
     );
+    const availableNormalSlots = getAvailableEnemySpawnSlots(this.getActiveEnemyCount());
+    let normalSpawnsUsed = 0;
 
     for (const archetype of waveResult.wave) {
+      const isMajorEncounter = Boolean(archetype.isElite || archetype.isMiniboss || archetype.isBoss);
+      if (!isMajorEncounter) {
+        if (normalSpawnsUsed >= availableNormalSlots) {
+          continue;
+        }
+        normalSpawnsUsed += 1;
+      }
+
       const spawnPoint = this.getSpawnPoint(archetype.isBoss ? 700 : 520, this.getEnemySpawnSafeRadius(archetype));
       this.spawnEnemyFromArchetype(archetype, spawnPoint);
       this.presentEncounterSpawn(archetype, spawnPoint);
@@ -1082,7 +1121,8 @@ export class RunScene extends Phaser.Scene {
   }
 
   private spawnEnemyFromArchetype(archetype: EnemyArchetype, spawnPoint: Phaser.Math.Vector2): Enemy {
-    const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, archetype);
+    const scaledArchetype = applyEnemyScaling(archetype, this.runElapsedMs);
+    const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, scaledArchetype);
     this.enemies.add(enemy);
     return enemy;
   }
@@ -1283,7 +1323,6 @@ export class RunScene extends Phaser.Scene {
 
     const challengeEnemies = [
       ENEMY_ARCHETYPES.crusher,
-      ENEMY_ARCHETYPES.mauler,
       ENEMY_ARCHETYPES.mauler,
       ENEMY_ARCHETYPES.hexcaster,
       ENEMY_ARCHETYPES.harrier,
@@ -1500,6 +1539,14 @@ export class RunScene extends Phaser.Scene {
     });
 
     return new Phaser.Math.Vector2(spawnPoint.x, spawnPoint.y);
+  }
+
+  private getActiveEnemyCount(): number {
+    if (!this.enemies?.active) {
+      return 0;
+    }
+
+    return (this.enemies.getChildren() as Enemy[]).filter((enemy) => enemy.active && enemy.isAlive()).length;
   }
 
   private getEnemySpawnSafeRadius(archetype: EnemyArchetype): number {

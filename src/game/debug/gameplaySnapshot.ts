@@ -13,7 +13,14 @@ export type GameplayBotEnemySummary = {
   x: number;
   y: number;
   distance: number;
+  hp: number;
+  maxHp: number;
+  moveSpeed: number;
   contactDamage: number;
+  shotDamage: number | null;
+  shotCooldownMs: number | null;
+  shotSpeed: number | null;
+  scalingStack: number;
   behavior: EnemyBehavior;
   xpValue: number;
   isRanged: boolean;
@@ -183,6 +190,23 @@ export type GameplayBotRunSnapshot = {
     eliteSafeRadius: number;
     bossSafeRadius: number;
     nearestEnemyDistance: number | null;
+  };
+  enemyPopulation: {
+    activeCount: number;
+    activeCap: number;
+    normalSpawnSlots: number;
+  };
+  enemyScaling: {
+    stack: number;
+    maxStack: number;
+    intervalMs: number;
+    multipliers: {
+      hp: number;
+      speed: number;
+      damage: number;
+      projectileCooldown: number;
+      projectileSpeed: number;
+    };
   };
   waveTemplate: {
     id: string;

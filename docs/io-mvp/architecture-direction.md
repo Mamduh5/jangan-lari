@@ -34,6 +34,8 @@ Sprint 14 freezes `io/mvp-foundation` as a reusable mobile `.io` foundation bran
 - Keep enemy spawn fairness centralized through safe-radius helpers and constants so edge clamping cannot collapse spawn points directly onto the player.
 - Keep enemy readability data-driven and cheap: prefer small Phaser-shape role markers, shared danger-color helpers, and XP tier helpers before adding art assets or broad balance changes.
 - Reserve red as the enemy danger/projectile language; XP gem tiers should use non-red reward colors so pickups do not compete with threat readability.
+- Keep enemy pressure legible on mobile: prefer lower active counts, stronger archetype identity, and capped normal-mode time scaling over uncapped swarm density.
+- Treat endless scaling as a separate mode decision; normal/timed runs should keep deterministic scaling caps visible in debug state.
 - Preserve fast restart and scene cleanup as first-class architecture concerns.
 - Keep `io/mvp-foundation` reusable: changes after the freeze should favor docs, verification, and reusable seams unless a later task explicitly reopens foundation work.
 

@@ -230,8 +230,8 @@ const ENDGAME_TEMPLATES: WaveTemplate[] = [
 const STAGE_RULES: StageRule[] = [
   {
     untilMs: OPENING_STAGE_END_MS,
-    minCount: 3,
-    maxCount: 4,
+    minCount: 2,
+    maxCount: 3,
     fallbackPool: [
       { archetype: ENEMY_ARCHETYPES.scuttler, weight: 22 },
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 20 },
@@ -243,8 +243,8 @@ const STAGE_RULES: StageRule[] = [
   },
   {
     untilMs: EARLY_RAMP_STAGE_END_MS,
-    minCount: 4,
-    maxCount: 5,
+    minCount: 3,
+    maxCount: 4,
     fallbackPool: [
       { archetype: ENEMY_ARCHETYPES.scuttler, weight: 12 },
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 18 },
@@ -257,8 +257,8 @@ const STAGE_RULES: StageRule[] = [
   },
   {
     untilMs: 240000,
-    minCount: 4,
-    maxCount: 6,
+    minCount: 3,
+    maxCount: 4,
     fallbackPool: [
       { archetype: ENEMY_ARCHETYPES.scuttler, weight: 10 },
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 16 },
@@ -272,8 +272,8 @@ const STAGE_RULES: StageRule[] = [
   },
   {
     untilMs: 420000,
-    minCount: 5,
-    maxCount: 7,
+    minCount: 4,
+    maxCount: 5,
     fallbackPool: [
       { archetype: ENEMY_ARCHETYPES.scuttler, weight: 8 },
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 12 },
@@ -287,8 +287,8 @@ const STAGE_RULES: StageRule[] = [
   },
   {
     untilMs: 600000,
-    minCount: 6,
-    maxCount: 8,
+    minCount: 4,
+    maxCount: 6,
     fallbackPool: [
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 10 },
       { archetype: ENEMY_ARCHETYPES.harrier, weight: 12 },
@@ -302,8 +302,8 @@ const STAGE_RULES: StageRule[] = [
   },
   {
     untilMs: RUN_TARGET_DURATION_MS,
-    minCount: 7,
-    maxCount: 10,
+    minCount: 5,
+    maxCount: 6,
     fallbackPool: [
       { archetype: ENEMY_ARCHETYPES.skimmer, weight: 8 },
       { archetype: ENEMY_ARCHETYPES.harrier, weight: 10 },
