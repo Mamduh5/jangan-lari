@@ -31,6 +31,7 @@ describe('save helpers', () => {
           'move-speed': 2,
           'pickup-range': 1,
           'starting-damage': 3,
+          'hp-regen': 4,
         },
         completedQuests: ['defeat-1-elite'],
         progressStats: {
@@ -49,12 +50,38 @@ describe('save helpers', () => {
     expect(save.totalGold).toBe(0);
     expect(save.selectedHero).toBe('vanguard');
     expect(save.unlockedHeroes).toEqual(['vanguard']);
+    expect(save.unlockedPermanentUpgrades).toEqual(['max-hp', 'move-speed', 'pickup-range', 'hp-regen']);
     expect(save.purchasedPermanentUpgrades['max-hp']).toBe(0);
+    expect(save.purchasedPermanentUpgrades['hp-regen']).toBe(4);
     expect(save.progressStats.totalKills).toBe(0);
     expect(save.bestScore).toBe(0);
     expect(save.localLeaderboard).toEqual([]);
     expect(save.controlGuideMode).toBe('subtle');
     expect(save.controlHintDismissed).toBe(true);
+  });
+
+  test('old saves without hp regen remain compatible and gain the default regen upgrade slot', () => {
+    window.localStorage.setItem(
+      'jangan-lari-save-v1',
+      JSON.stringify({
+        version: 4,
+        totalGold: 10,
+        selectedHero: 'runner',
+        unlockedHeroes: ['runner'],
+        unlockedPermanentUpgrades: ['max-hp', 'move-speed', 'pickup-range'],
+        purchasedPermanentUpgrades: {
+          'max-hp': 2,
+          'move-speed': 1,
+          'pickup-range': 0,
+          'starting-damage': 0,
+        },
+      }),
+    );
+
+    const save = loadGameSave();
+    expect(save.unlockedPermanentUpgrades).toContain('hp-regen');
+    expect(save.purchasedPermanentUpgrades['hp-regen']).toBe(0);
+    expect(save.purchasedPermanentUpgrades['max-hp']).toBe(2);
   });
 
   test('unlockHero requires enough gold and selects the unlocked hero', () => {

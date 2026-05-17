@@ -20,7 +20,7 @@ type RunSnapshot = {
     availablePoints: number;
     canSpend: boolean;
     statsMaxed: boolean;
-    levels: { bulletDamage: number; reload: number; moveSpeed: number; maxHealth: number };
+    levels: { bulletDamage: number; reload: number; moveSpeed: number; hpRegen: number };
   };
 };
 
@@ -55,7 +55,7 @@ test.describe('mobile upgrade exhaustion', () => {
       bulletDamage: 5,
       reload: 5,
       moveSpeed: 5,
-      maxHealth: 5,
+      hpRegen: 5,
     });
 
     const exhaustedHud = await getHudSnapshot(page);
@@ -110,11 +110,11 @@ async function maxAllStatsWithLeftoverPoints(page: import('@playwright/test').Pa
 
     const runScene = game.scene.getScene('RunScene') as {
       debugGrantStatPoints?: (value: number) => void;
-      allocateTankStat?: (statId: 'bulletDamage' | 'reload' | 'moveSpeed' | 'maxHealth') => boolean;
+      allocateTankStat?: (statId: 'bulletDamage' | 'reload' | 'moveSpeed' | 'hpRegen') => boolean;
     };
     runScene.debugGrantStatPoints?.(27);
 
-    for (const statId of ['bulletDamage', 'reload', 'moveSpeed', 'maxHealth'] as const) {
+    for (const statId of ['bulletDamage', 'reload', 'moveSpeed', 'hpRegen'] as const) {
       for (let index = 0; index < 5; index += 1) {
         runScene.allocateTankStat?.(statId);
       }

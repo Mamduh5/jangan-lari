@@ -113,17 +113,17 @@ export class MetaScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5);
 
-    let upgradeY = 278;
+    let upgradeY = 268;
     for (const upgrade of PERMANENT_UPGRADES) {
-      const frame = this.add.rectangle(350, upgradeY, 492, 82, 0x172033, 0.98).setOrigin(0.5);
+      const frame = this.add.rectangle(350, upgradeY, 492, 68, 0x172033, 0.98).setOrigin(0.5);
       frame.setStrokeStyle(1, 0x334155, 0.9);
       const button = this.add
         .text(506, upgradeY, upgrade.title, {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '17px',
+          fontSize: '15px',
           color: '#fef3c7',
           backgroundColor: '#1f2937',
-          padding: { left: 14, right: 14, top: 8, bottom: 8 },
+          padding: { left: 12, right: 12, top: 7, bottom: 7 },
         })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
@@ -134,19 +134,19 @@ export class MetaScene extends Phaser.Scene {
       button.on('pointerout', () => this.refreshView());
       button.on('pointerdown', () => this.handlePurchase(upgrade));
 
-      const detail = this.add.text(132, upgradeY - 18, '', {
+      const detail = this.add.text(132, upgradeY - 21, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
+        fontSize: '13px',
         color: '#cbd5e1',
         wordWrap: { width: 292 },
-        lineSpacing: 3,
+        lineSpacing: 2,
       });
       detail.setOrigin(0, 0);
 
       this.upgradeFrames.push(frame);
       this.upgradeButtons.push(button);
       this.upgradeDetails.push(detail);
-      upgradeY += 92;
+      upgradeY += 76;
     }
 
     let questY = 270;

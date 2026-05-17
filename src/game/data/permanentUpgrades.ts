@@ -1,4 +1,4 @@
-export type PermanentUpgradeId = 'max-hp' | 'move-speed' | 'pickup-range' | 'starting-damage';
+export type PermanentUpgradeId = 'max-hp' | 'move-speed' | 'pickup-range' | 'starting-damage' | 'hp-regen';
 
 export type PermanentUpgradeDefinition = {
   id: PermanentUpgradeId;
@@ -8,6 +8,8 @@ export type PermanentUpgradeDefinition = {
   costPerLevel: number;
   maxLevel: number;
 };
+
+export const PERMANENT_HP_REGEN_PER_LEVEL = 0.2;
 
 export const PERMANENT_UPGRADES: PermanentUpgradeDefinition[] = [
   {
@@ -42,7 +44,17 @@ export const PERMANENT_UPGRADES: PermanentUpgradeDefinition[] = [
     costPerLevel: 22,
     maxLevel: 5,
   },
+  {
+    id: 'hp-regen',
+    title: 'Recovery',
+    description: `+${PERMANENT_HP_REGEN_PER_LEVEL} HP/sec baseline regen per rank.`,
+    baseCost: 24,
+    costPerLevel: 20,
+    maxLevel: 5,
+  },
 ];
+
+export const PERMANENT_UPGRADE_IDS: PermanentUpgradeId[] = PERMANENT_UPGRADES.map((upgrade) => upgrade.id);
 
 export function getPermanentUpgradeCost(
   upgrade: PermanentUpgradeDefinition,

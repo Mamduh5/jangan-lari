@@ -148,8 +148,15 @@ describe('runSession helpers', () => {
       bulletDamage: 0,
       reload: 0,
       moveSpeed: 0,
-      maxHealth: 0,
+      hpRegen: 0,
     });
+    expect(registry.writes['run.tankStatEffects']).toMatchObject({
+      bulletDamageBonus: 0,
+      fireCooldownReductionMs: 0,
+      moveSpeedBonus: 0,
+      hpRegenPerSecond: 0,
+    });
+    expect(registry.writes['run.effectiveHpRegenPerSecond']).toBe(0);
     expect(registry.writes['run.classChoiceChoices']).toEqual([]);
     expect(registry.writes['run.totalGold']).toBe(120);
     expect(registry.writes['run.score']).toBe(0);

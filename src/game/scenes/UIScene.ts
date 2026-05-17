@@ -168,7 +168,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.statSummaryText = this.add
-      .text(176, 120, 'Stats DMG0 RLD0 SPD0 HP0', {
+      .text(176, 120, 'Stats DMG0 RLD0 SPD0 REG0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '16px',
         color: '#cbd5e1',
@@ -400,7 +400,7 @@ export class UIScene extends Phaser.Scene {
       bulletDamage: 0,
       reload: 0,
       moveSpeed: 0,
-      maxHealth: 0,
+      hpRegen: 0,
     }) as TankStatLevels;
 
     const classTitle = tankClass.title ?? 'Basic';
@@ -1351,7 +1351,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private formatStatSummary(levels: TankStatLevels): string {
-    return `DMG${levels.bulletDamage ?? 0} RLD${levels.reload ?? 0} SPD${levels.moveSpeed ?? 0} HP${levels.maxHealth ?? 0}`;
+    return `DMG${levels.bulletDamage ?? 0} RLD${levels.reload ?? 0} SPD${levels.moveSpeed ?? 0} REG${levels.hpRegen ?? 0}`;
   }
 
   private formatWeaponSummary(weaponNames: string[], classTitle: string): string {
@@ -1537,10 +1537,10 @@ export class UIScene extends Phaser.Scene {
       case 'vitality':
         return {
           badgeText: 'SUPPORT',
-          badgeColor: '#991b1b',
-          cardColor: 0x1a1623,
+          badgeColor: '#047857',
+          cardColor: 0x12231c,
           title: 'Vitality',
-          summary: '+25 max HP',
+          summary: '+0.8 HP/sec regen',
         };
       case 'swiftness':
         return {

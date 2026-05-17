@@ -1,4 +1,4 @@
-export type TankStatId = 'bulletDamage' | 'reload' | 'moveSpeed' | 'maxHealth';
+export type TankStatId = 'bulletDamage' | 'reload' | 'moveSpeed' | 'hpRegen';
 
 export type TankStatLevels = Record<TankStatId, number>;
 
@@ -6,7 +6,7 @@ export type TankStatEffectSnapshot = {
   bulletDamageBonus: number;
   fireCooldownReductionMs: number;
   moveSpeedBonus: number;
-  maxHealthBonus: number;
+  hpRegenPerSecond: number;
 };
 
 export type TankStatDefinition = {
@@ -18,7 +18,7 @@ export type TankStatDefinition = {
   summary: string;
 };
 
-export const TANK_STAT_IDS: TankStatId[] = ['bulletDamage', 'reload', 'moveSpeed', 'maxHealth'];
+export const TANK_STAT_IDS: TankStatId[] = ['bulletDamage', 'reload', 'moveSpeed', 'hpRegen'];
 
 export const TANK_STAT_DEFINITIONS: Record<TankStatId, TankStatDefinition> = {
   bulletDamage: {
@@ -45,13 +45,13 @@ export const TANK_STAT_DEFINITIONS: Record<TankStatId, TankStatDefinition> = {
     effectPerLevel: 10,
     summary: '+10 move speed',
   },
-  maxHealth: {
-    id: 'maxHealth',
-    label: 'Max Health',
-    shortLabel: 'HP',
+  hpRegen: {
+    id: 'hpRegen',
+    label: 'Regen',
+    shortLabel: 'REG',
     maxLevel: 5,
-    effectPerLevel: 12,
-    summary: '+12 max HP',
+    effectPerLevel: 0.35,
+    summary: '+0.35 HP/sec',
   },
 };
 
@@ -60,8 +60,22 @@ export function createInitialTankStatLevels(): TankStatLevels {
     bulletDamage: 0,
     reload: 0,
     moveSpeed: 0,
-    maxHealth: 0,
+    hpRegen: 0,
   };
+}
+
+export function isTankStatId(value: unknown): value is TankStatId {
+  return TANK_STAT_IDS.includes(value as TankStatId);
+}
+
+export function sanitizeTankStatLevels(levels: Partial<Record<TankStatId | 'maxHealth', number>> = {}): TankStatLevels {
+  const initial = createInitialTankStatLevels();
+
+  for (const statId of TANK_STAT_IDS) {
+    initial[statId] = Math.max(0, Math.floor(Number(levels[statId] ?? 0)));
+  }
+
+  return initial;
 }
 
 export function getTankStatDefinition(statId: TankStatId): TankStatDefinition {
@@ -73,6 +87,6 @@ export function createTankStatEffectSnapshot(levels: TankStatLevels): TankStatEf
     bulletDamageBonus: levels.bulletDamage * TANK_STAT_DEFINITIONS.bulletDamage.effectPerLevel,
     fireCooldownReductionMs: levels.reload * TANK_STAT_DEFINITIONS.reload.effectPerLevel,
     moveSpeedBonus: levels.moveSpeed * TANK_STAT_DEFINITIONS.moveSpeed.effectPerLevel,
-    maxHealthBonus: levels.maxHealth * TANK_STAT_DEFINITIONS.maxHealth.effectPerLevel,
+    hpRegenPerSecond: levels.hpRegen * TANK_STAT_DEFINITIONS.hpRegen.effectPerLevel,
   };
 }

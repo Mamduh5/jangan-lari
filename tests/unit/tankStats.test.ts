@@ -1,4 +1,4 @@
-import { createTankStatEffectSnapshot } from '../../src/game/data/tankStats';
+import { createTankStatEffectSnapshot, sanitizeTankStatLevels } from '../../src/game/data/tankStats';
 import { TankStatRuntime } from '../../src/game/systems/TankStatRuntime';
 
 describe('tank stat runtime', () => {
@@ -10,7 +10,7 @@ describe('tank stat runtime', () => {
       bulletDamage: 0,
       reload: 0,
       moveSpeed: 0,
-      maxHealth: 0,
+      hpRegen: 0,
     });
   });
 
@@ -56,14 +56,14 @@ describe('tank stat runtime', () => {
     const stats = new TankStatRuntime();
     stats.grantPoints(27);
 
-    for (const statId of ['bulletDamage', 'reload', 'moveSpeed', 'maxHealth'] as const) {
+    for (const statId of ['bulletDamage', 'reload', 'moveSpeed', 'hpRegen'] as const) {
       for (let index = 0; index < 5; index += 1) {
         stats.spendPoint(statId);
       }
     }
 
     expect(stats.getAvailablePoints()).toBe(7);
-    expect((['bulletDamage', 'reload', 'moveSpeed', 'maxHealth'] as const).some((statId) => stats.canSpend(statId))).toBe(false);
+    expect((['bulletDamage', 'reload', 'moveSpeed', 'hpRegen'] as const).some((statId) => stats.canSpend(statId))).toBe(false);
   });
 
   test('calculates stat effects predictably from levels', () => {
@@ -72,13 +72,31 @@ describe('tank stat runtime', () => {
         bulletDamage: 2,
         reload: 3,
         moveSpeed: 1,
-        maxHealth: 4,
+        hpRegen: 4,
       }),
     ).toEqual({
       bulletDamageBonus: 4,
       fireCooldownReductionMs: 60,
       moveSpeedBonus: 10,
-      maxHealthBonus: 48,
+      hpRegenPerSecond: 1.4,
+    });
+  });
+
+  test('sanitizes stale maxHealth run stat state without exposing it as spendable', () => {
+    const stats = new TankStatRuntime({ maxHealth: 5 }, 1);
+
+    expect(stats.canSpend('maxHealth')).toBe(false);
+    expect(stats.spendPoint('maxHealth').spent).toBe(false);
+    expect(
+      sanitizeTankStatLevels({
+        bulletDamage: 1,
+        maxHealth: 5,
+      }),
+    ).toEqual({
+      bulletDamage: 1,
+      reload: 0,
+      moveSpeed: 0,
+      hpRegen: 0,
     });
   });
 });

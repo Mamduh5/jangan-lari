@@ -156,6 +156,10 @@ export type GameplayBotRunSnapshot = {
     statsMaxed: boolean;
     levels: TankStatLevels;
     effects: TankStatEffectSnapshot;
+    effectiveHpRegenPerSecond: number;
+    metaHpRegenPerSecond: number;
+    runHpRegenPerSecond: number;
+    hpRegenActive: boolean;
   };
   tankClass: {
     id: TankClassId;

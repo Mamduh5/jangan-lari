@@ -17,7 +17,7 @@ type RunSnapshot = {
   totalGold: number;
   tankStats: {
     availablePoints: number;
-    levels: { bulletDamage: number; reload: number; moveSpeed: number; maxHealth: number };
+    levels: { bulletDamage: number; reload: number; moveSpeed: number; hpRegen: number };
   };
   tankClass: { id: string; title: string };
 };
@@ -51,7 +51,7 @@ test.describe('mobile landscape layout', () => {
     expect(initialHud.hp).toMatch(/^HP \d+\/\d+$/);
     expect(initialHud.level).toMatch(/^LV 1  XP \d+\/\d+$/);
     expect(initialHud.classStatus).toContain('Class Basic');
-    expect(initialHud.statSummary).toContain('DMG0 RLD0 SPD0 HP0');
+    expect(initialHud.statSummary).toContain('DMG0 RLD0 SPD0 REG0');
     expect(initialHud.gold).toBe('Run Gold 0');
     expect(initialHud.score).toMatch(/^Score \d+$/);
     expect(initialHud.orientationHintVisible).toBe(false);
@@ -89,12 +89,13 @@ async function seedSave(page: import('@playwright/test').Page, totalGold: number
         totalGold: gold,
         selectedHero: 'runner',
         unlockedHeroes: ['runner'],
-        unlockedPermanentUpgrades: ['max-hp', 'move-speed', 'pickup-range'],
+        unlockedPermanentUpgrades: ['max-hp', 'move-speed', 'pickup-range', 'hp-regen'],
         purchasedPermanentUpgrades: {
           'max-hp': 0,
           'move-speed': 0,
           'pickup-range': 0,
           'starting-damage': 0,
+          'hp-regen': 0,
         },
         completedQuests: [],
         progressStats: {

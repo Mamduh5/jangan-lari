@@ -11,6 +11,7 @@ import {
 } from '../config/constants';
 import type { HeroDefinition } from '../data/heroes';
 import type { TankClassVisualIdentity } from '../data/tankClasses';
+import { resolveHpRegenTick } from '../systems/hpRegen';
 
 export class Player extends Phaser.GameObjects.Rectangle {
   declare body: Phaser.Physics.Arcade.Body;
@@ -34,6 +35,9 @@ export class Player extends Phaser.GameObjects.Rectangle {
   private maxHealth = PLAYER_MAX_HP;
   private readonly hitInvulnerabilityMs = PLAYER_HIT_INVULNERABILITY_MS;
   private health = PLAYER_MAX_HP;
+  private hpRegenPerSecond = 0;
+  private hpRegenAccumulator = 0;
+  private hpRegenActive = false;
   private pickupRange = PLAYER_PICKUP_RANGE;
   private level = PLAYER_START_LEVEL;
   private experience = 0;
@@ -122,6 +126,14 @@ export class Player extends Phaser.GameObjects.Rectangle {
     return this.maxHealth;
   }
 
+  getHpRegenPerSecond(): number {
+    return this.hpRegenPerSecond;
+  }
+
+  wasHpRegenActive(): boolean {
+    return this.hpRegenActive;
+  }
+
   getMoveSpeed(): number {
     return this.speed;
   }
@@ -164,9 +176,47 @@ export class Player extends Phaser.GameObjects.Rectangle {
     return true;
   }
 
+  heal(amount: number): number {
+    if (!this.isAlive() || amount <= 0 || this.health >= this.maxHealth) {
+      return 0;
+    }
+
+    const previousHealth = this.health;
+    this.health = Math.min(this.maxHealth, this.health + amount);
+    return this.health - previousHealth;
+  }
+
   addMaxHealth(amount: number): void {
     this.maxHealth += amount;
     this.health = Math.min(this.maxHealth, this.health + amount);
+  }
+
+  addHpRegenPerSecond(amount: number): void {
+    this.hpRegenPerSecond = Math.max(0, this.hpRegenPerSecond + amount);
+  }
+
+  updateHpRegen(deltaMs: number): number {
+    const result = resolveHpRegenTick({
+      currentHp: this.health,
+      maxHp: this.maxHealth,
+      regenPerSecond: this.hpRegenPerSecond,
+      accumulator: this.hpRegenAccumulator,
+      deltaMs,
+      alive: this.isAlive(),
+    });
+
+    this.health = result.nextHp;
+    this.hpRegenAccumulator = result.nextAccumulator;
+    this.hpRegenActive = result.active;
+    return result.healedAmount;
+  }
+
+  setCurrentHealthForDebug(value: number): void {
+    this.health = Phaser.Math.Clamp(Math.floor(value), 0, this.maxHealth);
+    if (this.health >= this.maxHealth || this.health <= 0) {
+      this.hpRegenAccumulator = 0;
+      this.hpRegenActive = false;
+    }
   }
 
   addMoveSpeed(amount: number): void {

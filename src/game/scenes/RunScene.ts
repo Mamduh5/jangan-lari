@@ -59,6 +59,7 @@ import {
   type UpgradeId,
 } from '../data/upgrades';
 import { WEAPON_DEFINITIONS, type WeaponDefinition, type WeaponId } from '../data/weapons';
+import { PERMANENT_HP_REGEN_PER_LEVEL } from '../data/permanentUpgrades';
 import { Enemy, type EnemyAttackSignal } from '../entities/Enemy';
 import { NeutralShape } from '../entities/NeutralShape';
 import { Player } from '../entities/Player';
@@ -124,6 +125,7 @@ type ActiveRunEvent =
 export class RunScene extends Phaser.Scene {
   private static readonly FIRST_ELITE_XP_BONUS = 12;
   private static readonly WAVE_TEMPLATE_ALERT_COOLDOWN_MS = 7000;
+  private static readonly VITALITY_REGEN_PER_SECOND = 0.8;
 
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
@@ -236,6 +238,8 @@ export class RunScene extends Phaser.Scene {
   private globalWeaponCooldownReduction = 0;
   private globalProjectileSpeedBonus = 0;
   private globalWeaponRangeBonus = 0;
+  private metaHpRegenPerSecond = 0;
+  private runHpRegenPerSecond = 0;
 
   private readonly handlePageVisibilityChange = (): void => {
     this.refreshSystemPauseState();
@@ -306,6 +310,8 @@ export class RunScene extends Phaser.Scene {
     this.globalWeaponCooldownReduction = freshSession.globalWeaponCooldownReduction;
     this.globalProjectileSpeedBonus = freshSession.globalProjectileSpeedBonus;
     this.globalWeaponRangeBonus = freshSession.globalWeaponRangeBonus;
+    this.metaHpRegenPerSecond = 0;
+    this.runHpRegenPerSecond = 0;
     this.weapons = [];
     this.colliders = [];
     this.lineStrikeAttacks = [];
@@ -478,6 +484,7 @@ export class RunScene extends Phaser.Scene {
     this.updateLineStrikeAttacks(delta);
     this.updateShockwaveAttacks(delta);
     this.updateEnemyBolts(delta);
+    this.player.updateHpRegen(delta);
     this.updateGems();
 
     for (const weapon of this.weapons) {
@@ -658,6 +665,10 @@ export class RunScene extends Phaser.Scene {
         statsMaxed: this.areTankStatsMaxedWithPoints(),
         levels: this.tankStats.getLevels(),
         effects: this.tankStats.getEffects(),
+        effectiveHpRegenPerSecond: this.player.getHpRegenPerSecond(),
+        metaHpRegenPerSecond: this.metaHpRegenPerSecond,
+        runHpRegenPerSecond: this.runHpRegenPerSecond,
+        hpRegenActive: this.player.wasHpRegenActive(),
       },
       tankClass: {
         id: this.currentTankClass.id,
@@ -858,6 +869,24 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
   }
 
+  public debugSetPlayerHealth(health: number): void {
+    if (!this.player || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.player.setCurrentHealthForDebug(health);
+    this.publishHudState();
+  }
+
+  public debugTickHpRegen(deltaMs: number): void {
+    if (!this.player || this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.player.updateHpRegen(deltaMs);
+    this.publishHudState();
+  }
+
   public debugSetPlayerPosition(x: number, y: number): void {
     if (!this.player?.active || this.isTransitioningToMenu) {
       return;
@@ -992,6 +1021,7 @@ export class RunScene extends Phaser.Scene {
     const moveSpeedLevel = getPermanentUpgradeLevel(this.saveData, 'move-speed');
     const pickupRangeLevel = getPermanentUpgradeLevel(this.saveData, 'pickup-range');
     const startingDamageLevel = getPermanentUpgradeLevel(this.saveData, 'starting-damage');
+    const hpRegenLevel = getPermanentUpgradeLevel(this.saveData, 'hp-regen');
 
     if (maxHpLevel > 0) {
       this.player.addMaxHealth(maxHpLevel * 10);
@@ -1007,6 +1037,11 @@ export class RunScene extends Phaser.Scene {
 
     if (startingDamageLevel > 0) {
       this.applyWeaponDamageBonus(startingDamageLevel * 3);
+    }
+
+    if (hpRegenLevel > 0) {
+      this.metaHpRegenPerSecond = hpRegenLevel * PERMANENT_HP_REGEN_PER_LEVEL;
+      this.player.addHpRegenPerSecond(this.metaHpRegenPerSecond);
     }
   }
 
@@ -2505,7 +2540,7 @@ export class RunScene extends Phaser.Scene {
 
     switch (upgradeId) {
       case 'vitality':
-        this.player.addMaxHealth(25);
+        this.applyHpRegenBonus(RunScene.VITALITY_REGEN_PER_SECOND);
         break;
       case 'swiftness':
         this.player.addMoveSpeed(22);
@@ -2571,10 +2606,15 @@ export class RunScene extends Phaser.Scene {
       case 'moveSpeed':
         this.player.addMoveSpeed(effectDelta);
         break;
-      case 'maxHealth':
-        this.player.addMaxHealth(effectDelta);
+      case 'hpRegen':
+        this.applyHpRegenBonus(effectDelta);
         break;
     }
+  }
+
+  private applyHpRegenBonus(amountPerSecond: number): void {
+    this.runHpRegenPerSecond += amountPerSecond;
+    this.player.addHpRegenPerSecond(amountPerSecond);
   }
 
   private applyTankClass(definition: TankClassDefinition): void {
@@ -2598,7 +2638,7 @@ export class RunScene extends Phaser.Scene {
       bulletDamage: { color: '#fde68a', burstColor: 0xf59e0b },
       reload: { color: '#99f6e4', burstColor: 0x14b8a6 },
       moveSpeed: { color: '#bfdbfe', burstColor: 0x38bdf8 },
-      maxHealth: { color: '#fecaca', burstColor: 0xf87171 },
+      hpRegen: { color: '#bbf7d0', burstColor: 0x22c55e },
     };
     const statPalette = palette[statId];
 
@@ -2612,7 +2652,7 @@ export class RunScene extends Phaser.Scene {
       UpgradeId,
       { text: string; color: string; burstColor: number; radius: number }
     > = {
-      vitality: { text: 'Vitality +25 HP', color: '#fecaca', burstColor: 0xf87171, radius: 54 },
+      vitality: { text: 'Vitality +REG', color: '#bbf7d0', burstColor: 0x22c55e, radius: 54 },
       swiftness: { text: 'Swiftness +SPD', color: '#bfdbfe', burstColor: 0x60a5fa, radius: 56 },
       power: { text: 'Power +DMG', color: '#fde68a', burstColor: 0xf59e0b, radius: 60 },
       'rapid-fire': { text: 'Rapid Fire online', color: '#99f6e4', burstColor: 0x14b8a6, radius: 58 },
@@ -2797,6 +2837,10 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.statPoints', this.tankStats.getAvailablePoints());
     this.registry.set('run.tankStatLevels', this.tankStats.getLevels());
     this.registry.set('run.tankStatEffects', this.tankStats.getEffects());
+    this.registry.set('run.effectiveHpRegenPerSecond', this.player.getHpRegenPerSecond());
+    this.registry.set('run.metaHpRegenPerSecond', this.metaHpRegenPerSecond);
+    this.registry.set('run.runHpRegenPerSecond', this.runHpRegenPerSecond);
+    this.registry.set('run.hpRegenActive', this.player.wasHpRegenActive());
     this.registry.set('run.canSpendStatPoints', this.hasSpendableTankStats());
     this.registry.set('run.statsMaxed', this.areTankStatsMaxedWithPoints());
     this.registry.set('run.tankClass', {

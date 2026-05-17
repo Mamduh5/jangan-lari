@@ -36,6 +36,8 @@ Sprint 14 freezes `io/mvp-foundation` as a reusable mobile `.io` foundation bran
 - Reserve red as the enemy danger/projectile language; XP gem tiers should use non-red reward colors so pickups do not compete with threat readability.
 - Keep enemy pressure legible on mobile: prefer lower active counts, stronger archetype identity, and capped normal-mode time scaling over uncapped swarm density.
 - Treat endless scaling as a separate mode decision; normal/timed runs should keep deterministic scaling caps visible in debug state.
+- Treat HP regeneration as the current run survivability allocation stat; max HP can still exist for base tuning, heroes, and legacy permanent upgrades, but normal run stat allocation should expose Regen/REG instead.
+- Keep regen deterministic and observable: apply HP-per-second healing only during active living gameplay, cap it at max HP, and expose effective/meta/run regen values in debug state.
 - Preserve fast restart and scene cleanup as first-class architecture concerns.
 - Keep `io/mvp-foundation` reusable: changes after the freeze should favor docs, verification, and reusable seams unless a later task explicitly reopens foundation work.
 

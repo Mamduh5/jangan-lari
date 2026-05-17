@@ -20,7 +20,7 @@ type RunSnapshot = {
   player: { x: number; y: number };
   tankStats: {
     availablePoints: number;
-    levels: { bulletDamage: number; reload: number; moveSpeed: number; maxHealth: number };
+    levels: { bulletDamage: number; reload: number; moveSpeed: number; hpRegen: number };
   };
   tankClass: { id: string; title: string };
 };
@@ -49,7 +49,7 @@ test.describe('mobile HUD readability', () => {
     expect(initialHud.level).toMatch(/^LV 1  XP \d+\/\d+$/);
     expect(initialHud.xp).toBe(initialHud.level);
     expect(initialHud.classStatus).toContain('Class Basic');
-    expect(initialHud.statSummary).toContain('DMG0 RLD0 SPD0 HP0');
+    expect(initialHud.statSummary).toContain('DMG0 RLD0 SPD0 REG0');
     expect(initialHud.weaponSummary).toContain('Weapon');
     expect(initialHud.gold).toMatch(/^Run Gold \d+$/);
     expect(initialHud.kills).toBe('Kills 0');

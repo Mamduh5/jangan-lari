@@ -1,5 +1,5 @@
 import { HERO_IDS, type HeroId } from '../data/heroes';
-import type { PermanentUpgradeId } from '../data/permanentUpgrades';
+import { PERMANENT_UPGRADE_IDS, type PermanentUpgradeId } from '../data/permanentUpgrades';
 import type { QuestId } from '../data/quests';
 import type { TankClassId } from '../data/tankClasses';
 
@@ -50,12 +50,13 @@ export function createDefaultSaveData(): GameSaveData {
     totalGold: 0,
     selectedHero: 'runner',
     unlockedHeroes: ['runner'],
-    unlockedPermanentUpgrades: ['max-hp', 'move-speed', 'pickup-range'],
+    unlockedPermanentUpgrades: ['max-hp', 'move-speed', 'pickup-range', 'hp-regen'],
     purchasedPermanentUpgrades: {
       'max-hp': 0,
       'move-speed': 0,
       'pickup-range': 0,
       'starting-damage': 0,
+      'hp-regen': 0,
     },
     completedQuests: [],
     progressStats: {
@@ -93,13 +94,12 @@ export function loadGameSave(): GameSaveData {
 
     const unlockedPermanentUpgrades = Array.isArray(parsed.unlockedPermanentUpgrades)
       ? parsed.unlockedPermanentUpgrades.filter(
-          (upgrade): upgrade is PermanentUpgradeId =>
-            upgrade === 'max-hp' ||
-            upgrade === 'move-speed' ||
-            upgrade === 'pickup-range' ||
-            upgrade === 'starting-damage',
+          (upgrade): upgrade is PermanentUpgradeId => PERMANENT_UPGRADE_IDS.includes(upgrade as PermanentUpgradeId),
         )
       : fallback.unlockedPermanentUpgrades;
+    const mergedUnlockedPermanentUpgrades = [
+      ...new Set([...fallback.unlockedPermanentUpgrades, ...unlockedPermanentUpgrades]),
+    ];
 
     const completedQuests = Array.isArray(parsed.completedQuests)
       ? parsed.completedQuests.filter(
@@ -118,12 +118,13 @@ export function loadGameSave(): GameSaveData {
       selectedHero: unlockedHeroes.includes(selectedHero) ? selectedHero : unlockedHeroes[0] ?? fallback.selectedHero,
       unlockedHeroes: unlockedHeroes.length > 0 ? unlockedHeroes : fallback.unlockedHeroes,
       unlockedPermanentUpgrades:
-        unlockedPermanentUpgrades.length > 0 ? unlockedPermanentUpgrades : fallback.unlockedPermanentUpgrades,
+        mergedUnlockedPermanentUpgrades.length > 0 ? mergedUnlockedPermanentUpgrades : fallback.unlockedPermanentUpgrades,
       purchasedPermanentUpgrades: {
         'max-hp': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['max-hp'] ?? 0)),
         'move-speed': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['move-speed'] ?? 0)),
         'pickup-range': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['pickup-range'] ?? 0)),
         'starting-damage': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['starting-damage'] ?? 0)),
+        'hp-regen': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['hp-regen'] ?? 0)),
       },
       completedQuests,
       progressStats: {

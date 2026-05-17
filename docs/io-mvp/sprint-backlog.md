@@ -442,3 +442,22 @@ Acceptance checks:
 - Spawn safety and A4 readability remain intact.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/camera-spawn/readability/enemy-scaling e2e, and diff check.
+
+## Sprint A6: HP Regen Stat And Meta Upgrade
+
+Goal: Add conservative survivability through HP regeneration while replacing the run max-health allocation slot.
+
+Status note:
+- Added HP regen as a real player stat that heals active, living players over time without exceeding max HP.
+- Replaced the run allocation `maxHealth` stat with `hpRegen`/`Regen` while preserving existing base HP, hero max-HP bonuses, and old permanent max-HP save data.
+- Added a permanent `hp-regen`/Recovery meta upgrade that persists in local save and applies as baseline regen to future runs.
+- Exposed effective/meta/run regen and regen activity in debug/HUD state for focused validation.
+- Deferred endless mode, bot tanks, multiplayer, backend, broad rebalance, and full gameplay-bot recalibration.
+
+Acceptance checks:
+- Player can gain HP regen from run stat allocation and meta progression.
+- Regen heals gradually during active gameplay, does not heal dead/end-state players, and caps at max HP.
+- Run stat allocation shows Regen/REG instead of maxHealth/HP.
+- Old saves without `hp-regen` remain compatible.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/upgrade-exhaustion/enemy-scaling/hp-regen e2e, and diff check.

@@ -22,6 +22,8 @@
     "test:e2e:mobile-alpha-ui": "playwright test tests/e2e/mobile-alpha-ui.spec.ts",
     "test:e2e:overlay-input": "playwright test tests/e2e/overlay-input.spec.ts",
     "test:e2e:upgrade-exhaustion": "playwright test tests/e2e/mobile-upgrade-exhaustion.spec.ts",
+    "test:e2e:hpregen": "playwright test tests/e2e/hp-regen.spec.ts",
+    "test:e2e:hp-regen": "playwright test tests/e2e/hp-regen.spec.ts",
     "test:e2e:neutral-shapes": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"neutral shapes\"",
     "test:e2e:stat-allocation": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"stat allocation\"",
     "test:e2e:class-branching": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"class branching\"",
