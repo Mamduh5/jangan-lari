@@ -1,3 +1,4 @@
+// Global runtime dimensions
 export const GAME_WIDTH = 1600;
 export const GAME_HEIGHT = 720;
 
@@ -6,100 +7,18 @@ export const WORLD_HEIGHT = 1400;
 export const CAMERA_OVERSCROLL_PADDING_X = GAME_WIDTH / 2;
 export const CAMERA_OVERSCROLL_PADDING_Y = GAME_HEIGHT / 2;
 
-export const PLAYER_SPEED = 260;
-export const PLAYER_MAX_HP = 100;
-export const PLAYER_HIT_INVULNERABILITY_MS = 700;
-export const PLAYER_HIT_FLASH_MS = 120;
-export const PLAYER_PICKUP_RANGE = 90;
-export const DEFAULT_HP_REGEN_MAX_DELTA_MS = 250;
-export const PLAYER_START_LEVEL = 1;
-export const PLAYER_START_XP_TO_NEXT_LEVEL = 78;
-export const PLAYER_XP_PER_LEVEL = 24;
-
-export const ENEMY_SPAWN_INTERVAL_MS = 1600;
-export const ENEMY_ACTIVE_CAP = 28;
-export const ENEMY_SPAWN_PLAYER_SAFE_RADIUS = 360;
-export const ELITE_SPAWN_PLAYER_SAFE_RADIUS = 480;
-export const BOSS_SPAWN_PLAYER_SAFE_RADIUS = 620;
-export const ENEMY_SPAWN_SAFE_ATTEMPTS = 24;
-export const ENEMY_SCALING_INTERVAL_MS = 90000;
-export const ENEMY_SCALING_MAX_STACK = 8;
-export const ENEMY_SCALING_HP_PER_STACK = 0.20;
-export const ENEMY_SCALING_SPEED_PER_STACK = 0.025;
-export const ENEMY_SCALING_DAMAGE_PER_STACK = 0.06;
-export const ENEMY_SCALING_MAJOR_ENCOUNTER_FACTOR = 0.5;
-export const STAGE_BOSS_SPAWN_TIME_MS = 900000;
-export const BOSS_SPAWN_TIME_MS = STAGE_BOSS_SPAWN_TIME_MS;
-export const RUN_TARGET_DURATION_MS = STAGE_BOSS_SPAWN_TIME_MS;
-export const RUN_ACTIVE_DELTA_CAP_MS = 100;
-export const MINIBOSS_SPAWN_TIME_MS = 210000;
-export const MINIBOSS_SPAWN_INTERVAL_MS = 210000;
-export const ELITE_SPAWN_INTERVAL_MS = 45000;
-export const BOSS_FIRST_PASS_MAX_HEALTH = 120000;
-export const BOSS_TARGET_FAST_KILL_MS = 60000;
-export const BOSS_PHASE_TWO_HEALTH_RATIO = 0.5;
-export const BOSS_PHASE_TWO_DAMAGE_MULTIPLIER = 1.24;
-export const BOSS_PHASE_TWO_ATTACK_INTERVAL_MULTIPLIER = 0.72;
-export const BOSS_PHASE_TWO_SHOCKWAVE_RADIUS_MULTIPLIER = 1.14;
-export const BOSS_SHOCKWAVE_RADIUS = 300;
-export const BOSS_SHOCKWAVE_TELEGRAPH_MS = 780;
-export const BOSS_SHOCKWAVE_DAMAGE_ACTIVE_MS = 980;
-export const BOSS_SHOCKWAVE_THICKNESS = 16;
-export const BOSS_SHOCKWAVE_COOLDOWN_MIN_MS = 3800;
-export const BOSS_SHOCKWAVE_COOLDOWN_MAX_MS = 5000;
-export const BOSS_SUMMON_FIRST_DELAY_MS = 2400;
-export const BOSS_SUMMON_INTERVAL_MS = 7600;
-export const BOSS_SUMMON_BATCH_SIZE = 3;
-export const BOSS_SUMMON_MAX_ACTIVE = 6;
-export const BOSS_SUMMON_HEALTH_MULTIPLIER = 2.2;
-export const BOSS_SUMMON_DAMAGE_MULTIPLIER = 0.78;
-export const BOSS_SUMMON_SPEED_MULTIPLIER = 1.08;
-export const BOSS_SUMMON_XP_VALUE = 1;
-export const ENEMY_HIT_FLASH_MS = 80;
-export const RUN_EVENT_ENCOUNTER_BUFFER_MS = 6000;
-export const REWARD_TARGET_EVENT_WINDOW_START_MS = 100000;
-export const REWARD_TARGET_EVENT_WINDOW_END_MS = 170000;
-export const REWARD_TARGET_EVENT_DURATION_MS = 18000;
-export const CHALLENGE_WAVE_EVENT_WINDOW_START_MS = 255000;
-export const CHALLENGE_WAVE_EVENT_WINDOW_END_MS = 335000;
-export const CHALLENGE_WAVE_EVENT_DURATION_MS = 16000;
-
-export const MINIBOSS_LINE_STRIKE_LENGTH = 420;
-export const MINIBOSS_LINE_STRIKE_WIDTH = 76;
-export const MINIBOSS_LINE_STRIKE_TELEGRAPH_MS = 420;
-export const MINIBOSS_LINE_STRIKE_DAMAGE_ACTIVE_MS = 180;
-export const MINIBOSS_VOLLEY_TELEGRAPH_MS = 520;
-export const MINIBOSS_VOLLEY_COOLDOWN_MS = 6400;
-export const MINIBOSS_VOLLEY_PROJECTILE_COUNT = 5;
-export const MINIBOSS_VOLLEY_PROJECTILE_RADIUS = 8;
-export const MINIBOSS_VOLLEY_PROJECTILE_SPEED = 320;
-export const MINIBOSS_VOLLEY_DAMAGE = 13;
-export const MINIBOSS_VOLLEY_SPREAD_DEGREES = 58;
-
-export const EVENT_ENEMY_STAT_MULTIPLIER = 5;
-export const EVENT_ENEMY_SPEED_MULTIPLIER = 1.08;
-
-export const XP_GEM_ATTRACT_SPEED = 520;
-
-export const NEUTRAL_SHAPE_INITIAL_COUNT = 10;
-export const NEUTRAL_SHAPE_MAX_COUNT = 16;
-export const NEUTRAL_SHAPE_SPAWN_INTERVAL_MS = 4200;
-export const NEUTRAL_SHAPE_SPAWN_PADDING = 120;
-export const NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS = 260;
-export const NEUTRAL_SHAPE_HIT_FLASH_MS = 70;
-
-export const LEVEL_UP_FLASH_MS = 170;
-export const LEVEL_UP_AUTO_PICK_MS = 15000;
+// Visual feedback
 export const PLAYER_HIT_SHAKE_DURATION_MS = 90;
 export const PLAYER_HIT_SHAKE_INTENSITY = 0.0032;
-export const ELITE_SPAWN_INDICATOR_MS = 650;
-export const ENDING_FLASH_MS = 240;
 
+// Audio
 export const AUDIO_MASTER_GAIN = 1;
 export const AUDIO_NOTE_ATTACK_S = 0.04;
 export const AUDIO_NOTE_FLOOR_GAIN = 0.001;
 
-export const GOLD_REWARD_BASE = 14;
-export const GOLD_REWARD_PER_LEVEL = 5;
-export const GOLD_REWARD_PER_KILL_STEP = 5;
-export const GOLD_REWARD_VICTORY_BONUS = 28;
+// Re-exports for backward compatibility.
+// New code should import directly from the grouped balance files below.
+export * from './playerBalance';
+export * from './enemyBalance';
+export * from './bossBalance';
+export * from './rewardBalance';

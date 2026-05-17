@@ -13,6 +13,15 @@ import {
   type LocalLeaderboardEntry,
 } from '../save/saveData';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import {
+  MAGNET_PICKUP_RANGE_BONUS,
+  POWER_DAMAGE_BONUS,
+  RAPID_FIRE_COOLDOWN_REDUCTION_MS,
+  REACH_RANGE_BONUS,
+  SWIFTNESS_MOVE_SPEED_BONUS,
+  VELOCITY_PROJECTILE_SPEED_BONUS,
+  VITALITY_REGEN_PER_SECOND,
+} from '../config/playerBalance';
 import { RunScene } from './RunScene';
 
 type ControlJoystickChannel = {
@@ -1618,7 +1627,7 @@ export class UIScene extends Phaser.Scene {
           badgeColor: '#047857',
           cardColor: 0x12231c,
           title: 'Vitality',
-          summary: '+0.6 HP/sec regen',
+          summary: `+${VITALITY_REGEN_PER_SECOND} HP/sec regen`,
         });
       case 'swiftness':
         return withClassification({
@@ -1626,7 +1635,7 @@ export class UIScene extends Phaser.Scene {
           badgeColor: '#1d4ed8',
           cardColor: 0x132033,
           title: 'Swiftness',
-          summary: '+22 move speed',
+          summary: `+${SWIFTNESS_MOVE_SPEED_BONUS} move speed`,
         });
       case 'power':
         return withClassification({
@@ -1634,7 +1643,7 @@ export class UIScene extends Phaser.Scene {
           badgeColor: '#92400e',
           cardColor: 0x211915,
           title: 'Power',
-          summary: '+5 damage to all weapons',
+          summary: `+${POWER_DAMAGE_BONUS} damage to all weapons`,
         });
       case 'rapid-fire':
         return withClassification({
@@ -1642,7 +1651,7 @@ export class UIScene extends Phaser.Scene {
           badgeColor: '#0f766e',
           cardColor: 0x122225,
           title: 'Rapid Fire',
-          summary: '-40 ms cooldown',
+          summary: `-${RAPID_FIRE_COOLDOWN_REDUCTION_MS} ms cooldown`,
         });
       case 'velocity':
         return withClassification({
@@ -1650,7 +1659,7 @@ export class UIScene extends Phaser.Scene {
           badgeColor: '#7c3aed',
           cardColor: 0x171a2e,
           title: 'Velocity',
-          summary: '+90 projectile speed',
+          summary: `+${VELOCITY_PROJECTILE_SPEED_BONUS} projectile speed`,
         });
       case 'magnet':
         return withClassification({
@@ -1658,7 +1667,7 @@ export class UIScene extends Phaser.Scene {
           badgeColor: '#15803d',
           cardColor: 0x13251c,
           title: 'Magnet',
-          summary: '+35 pickup range',
+          summary: `+${MAGNET_PICKUP_RANGE_BONUS} pickup range`,
         });
       case 'reach':
         return withClassification({
@@ -1666,7 +1675,7 @@ export class UIScene extends Phaser.Scene {
           badgeColor: '#1d4ed8',
           cardColor: 0x132033,
           title: 'Reach',
-          summary: '+55 weapon range',
+          summary: `+${REACH_RANGE_BONUS} weapon range`,
         });
       default:
         return withClassification({

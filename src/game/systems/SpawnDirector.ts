@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import {
   BOSS_SPAWN_TIME_MS,
+  EARLY_RAMP_STAGE_END_MS,
   ELITE_SPAWN_INTERVAL_MS,
+  FIRST_ELITE_SPAWN_AT_MS,
   MINIBOSS_SPAWN_INTERVAL_MS,
   MINIBOSS_SPAWN_TIME_MS,
+  OPENING_STAGE_END_MS,
 } from '../config/constants';
 import { ENEMY_ARCHETYPES, type EnemyArchetype } from '../data/enemies';
 
@@ -34,10 +37,6 @@ export type SpawnWaveResult = {
   templateLabel: string;
   templateHighlight: boolean;
 };
-
-const OPENING_STAGE_END_MS = 45000;
-const EARLY_RAMP_STAGE_END_MS = 120000;
-const FIRST_ELITE_SPAWN_AT_MS = 35000;
 
 function chooseOne<T>(items: T[]): T {
   return items[Phaser.Math.Between(0, items.length - 1)];

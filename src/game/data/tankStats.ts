@@ -50,8 +50,8 @@ export const TANK_STAT_DEFINITIONS: Record<TankStatId, TankStatDefinition> = {
     label: 'Regen',
     shortLabel: 'REG',
     maxLevel: 5,
-    effectPerLevel: 0.2,
-    summary: '+0.2 HP/sec',
+    effectPerLevel: 0.35,
+    summary: '+0.35 HP/sec',
   },
 };
 

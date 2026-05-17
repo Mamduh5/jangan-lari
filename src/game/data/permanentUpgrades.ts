@@ -1,3 +1,11 @@
+import {
+  PERMANENT_HP_REGEN_PER_LEVEL,
+  PERMANENT_MAX_HP_PER_LEVEL,
+  PERMANENT_MOVE_SPEED_PER_LEVEL,
+  PERMANENT_PICKUP_RANGE_PER_LEVEL,
+  PERMANENT_STARTING_DAMAGE_PER_LEVEL,
+} from '../config/playerBalance';
+
 export type PermanentUpgradeId = 'max-hp' | 'move-speed' | 'pickup-range' | 'starting-damage' | 'hp-regen';
 
 export type PermanentUpgradeDefinition = {
@@ -9,13 +17,13 @@ export type PermanentUpgradeDefinition = {
   maxLevel: number;
 };
 
-export const PERMANENT_HP_REGEN_PER_LEVEL = 0.15;
+export { PERMANENT_HP_REGEN_PER_LEVEL } from '../config/playerBalance';
 
 export const PERMANENT_UPGRADES: PermanentUpgradeDefinition[] = [
   {
     id: 'max-hp',
     title: 'Field Rations',
-    description: '+10 starting max HP per rank.',
+    description: `+${PERMANENT_MAX_HP_PER_LEVEL} starting max HP per rank.`,
     baseCost: 25,
     costPerLevel: 20,
     maxLevel: 5,
@@ -23,7 +31,7 @@ export const PERMANENT_UPGRADES: PermanentUpgradeDefinition[] = [
   {
     id: 'move-speed',
     title: 'Light Boots',
-    description: '+8 starting move speed per rank.',
+    description: `+${PERMANENT_MOVE_SPEED_PER_LEVEL} starting move speed per rank.`,
     baseCost: 20,
     costPerLevel: 18,
     maxLevel: 5,
@@ -31,7 +39,7 @@ export const PERMANENT_UPGRADES: PermanentUpgradeDefinition[] = [
   {
     id: 'pickup-range',
     title: 'Salvage Magnet',
-    description: '+12 starting pickup range per rank.',
+    description: `+${PERMANENT_PICKUP_RANGE_PER_LEVEL} starting pickup range per rank.`,
     baseCost: 18,
     costPerLevel: 16,
     maxLevel: 5,
@@ -39,7 +47,7 @@ export const PERMANENT_UPGRADES: PermanentUpgradeDefinition[] = [
   {
     id: 'starting-damage',
     title: 'Sharpened Core',
-    description: '+3 starting projectile damage per rank.',
+    description: `+${PERMANENT_STARTING_DAMAGE_PER_LEVEL} starting projectile damage per rank.`,
     baseCost: 28,
     costPerLevel: 22,
     maxLevel: 5,

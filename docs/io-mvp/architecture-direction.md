@@ -130,3 +130,21 @@ Migration order:
 3. Add an authoritative room server prototype.
 4. Add snapshot replication.
 5. Gate debug hooks and add anti-cheat validation.
+
+## Balance Config Guardrail
+
+New gameplay balance values must be placed in config/data files, not hidden inside scenes.
+
+- `src/game/config/playerBalance.ts` for player stats, XP, regen, and upgrade effects
+- `src/game/config/enemyBalance.ts` for enemy spawn, scaling, and miniboss timing
+- `src/game/config/bossBalance.ts` for boss HP, phases, shockwave, and summons
+- `src/game/config/rewardBalance.ts` for gold, score, XP gems, neutral shapes, and event tuning
+- `src/game/config/constants.ts` for global runtime dimensions, audio, and visual feedback only
+
+Scene files should orchestrate gameplay, not own tunable balance numbers. Any number that affects damage, health, speed, XP, gold, or spawn timing belongs in a config file.
+
+Data tables (`enemies.ts`, `weapons.ts`, `upgrades.ts`, `tankStats.ts`, `permanentUpgrades.ts`) may remain as data tables. If an effect value is duplicated in descriptions and scene logic, import the shared constant from the appropriate balance config file so descriptions and gameplay stay in sync.
+
+Dangerous visual/hitbox values must still use shared contracts (`dangerousEffectContracts.ts`). Tests should import config values where practical instead of duplicating magic numbers.
+
+Client config is not anti-cheat security. Do not hide values for anti-cheat. Future multiplayer security must come from authoritative server logic, not from hiding client values.

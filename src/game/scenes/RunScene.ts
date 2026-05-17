@@ -18,28 +18,42 @@ import {
   CHALLENGE_WAVE_EVENT_DURATION_MS,
   CHALLENGE_WAVE_EVENT_WINDOW_END_MS,
   CHALLENGE_WAVE_EVENT_WINDOW_START_MS,
+  ELITE_SPAWN_INDICATOR_MS,
   ELITE_SPAWN_PLAYER_SAFE_RADIUS,
   ENEMY_ACTIVE_CAP,
-  ELITE_SPAWN_INDICATOR_MS,
+  ENEMY_SPAWN_INTERVAL_MS,
   ENEMY_SPAWN_PLAYER_SAFE_RADIUS,
   ENEMY_SPAWN_SAFE_ATTEMPTS,
   ENDING_FLASH_MS,
-  ENEMY_SPAWN_INTERVAL_MS,
   EVENT_ENEMY_STAT_MULTIPLIER,
+  FIRST_ELITE_XP_BONUS,
   GAME_HEIGHT,
   GAME_WIDTH,
   LEVEL_UP_FLASH_MS,
+  MAGNET_PICKUP_RANGE_BONUS,
   NEUTRAL_SHAPE_INITIAL_COUNT,
   NEUTRAL_SHAPE_MAX_COUNT,
   NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS,
   NEUTRAL_SHAPE_SPAWN_INTERVAL_MS,
   NEUTRAL_SHAPE_SPAWN_PADDING,
+  PERMANENT_HP_REGEN_PER_LEVEL,
+  PERMANENT_MAX_HP_PER_LEVEL,
+  PERMANENT_MOVE_SPEED_PER_LEVEL,
+  PERMANENT_PICKUP_RANGE_PER_LEVEL,
+  PERMANENT_STARTING_DAMAGE_PER_LEVEL,
   PLAYER_HIT_SHAKE_DURATION_MS,
   PLAYER_HIT_SHAKE_INTENSITY,
+  POWER_DAMAGE_BONUS,
+  RAPID_FIRE_COOLDOWN_REDUCTION_MS,
+  REACH_RANGE_BONUS,
   REWARD_TARGET_EVENT_DURATION_MS,
   REWARD_TARGET_EVENT_WINDOW_END_MS,
   REWARD_TARGET_EVENT_WINDOW_START_MS,
   RUN_EVENT_ENCOUNTER_BUFFER_MS,
+  SWIFTNESS_MOVE_SPEED_BONUS,
+  VELOCITY_PROJECTILE_SPEED_BONUS,
+  VITALITY_REGEN_PER_SECOND,
+  WAVE_TEMPLATE_ALERT_COOLDOWN_MS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
@@ -64,7 +78,6 @@ import {
   type UpgradeId,
 } from '../data/upgrades';
 import { WEAPON_DEFINITIONS, type WeaponDefinition, type WeaponId } from '../data/weapons';
-import { PERMANENT_HP_REGEN_PER_LEVEL } from '../data/permanentUpgrades';
 import { Enemy, type EnemyAttackSignal } from '../entities/Enemy';
 import { NeutralShape } from '../entities/NeutralShape';
 import { Player } from '../entities/Player';
@@ -148,10 +161,6 @@ type ActiveRunEvent =
     };
 
 export class RunScene extends Phaser.Scene {
-  private static readonly FIRST_ELITE_XP_BONUS = 12;
-  private static readonly WAVE_TEMPLATE_ALERT_COOLDOWN_MS = 7000;
-  private static readonly VITALITY_REGEN_PER_SECOND = 0.6;
-
   private player!: Player;
   private enemies!: Phaser.Physics.Arcade.Group;
   private neutralShapes!: Phaser.Physics.Arcade.Group;
@@ -1296,19 +1305,19 @@ export class RunScene extends Phaser.Scene {
     const hpRegenLevel = getPermanentUpgradeLevel(this.saveData, 'hp-regen');
 
     if (maxHpLevel > 0) {
-      this.player.addMaxHealth(maxHpLevel * 10);
+      this.player.addMaxHealth(maxHpLevel * PERMANENT_MAX_HP_PER_LEVEL);
     }
 
     if (moveSpeedLevel > 0) {
-      this.player.addMoveSpeed(moveSpeedLevel * 8);
+      this.player.addMoveSpeed(moveSpeedLevel * PERMANENT_MOVE_SPEED_PER_LEVEL);
     }
 
     if (pickupRangeLevel > 0) {
-      this.player.addPickupRange(pickupRangeLevel * 12);
+      this.player.addPickupRange(pickupRangeLevel * PERMANENT_PICKUP_RANGE_PER_LEVEL);
     }
 
     if (startingDamageLevel > 0) {
-      this.applyWeaponDamageBonus(startingDamageLevel * 3);
+      this.applyWeaponDamageBonus(startingDamageLevel * PERMANENT_STARTING_DAMAGE_PER_LEVEL);
     }
 
     if (hpRegenLevel > 0) {
@@ -1784,7 +1793,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     const now = this.time.now;
-    if (now - this.lastWaveTemplateAlertAtMs < RunScene.WAVE_TEMPLATE_ALERT_COOLDOWN_MS) {
+    if (now - this.lastWaveTemplateAlertAtMs < WAVE_TEMPLATE_ALERT_COOLDOWN_MS) {
       return;
     }
 
@@ -2569,16 +2578,16 @@ export class RunScene extends Phaser.Scene {
         this.guaranteedSignatureChoices += 1;
         this.firstEliteSignatureRewardClaimed = true;
         signatureChoicePrimed = true;
-        bonusLevelsGained = this.player.gainExperience(RunScene.FIRST_ELITE_XP_BONUS);
+        bonusLevelsGained = this.player.gainExperience(FIRST_ELITE_XP_BONUS);
         this.showFloatingText(x, y - 80, 'Signature pick primed', '#f5d0fe', 18);
-        this.showFloatingText(x, y - 102, `+${RunScene.FIRST_ELITE_XP_BONUS} XP`, '#bfdbfe', 16);
+        this.showFloatingText(x, y - 102, `+${FIRST_ELITE_XP_BONUS} XP`, '#bfdbfe', 16);
         this.createBurstCircle(x, y, 0xc084fc, 16, 54, 240, 0.42);
         this.createBurstCircle(x, y, 0x60a5fa, 10, 42, 180, 0.32);
         if (bonusLevelsGained > 0) {
           this.handlePlayerLevelsGained(bonusLevelsGained);
         }
         rewardMessages.push('signature pick primed');
-        rewardMessages.push(`+${RunScene.FIRST_ELITE_XP_BONUS} XP`);
+        rewardMessages.push(`+${FIRST_ELITE_XP_BONUS} XP`);
       }
 
       if (enemy.isMiniboss()) {
@@ -3200,25 +3209,25 @@ export class RunScene extends Phaser.Scene {
 
     switch (upgradeId) {
       case 'vitality':
-        this.applyHpRegenBonus(RunScene.VITALITY_REGEN_PER_SECOND);
+        this.applyHpRegenBonus(VITALITY_REGEN_PER_SECOND);
         break;
       case 'swiftness':
-        this.player.addMoveSpeed(22);
+        this.player.addMoveSpeed(SWIFTNESS_MOVE_SPEED_BONUS);
         break;
       case 'power':
-        this.applyWeaponDamageBonus(5);
+        this.applyWeaponDamageBonus(POWER_DAMAGE_BONUS);
         break;
       case 'rapid-fire':
-        this.applyWeaponCooldownReduction(40);
+        this.applyWeaponCooldownReduction(RAPID_FIRE_COOLDOWN_REDUCTION_MS);
         break;
       case 'velocity':
-        this.applyProjectileSpeedBonus(90);
+        this.applyProjectileSpeedBonus(VELOCITY_PROJECTILE_SPEED_BONUS);
         break;
       case 'magnet':
-        this.player.addPickupRange(35);
+        this.player.addPickupRange(MAGNET_PICKUP_RANGE_BONUS);
         break;
       case 'reach':
-        this.applyWeaponRangeBonus(55);
+        this.applyWeaponRangeBonus(REACH_RANGE_BONUS);
         break;
       case 'unlock-twin-fangs':
         this.registerWeapon(WEAPON_DEFINITIONS['twin-fangs'], true);

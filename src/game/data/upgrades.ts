@@ -1,3 +1,12 @@
+import {
+  MAGNET_PICKUP_RANGE_BONUS,
+  POWER_DAMAGE_BONUS,
+  RAPID_FIRE_COOLDOWN_REDUCTION_MS,
+  REACH_RANGE_BONUS,
+  SWIFTNESS_MOVE_SPEED_BONUS,
+  VELOCITY_PROJECTILE_SPEED_BONUS,
+  VITALITY_REGEN_PER_SECOND,
+} from '../config/playerBalance';
 import type { WeaponId, WeaponStatPatch } from './weapons';
 
 export type UpgradeId =
@@ -44,43 +53,43 @@ export const UPGRADE_POOL: UpgradeDefinition[] = [
   {
     id: 'vitality',
     title: 'Vitality',
-    description: '+0.6 HP/sec regeneration.',
+    description: `+${VITALITY_REGEN_PER_SECOND} HP/sec regeneration.`,
     kind: 'core',
   },
   {
     id: 'swiftness',
     title: 'Swiftness',
-    description: '+22 move speed.',
+    description: `+${SWIFTNESS_MOVE_SPEED_BONUS} move speed.`,
     kind: 'core',
   },
   {
     id: 'power',
     title: 'Power',
-    description: '+5 damage to all owned weapons.',
+    description: `+${POWER_DAMAGE_BONUS} damage to all owned weapons.`,
     kind: 'core',
   },
   {
     id: 'rapid-fire',
     title: 'Rapid Fire',
-    description: '-40 ms cooldown to all owned weapons.',
+    description: `-${RAPID_FIRE_COOLDOWN_REDUCTION_MS} ms cooldown to all owned weapons.`,
     kind: 'core',
   },
   {
     id: 'velocity',
     title: 'Velocity',
-    description: '+90 projectile speed to all owned weapons.',
+    description: `+${VELOCITY_PROJECTILE_SPEED_BONUS} projectile speed to all owned weapons.`,
     kind: 'core',
   },
   {
     id: 'magnet',
     title: 'Magnet',
-    description: '+35 pickup range.',
+    description: `+${MAGNET_PICKUP_RANGE_BONUS} pickup range.`,
     kind: 'core',
   },
   {
     id: 'reach',
     title: 'Reach',
-    description: '+55 attack range to all owned weapons.',
+    description: `+${REACH_RANGE_BONUS} attack range to all owned weapons.`,
     kind: 'core',
   },
   {
