@@ -24,6 +24,7 @@
     "test:e2e:upgrade-exhaustion": "playwright test tests/e2e/mobile-upgrade-exhaustion.spec.ts",
     "test:e2e:hp-regen": "playwright test tests/e2e/hp-regen.spec.ts",
     "test:e2e:hitbox-truth": "playwright test tests/e2e/hitbox-truth.spec.ts",
+    "test:e2e:reward-visibility": "playwright test tests/e2e/reward-visibility.spec.ts",
     "test:e2e:neutral-shapes": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"neutral shapes\"",
     "test:e2e:stat-allocation": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"stat allocation\"",
     "test:e2e:class-branching": "playwright test tests/e2e/gameplay-bot.spec.ts -g \"class branching\"",

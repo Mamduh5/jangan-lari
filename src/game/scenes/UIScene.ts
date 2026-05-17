@@ -4,6 +4,7 @@ import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import type { ActivePointerLike } from '../input/MovementInputController';
+import { getUpgradeRewardType, upgradeHasWeaponRewardTag, type UpgradeRewardType } from '../systems/rewardClassification';
 import {
   CONTROL_GUIDE_MODES,
   loadGameSave,
@@ -67,6 +68,12 @@ export class UIScene extends Phaser.Scene {
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
   private levelUpDescriptions: Phaser.GameObjects.Text[] = [];
   private levelUpBadges: Phaser.GameObjects.Text[] = [];
+  private levelUpWeaponTagIcons: Array<{
+    container: Phaser.GameObjects.Container;
+    frame: Phaser.GameObjects.Rectangle;
+    barrel: Phaser.GameObjects.Rectangle;
+    muzzle: Phaser.GameObjects.Arc;
+  }> = [];
   private classChoiceContainer!: Phaser.GameObjects.Container;
   private classChoiceCards: Phaser.GameObjects.Rectangle[] = [];
   private classChoiceTitles: Phaser.GameObjects.Text[] = [];
@@ -111,6 +118,7 @@ export class UIScene extends Phaser.Scene {
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
     this.levelUpBadges = [];
+    this.levelUpWeaponTagIcons = [];
     this.classChoiceCards = [];
     this.classChoiceTitles = [];
     this.classChoiceDescriptions = [];
@@ -671,6 +679,16 @@ export class UIScene extends Phaser.Scene {
         .setOrigin(0, 0.5)
         .setScrollFactor(0);
 
+      const weaponTagFrame = this.add.rectangle(0, 0, 38, 24, 0x0f172a, 0.96);
+      weaponTagFrame.setStrokeStyle(1, 0xfacc15, 0.95);
+      const weaponTagBarrel = this.add.rectangle(-4, 0, 20, 5, 0xfacc15, 0.95);
+      weaponTagBarrel.setOrigin(0.2, 0.5);
+      const weaponTagMuzzle = this.add.circle(11, 0, 4, 0xfef3c7, 0.96);
+      const weaponTag = this.add
+        .container(x + 100, 320, [weaponTagFrame, weaponTagBarrel, weaponTagMuzzle])
+        .setScrollFactor(0)
+        .setVisible(false);
+
       const button = this.add
         .text(x - 106, 348, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
@@ -694,9 +712,15 @@ export class UIScene extends Phaser.Scene {
 
       this.levelUpCards.push(card);
       this.levelUpBadges.push(badge);
+      this.levelUpWeaponTagIcons.push({
+        container: weaponTag,
+        frame: weaponTagFrame,
+        barrel: weaponTagBarrel,
+        muzzle: weaponTagMuzzle,
+      });
       this.levelUpButtons.push(button);
       this.levelUpDescriptions.push(description);
-      children.push(card, badge, button, description);
+      children.push(card, badge, weaponTag, button, description);
     }
 
     const container = this.add.container(0, 0, children);
@@ -1179,12 +1203,14 @@ export class UIScene extends Phaser.Scene {
       const choice = choices[index];
       const card = this.levelUpCards[index];
       const badge = this.levelUpBadges[index];
+      const weaponTag = this.levelUpWeaponTagIcons[index];
       const button = this.levelUpButtons[index];
       const description = this.levelUpDescriptions[index];
 
       if (!choice) {
         card.setVisible(false);
         badge.setVisible(false);
+        weaponTag?.container.setVisible(false);
         button.setVisible(false);
         description.setVisible(false);
         continue;
@@ -1193,9 +1219,12 @@ export class UIScene extends Phaser.Scene {
       const presentation = this.getUpgradePresentation(choice);
       card.setVisible(true);
       badge.setVisible(true);
+      weaponTag?.container.setVisible(presentation.hasWeaponTag);
       button.setVisible(true);
       description.setVisible(true);
       card.setData('baseColor', presentation.cardColor);
+      card.setData('rewardType', presentation.rewardType);
+      card.setData('hasWeaponTag', presentation.hasWeaponTag);
       badge.setBackgroundColor(presentation.badgeColor);
       this.setTextIfChanged(badge, presentation.badgeText);
       this.setTextIfChanged(button, presentation.title);
@@ -1499,105 +1528,121 @@ export class UIScene extends Phaser.Scene {
     cardColor: number;
     title: string;
     summary: string;
+    rewardType: UpgradeRewardType;
+    hasWeaponTag: boolean;
   } {
+    const rewardType = getUpgradeRewardType(choice);
+    const hasWeaponTag = upgradeHasWeaponRewardTag(choice);
+    const withClassification = (presentation: {
+      badgeText: string;
+      badgeColor: string;
+      cardColor: number;
+      title: string;
+      summary: string;
+    }) => ({
+      ...presentation,
+      rewardType,
+      hasWeaponTag,
+    });
+
     if (choice.kind === 'signature' && choice.requiresWeaponId) {
       const weapon = WEAPON_DEFINITIONS[choice.requiresWeaponId];
-      return {
+      return withClassification({
         badgeText: 'SIGNATURE',
         badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
         cardColor: 0x1a2235,
         title: choice.title,
         summary: `${weapon.name}: ${choice.description}`,
-      };
+      });
     }
 
     if (choice.kind === 'branch' && choice.requiresWeaponId) {
       const weapon = WEAPON_DEFINITIONS[choice.requiresWeaponId];
-      return {
+      return withClassification({
         badgeText: 'BRANCH',
         badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
         cardColor: 0x162033,
         title: choice.title,
         summary: `${weapon.name}: ${choice.description}`,
-      };
+      });
     }
 
     const weapon = this.getWeaponUpgrade(choice.id);
     if (weapon) {
-      return {
+      return withClassification({
         badgeText: 'WEAPON',
         badgeColor: `#${weapon.projectileColor.toString(16).padStart(6, '0')}`,
         cardColor: 0x132033,
         title: weapon.name,
         summary: weapon.codexSummary,
-      };
+      });
     }
 
     switch (choice.id) {
       case 'vitality':
-        return {
+        return withClassification({
           badgeText: 'SUPPORT',
           badgeColor: '#047857',
           cardColor: 0x12231c,
           title: 'Vitality',
           summary: '+0.8 HP/sec regen',
-        };
+        });
       case 'swiftness':
-        return {
+        return withClassification({
           badgeText: 'SUPPORT',
           badgeColor: '#1d4ed8',
           cardColor: 0x132033,
           title: 'Swiftness',
           summary: '+22 move speed',
-        };
+        });
       case 'power':
-        return {
+        return withClassification({
           badgeText: 'SUPPORT',
           badgeColor: '#92400e',
           cardColor: 0x211915,
           title: 'Power',
           summary: '+5 damage to all weapons',
-        };
+        });
       case 'rapid-fire':
-        return {
+        return withClassification({
           badgeText: 'SUPPORT',
           badgeColor: '#0f766e',
           cardColor: 0x122225,
           title: 'Rapid Fire',
           summary: '-40 ms cooldown',
-        };
+        });
       case 'velocity':
-        return {
+        return withClassification({
           badgeText: 'SUPPORT',
           badgeColor: '#7c3aed',
           cardColor: 0x171a2e,
           title: 'Velocity',
           summary: '+90 projectile speed',
-        };
+        });
       case 'magnet':
-        return {
+        return withClassification({
           badgeText: 'SUPPORT',
           badgeColor: '#15803d',
           cardColor: 0x13251c,
           title: 'Magnet',
           summary: '+35 pickup range',
-        };
+        });
       case 'reach':
-        return {
+        return withClassification({
           badgeText: 'SUPPORT',
           badgeColor: '#1d4ed8',
           cardColor: 0x132033,
           title: 'Reach',
           summary: '+55 weapon range',
-        };
+        });
       default:
-        return {
+        return withClassification({
           badgeText: 'SUPPORT',
           badgeColor: '#334155',
           cardColor: 0x111827,
           title: choice.title,
           summary: choice.description,
-        };
+        });
     }
   }
 
@@ -1670,6 +1715,7 @@ export class UIScene extends Phaser.Scene {
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
     this.levelUpBadges = [];
+    this.levelUpWeaponTagIcons = [];
     this.classChoiceCards = [];
     this.classChoiceTitles = [];
     this.classChoiceDescriptions = [];

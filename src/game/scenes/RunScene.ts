@@ -80,6 +80,7 @@ import {
   getEnemyScalingSnapshot,
 } from '../systems/enemyScaling';
 import { createMinibossLineAttackContract } from '../systems/dangerousEffectContracts';
+import { getUpgradeRewardType, upgradeHasWeaponRewardTag } from '../systems/rewardClassification';
 import { SpawnDirector } from '../systems/SpawnDirector';
 import { getEnemyProjectileVisual, getEnemyXpReward, getXpGemVisual, type ProjectileVisual } from '../systems/readabilityVisuals';
 import { chooseSafeSpawnPoint } from '../systems/spawnSafety';
@@ -724,6 +725,8 @@ export class RunScene extends Phaser.Scene {
       upgradeChoices: levelUpChoices.map((choice) => ({
         id: choice.id,
         title: choice.title,
+        rewardType: getUpgradeRewardType(choice),
+        hasWeaponTag: upgradeHasWeaponRewardTag(choice),
       })),
       camera: {
         scrollX: this.cameras.main.scrollX,
@@ -1010,6 +1013,32 @@ export class RunScene extends Phaser.Scene {
       { x: 1, y: 0 },
       length,
     );
+    this.publishHudState();
+  }
+
+  public debugForceRewardVisibilityChoices(): void {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    const choices = ['unlock-twin-fangs', 'vitality', 'power']
+      .map((upgradeId) => findUpgradeDefinitionById(upgradeId as UpgradeId))
+      .filter((upgrade): upgrade is UpgradeDefinition => Boolean(upgrade));
+    if (choices.length === 0) {
+      return;
+    }
+
+    this.pendingLevelUps = 1;
+    this.isLevelingUp = true;
+    this.isResolvingLevelUpChoice = false;
+    this.levelUpRemainingMs = beginLevelUpCountdown();
+    this.pauseGameplaySystems('Pick a reward, then continue shaping your tank.');
+    this.registry.set('run.levelUpActive', true);
+    this.registry.set('run.levelUpMode', 'normal');
+    this.registry.set('run.levelUpChoices', choices);
+    this.registry.set('run.levelUpChoiceCount', choices.length);
+    this.registry.set('run.levelUpRemainingMs', this.levelUpRemainingMs);
+    this.registry.set('run.upgradePoolExhausted', false);
     this.publishHudState();
   }
 

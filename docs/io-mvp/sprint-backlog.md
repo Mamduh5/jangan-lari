@@ -480,3 +480,21 @@ Acceptance checks:
 - HP regen behavior remains intact with the same max delta cap.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/camera-spawn/readability/enemy-scaling/hp-regen/hitbox-truth e2e, and diff check.
+
+## Sprint A8: Reward Visibility And Weapon Tagging
+
+Goal: Make weapon rewards visibly distinct from stat/passive choices without redesigning the whole upgrade system.
+
+Status note:
+- Added reward classification for upgrade choices so weapon, stat, passive, and utility choices are visible to UI/debug code.
+- Weapon unlocks, signature rewards, and branch weapon rewards now receive compact shared weapon tag metadata.
+- Level-up reward cards draw a small Phaser-shape weapon icon for weapon rewards only; stat/passive/support rewards remain untagged.
+- Debug snapshots expose each upgrade choice reward type and weapon-tag state for focused validation.
+- Deferred boss redesign, boss timing, reward-system redesign, new weapons, endless mode, bot tanks, multiplayer, backend, and broad rebalance.
+
+Acceptance checks:
+- Weapon rewards are tagged with a compact icon/marker and not only plain text.
+- Stat/passive rewards do not show the weapon tag.
+- Reward selection and upgrade exhaustion continue to work.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/controls/upgrade-exhaustion/reward-visibility e2e, and diff check.

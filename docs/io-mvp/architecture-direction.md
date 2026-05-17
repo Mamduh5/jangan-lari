@@ -40,6 +40,7 @@ Sprint 14 freezes `io/mvp-foundation` as a reusable mobile `.io` foundation bran
 - Keep regen deterministic and observable: apply HP-per-second healing only during active living gameplay, cap it at max HP, and expose effective/meta/run regen values in debug state.
 - Keep dangerous effect truth explicit. Any damaging enemy effect must source damage geometry and active visual geometry from the same constants/helper or have focused tests proving they match. Telegraphs may be larger or earlier, but the damage-active visual must match the active hitbox/window; no invisible damage and no lingering danger visuals after damage is inactive unless the fade is clearly harmless.
 - Expose active enemy attack bounds/windows in debug state when practical so future bots and focused tests can catch visual/hitbox drift.
+- Keep reward readability typed. Upgrade choices should expose a simple reward category for UI and debug state, and weapon rewards should use a compact shared shape icon/tag that stat/passive rewards do not inherit.
 - Preserve fast restart and scene cleanup as first-class architecture concerns.
 - Keep `io/mvp-foundation` reusable: changes after the freeze should favor docs, verification, and reusable seams unless a later task explicitly reopens foundation work.
 

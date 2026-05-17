@@ -6,6 +6,7 @@ import type { ControlGuideMode } from '../save/saveData';
 import type { TankClassId } from '../data/tankClasses';
 import type { TankStatEffectSnapshot, TankStatLevels } from '../data/tankStats';
 import type { UpgradeId } from '../data/upgrades';
+import type { UpgradeRewardType } from '../systems/rewardClassification';
 import type { WeaponId } from '../data/weapons';
 
 export type GameplayBotEnemySummary = {
@@ -54,6 +55,8 @@ export type GameplayBotNeutralShapeSummary = {
 export type GameplayBotUpgradeChoice = {
   id: UpgradeId;
   title: string;
+  rewardType: UpgradeRewardType;
+  hasWeaponTag: boolean;
 };
 
 export type GameplayBotEnemyProjectileSummary = {
