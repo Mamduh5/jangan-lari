@@ -461,3 +461,22 @@ Acceptance checks:
 - Old saves without `hp-regen` remain compatible.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/upgrade-exhaustion/enemy-scaling/hp-regen e2e, and diff check.
+
+## Sprint A7: Collision Fairness, Hit/Effect Truth, And Config Cleanup
+
+Goal: Tighten foundation quality so mobile combat reads honestly and tuning constants stay easy to find.
+
+Status note:
+- Enemy/enemy physical collision remains disabled: enemies are only overlapped against player/projectiles, so swarms can flow through each other without blocking or pushing.
+- Miniboss line-strike damage and active visual now share a small contract for range, width, and active duration.
+- Debug snapshots expose active enemy attack geometry/window and enemy collision mode for focused validation.
+- Moved the HP regen max delta cap into `config/constants.ts` so regen timing remains tuneable from the central config surface.
+- Added a guardrail that damaging enemy effects must share visual/damage geometry or be explicitly tested.
+- Deferred boss redesign, reward tags, scaling changes, endless mode, bot tanks, multiplayer, backend, and broad balance changes.
+
+Acceptance checks:
+- Enemy pressure remains readable without enemy/enemy physical blocking.
+- Miniboss damage-active lane visual matches its damage range, width, and active window.
+- HP regen behavior remains intact with the same max delta cap.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/camera-spawn/readability/enemy-scaling/hp-regen/hitbox-truth e2e, and diff check.

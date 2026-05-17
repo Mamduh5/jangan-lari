@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { getEnemyCombatResponseProfile, type EnemyCombatResponseProfile } from '../combat/combatResponse';
-import { ENEMY_HIT_FLASH_MS } from '../config/constants';
+import { ENEMY_HIT_FLASH_MS, MINIBOSS_LINE_STRIKE_LENGTH, MINIBOSS_LINE_STRIKE_TELEGRAPH_MS } from '../config/constants';
 import type { EnemyArchetype } from '../data/enemies';
 
 export type EnemyAttackSignal =
@@ -394,7 +394,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
           x: this.x,
           y: this.y,
           direction: { x: dashDirection.x, y: dashDirection.y },
-          length: 420,
+          length: MINIBOSS_LINE_STRIKE_LENGTH,
         };
         this.primedMinibossCharge = null;
       }
@@ -413,7 +413,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   private updateSignatureAttackState(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
     if (this.isMiniboss()) {
-      const chargeWindowMs = 420;
+      const chargeWindowMs = MINIBOSS_LINE_STRIKE_TELEGRAPH_MS;
       if (
         !this.primedMinibossCharge &&
         currentTime >= this.nextDashAt - chargeWindowMs &&
@@ -427,7 +427,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
           x: this.x,
           y: this.y,
           direction: { x: chargeDirection.x, y: chargeDirection.y },
-          length: 420,
+          length: MINIBOSS_LINE_STRIKE_LENGTH,
         };
       }
     }

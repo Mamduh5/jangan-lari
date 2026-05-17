@@ -1,3 +1,4 @@
+import { DEFAULT_HP_REGEN_MAX_DELTA_MS } from '../../src/game/config/constants';
 import { resolveHpRegenTick } from '../../src/game/systems/hpRegen';
 
 describe('hp regen', () => {
@@ -58,5 +59,26 @@ describe('hp regen', () => {
     expect(result.nextHp).toBe(0);
     expect(result.nextAccumulator).toBe(0);
     expect(result.active).toBe(false);
+  });
+
+  test('uses the configured default max delta cap', () => {
+    const capped = resolveHpRegenTick({
+      currentHp: 50,
+      maxHp: 100,
+      regenPerSecond: 8,
+      accumulator: 0,
+      deltaMs: DEFAULT_HP_REGEN_MAX_DELTA_MS * 4,
+      alive: true,
+    });
+    const uncapped = resolveHpRegenTick({
+      currentHp: 50,
+      maxHp: 100,
+      regenPerSecond: 8,
+      accumulator: 0,
+      deltaMs: DEFAULT_HP_REGEN_MAX_DELTA_MS,
+      alive: true,
+    });
+
+    expect(capped).toEqual(uncapped);
   });
 });

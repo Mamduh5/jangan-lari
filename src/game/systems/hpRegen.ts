@@ -1,3 +1,5 @@
+import { DEFAULT_HP_REGEN_MAX_DELTA_MS } from '../config/constants';
+
 export type HpRegenTickInput = {
   currentHp: number;
   maxHp: number;
@@ -14,8 +16,6 @@ export type HpRegenTickResult = {
   healedAmount: number;
   active: boolean;
 };
-
-export const DEFAULT_HP_REGEN_MAX_DELTA_MS = 250;
 
 export function resolveHpRegenTick(input: HpRegenTickInput): HpRegenTickResult {
   const currentHp = Math.max(0, Number(input.currentHp));

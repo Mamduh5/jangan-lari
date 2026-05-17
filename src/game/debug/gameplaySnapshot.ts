@@ -67,6 +67,19 @@ export type GameplayBotEnemyProjectileSummary = {
   containsRed: boolean;
 };
 
+export type GameplayBotEnemyAttackSummary = {
+  kind: 'miniboss-line-strike' | 'boss-shockwave';
+  damageRange: number;
+  visualRange: number;
+  damageWidth: number | null;
+  visualWidth: number | null;
+  damageRadius: number | null;
+  visualRadius: number | null;
+  damageActive: boolean;
+  effectActive: boolean;
+  remainingMs: number;
+};
+
 export type GameplayBotEventSnapshot = {
   active: boolean;
   type: 'challenge-wave' | 'reward-target' | '';
@@ -180,6 +193,7 @@ export type GameplayBotRunSnapshot = {
   neutralShapes: GameplayBotNeutralShapeSummary[];
   xpGems: GameplayBotGemSummary[];
   enemyProjectiles: GameplayBotEnemyProjectileSummary[];
+  enemyAttacks: GameplayBotEnemyAttackSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
   camera: {
     scrollX: number;
@@ -199,6 +213,7 @@ export type GameplayBotRunSnapshot = {
     activeCount: number;
     activeCap: number;
     normalSpawnSlots: number;
+    enemyEnemyPhysicalCollision: boolean;
   };
   enemyScaling: {
     stack: number;

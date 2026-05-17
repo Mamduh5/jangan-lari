@@ -79,6 +79,7 @@ import {
   getAvailableEnemySpawnSlots,
   getEnemyScalingSnapshot,
 } from '../systems/enemyScaling';
+import { createMinibossLineAttackContract } from '../systems/dangerousEffectContracts';
 import { SpawnDirector } from '../systems/SpawnDirector';
 import { getEnemyProjectileVisual, getEnemyXpReward, getXpGemVisual, type ProjectileVisual } from '../systems/readabilityVisuals';
 import { chooseSafeSpawnPoint } from '../systems/spawnSafety';
@@ -153,13 +154,17 @@ export class RunScene extends Phaser.Scene {
   private combatResponseImpactCounts: Partial<Record<WeaponId, number>> = {};
   private combatResponseEnemyImpactCounts: Partial<Record<EnemyArchetypeId, number>> = {};
   private lineStrikeAttacks: Array<{
+    kind: 'miniboss-line-strike';
     x: number;
     y: number;
     direction: { x: number; y: number };
     length: number;
+    visualWidth: number;
+    damageWidth: number;
     halfWidth: number;
     damage: number;
     durationMs: number;
+    activeVisualMs: number;
     elapsedMs: number;
     hasHitPlayer: boolean;
   }> = [];
@@ -593,6 +598,32 @@ export class RunScene extends Phaser.Scene {
         containsRed: bolt.visual.containsRed,
       }))
       .slice(0, 12);
+    const enemyAttacks = [
+      ...this.lineStrikeAttacks.map((attack) => ({
+        kind: attack.kind,
+        damageRange: attack.length,
+        visualRange: attack.length,
+        damageWidth: attack.damageWidth,
+        visualWidth: attack.visualWidth,
+        damageRadius: null,
+        visualRadius: null,
+        damageActive: attack.elapsedMs < attack.durationMs,
+        effectActive: attack.elapsedMs < attack.activeVisualMs,
+        remainingMs: Math.max(0, attack.durationMs - attack.elapsedMs),
+      })),
+      ...this.shockwaveAttacks.map((attack) => ({
+        kind: 'boss-shockwave' as const,
+        damageRange: attack.currentRadius,
+        visualRange: attack.currentRadius,
+        damageWidth: null,
+        visualWidth: null,
+        damageRadius: attack.currentRadius,
+        visualRadius: attack.currentRadius,
+        damageActive: attack.elapsedMs < attack.durationMs,
+        effectActive: attack.ring.active || attack.halo.active,
+        remainingMs: Math.max(0, attack.durationMs - attack.elapsedMs),
+      })),
+    ];
     const combatResponseMetrics = this.combatResponse.getMetrics();
 
     return {
@@ -689,6 +720,7 @@ export class RunScene extends Phaser.Scene {
       neutralShapes: neutralShapes.slice(0, 16),
       xpGems,
       enemyProjectiles,
+      enemyAttacks,
       upgradeChoices: levelUpChoices.map((choice) => ({
         id: choice.id,
         title: choice.title,
@@ -711,6 +743,7 @@ export class RunScene extends Phaser.Scene {
         activeCount: this.getActiveEnemyCount(),
         activeCap: ENEMY_ACTIVE_CAP,
         normalSpawnSlots: getAvailableEnemySpawnSlots(this.getActiveEnemyCount()),
+        enemyEnemyPhysicalCollision: false,
       },
       enemyScaling,
       waveTemplate: {
@@ -962,6 +995,21 @@ export class RunScene extends Phaser.Scene {
     const x = Phaser.Math.Clamp(this.player.x + 120, 40, WORLD_WIDTH - 40);
     const y = Phaser.Math.Clamp(this.player.y, 40, WORLD_HEIGHT - 40);
     this.xpGems.add(new XPGem(this, x, y, Math.max(1, Math.floor(value))));
+    this.publishHudState();
+  }
+
+  public debugTriggerMinibossLineStrike(length = createMinibossLineAttackContract().length): void {
+    if (!this.player?.active || this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.executeMinibossLineStrike(
+      { contactDamage: 26 } as Enemy,
+      this.player.x - length / 2,
+      this.player.y,
+      { x: 1, y: 0 },
+      length,
+    );
     this.publishHudState();
   }
 
@@ -1685,7 +1733,7 @@ export class RunScene extends Phaser.Scene {
         }
       }
 
-      if (attack.elapsedMs < attack.durationMs && !attack.hasHitPlayer) {
+      if (attack.elapsedMs < attack.durationMs) {
         nextAttacks.push(attack);
       }
     }
@@ -2077,7 +2125,10 @@ export class RunScene extends Phaser.Scene {
       case 'miniboss-line-telegraph':
         this.registry.set('run.instructions', 'Lane forming. Move aside.');
         this.setAlert('miniboss', 'Charge lane', 800);
-        this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, signal.length, 58, 0xfda4af, 420, 'warning');
+        {
+          const contract = createMinibossLineAttackContract(signal.length);
+          this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, contract.length, contract.visualWidth, 0xfda4af, contract.telegraphMs, 'warning');
+        }
         playCue('dash-warning');
         break;
       case 'miniboss-line-execute':
@@ -2111,18 +2162,22 @@ export class RunScene extends Phaser.Scene {
     direction: { x: number; y: number },
     length: number,
   ): void {
-    const durationMs = 180;
-    this.showLineAttackTelegraph(x, y, direction, length, 62, 0xfb7185, durationMs, 'active');
+    const contract = createMinibossLineAttackContract(length);
+    this.showLineAttackTelegraph(x, y, direction, contract.length, contract.visualWidth, 0xfb7185, contract.activeVisualMs, 'active');
     this.createBurstCircle(x, y, 0xfb7185, 22, 70, 260, 0.75);
     this.cameras.main.shake(100, 0.0022);
     this.lineStrikeAttacks.push({
+      kind: contract.kind,
       x,
       y,
       direction,
-      length,
-      halfWidth: 38,
+      length: contract.length,
+      visualWidth: contract.visualWidth,
+      damageWidth: contract.damageWidth,
+      halfWidth: contract.halfWidth,
       damage: Math.max(18, enemy.contactDamage - 4),
-      durationMs,
+      durationMs: contract.damageActiveMs,
+      activeVisualMs: contract.activeVisualMs,
       elapsedMs: 0,
       hasHitPlayer: false,
     });
