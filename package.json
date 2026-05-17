@@ -16,6 +16,7 @@
     "test:e2e:hud": "playwright test tests/e2e/mobile-hud.spec.ts",
     "test:e2e:aim": "playwright test tests/e2e/mobile-aim.spec.ts",
     "test:e2e:controls": "playwright test tests/e2e/mobile-controls.spec.ts",
+    "test:e2e:camera-spawn": "playwright test tests/e2e/camera-spawn.spec.ts",
     "test:e2e:mobile-alpha-ui": "playwright test tests/e2e/mobile-alpha-ui.spec.ts",
     "test:e2e:overlay-input": "playwright test tests/e2e/overlay-input.spec.ts",
     "test:e2e:upgrade-exhaustion": "playwright test tests/e2e/mobile-upgrade-exhaustion.spec.ts",

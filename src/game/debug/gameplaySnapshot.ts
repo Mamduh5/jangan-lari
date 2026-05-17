@@ -150,6 +150,20 @@ export type GameplayBotRunSnapshot = {
   neutralShapes: GameplayBotNeutralShapeSummary[];
   xpGems: GameplayBotGemSummary[];
   upgradeChoices: GameplayBotUpgradeChoice[];
+  camera: {
+    scrollX: number;
+    scrollY: number;
+    playerScreenX: number;
+    playerScreenY: number;
+    overscrollPaddingX: number;
+    overscrollPaddingY: number;
+  };
+  spawnSafety: {
+    enemySafeRadius: number;
+    eliteSafeRadius: number;
+    bossSafeRadius: number;
+    nearestEnemyDistance: number | null;
+  };
   waveTemplate: {
     id: string;
     label: string;

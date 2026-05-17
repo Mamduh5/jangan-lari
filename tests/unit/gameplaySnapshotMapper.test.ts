@@ -101,6 +101,20 @@ function createRunSnapshot(overrides: Partial<GameplayBotRunSnapshot> = {}): Gam
     ],
     xpGems: [],
     upgradeChoices: [],
+    camera: {
+      scrollX: -160,
+      scrollY: 120,
+      playerScreenX: 800,
+      playerScreenY: 360,
+      overscrollPaddingX: 800,
+      overscrollPaddingY: 360,
+    },
+    spawnSafety: {
+      enemySafeRadius: 360,
+      eliteSafeRadius: 480,
+      bossSafeRadius: 620,
+      nearestEnemyDistance: 72,
+    },
     waveTemplate: {
       id: 'steady',
       label: 'Steady',

@@ -383,3 +383,22 @@ Acceptance checks:
 - Joystick visuals reset or resume from the reconciled pointer state.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/upgrade-exhaustion/mobile-alpha-ui/overlay-input e2e, and diff check.
+
+## Sprint A3: Camera Centering And Enemy Spawn Safety
+
+Goal: Improve APK/mobile play feel by keeping edge play readable and preventing unfair enemy pop-ins.
+
+Status note:
+- Expanded camera bounds with virtual-view overscroll padding so the player can remain visually centered at world edges while physics movement stays clamped to the arena.
+- Filled the overscroll margin with a simple dark arena surround so camera padding does not reveal transparent or broken space.
+- Added bounded enemy spawn safety retries plus safe-radius constants for normal, elite/miniboss, and boss spawns.
+- Applied spawn safety to normal waves, elite/miniboss/boss arrivals, challenge wave enemies, and reward target events without changing enemy identities, projectile colors, XP colors, scaling, regen, aspect ratio, backend, or multiplayer.
+- Added debug snapshot fields for camera/player screen position and nearest enemy spawn distance for focused validation.
+- Deferred enemy readability, projectile color, XP color, count/scaling, HP regen, aspect-ratio, multiplayer, backend, and full gameplay-bot recalibration to later sprints.
+
+Acceptance checks:
+- Player remains visually centered when clamped at map edges.
+- Player cannot move outside the world/map bounds.
+- Enemy spawns respect a minimum player safe radius where the world has valid space.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation remains limited to unit, build, smoke/mobile-layout/aim/controls/camera-spawn e2e, and diff check.

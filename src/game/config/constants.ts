@@ -3,6 +3,8 @@ export const GAME_HEIGHT = 720;
 
 export const WORLD_WIDTH = 2000;
 export const WORLD_HEIGHT = 1400;
+export const CAMERA_OVERSCROLL_PADDING_X = GAME_WIDTH / 2;
+export const CAMERA_OVERSCROLL_PADDING_Y = GAME_HEIGHT / 2;
 
 export const PLAYER_SPEED = 260;
 export const PLAYER_MAX_HP = 100;
@@ -14,6 +16,10 @@ export const PLAYER_START_XP_TO_NEXT_LEVEL = 24;
 export const PLAYER_XP_PER_LEVEL = 12;
 
 export const ENEMY_SPAWN_INTERVAL_MS = 1000;
+export const ENEMY_SPAWN_PLAYER_SAFE_RADIUS = 360;
+export const ELITE_SPAWN_PLAYER_SAFE_RADIUS = 480;
+export const BOSS_SPAWN_PLAYER_SAFE_RADIUS = 620;
+export const ENEMY_SPAWN_SAFE_ATTEMPTS = 24;
 export const RUN_TARGET_DURATION_MS = 720000;
 export const RUN_ACTIVE_DELTA_CAP_MS = 100;
 export const MINIBOSS_SPAWN_TIME_MS = 210000;

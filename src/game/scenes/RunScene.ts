@@ -7,10 +7,16 @@ import {
 } from '../combat/combatResponse';
 import {
   BOSS_SPAWN_TIME_MS,
+  BOSS_SPAWN_PLAYER_SAFE_RADIUS,
+  CAMERA_OVERSCROLL_PADDING_X,
+  CAMERA_OVERSCROLL_PADDING_Y,
   CHALLENGE_WAVE_EVENT_DURATION_MS,
   CHALLENGE_WAVE_EVENT_WINDOW_END_MS,
   CHALLENGE_WAVE_EVENT_WINDOW_START_MS,
+  ELITE_SPAWN_PLAYER_SAFE_RADIUS,
   ELITE_SPAWN_INDICATOR_MS,
+  ENEMY_SPAWN_PLAYER_SAFE_RADIUS,
+  ENEMY_SPAWN_SAFE_ATTEMPTS,
   ENDING_FLASH_MS,
   ENEMY_SPAWN_INTERVAL_MS,
   GAME_HEIGHT,
@@ -67,6 +73,7 @@ import { applyRunProgressToQuests } from '../save/saveQuests';
 import { awardRunGold, getPermanentUpgradeLevel } from '../save/saveUpgrades';
 import { AutoFireWeapon } from '../systems/AutoFireWeapon';
 import { SpawnDirector } from '../systems/SpawnDirector';
+import { chooseSafeSpawnPoint } from '../systems/spawnSafety';
 import { TankStatRuntime } from '../systems/TankStatRuntime';
 import type { EnemyArchetypeId } from '../data/enemies';
 import { ENEMY_ARCHETYPES, type EnemyArchetype } from '../data/enemies';
@@ -340,7 +347,12 @@ export class RunScene extends Phaser.Scene {
 
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setZoom(1);
-    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    this.cameras.main.setBounds(
+      -CAMERA_OVERSCROLL_PADDING_X,
+      -CAMERA_OVERSCROLL_PADDING_Y,
+      WORLD_WIDTH + CAMERA_OVERSCROLL_PADDING_X * 2,
+      WORLD_HEIGHT + CAMERA_OVERSCROLL_PADDING_Y * 2,
+    );
 
     this.colliders.push(
       this.physics.add.overlap(this.player, this.enemies, (_playerObject, enemyObject) => {
@@ -632,6 +644,20 @@ export class RunScene extends Phaser.Scene {
         id: choice.id,
         title: choice.title,
       })),
+      camera: {
+        scrollX: this.cameras.main.scrollX,
+        scrollY: this.cameras.main.scrollY,
+        playerScreenX: (this.player.x - this.cameras.main.scrollX) * this.cameras.main.zoom,
+        playerScreenY: (this.player.y - this.cameras.main.scrollY) * this.cameras.main.zoom,
+        overscrollPaddingX: CAMERA_OVERSCROLL_PADDING_X,
+        overscrollPaddingY: CAMERA_OVERSCROLL_PADDING_Y,
+      },
+      spawnSafety: {
+        enemySafeRadius: ENEMY_SPAWN_PLAYER_SAFE_RADIUS,
+        eliteSafeRadius: ELITE_SPAWN_PLAYER_SAFE_RADIUS,
+        bossSafeRadius: BOSS_SPAWN_PLAYER_SAFE_RADIUS,
+        nearestEnemyDistance: enemies[0]?.distance ?? null,
+      },
       waveTemplate: {
         id: this.spawnDirector?.getLastWaveTemplateId() ?? '',
         label: this.spawnDirector?.getLastWaveTemplateLabel() ?? '',
@@ -788,6 +814,43 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
   }
 
+  public debugSetPlayerPosition(x: number, y: number): void {
+    if (!this.player?.active || this.isTransitioningToMenu) {
+      return;
+    }
+
+    const halfWidth = this.player.body.halfWidth ?? this.player.body.width / 2;
+    const halfHeight = this.player.body.halfHeight ?? this.player.body.height / 2;
+    const nextX = Phaser.Math.Clamp(x, halfWidth, WORLD_WIDTH - halfWidth);
+    const nextY = Phaser.Math.Clamp(y, halfHeight, WORLD_HEIGHT - halfHeight);
+    this.player.body.reset(nextX, nextY);
+    this.player.setPosition(nextX, nextY);
+    this.player.updateVisualState(this.time.now);
+    this.cameras.main.centerOn(nextX, nextY);
+    this.publishHudState();
+  }
+
+  public debugSpawnEnemyWaveAt(elapsedMs = this.runElapsedMs): void {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.runElapsedMs = Phaser.Math.Clamp(elapsedMs, 0, RUN_TARGET_DURATION_MS);
+    this.spawnEnemyWave();
+    this.publishHudState();
+  }
+
+  public debugClearEnemies(): void {
+    if (!this.enemies?.active) {
+      return;
+    }
+
+    for (const enemy of this.enemies.getChildren() as Enemy[]) {
+      enemy.despawnSilently();
+    }
+    this.publishHudState();
+  }
+
   public debugEndRun(victory = false): void {
     if (this.isEnded || this.isTransitioningToMenu) {
       return;
@@ -889,6 +952,30 @@ export class RunScene extends Phaser.Scene {
   private drawArena(): void {
     const graphics = this.add.graphics();
 
+    graphics.fillStyle(0x0b1020, 1);
+    graphics.fillRect(
+      -CAMERA_OVERSCROLL_PADDING_X,
+      -CAMERA_OVERSCROLL_PADDING_Y,
+      WORLD_WIDTH + CAMERA_OVERSCROLL_PADDING_X * 2,
+      WORLD_HEIGHT + CAMERA_OVERSCROLL_PADDING_Y * 2,
+    );
+
+    graphics.fillStyle(0x111827, 1);
+    graphics.fillRect(
+      -CAMERA_OVERSCROLL_PADDING_X,
+      -CAMERA_OVERSCROLL_PADDING_Y,
+      WORLD_WIDTH + CAMERA_OVERSCROLL_PADDING_X * 2,
+      CAMERA_OVERSCROLL_PADDING_Y,
+    );
+    graphics.fillRect(
+      -CAMERA_OVERSCROLL_PADDING_X,
+      WORLD_HEIGHT,
+      WORLD_WIDTH + CAMERA_OVERSCROLL_PADDING_X * 2,
+      CAMERA_OVERSCROLL_PADDING_Y,
+    );
+    graphics.fillRect(-CAMERA_OVERSCROLL_PADDING_X, 0, CAMERA_OVERSCROLL_PADDING_X, WORLD_HEIGHT);
+    graphics.fillRect(WORLD_WIDTH, 0, CAMERA_OVERSCROLL_PADDING_X, WORLD_HEIGHT);
+
     graphics.fillStyle(0x152238, 1);
     graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
@@ -928,7 +1015,7 @@ export class RunScene extends Phaser.Scene {
     );
 
     for (const archetype of waveResult.wave) {
-      const spawnPoint = this.getSpawnPoint(archetype.isBoss ? 700 : 520);
+      const spawnPoint = this.getSpawnPoint(archetype.isBoss ? 700 : 520, this.getEnemySpawnSafeRadius(archetype));
       this.spawnEnemyFromArchetype(archetype, spawnPoint);
       this.presentEncounterSpawn(archetype, spawnPoint);
     }
@@ -1144,7 +1231,9 @@ export class RunScene extends Phaser.Scene {
       ENEMY_ARCHETYPES.mauler,
       ENEMY_ARCHETYPES.hexcaster,
       ENEMY_ARCHETYPES.harrier,
-    ].map((archetype, index) => this.spawnEnemyFromArchetype(archetype, this.getSpawnPoint(index === 0 ? 460 : 420)));
+    ].map((archetype, index) =>
+      this.spawnEnemyFromArchetype(archetype, this.getSpawnPoint(index === 0 ? 460 : 420, this.getEnemySpawnSafeRadius(archetype))),
+    );
 
     this.activeRunEvent = {
       type: 'challenge-wave',
@@ -1181,7 +1270,10 @@ export class RunScene extends Phaser.Scene {
       preferredDistance: 150,
       strafeStrength: 0.55,
     };
-    const targetEnemy = this.spawnEnemyFromArchetype(rewardTargetArchetype, this.getSpawnPoint(300));
+    const targetEnemy = this.spawnEnemyFromArchetype(
+      rewardTargetArchetype,
+      this.getSpawnPoint(380, ENEMY_SPAWN_PLAYER_SAFE_RADIUS),
+    );
     targetEnemy.setEventMarker(0xfbbf24);
 
     this.activeRunEvent = {
@@ -1328,32 +1420,42 @@ export class RunScene extends Phaser.Scene {
     this.rewardTargetLabel = undefined;
   }
 
-  private getSpawnPoint(distance: number): Phaser.Math.Vector2 {
-    const side = Phaser.Math.Between(0, 3);
-    const offset = Phaser.Math.Between(-260, 260);
+  private getSpawnPoint(distance: number, safeRadius = ENEMY_SPAWN_PLAYER_SAFE_RADIUS): Phaser.Math.Vector2 {
+    const spawnPoint = chooseSafeSpawnPoint({
+      player: { x: this.player.x, y: this.player.y },
+      bounds: { minX: 24, minY: 24, maxX: WORLD_WIDTH - 24, maxY: WORLD_HEIGHT - 24 },
+      safeRadius,
+      attempts: ENEMY_SPAWN_SAFE_ATTEMPTS,
+      createCandidate: () => {
+        const side = Phaser.Math.Between(0, 3);
+        const offset = Phaser.Math.Between(-260, 260);
 
-    switch (side) {
-      case 0:
-        return new Phaser.Math.Vector2(
-          Phaser.Math.Clamp(this.player.x + offset, 24, WORLD_WIDTH - 24),
-          Phaser.Math.Clamp(this.player.y - distance, 24, WORLD_HEIGHT - 24),
-        );
-      case 1:
-        return new Phaser.Math.Vector2(
-          Phaser.Math.Clamp(this.player.x + distance, 24, WORLD_WIDTH - 24),
-          Phaser.Math.Clamp(this.player.y + offset, 24, WORLD_HEIGHT - 24),
-        );
-      case 2:
-        return new Phaser.Math.Vector2(
-          Phaser.Math.Clamp(this.player.x + offset, 24, WORLD_WIDTH - 24),
-          Phaser.Math.Clamp(this.player.y + distance, 24, WORLD_HEIGHT - 24),
-        );
-      default:
-        return new Phaser.Math.Vector2(
-          Phaser.Math.Clamp(this.player.x - distance, 24, WORLD_WIDTH - 24),
-          Phaser.Math.Clamp(this.player.y + offset, 24, WORLD_HEIGHT - 24),
-        );
+        switch (side) {
+          case 0:
+            return { x: this.player.x + offset, y: this.player.y - distance };
+          case 1:
+            return { x: this.player.x + distance, y: this.player.y + offset };
+          case 2:
+            return { x: this.player.x + offset, y: this.player.y + distance };
+          default:
+            return { x: this.player.x - distance, y: this.player.y + offset };
+        }
+      },
+    });
+
+    return new Phaser.Math.Vector2(spawnPoint.x, spawnPoint.y);
+  }
+
+  private getEnemySpawnSafeRadius(archetype: EnemyArchetype): number {
+    if (archetype.isBoss) {
+      return BOSS_SPAWN_PLAYER_SAFE_RADIUS;
     }
+
+    if (archetype.isElite || archetype.isMiniboss) {
+      return ELITE_SPAWN_PLAYER_SAFE_RADIUS;
+    }
+
+    return ENEMY_SPAWN_PLAYER_SAFE_RADIUS;
   }
 
   private updateEnemies(): void {
