@@ -102,6 +102,10 @@ export class UIScene extends Phaser.Scene {
   private controlGuideSubLabels: Phaser.GameObjects.Text[] = [];
   private controlHintContainer!: Phaser.GameObjects.Container;
   private controlGuideToggleButton!: Phaser.GameObjects.Text;
+  private pauseButton!: Phaser.GameObjects.Text;
+  private pauseMenuContainer!: Phaser.GameObjects.Container;
+  private pauseMenuSummaryText!: Phaser.GameObjects.Text;
+  private pauseMenuButtons: Phaser.GameObjects.Text[] = [];
 
   private readonly handleSelectUpgradeOne = (): void => {
     this.selectUpgrade(0);
@@ -139,6 +143,7 @@ export class UIScene extends Phaser.Scene {
     this.controlGuideKnobs = [];
     this.controlGuideLabels = [];
     this.controlGuideSubLabels = [];
+    this.pauseMenuButtons = [];
     this.controlGuideMode = this.readControlGuideMode();
 
     this.heroText = this.add
@@ -352,7 +357,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.returnHintText = this.add
-      .text(viewWidth - 30, viewHeight - 28, 'ESC: Return to Menu', {
+      .text(viewWidth - 30, viewHeight - 28, 'ESC: Pause', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#cbd5e1',
@@ -369,6 +374,8 @@ export class UIScene extends Phaser.Scene {
     this.controlGuideVisualContainer = this.createControlGuideVisuals();
     this.controlHintContainer = this.createControlHintOverlay();
     this.controlGuideToggleButton = this.createControlGuideToggleButton();
+    this.pauseButton = this.createPauseButton();
+    this.pauseMenuContainer = this.createPauseMenuOverlay();
 
     this.input.keyboard?.on('keydown-ENTER', this.handleConfirmInput, this);
     this.input.keyboard?.on('keydown-SPACE', this.handleConfirmInput, this);
@@ -403,6 +410,7 @@ export class UIScene extends Phaser.Scene {
     const levelUpRemainingMs = Number(this.registry.get('run.levelUpRemainingMs') ?? 0);
     const endActive = Boolean(this.registry.get('run.endActive'));
     const levelUpActive = Boolean(this.registry.get('run.levelUpActive'));
+    const pauseMenuActive = Boolean(this.registry.get('run.pauseMenuActive'));
     const alertKind = String(this.registry.get('run.alertKind') ?? 'objective');
     const alertMessage = String(this.registry.get('run.alertText') ?? '');
     const rewardMessage = String(this.registry.get('run.rewardText') ?? '');
@@ -457,6 +465,7 @@ export class UIScene extends Phaser.Scene {
     this.refreshEventHud(eventActive, eventTitle, eventText, eventRemainingMs, levelUpActive || classChoiceActive, endActive);
     this.refreshStatAllocationPanel(statPoints, tankStatLevels, levelUpActive, classChoiceActive, endActive);
     this.refreshOrientationHint();
+    this.refreshPauseControls(pauseMenuActive, levelUpActive, classChoiceActive, endActive, level, classTitle, score, runGold, elapsedMs, stagePhase);
     this.refreshControlGuideState(levelUpActive, classChoiceActive, endActive);
     this.refreshMobileCopyState();
 
@@ -509,6 +518,11 @@ export class UIScene extends Phaser.Scene {
     controlHintVisible: boolean;
     controlGuideToggleText: string;
     controlGuideToggleVisible: boolean;
+    pauseButtonVisible: boolean;
+    pauseButton: { x: number; y: number; width: number; height: number };
+    pauseMenuVisible: boolean;
+    pauseMenuButtons: string[];
+    pauseMenuButtonBounds: Array<{ text: string; x: number; y: number; width: number; height: number }>;
   } {
     return {
       hero: this.heroText.text,
@@ -548,6 +562,24 @@ export class UIScene extends Phaser.Scene {
       controlHintVisible: this.controlHintContainer.visible,
       controlGuideToggleText: this.controlGuideToggleButton.text,
       controlGuideToggleVisible: this.controlGuideToggleButton.visible,
+      pauseButtonVisible: this.pauseButton.visible,
+      pauseButton: {
+        x: this.pauseButton.x,
+        y: this.pauseButton.y,
+        width: this.pauseButton.displayWidth,
+        height: this.pauseButton.displayHeight,
+      },
+      pauseMenuVisible: this.pauseMenuContainer.visible,
+      pauseMenuButtons: this.pauseMenuButtons.filter((button) => button.visible).map((button) => button.text),
+      pauseMenuButtonBounds: this.pauseMenuButtons
+        .filter((button) => button.visible)
+        .map((button) => ({
+          text: button.text,
+          x: button.x,
+          y: button.y,
+          width: button.displayWidth,
+          height: button.displayHeight,
+        })),
     };
   }
 
@@ -1018,6 +1050,175 @@ export class UIScene extends Phaser.Scene {
     return button;
   }
 
+  private createPauseButton(): Phaser.GameObjects.Text {
+    const button = this.add
+      .text(GAME_WIDTH - 72, 158, 'II', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '20px',
+        color: '#e0f2fe',
+        backgroundColor: '#0f172a',
+        padding: { left: 18, right: 18, top: 9, bottom: 9 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+
+    button.on('pointerdown', () => this.openPauseMenu());
+    button.on('pointerover', () => button.setStyle({ color: '#ffffff', backgroundColor: '#1f2937' }));
+    button.on('pointerout', () => button.setStyle({ color: '#e0f2fe', backgroundColor: '#0f172a' }));
+    button.setDepth(82);
+
+    return button;
+  }
+
+  private createPauseMenuOverlay(): Phaser.GameObjects.Container {
+    const viewWidth = GAME_WIDTH;
+    const viewHeight = GAME_HEIGHT;
+    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.62).setOrigin(0).setScrollFactor(0);
+    backdrop.setInteractive();
+
+    const panel = this.add.rectangle(viewWidth / 2, viewHeight / 2, 480, 390, 0x0f172a, 0.98).setScrollFactor(0);
+    panel.setStrokeStyle(2, 0x475569, 1);
+
+    const heading = this.add
+      .text(viewWidth / 2, viewHeight / 2 - 142, 'Paused', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '38px',
+        color: '#f8fafc',
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    this.pauseMenuSummaryText = this.add
+      .text(viewWidth / 2, viewHeight / 2 - 96, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '16px',
+        color: '#bfdbfe',
+        align: 'center',
+        wordWrap: { width: 400 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    const resumeButton = this.createPauseMenuButton(viewWidth / 2, viewHeight / 2 - 28, 'Resume', (pointer) => {
+      this.closePauseMenu(pointer);
+    });
+    const restartButton = this.createPauseMenuButton(viewWidth / 2, viewHeight / 2 + 48, 'Restart Run', () => {
+      this.restartRun();
+    });
+    const menuButton = this.createPauseMenuButton(viewWidth / 2, viewHeight / 2 + 124, 'Return to Main Menu', () => {
+      this.returnToMainMenu();
+    });
+
+    this.pauseMenuButtons.push(resumeButton, restartButton, menuButton);
+
+    const container = this.add.container(0, 0, [backdrop, panel, heading, this.pauseMenuSummaryText, resumeButton, restartButton, menuButton]);
+    container.setDepth(110);
+    container.setScrollFactor(0);
+    container.setVisible(false);
+
+    return container;
+  }
+
+  private createPauseMenuButton(
+    x: number,
+    y: number,
+    text: string,
+    onClick: (pointer: ActivePointerLike) => void,
+  ): Phaser.GameObjects.Text {
+    const button = this.add
+      .text(x, y, text, {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '23px',
+        color: '#f8fafc',
+        backgroundColor: '#1f2937',
+        padding: { left: 26, right: 26, top: 13, bottom: 13 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+
+    button.on('pointerdown', (pointer: ActivePointerLike) => onClick(pointer));
+    button.on('pointerover', () => button.setStyle({ color: '#ffffff', backgroundColor: '#334155' }));
+    button.on('pointerout', () => button.setStyle({ color: '#f8fafc', backgroundColor: '#1f2937' }));
+
+    return button;
+  }
+
+  private refreshPauseControls(
+    pauseMenuActive: boolean,
+    levelUpActive: boolean,
+    classChoiceActive: boolean,
+    endActive: boolean,
+    level: number,
+    classTitle: string,
+    score: number,
+    runGold: number,
+    elapsedMs: number,
+    stagePhase: string,
+  ): void {
+    const modalOverlayActive = levelUpActive || classChoiceActive || endActive || this.orientationHintContainer.visible || pauseMenuActive;
+    const pauseButtonVisible = this.scene.isActive('RunScene') && !modalOverlayActive;
+
+    this.pauseButton.setVisible(pauseButtonVisible);
+    if (pauseButtonVisible) {
+      if (!this.pauseButton.input?.enabled) {
+        this.pauseButton.setInteractive({ useHandCursor: true });
+      }
+    } else {
+      this.pauseButton.disableInteractive();
+    }
+
+    this.pauseMenuContainer.setVisible(pauseMenuActive && !endActive && !levelUpActive && !classChoiceActive && !this.orientationHintContainer.visible);
+    if (!this.pauseMenuContainer.visible) {
+      return;
+    }
+
+    const bossStatus = stagePhase === 'boss' ? 'Boss active' : 'Boss pending';
+    this.setTextIfChanged(
+      this.pauseMenuSummaryText,
+      `LV ${level} ${classTitle}  |  ${this.formatTime(elapsedMs)}  |  Score ${score}\nRun Gold ${runGold}  |  ${bossStatus}`,
+    );
+  }
+
+  private openPauseMenu(): void {
+    if (!this.scene.isActive('RunScene')) {
+      return;
+    }
+
+    const runScene = this.scene.get('RunScene') as RunScene;
+    runScene.openManualPauseMenu();
+  }
+
+  private closePauseMenu(pointer?: ActivePointerLike): void {
+    if (!this.scene.isActive('RunScene')) {
+      return;
+    }
+
+    const runScene = this.scene.get('RunScene') as RunScene;
+    runScene.closeManualPauseMenu(pointer);
+  }
+
+  private restartRun(): void {
+    if (!this.scene.isActive('RunScene')) {
+      return;
+    }
+
+    const runScene = this.scene.get('RunScene') as RunScene;
+    runScene.restartRun();
+  }
+
+  private returnToMainMenu(): void {
+    if (!this.scene.isActive('RunScene')) {
+      this.scene.stop();
+      this.scene.start('MenuScene');
+      return;
+    }
+
+    const runScene = this.scene.get('RunScene') as RunScene;
+    runScene.exitToMenu();
+  }
+
   private refreshControlGuideState(levelUpActive: boolean, classChoiceActive: boolean, endActive: boolean): void {
     const mode = this.readControlGuideMode();
     if (mode !== this.controlGuideMode) {
@@ -1025,7 +1226,12 @@ export class UIScene extends Phaser.Scene {
     }
 
     const mobileControlUi = this.shouldUseMobileControlUi();
-    const modalOverlayActive = levelUpActive || classChoiceActive || endActive || this.orientationHintContainer.visible;
+    const modalOverlayActive =
+      levelUpActive ||
+      classChoiceActive ||
+      endActive ||
+      this.orientationHintContainer.visible ||
+      Boolean(this.registry.get('run.pauseMenuActive'));
     const guidesVisible = mobileControlUi && this.controlGuideMode !== 'hidden' && !modalOverlayActive;
     const hintVisible = guidesVisible && Boolean(this.registry.get('run.controlHintVisible'));
 
@@ -1758,5 +1964,6 @@ export class UIScene extends Phaser.Scene {
     this.classChoiceActionLabels = [];
     this.statButtons = {};
     this.statButtonLabels = {};
+    this.pauseMenuButtons = [];
   }
 }

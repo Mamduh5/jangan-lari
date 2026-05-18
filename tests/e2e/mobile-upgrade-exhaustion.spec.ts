@@ -36,7 +36,7 @@ test.describe('mobile upgrade exhaustion', () => {
 
     const initialHud = await getHudSnapshot(page);
     expect(initialHud.returnHintVisible).toBe(false);
-    expect(initialHud.returnHintText).toBe('ESC: Return to Menu');
+    expect(initialHud.returnHintText).toBe('ESC: Pause');
     expect(initialHud.instructionText).not.toMatch(/\b(Enter|Space|ESC)\b/);
 
     await maxAllStatsWithLeftoverPoints(page);

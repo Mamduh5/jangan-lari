@@ -283,6 +283,7 @@ export class RunScene extends Phaser.Scene {
   private isLevelingUp = false;
   private isChoosingTankClass = false;
   private isSystemPaused = false;
+  private isManualPaused = false;
   private isTransitioningToMenu = false;
   private isResolvingLevelUpChoice = false;
   private levelUpStartQueued = false;
@@ -357,6 +358,7 @@ export class RunScene extends Phaser.Scene {
     this.isLevelingUp = freshSession.isLevelingUp;
     this.isChoosingTankClass = false;
     this.isSystemPaused = freshSession.isSystemPaused;
+    this.isManualPaused = false;
     this.isTransitioningToMenu = freshSession.isTransitioningToMenu;
     this.isResolvingLevelUpChoice = freshSession.isResolvingLevelUpChoice;
     this.levelUpStartQueued = false;
@@ -500,13 +502,18 @@ export class RunScene extends Phaser.Scene {
     window.addEventListener('blur', this.handleWindowBlur);
     window.addEventListener('focus', this.handleWindowFocus);
 
-    this.input.keyboard?.on('keydown-ESC', this.handleExitToMenu, this);
+    this.input.keyboard?.on('keydown-ESC', this.handleEscapeShortcut, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.refreshSystemPauseState();
   }
 
   update(_time: number, delta: number): void {
     if (!this.player) {
+      return;
+    }
+
+    if (this.isManualPaused) {
+      this.publishHudState();
       return;
     }
 
@@ -598,9 +605,12 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.isTransitioningToMenu = true;
+    this.isManualPaused = false;
     this.levelUpStartQueued = false;
     this.tankClassChoiceStartQueued = false;
     this.isTankClassChoiceForced = false;
+    this.registry.set('run.manualPaused', false);
+    this.registry.set('run.pauseMenuActive', false);
     this.clearActiveRunEvent();
     this.pauseGameplaySystems();
     clearRunRegistryState(this.registry, this.saveData?.totalGold ?? Number(this.registry.get('save.totalGold') ?? 0));
@@ -613,6 +623,52 @@ export class RunScene extends Phaser.Scene {
 
     sceneManager.stop('RunScene');
     sceneManager.start('MenuScene');
+  }
+
+  public openManualPauseMenu(): void {
+    if (this.isEnded || this.isTransitioningToMenu || this.isLevelingUp || this.isChoosingTankClass || this.isManualPaused) {
+      return;
+    }
+
+    this.isManualPaused = true;
+    this.registry.set('run.manualPaused', true);
+    this.registry.set('run.pauseMenuActive', true);
+    this.pauseGameplaySystems();
+    this.publishHudState();
+  }
+
+  public closeManualPauseMenu(overlayPointer?: ActivePointerLike): void {
+    if (!this.isManualPaused || this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.isManualPaused = false;
+    this.registry.set('run.manualPaused', false);
+    this.registry.set('run.pauseMenuActive', false);
+    this.registry.set('run.instructions', '');
+    this.resumeGameplaySystems('', overlayPointer);
+    this.publishHudState();
+  }
+
+  public restartRun(): void {
+    if (this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.isManualPaused = false;
+    this.isTransitioningToMenu = true;
+    this.registry.set('run.manualPaused', false);
+    this.registry.set('run.pauseMenuActive', false);
+    this.clearActiveRunEvent();
+    this.pauseGameplaySystems();
+
+    const sceneManager = this.game.scene;
+    if (sceneManager.isActive('UIScene')) {
+      sceneManager.stop('UIScene');
+    }
+
+    this.scene.restart();
+    this.scene.launch('UIScene');
   }
 
   public getGameplayBotSnapshot(): GameplayBotRunSnapshot {
@@ -3638,6 +3694,8 @@ export class RunScene extends Phaser.Scene {
             ? 'Run paused.'
             : 'Tab inactive. Run paused.';
       this.pauseGameplaySystems(message);
+    } else if (this.isManualPaused) {
+      this.pauseGameplaySystems();
     } else if (this.isChoosingTankClass) {
       this.registry.set('run.instructions', 'Choose a tank class branch.');
     } else if (this.isLevelingUp) {
@@ -3677,7 +3735,14 @@ export class RunScene extends Phaser.Scene {
   }
 
   private resumeGameplaySystems(instructionText?: string, ignoredPointer?: ActivePointerLike): void {
-    if (this.isEnded || this.isSystemPaused || this.isLevelingUp || this.isChoosingTankClass || this.isTransitioningToMenu) {
+    if (
+      this.isEnded ||
+      this.isSystemPaused ||
+      this.isManualPaused ||
+      this.isLevelingUp ||
+      this.isChoosingTankClass ||
+      this.isTransitioningToMenu
+    ) {
       return;
     }
 
@@ -3761,6 +3826,8 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.localLeaderboard', this.saveData.localLeaderboard);
     this.registry.set('run.localLeaderboardEntryCount', this.saveData.localLeaderboard.length);
     this.registry.set('run.weaponNames', this.weapons.map((weapon) => weapon.getStats().name));
+    this.registry.set('run.manualPaused', this.isManualPaused);
+    this.registry.set('run.pauseMenuActive', this.isManualPaused);
     this.registry.set('run.eventActive', Boolean(this.activeRunEvent));
     this.registry.set('run.eventType', this.activeRunEvent?.type ?? '');
     this.registry.set('run.eventTitle', this.activeRunEvent?.title ?? '');
@@ -4117,12 +4184,22 @@ export class RunScene extends Phaser.Scene {
     });
   }
 
-  private handleExitToMenu(): void {
-    this.exitToMenu();
+  private handleEscapeShortcut(): void {
+    if (this.isEnded) {
+      this.exitToMenu();
+      return;
+    }
+
+    if (this.isManualPaused) {
+      this.closeManualPauseMenu();
+      return;
+    }
+
+    this.openManualPauseMenu();
   }
 
   private handleShutdown(): void {
-    this.input.keyboard?.off('keydown-ESC', this.handleExitToMenu, this);
+    this.input.keyboard?.off('keydown-ESC', this.handleEscapeShortcut, this);
     document.removeEventListener('visibilitychange', this.handlePageVisibilityChange);
     window.removeEventListener('blur', this.handleWindowBlur);
     window.removeEventListener('focus', this.handleWindowFocus);
@@ -4257,7 +4334,14 @@ export class RunScene extends Phaser.Scene {
 
     this.tweens.resumeAll();
 
-    if (this.isEnded || this.isLevelingUp || this.isChoosingTankClass || this.isSystemPaused || this.isTransitioningToMenu) {
+    if (
+      this.isEnded ||
+      this.isLevelingUp ||
+      this.isChoosingTankClass ||
+      this.isSystemPaused ||
+      this.isManualPaused ||
+      this.isTransitioningToMenu
+    ) {
       return;
     }
 

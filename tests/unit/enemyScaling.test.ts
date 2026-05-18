@@ -46,7 +46,7 @@ describe('enemy scaling', () => {
 
     expect(getEnemyMajorEncounterFactor(ENEMY_ARCHETYPES.hexcaster)).toBe(1);
     expect(getEnemyMajorEncounterFactor(ENEMY_ARCHETYPES.behemoth)).toBe(0.5);
-    expect(hexcaster.maxHealth).toBe(76);
+    expect(hexcaster.maxHealth).toBe(94);
     expect(hexcaster.shotCooldownMs).toBe(1575);
     expect(boss.maxHealth).toBe(Math.round(BOSS_FIRST_PASS_MAX_HEALTH * 1.4));
   });

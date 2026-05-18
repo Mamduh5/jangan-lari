@@ -6,6 +6,7 @@ type GameState = {
   runActive: boolean;
   uiActive: boolean;
   endActive: boolean;
+  pauseMenuActive: boolean;
   elapsedMs: number;
   goldEarned: number;
   codexOpen: boolean;
@@ -20,6 +21,7 @@ async function getGameState(page: import('@playwright/test').Page): Promise<Game
       runActive: game?.scene.isActive('RunScene') ?? false,
       uiActive: game?.scene.isActive('UIScene') ?? false,
       endActive: Boolean(game?.registry.get('run.endActive')),
+      pauseMenuActive: Boolean(game?.registry.get('run.pauseMenuActive')),
       elapsedMs: Number(game?.registry.get('run.elapsedMs') ?? -1),
       goldEarned: Number(game?.registry.get('run.goldEarned') ?? -1),
       codexOpen: Boolean((game?.scene.getScene('MenuScene') as { codexOverlayVisible?: boolean } | undefined)?.codexOverlayVisible),
@@ -256,7 +258,7 @@ test.describe('menu and run scene flow', () => {
     expect(runtimeErrors).toEqual([]);
   });
 
-  test('ESC flow returns to menu cleanly after starting from the actual Start Run button', async ({ page }) => {
+  test('ESC flow opens and closes pause cleanly after starting from the actual Start Run button', async ({ page }) => {
     const runtimeErrors = trackRuntimeErrors(page);
 
     await page.goto('/');
@@ -266,15 +268,22 @@ test.describe('menu and run scene flow', () => {
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('RunScene')));
     await triggerRunEscape(page);
 
-    await page.waitForFunction(() => {
-      const game = window.__JANGAN_LARI_GAME__;
-      return Boolean(game?.scene.isActive('MenuScene') && !game.scene.isActive('RunScene') && !game.scene.isActive('UIScene'));
-    });
+    await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.registry.get('run.pauseMenuActive')));
 
-    const state = await getGameState(page);
-    expect(state.menuActive).toBe(true);
-    expect(state.runActive).toBe(false);
-    expect(state.uiActive).toBe(false);
+    let state = await getGameState(page);
+    expect(state.menuActive).toBe(false);
+    expect(state.runActive).toBe(true);
+    expect(state.uiActive).toBe(true);
+    expect(state.pauseMenuActive).toBe(true);
+
+    await triggerRunEscape(page);
+    await page.waitForFunction(() => !window.__JANGAN_LARI_GAME__?.registry.get('run.pauseMenuActive'));
+
+    state = await getGameState(page);
+    expect(state.menuActive).toBe(false);
+    expect(state.runActive).toBe(true);
+    expect(state.uiActive).toBe(true);
+    expect(state.pauseMenuActive).toBe(false);
     expect(state.endActive).toBe(false);
     expectNoBrokenSceneApiErrors(runtimeErrors);
     expect(runtimeErrors).toEqual([]);

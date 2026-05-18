@@ -590,3 +590,31 @@ Acceptance checks:
 - Stable full-run gameplay flow preserved end-to-end.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation: unit, build, smoke/mobile-layout/controls/mobile-alpha-ui/mobile-hud e2e, and diff check.
+
+## Sprint A15: Pause Menu And Run Options
+
+Goal: Add a small in-run pause/settings menu so active gameplay stays clean while resume, restart, and return-to-menu controls live behind an intentional overlay.
+
+Status note:
+- Add a compact in-run pause button that is visible during normal gameplay and hidden during level-up, class choice, end screen, and orientation-warning overlays.
+- Add a centered pause overlay with Resume, Restart Run, and Return to Main Menu actions.
+- Manual pause stops gameplay progression while UIScene remains interactive: player movement, physics, weapons/projectiles, spawn timers, run elapsed time, event timers, boss timers, and contact damage do not advance.
+- ESC opens/closes the pause menu during an active run instead of immediately exiting.
+- Restart and return-to-menu abandon the current run without victory/defeat rewards, gold payout, save scoring, or leaderboard writes.
+
+Intentionally skipped:
+- No gameplay balance changes.
+- No gameplay content additions.
+- No collision changes.
+- No boss or miniboss behavior changes.
+- No enemy stat, reward, XP, gold, spawn timing, event timing, or economy changes.
+- No multiplayer, backend, accounts, ads, IAP, online leaderboard, monetization, or gameplay-bot work.
+
+Acceptance checks:
+- Pause button appears during normal gameplay without reintroducing active-HUD tutorial/objective clutter.
+- Pause overlay is tappable on mobile and includes Resume, Restart Run, and Return to Main Menu.
+- Paused gameplay genuinely stops while the UI remains usable.
+- Resume returns to the same run.
+- Restart starts a fresh run without abandoned-run rewards.
+- Return to Main Menu exits cleanly without abandoned-run rewards.
+- Focused validation remains limited to unit, build, diff check, pause-menu e2e, mobile HUD, and mobile-alpha UI e2e.
