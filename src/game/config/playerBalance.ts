@@ -6,7 +6,7 @@ export const PLAYER_HIT_FLASH_MS = 120;
 export const PLAYER_PICKUP_RANGE = 90;
 export const PLAYER_START_LEVEL = 1;
 export const PLAYER_START_XP_TO_NEXT_LEVEL = 24;
-export const PLAYER_XP_PER_LEVEL = 60;
+export const PLAYER_XP_PER_LEVEL = 40;
 
 // HP regen timing cap
 export const DEFAULT_HP_REGEN_MAX_DELTA_MS = 250;
