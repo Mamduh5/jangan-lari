@@ -4017,7 +4017,7 @@ export class RunScene extends Phaser.Scene {
 
   private showEncounterBanner(title: string, subtitle: string, color: number, duration: number): void {
     const mobileCopy = this.shouldUseMobileCopy();
-    const bannerY = mobileCopy ? 76 : 86;
+    const bannerY = mobileCopy ? 110 : 120;
     const bannerWidth = mobileCopy ? 460 : 620;
     const bannerHeight = mobileCopy ? 58 : 92;
     const accentWidth = mobileCopy ? 390 : 560;

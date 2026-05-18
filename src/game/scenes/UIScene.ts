@@ -193,7 +193,7 @@ export class UIScene extends Phaser.Scene {
     this.timerText = this.add
       .text(viewWidth / 2, 26, '00:00', {
         fontFamily: 'Georgia, serif',
-        fontSize: '42px',
+        fontSize: '28px',
         color: '#e0f2fe',
       })
       .setOrigin(0.5, 0)
@@ -555,7 +555,7 @@ export class UIScene extends Phaser.Scene {
     const viewWidth = GAME_WIDTH;
     const viewHeight = GAME_HEIGHT;
 
-    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.78)
+    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0)
     const panel = this.add.rectangle(viewWidth / 2, viewHeight / 2, 640, 500, 0x0f172a, 0.995).setScrollFactor(0);
     panel.setStrokeStyle(2, 0x475569, 1);
 
@@ -759,7 +759,7 @@ export class UIScene extends Phaser.Scene {
     const viewWidth = GAME_WIDTH;
     const viewHeight = GAME_HEIGHT;
 
-    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.78)
+    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0)
     const heading = this.add
       .text(viewWidth / 2, 138, 'EVOLUTION', {
         fontFamily: 'Trebuchet MS, sans-serif',
