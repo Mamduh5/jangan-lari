@@ -209,6 +209,69 @@ test.describe('miniboss skill snapshot labeling', () => {
     expect(runtimeErrors).toEqual([]);
   });
 
+  test('line strike with dynamic length for 500px range covers and damages the player', async ({ page }) => {
+    const runtimeErrors = trackRuntimeErrors(page);
+    await startRun(page);
+
+    const startingHp = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
+    expect(startingHp).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as unknown as RunSceneDebug;
+      const dynamicLength = 610;
+      runScene.executeMinibossLineStrike({ contactDamage: 26 }, runScene.player.x - 500, runScene.player.y, { x: 1, y: 0 }, dynamicLength);
+    });
+
+    await page.waitForFunction(() => {
+      const debug = (window as unknown as { __JANGAN_LARI_DEBUG__?: DebugHandle }).__JANGAN_LARI_DEBUG__;
+      const attacks = debug?.getGameplaySnapshot().run?.enemyAttacks ?? [];
+      return attacks.some((a) => a.kind === 'miniboss-line-strike' && !a.warningOnly && (a.damageRange ?? 0) >= 500);
+    });
+
+    const snapshot = await page.evaluate(() => {
+      const debug = (window as unknown as { __JANGAN_LARI_DEBUG__?: DebugHandle }).__JANGAN_LARI_DEBUG__;
+      return debug?.getGameplaySnapshot().run?.enemyAttacks ?? [];
+    });
+    const activeEntry = snapshot.find((a) => a.kind === 'miniboss-line-strike' && !a.warningOnly);
+    expect(activeEntry?.damageRange).toBeGreaterThanOrEqual(500);
+
+    await page.waitForFunction(
+      (baselineHp) => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1) < baselineHp,
+      startingHp,
+    );
+
+    const hpAfterStrike = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
+    expect(hpAfterStrike).toBeLessThan(startingHp);
+    expect(runtimeErrors).toEqual([]);
+  });
+
+  test('line strike sideways dodge: perpendicular offset avoids damage', async ({ page }) => {
+    const runtimeErrors = trackRuntimeErrors(page);
+    await startRun(page);
+
+    const startingHp = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
+    expect(startingHp).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as unknown as RunSceneDebug;
+      runScene.executeMinibossLineStrike(
+        { contactDamage: 26 },
+        runScene.player.x - 200,
+        runScene.player.y + 200,
+        { x: 1, y: 0 },
+        500,
+      );
+    });
+
+    await page.waitForTimeout(400);
+
+    const hpAfterMiss = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
+    expect(hpAfterMiss).toBe(startingHp);
+    expect(runtimeErrors).toEqual([]);
+  });
+
   test('volley execute is labeled active in snapshot and damages the player inside a lane', async ({ page }) => {
     const runtimeErrors = trackRuntimeErrors(page);
     await startRun(page);

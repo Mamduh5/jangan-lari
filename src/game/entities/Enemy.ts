@@ -3,6 +3,7 @@ import { getEnemyCombatResponseProfile, type EnemyCombatResponseProfile } from '
 import { ENEMY_HIT_FLASH_MS } from '../config/constants';
 import type { EnemyArchetype } from '../data/enemies';
 import {
+  computeMinibossLineStrikeDynamicLength,
   createBossShockwaveContract,
   createMinibossLineAttackContract,
   createMinibossVolleyContract,
@@ -59,6 +60,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private dashVector = new Phaser.Math.Vector2(0, 0);
   private readonly baseStrokeWidth: number;
   private primedMinibossCharge: Phaser.Math.Vector2 | null = null;
+  private minibossLineStrikeLength = 0;
+  public isLineStrikeMoving = false;
   private pendingAttackSignal: EnemyAttackSignal | null = null;
   private nextShockwaveAt = 0;
   private shockwaveWindupUntil = 0;
@@ -459,23 +462,42 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return;
     }
 
+    this.isLineStrikeMoving = false;
+
     if (currentTime >= this.nextDashAt) {
       const dashDirection = (this.primedMinibossCharge ?? towardTarget).clone().normalize();
-      const dashSpeed = this.speed * (this.archetype.dashSpeedMultiplier ?? 2);
-      this.dashVector = dashDirection.scale(dashSpeed);
-      this.dashUntil = currentTime + (this.archetype.dashDurationMs ?? 240);
-      this.nextDashAt = this.dashUntil + (this.archetype.dashCooldownMs ?? 1400);
+
       if (this.isMiniboss() && this.primedMinibossCharge) {
-        const contract = createMinibossLineAttackContract();
+        const contract = createMinibossLineAttackContract(this.minibossLineStrikeLength);
+        const travelDistance = this.minibossLineStrikeLength * contract.travelMultiplier;
+        const worldBounds = this.scene.physics.world.bounds;
+        const halfBodySize = this.body.halfWidth;
+        const rawDestX = this.x + dashDirection.x * travelDistance;
+        const rawDestY = this.y + dashDirection.y * travelDistance;
+        const destX = Phaser.Math.Clamp(rawDestX, worldBounds.x + halfBodySize, worldBounds.right - halfBodySize);
+        const destY = Phaser.Math.Clamp(rawDestY, worldBounds.y + halfBodySize, worldBounds.bottom - halfBodySize);
+        this.dashVector.set(
+          ((destX - this.x) / contract.damageActiveMs) * 1000,
+          ((destY - this.y) / contract.damageActiveMs) * 1000,
+        );
+        this.dashUntil = currentTime + contract.damageActiveMs;
+        this.nextDashAt = this.dashUntil + (this.archetype.dashCooldownMs ?? 1400);
+        this.isLineStrikeMoving = true;
         this.pendingAttackSignal = {
           type: 'miniboss-line-execute',
           x: this.x,
           y: this.y,
           direction: { x: dashDirection.x, y: dashDirection.y },
-          length: contract.length,
+          length: this.minibossLineStrikeLength,
         };
         this.primedMinibossCharge = null;
+      } else {
+        const dashSpeed = this.speed * (this.archetype.dashSpeedMultiplier ?? 2);
+        this.dashVector = dashDirection.scale(dashSpeed);
+        this.dashUntil = currentTime + (this.archetype.dashDurationMs ?? 240);
+        this.nextDashAt = this.dashUntil + (this.archetype.dashCooldownMs ?? 1400);
       }
+
       this.body.setVelocity(this.dashVector.x, this.dashVector.y);
       return;
     }
@@ -502,13 +524,15 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
         towardTarget.lengthSq() > 0
       ) {
         const chargeDirection = towardTarget.clone().normalize();
+        const dynamicLength = computeMinibossLineStrikeDynamicLength(towardTarget.length());
+        this.minibossLineStrikeLength = dynamicLength;
         this.primedMinibossCharge = chargeDirection;
         this.pendingAttackSignal = {
           type: 'miniboss-line-telegraph',
           x: this.x,
           y: this.y,
           direction: { x: chargeDirection.x, y: chargeDirection.y },
-          length: chargeContract.length,
+          length: dynamicLength,
         };
       }
 

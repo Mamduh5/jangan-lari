@@ -1,9 +1,10 @@
-import { MINIBOSS_LINE_STRIKE_DAMAGE_ACTIVE_MS, MINIBOSS_LINE_STRIKE_WIDTH } from '../../src/game/config/constants';
+import { MINIBOSS_LINE_STRIKE_DAMAGE_ACTIVE_MS, MINIBOSS_LINE_STRIKE_MIN_LENGTH, MINIBOSS_LINE_STRIKE_WIDTH } from '../../src/game/config/constants';
 import {
   bossShockwaveDamageAndVisualMatch,
   createBossShockwaveContract,
   createMinibossLineAttackContract,
   createMinibossVolleyContract,
+  computeMinibossLineStrikeDynamicLength,
   lineAttackDamageAndVisualMatch,
   minibossVolleyLaneDamageAndVisualMatch,
 } from '../../src/game/systems/dangerousEffectContracts';
@@ -18,6 +19,25 @@ describe('dangerous effect contracts', () => {
     expect(contract.activeVisualMs).toBe(MINIBOSS_LINE_STRIKE_DAMAGE_ACTIVE_MS);
     expect(contract.damageActiveMs).toBe(contract.activeVisualMs);
     expect(lineAttackDamageAndVisualMatch(contract)).toBe(true);
+  });
+
+  test('line strike contract carries dynamic length parameters', () => {
+    const contract = createMinibossLineAttackContract();
+
+    expect(contract.minLength).toBe(MINIBOSS_LINE_STRIKE_MIN_LENGTH);
+    expect(contract.maxLength).toBeGreaterThan(contract.minLength);
+    expect(contract.overrunDistance).toBeGreaterThan(0);
+    expect(contract.travelMultiplier).toBeGreaterThan(1);
+  });
+
+  test('dynamic strike length clamps to min/max and adds overrun', () => {
+    const contract = createMinibossLineAttackContract();
+
+    expect(computeMinibossLineStrikeDynamicLength(0)).toBe(contract.minLength);
+    expect(computeMinibossLineStrikeDynamicLength(500)).toBe(610);
+    expect(computeMinibossLineStrikeDynamicLength(1000)).toBe(contract.maxLength);
+    const normalDashDistancePx = 92 * 2.45 * (380 / 1000);
+    expect(contract.minLength * contract.travelMultiplier).toBeGreaterThan(normalDashDistancePx * 4);
   });
 
   test('custom line lengths keep visual and damage range together', () => {

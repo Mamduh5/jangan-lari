@@ -2553,6 +2553,10 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    if (enemy.isLineStrikeMoving) {
+      return;
+    }
+
     const tookDamage = this.player.takeDamage(enemy.contactDamage, this.time.now);
 
     if (!tookDamage) {

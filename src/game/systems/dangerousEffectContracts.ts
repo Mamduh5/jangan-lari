@@ -9,8 +9,11 @@ import {
   BOSS_SHOCKWAVE_TELEGRAPH_MS,
   BOSS_SHOCKWAVE_THICKNESS,
   MINIBOSS_LINE_STRIKE_DAMAGE_ACTIVE_MS,
-  MINIBOSS_LINE_STRIKE_LENGTH,
+  MINIBOSS_LINE_STRIKE_MAX_LENGTH,
+  MINIBOSS_LINE_STRIKE_MIN_LENGTH,
+  MINIBOSS_LINE_STRIKE_OVERRUN_DISTANCE,
   MINIBOSS_LINE_STRIKE_TELEGRAPH_MS,
+  MINIBOSS_LINE_STRIKE_TRAVEL_MULTIPLIER,
   MINIBOSS_LINE_STRIKE_WIDTH,
   MINIBOSS_VOLLEY_ACTIVE_MS,
   MINIBOSS_VOLLEY_COOLDOWN_MS,
@@ -26,6 +29,10 @@ import {
 export type LineAttackEffectContract = {
   kind: 'miniboss-line-strike';
   length: number;
+  minLength: number;
+  maxLength: number;
+  overrunDistance: number;
+  travelMultiplier: number;
   damageWidth: number;
   visualWidth: number;
   halfWidth: number;
@@ -63,13 +70,17 @@ export type MinibossVolleyContract = {
   cooldownMs: number;
 };
 
-export function createMinibossLineAttackContract(length = MINIBOSS_LINE_STRIKE_LENGTH): LineAttackEffectContract {
+export function createMinibossLineAttackContract(length = MINIBOSS_LINE_STRIKE_MIN_LENGTH): LineAttackEffectContract {
   const safeLength = Math.max(1, Math.floor(length));
   const width = MINIBOSS_LINE_STRIKE_WIDTH;
 
   return {
     kind: 'miniboss-line-strike',
     length: safeLength,
+    minLength: MINIBOSS_LINE_STRIKE_MIN_LENGTH,
+    maxLength: MINIBOSS_LINE_STRIKE_MAX_LENGTH,
+    overrunDistance: MINIBOSS_LINE_STRIKE_OVERRUN_DISTANCE,
+    travelMultiplier: MINIBOSS_LINE_STRIKE_TRAVEL_MULTIPLIER,
     damageWidth: width,
     visualWidth: width,
     halfWidth: width / 2,
@@ -77,6 +88,11 @@ export function createMinibossLineAttackContract(length = MINIBOSS_LINE_STRIKE_L
     damageActiveMs: MINIBOSS_LINE_STRIKE_DAMAGE_ACTIVE_MS,
     activeVisualMs: MINIBOSS_LINE_STRIKE_DAMAGE_ACTIVE_MS,
   };
+}
+
+export function computeMinibossLineStrikeDynamicLength(distanceToTarget: number): number {
+  const raw = distanceToTarget + MINIBOSS_LINE_STRIKE_OVERRUN_DISTANCE;
+  return Math.max(MINIBOSS_LINE_STRIKE_MIN_LENGTH, Math.min(MINIBOSS_LINE_STRIKE_MAX_LENGTH, raw));
 }
 
 export function createBossShockwaveContract(phase: 1 | 2 = 1): BossShockwaveContract {
