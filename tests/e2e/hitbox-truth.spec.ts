@@ -19,7 +19,7 @@ type RunSnapshot = {
 };
 
 test.describe('hitbox and effect truth', () => {
-  test('miniboss line active visual matches damage geometry and enemies do not physically collide', async ({ page }) => {
+  test('miniboss line active visual matches damage geometry and enemies physically collide', async ({ page }) => {
     const runtimeErrors = trackRuntimeErrors(page);
 
     await page.goto('/');
@@ -51,7 +51,7 @@ test.describe('hitbox and effect truth', () => {
     expect(attack?.damageActive).toBe(true);
     expect(attack?.effectActive).toBe(true);
     expect(attack?.remainingMs ?? 0).toBeGreaterThan(0);
-    expect(run.enemyPopulation.enemyEnemyPhysicalCollision).toBe(false);
+    expect(run.enemyPopulation.enemyEnemyPhysicalCollision).toBe(true);
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 });

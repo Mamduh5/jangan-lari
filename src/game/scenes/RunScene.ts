@@ -462,12 +462,14 @@ export class RunScene extends Phaser.Scene {
     );
 
     this.colliders.push(
-      this.physics.add.overlap(this.player, this.enemies, (_playerObject, enemyObject) => {
+      this.physics.add.collider(this.player, this.enemies, (_playerObject, enemyObject) => {
         if (enemyObject instanceof Enemy) {
           this.handlePlayerEnemyOverlap(enemyObject);
         }
       }),
     );
+
+    this.colliders.push(this.physics.add.collider(this.enemies, this.enemies));
 
     this.colliders.push(
       this.physics.add.overlap(this.player, this.xpGems, (_playerObject, gemObject) => {
@@ -912,7 +914,7 @@ export class RunScene extends Phaser.Scene {
         activeCount: this.getActiveEnemyCount(),
         activeCap: ENEMY_ACTIVE_CAP,
         normalSpawnSlots: this.areNormalSpawnsSuppressed() ? 0 : getAvailableEnemySpawnSlots(this.getActiveEnemyCount()),
-        enemyEnemyPhysicalCollision: false,
+        enemyEnemyPhysicalCollision: true,
       },
       enemyScaling,
       waveTemplate: {

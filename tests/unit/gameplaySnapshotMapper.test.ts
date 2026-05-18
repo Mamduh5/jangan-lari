@@ -166,6 +166,7 @@ function createRunSnapshot(overrides: Partial<GameplayBotRunSnapshot> = {}): Gam
       activeCount: 1,
       activeCap: 28,
       normalSpawnSlots: 27,
+      enemyEnemyPhysicalCollision: true,
     },
     enemyScaling: {
       stack: 0,
