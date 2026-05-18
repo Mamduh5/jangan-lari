@@ -141,10 +141,6 @@ export class UIScene extends Phaser.Scene {
     this.controlGuideSubLabels = [];
     this.controlGuideMode = this.readControlGuideMode();
 
-    const topLeftPanel = this.add.rectangle(20, 16, 390, 166, 0x102033, 0.88).setOrigin(0);
-    topLeftPanel.setStrokeStyle(1, 0x4b6b8a, 0.84);
-    topLeftPanel.setScrollFactor(0);
-
     this.heroText = this.add
       .text(38, 28, '--', {
         fontFamily: 'Trebuchet MS, sans-serif',
@@ -216,10 +212,10 @@ export class UIScene extends Phaser.Scene {
     this.alertText = this.add
       .text(viewWidth / 2, 76, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
+        fontSize: '15px',
         color: '#dbeafe',
-        backgroundColor: '#1e3a8a',
-        padding: { left: 12, right: 12, top: 6, bottom: 6 },
+        stroke: '#000000',
+        strokeThickness: 4,
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
@@ -230,8 +226,8 @@ export class UIScene extends Phaser.Scene {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#fef3c7',
-        backgroundColor: '#111827',
-        padding: { left: 12, right: 12, top: 6, bottom: 6 },
+        stroke: '#000000',
+        strokeThickness: 4,
         wordWrap: { width: 640 },
         align: 'center',
       })
@@ -244,8 +240,8 @@ export class UIScene extends Phaser.Scene {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '13px',
         color: '#cbd5e1',
-        backgroundColor: '#0f172a',
-        padding: { left: 14, right: 14, top: 6, bottom: 6 },
+        stroke: '#000000',
+        strokeThickness: 3,
         wordWrap: { width: 760 },
         align: 'center',
       })
@@ -253,43 +249,38 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setVisible(false);
 
-    this.eventPanel = this.add.rectangle(viewWidth / 2, 206, 520, 68, 0x111827, 0.9).setScrollFactor(0).setVisible(false);
-    this.eventPanel.setStrokeStyle(1, 0xfbbf24, 0.9);
+    this.eventPanel = this.add.rectangle(0, 0, 0, 0, 0x000000, 0).setScrollFactor(0).setVisible(false);
 
     this.eventTitleText = this.add
-      .text(viewWidth / 2 - 240, 182, '', {
+      .text(viewWidth / 2, 86, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
+        fontSize: '15px',
         color: '#fde68a',
+        stroke: '#000000',
+        strokeThickness: 3,
       })
-      .setOrigin(0, 0)
+      .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setVisible(false);
 
     this.eventBodyText = this.add
-      .text(viewWidth / 2 - 240, 202, '', {
+      .text(viewWidth / 2, 108, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '13px',
-        color: '#f8fafc',
-        wordWrap: { width: 400 },
+        color: '#e2e8f0',
+        stroke: '#000000',
+        strokeThickness: 3,
+        wordWrap: { width: 480 },
+        align: 'center',
       })
-      .setOrigin(0, 0)
+      .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setVisible(false);
 
     this.eventTimerText = this.add
-      .text(viewWidth / 2 + 224, 182, '', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '24px',
-        color: '#fde68a',
-      })
-      .setOrigin(1, 0)
+      .text(0, 0, '', { fontFamily: 'Trebuchet MS, sans-serif', fontSize: '1px', color: '#000000' })
       .setScrollFactor(0)
       .setVisible(false);
-
-    const topRightPanel = this.add.rectangle(viewWidth - 320, 16, 300, 166, 0x102033, 0.88).setOrigin(0);
-    topRightPanel.setStrokeStyle(1, 0x4b6b8a, 0.84);
-    topRightPanel.setScrollFactor(0);
 
     this.scoreText = this.add
       .text(viewWidth - 30, 28, 'Score 0', {
@@ -317,10 +308,6 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
-
-    const bottomLeftPanel = this.add.rectangle(20, viewHeight - 130, 254, 116, 0x0d1e30, 0.9).setOrigin(0);
-    bottomLeftPanel.setStrokeStyle(1, 0x2a4a68, 0.82);
-    bottomLeftPanel.setScrollFactor(0);
 
     this.weaponSummaryText = this.add
       .text(38, viewHeight - 118, 'Weapon --', {
@@ -1479,9 +1466,6 @@ export class UIScene extends Phaser.Scene {
     if (this.alertText.style.color !== palette.textColor) {
       this.alertText.setColor(palette.textColor);
     }
-    if (this.alertText.style.backgroundColor !== palette.backgroundColor) {
-      this.alertText.setBackgroundColor(palette.backgroundColor);
-    }
     this.alertText.setVisible(true);
   }
 
@@ -1498,20 +1482,8 @@ export class UIScene extends Phaser.Scene {
     this.rewardText.setVisible(true);
   }
 
-  private refreshInstruction(message: string, levelUpActive: boolean, endActive: boolean): void {
-    if (!message || levelUpActive || endActive) {
-      this.instructionText.setVisible(false);
-      return;
-    }
-
-    const copy = this.getInstructionCopy(message);
-    if (!copy) {
-      this.instructionText.setVisible(false);
-      return;
-    }
-
-    this.setTextIfChanged(this.instructionText, copy);
-    this.instructionText.setVisible(true);
+  private refreshInstruction(_message: string, _levelUpActive: boolean, _endActive: boolean): void {
+    this.instructionText.setVisible(false);
   }
 
   private getInstructionCopy(message: string): string {
@@ -1539,18 +1511,18 @@ export class UIScene extends Phaser.Scene {
     endActive: boolean,
   ): void {
     const visible = active && !levelUpActive && !endActive;
-    this.eventPanel.setVisible(visible);
+    this.eventPanel.setVisible(false);
     this.eventTitleText.setVisible(visible);
     this.eventBodyText.setVisible(visible);
-    this.eventTimerText.setVisible(visible);
+    this.eventTimerText.setVisible(false);
 
     if (!visible) {
       return;
     }
 
-    this.setTextIfChanged(this.eventTitleText, title.toUpperCase());
+    const seconds = Math.max(0, Math.round(remainingMs / 1000));
+    this.setTextIfChanged(this.eventTitleText, `${title.toUpperCase()} • ${seconds}s`);
     this.setTextIfChanged(this.eventBodyText, objective);
-    this.setTextIfChanged(this.eventTimerText, `${Math.max(0, remainingMs / 1000).toFixed(1)}s`);
   }
 
   private refreshOrientationHint(): void {
@@ -1755,16 +1727,8 @@ export class UIScene extends Phaser.Scene {
     card.setStrokeStyle(2, hovered ? 0xfef08a : 0x38bdf8, hovered ? 1 : 0.9);
   }
 
-  private getTimerSubtitleHint(stagePhase: string): string {
-    switch (stagePhase) {
-      case 'boss':
-        return 'dodge and fire';
-      case 'victory':
-      case 'defeat':
-        return '';
-      default:
-        return 'farm shapes \u2022 spend stats \u2022 prepare';
-    }
+  private getTimerSubtitleHint(_stagePhase: string): string {
+    return '';
   }
 
   private setTextIfChanged(target: Phaser.GameObjects.Text, nextText: string): void {
