@@ -74,6 +74,8 @@ export type GameplayBotEnemyProjectileSummary = {
 
 export type GameplayBotEnemyAttackSummary = {
   kind: 'miniboss-line-strike' | 'miniboss-volley' | 'boss-shockwave';
+  phase: 'warning' | 'active';
+  warningOnly: boolean;
   damageRange: number;
   visualRange: number;
   damageWidth: number | null;

@@ -18,6 +18,7 @@ import {
   MINIBOSS_VOLLEY_PROJECTILE_RADIUS,
   MINIBOSS_VOLLEY_PROJECTILE_SPEED,
   MINIBOSS_VOLLEY_SPREAD_DEGREES,
+  MINIBOSS_VOLLEY_TELEGRAPH_LANE_LENGTH,
   MINIBOSS_VOLLEY_TELEGRAPH_MS,
 } from '../config/constants';
 
@@ -50,6 +51,7 @@ export type BossShockwaveContract = {
 export type MinibossVolleyContract = {
   kind: 'miniboss-volley';
   telegraphMs: number;
+  telegraphLaneLength: number;
   cooldownMs: number;
   projectileCount: number;
   projectileDamageRadius: number;
@@ -100,6 +102,7 @@ export function createMinibossVolleyContract(): MinibossVolleyContract {
   return {
     kind: 'miniboss-volley',
     telegraphMs: MINIBOSS_VOLLEY_TELEGRAPH_MS,
+    telegraphLaneLength: MINIBOSS_VOLLEY_TELEGRAPH_LANE_LENGTH,
     cooldownMs: MINIBOSS_VOLLEY_COOLDOWN_MS,
     projectileCount: MINIBOSS_VOLLEY_PROJECTILE_COUNT,
     projectileDamageRadius: MINIBOSS_VOLLEY_PROJECTILE_RADIUS,

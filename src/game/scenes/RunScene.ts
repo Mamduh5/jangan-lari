@@ -228,6 +228,19 @@ export class RunScene extends Phaser.Scene {
     damageRadius: number;
     durationMs: number;
     elapsedMs: number;
+    laneLength?: number;
+    laneWidth?: number;
+  }> = [];
+  private lineTelegraphTracking: Array<{
+    kind: 'miniboss-line-strike';
+    x: number;
+    y: number;
+    direction: { x: number; y: number };
+    visualLength: number;
+    visualWidth: number;
+    damageWidth: number;
+    durationMs: number;
+    elapsedMs: number;
   }> = [];
   private enemyBolts: Array<{
     orb: Phaser.GameObjects.Arc;
@@ -370,6 +383,7 @@ export class RunScene extends Phaser.Scene {
     this.lineStrikeAttacks = [];
     this.shockwaveAttacks = [];
     this.enemyBolts = [];
+    this.lineTelegraphTracking = [];
     this.ownedWeaponIds.clear();
     this.takenUniqueUpgradeIds.clear();
     this.combatResponseImpactCounts = {};
@@ -657,21 +671,39 @@ export class RunScene extends Phaser.Scene {
         containsRed: bolt.visual.containsRed,
       }))
       .slice(0, 12);
-    const enemyAttacks = [
+    const enemyAttacks: import('../debug/gameplaySnapshot').GameplayBotEnemyAttackSummary[] = [
       ...this.skillTelegraphs.map((telegraph) => ({
         kind: telegraph.kind,
+        phase: 'warning' as const,
+        warningOnly: true,
         damageRange: telegraph.damageRadius,
-        visualRange: telegraph.visualRadius,
+        visualRange: telegraph.laneLength ?? telegraph.visualRadius,
         damageWidth: null,
-        visualWidth: null,
+        visualWidth: telegraph.laneWidth ?? null,
         damageRadius: telegraph.damageRadius,
         visualRadius: telegraph.visualRadius,
         damageActive: false,
         effectActive: telegraph.elapsedMs < telegraph.durationMs,
         remainingMs: Math.max(0, telegraph.durationMs - telegraph.elapsedMs),
       })),
+      ...this.lineTelegraphTracking.map((telegraph) => ({
+        kind: telegraph.kind,
+        phase: 'warning' as const,
+        warningOnly: true,
+        damageRange: telegraph.visualLength,
+        visualRange: telegraph.visualLength,
+        damageWidth: telegraph.damageWidth,
+        visualWidth: telegraph.visualWidth,
+        damageRadius: null,
+        visualRadius: null,
+        damageActive: false,
+        effectActive: telegraph.elapsedMs < telegraph.durationMs,
+        remainingMs: Math.max(0, telegraph.durationMs - telegraph.elapsedMs),
+      })),
       ...this.lineStrikeAttacks.map((attack) => ({
         kind: attack.kind,
+        phase: 'active' as const,
+        warningOnly: false,
         damageRange: attack.length,
         visualRange: attack.length,
         damageWidth: attack.damageWidth,
@@ -684,6 +716,8 @@ export class RunScene extends Phaser.Scene {
       })),
       ...this.shockwaveAttacks.map((attack) => ({
         kind: 'boss-shockwave' as const,
+        phase: 'active' as const,
+        warningOnly: false,
         damageRange: attack.currentRadius,
         visualRange: attack.currentRadius,
         damageWidth: null,
@@ -1220,6 +1254,39 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
   }
 
+  public debugShowMinibossLineTelegraph(): void {
+    if (!this.player?.active || this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    const contract = createMinibossLineAttackContract();
+    const direction = { x: 1, y: 0 };
+    const x = Phaser.Math.Clamp(this.player.x - contract.length * 0.5, 40, WORLD_WIDTH - 40);
+    const y = this.player.y;
+    this.showLineAttackTelegraph(x, y, direction, contract.length, contract.visualWidth, 0xfda4af, contract.telegraphMs, 'warning');
+    this.lineTelegraphTracking.push({
+      kind: contract.kind,
+      x,
+      y,
+      direction,
+      visualLength: contract.length,
+      visualWidth: contract.visualWidth,
+      damageWidth: contract.damageWidth,
+      durationMs: contract.telegraphMs,
+      elapsedMs: 0,
+    });
+    this.publishHudState();
+  }
+
+  public debugShowMinibossVolleyTelegraph(): void {
+    if (!this.player?.active || this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.showMinibossVolleyTelegraph(this.player.x, this.player.y, { x: 1, y: 0 });
+    this.publishHudState();
+  }
+
   public debugForceRewardVisibilityChoices(): void {
     if (this.isEnded || this.isTransitioningToMenu) {
       return;
@@ -1549,6 +1616,10 @@ export class RunScene extends Phaser.Scene {
   private getActiveMinibossSkillName(): string {
     if (this.skillTelegraphs.some((telegraph) => telegraph.kind === 'miniboss-volley')) {
       return 'volley-telegraph';
+    }
+
+    if (this.lineTelegraphTracking.length > 0) {
+      return 'line-strike-telegraph';
     }
 
     if (this.lineStrikeAttacks.some((attack) => attack.elapsedMs < attack.durationMs)) {
@@ -2214,19 +2285,27 @@ export class RunScene extends Phaser.Scene {
   }
 
   private updateSkillTelegraphs(deltaMs: number): void {
-    if (this.skillTelegraphs.length === 0) {
-      return;
-    }
-
-    const nextTelegraphs: typeof this.skillTelegraphs = [];
-    for (const telegraph of this.skillTelegraphs) {
-      telegraph.elapsedMs += deltaMs;
-      if (telegraph.elapsedMs < telegraph.durationMs) {
-        nextTelegraphs.push(telegraph);
+    if (this.skillTelegraphs.length > 0) {
+      const nextTelegraphs: typeof this.skillTelegraphs = [];
+      for (const telegraph of this.skillTelegraphs) {
+        telegraph.elapsedMs += deltaMs;
+        if (telegraph.elapsedMs < telegraph.durationMs) {
+          nextTelegraphs.push(telegraph);
+        }
       }
+      this.skillTelegraphs = nextTelegraphs;
     }
 
-    this.skillTelegraphs = nextTelegraphs;
+    if (this.lineTelegraphTracking.length > 0) {
+      const nextLineTelegraphs: typeof this.lineTelegraphTracking = [];
+      for (const telegraph of this.lineTelegraphTracking) {
+        telegraph.elapsedMs += deltaMs;
+        if (telegraph.elapsedMs < telegraph.durationMs) {
+          nextLineTelegraphs.push(telegraph);
+        }
+      }
+      this.lineTelegraphTracking = nextLineTelegraphs;
+    }
   }
 
   private updateLineStrikeAttacks(deltaMs: number): void {
@@ -2655,6 +2734,17 @@ export class RunScene extends Phaser.Scene {
         {
           const contract = createMinibossLineAttackContract(signal.length);
           this.showLineAttackTelegraph(signal.x, signal.y, signal.direction, contract.length, contract.visualWidth, 0xfda4af, contract.telegraphMs, 'warning');
+          this.lineTelegraphTracking.push({
+            kind: contract.kind,
+            x: signal.x,
+            y: signal.y,
+            direction: signal.direction,
+            visualLength: contract.length,
+            visualWidth: contract.visualWidth,
+            damageWidth: contract.damageWidth,
+            durationMs: contract.telegraphMs,
+            elapsedMs: 0,
+          });
         }
         playCue('dash-warning');
         break;
@@ -2887,8 +2977,8 @@ export class RunScene extends Phaser.Scene {
 
   private showMinibossVolleyTelegraph(x: number, y: number, direction: { x: number; y: number }): void {
     const contract = createMinibossVolleyContract();
-    const length = 340;
-    const width = contract.projectileVisualRadius * 2.8;
+    const length = contract.telegraphLaneLength;
+    const width = contract.projectileVisualRadius * 2;
     this.skillTelegraphs.push({
       kind: 'miniboss-volley',
       x,
@@ -2897,6 +2987,8 @@ export class RunScene extends Phaser.Scene {
       damageRadius: contract.projectileDamageRadius,
       durationMs: contract.telegraphMs,
       elapsedMs: 0,
+      laneLength: length,
+      laneWidth: width,
     });
 
     const baseAngle = Math.atan2(direction.y, direction.x);
