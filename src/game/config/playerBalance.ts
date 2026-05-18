@@ -13,7 +13,7 @@ export const DEFAULT_HP_REGEN_MAX_DELTA_MS = 250;
 
 // Core upgrade effect values.
 // These must stay in sync with upgrades.ts descriptions and RunScene logic.
-export const VITALITY_REGEN_PER_SECOND = 0.6;
+export const VITALITY_REGEN_PER_SECOND = 0.4;
 export const SWIFTNESS_MOVE_SPEED_BONUS = 22;
 export const POWER_DAMAGE_BONUS = 5;
 export const RAPID_FIRE_COOLDOWN_REDUCTION_MS = 40;
