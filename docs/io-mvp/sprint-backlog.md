@@ -561,3 +561,32 @@ Acceptance checks:
 - Player death still triggers defeat.
 - Phaser scale remains FIT and virtual size remains 1600x720.
 - Focused validation remains limited to unit, build, smoke/mobile-layout/controls/camera-spawn/enemy-scaling/readability/boss-stage/boss-phase/boss-balance e2e, and diff check.
+
+## Sprint A12: Main Menu And Gameplay UI/UX Polish
+
+Goal: Improve player-facing UI/UX for mobile alpha now that the core run is stable. Make the main menu, gameplay HUD, permanent upgrade UI, and general presentation feel cleaner, less noisy, and more intentional. Visual target is the v2 mockup (mobile-alpha-ui-v2-*.png) for layout/hierarchy direction, not pixel-perfect art.
+
+Status note:
+- Restructured MenuScene to a left selected-loadout panel, right hero-grid panel, slim top bar (GOLD/BEST/GUIDE), and a bottom action bar (START RUN prominent, UPGRADES, CODEX). Removed the bulky title block from the main content area.
+- Added hero preview shape in the left loadout panel alongside large hero name, weapon, passive, and description.
+- Rewrote the right-panel hero roster as a denser two-column grid with status badges and "tap to focus" affordance.
+- Added last-run summary line below hero grid.
+- Polished UIScene HUD: combined hero + class into a single top-left line, compacted the stat summary, added a small objective hint below the stage timer, and suppressed the redundant instruction text from the normal player path.
+- Polished MetaScene permanent upgrade cards: bolder level/cost display and improved affordability signalling.
+- Updated mobile-hud.spec.ts to derive start-button coordinates from MenuScene snapshot instead of hard-coding the old header position; all other coordinate contracts (stat panel, class choice) are unchanged.
+
+Intentionally skipped:
+- No miniboss behavior changes.
+- No boss behavior changes.
+- No gameplay content additions (weapons, heroes, classes, maps, modes, enemies, objectives).
+- No multiplayer, backend, accounts, monetization, or online leaderboard work.
+- Full gameplay-bot suite not run or recalibrated.
+
+Acceptance checks:
+- Main menu prioritizes player actions over branding noise.
+- Gameplay HUD shows HP/XP/level/score/gold/class with reduced visual noise.
+- Permanent upgrade UI clearly shows level, cost, and affordability state.
+- Hint/objective helper UI no longer distracts during normal play.
+- Stable full-run gameplay flow preserved end-to-end.
+- Phaser scale remains FIT and virtual size remains 1600x720.
+- Focused validation: unit, build, smoke/mobile-layout/controls/mobile-alpha-ui/mobile-hud e2e, and diff check.

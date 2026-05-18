@@ -118,12 +118,12 @@ export class MetaScene extends Phaser.Scene {
       const frame = this.add.rectangle(350, upgradeY, 492, 68, 0x172033, 0.98).setOrigin(0.5);
       frame.setStrokeStyle(1, 0x334155, 0.9);
       const button = this.add
-        .text(506, upgradeY, upgrade.title, {
+        .text(510, upgradeY, upgrade.title, {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '15px',
+          fontSize: '16px',
           color: '#fef3c7',
           backgroundColor: '#1f2937',
-          padding: { left: 12, right: 12, top: 7, bottom: 7 },
+          padding: { left: 14, right: 14, top: 8, bottom: 8 },
         })
         .setOrigin(0.5)
         .setInteractive({ useHandCursor: true });
@@ -134,12 +134,12 @@ export class MetaScene extends Phaser.Scene {
       button.on('pointerout', () => this.refreshView());
       button.on('pointerdown', () => this.handlePurchase(upgrade));
 
-      const detail = this.add.text(132, upgradeY - 21, '', {
+      const detail = this.add.text(132, upgradeY - 22, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '13px',
         color: '#cbd5e1',
         wordWrap: { width: 292 },
-        lineSpacing: 2,
+        lineSpacing: 3,
       });
       detail.setOrigin(0, 0);
 
@@ -229,8 +229,9 @@ export class MetaScene extends Phaser.Scene {
         color: !unlocked ? '#94a3b8' : maxed ? '#111827' : canBuy ? '#fef3c7' : '#cbd5e1',
         backgroundColor: !unlocked ? '#233044' : maxed ? '#86efac' : canBuy ? '#1f2937' : '#374151',
       });
+      const levelBar = level > 0 ? '█'.repeat(level) + '░'.repeat(Math.max(0, upgrade.maxLevel - level)) : '░'.repeat(upgrade.maxLevel);
       this.upgradeDetails[index].setText(
-        `${upgrade.title} ${level}/${upgrade.maxLevel}\n${upgrade.description}\n${state}`,
+        `LV ${level}/${upgrade.maxLevel}  ${levelBar}\n${upgrade.description}\n${state}`,
       );
     }
 

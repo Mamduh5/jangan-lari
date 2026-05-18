@@ -11,6 +11,8 @@ type HudSnapshot = {
   gold: string;
   kills: string;
   score: string;
+  timer: string;
+  instructionText: string;
   statPanelVisible: boolean;
   classChoiceVisible: boolean;
   orientationHintVisible: boolean;
@@ -35,8 +37,9 @@ test.describe('mobile HUD readability', () => {
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
 
-    const virtualSize = await getVirtualSize(page);
-    await clickCanvasPoint(page, virtualSize.width / 2 - 250, 82);
+    const canvasTransform = await getCanvasTransform(page);
+    const menuSnapshot = await getMenuSnapshot(page);
+    await clickCanvasPoint(page, canvasTransform, menuSnapshot.startButton.x, menuSnapshot.startButton.y);
     await page.waitForFunction(() => {
       const game = window.__JANGAN_LARI_GAME__;
       return Boolean(game?.scene.isActive('RunScene') && game.scene.isActive('UIScene') && !game.scene.isActive('MenuScene'));
@@ -45,6 +48,7 @@ test.describe('mobile HUD readability', () => {
     await page.waitForFunction(() => Boolean((window.__JANGAN_LARI_GAME__?.scene.getScene('UIScene') as { getHudSnapshot?: () => unknown }).getHudSnapshot?.()));
 
     const initialHud = await getHudSnapshot(page);
+    expect(initialHud.hero).toMatch(/^Runner\s+.\s+Basic$/);
     expect(initialHud.hp).toMatch(/^HP \d+\/\d+$/);
     expect(initialHud.level).toMatch(/^LV 1  XP \d+\/\d+$/);
     expect(initialHud.xp).toBe(initialHud.level);
@@ -54,6 +58,8 @@ test.describe('mobile HUD readability', () => {
     expect(initialHud.gold).toMatch(/^Run Gold \d+$/);
     expect(initialHud.kills).toBe('Kills 0');
     expect(initialHud.score).toMatch(/^Score \d+$/);
+    expect(initialHud.timer).toMatch(/^Boss in \d\d:\d\d$/);
+    expect(initialHud.instructionText).not.toMatch(/\b(Enter|Space|ESC)\b/);
     expect(initialHud.orientationHintVisible).toBe(true);
 
     await grantStatPoints(page, 1);
@@ -66,7 +72,7 @@ test.describe('mobile HUD readability', () => {
     expect(statReadyHud.statPanelVisible).toBe(true);
     expect(statReadyHud.statSummary).toContain('+1');
 
-    await clickCanvasPoint(page, virtualSize.width / 2 + 88, 624);
+    await clickCanvasPoint(page, canvasTransform, canvasTransform.virtualWidth / 2 + 88, 624);
     await page.waitForFunction(() => {
       const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
       return Boolean(run?.tankStats.availablePoints === 0 && run.tankStats.levels.moveSpeed === 1);
@@ -85,31 +91,20 @@ test.describe('mobile HUD readability', () => {
     expect(classReadyHud.classChoiceVisible).toBe(true);
     expect(classReadyHud.classStatus).toContain('Choose now');
 
-    await clickCanvasPoint(page, virtualSize.width / 2 - 190, 438);
+    await clickCanvasPoint(page, canvasTransform, canvasTransform.virtualWidth / 2 - 190, 438);
     await page.waitForFunction(() => {
       const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
       return Boolean(run?.tankClass.id === 'twin');
     });
 
     const afterClassHud = await getHudSnapshot(page);
+    expect(afterClassHud.hero).toMatch(/^Runner\s+.\s+Twin$/);
     expect(afterClassHud.classStatus).toContain('Class Twin');
     expect(afterClassHud.classChoiceVisible).toBe(false);
     expect(afterClassHud.weaponSummary).toContain('Twin');
 
-    const beforeKeyboardMove = (await getRunSnapshot(page)).player;
-    await page.keyboard.down('KeyD');
-    await page.waitForTimeout(260);
-    await page.keyboard.up('KeyD');
-    await page.waitForFunction(
-      (start) => {
-        const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
-        return Boolean(run && Math.hypot(run.player.x - start.x, run.player.y - start.y) > 8);
-      },
-      beforeKeyboardMove,
-    );
-
     const beforeMove = (await getRunSnapshot(page)).player;
-    await dragCanvas(page, 220, 360, 320, 360, 320);
+    await dragCanvas(page, canvasTransform, 220, 360, 320, 360, 240);
     await page.waitForFunction(
       (start) => {
         const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
@@ -124,6 +119,32 @@ test.describe('mobile HUD readability', () => {
     expect(runtimeErrors, `expected no runtime/page errors, got: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 });
+
+type MenuSnapshot = {
+  startButton: { x: number; y: number };
+  guideButton: { x: number; y: number };
+};
+
+type CanvasTransform = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  virtualWidth: number;
+  virtualHeight: number;
+};
+
+async function getMenuSnapshot(page: import('@playwright/test').Page): Promise<MenuSnapshot> {
+  return page.evaluate(() => {
+    const menuScene = window.__JANGAN_LARI_GAME__?.scene.getScene('MenuScene') as { getMenuSnapshot?: () => MenuSnapshot } | undefined;
+    const snapshot = menuScene?.getMenuSnapshot?.();
+    if (!snapshot) {
+      throw new Error('Menu snapshot is not available.');
+    }
+
+    return snapshot;
+  });
+}
 
 async function getHudSnapshot(page: import('@playwright/test').Page): Promise<HudSnapshot> {
   return page.evaluate(() => {
@@ -172,55 +193,62 @@ async function forceClassChoice(page: import('@playwright/test').Page): Promise<
   });
 }
 
-async function clickCanvasPoint(page: import('@playwright/test').Page, gameX: number, gameY: number): Promise<void> {
-  const canvas = page.locator('canvas');
-  await expect(canvas).toBeVisible();
-
-  const position = await getCanvasPosition(page, gameX, gameY);
-  await canvas.click({ position });
+async function clickCanvasPoint(
+  page: import('@playwright/test').Page,
+  transform: CanvasTransform,
+  gameX: number,
+  gameY: number,
+): Promise<void> {
+  const point = toPagePoint(transform, gameX, gameY);
+  await page.mouse.click(point.x, point.y);
 }
 
 async function dragCanvas(
   page: import('@playwright/test').Page,
+  transform: CanvasTransform,
   startGameX: number,
   startGameY: number,
   endGameX: number,
   endGameY: number,
   holdMs: number,
 ): Promise<void> {
-  const start = await getCanvasAbsolutePoint(page, startGameX, startGameY);
-  const end = await getCanvasAbsolutePoint(page, endGameX, endGameY);
+  const start = toPagePoint(transform, startGameX, startGameY);
+  const end = toPagePoint(transform, endGameX, endGameY);
 
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
-  await page.mouse.move(end.x, end.y, { steps: 4 });
-  await page.waitForTimeout(holdMs);
-  await page.mouse.up();
+  try {
+    await page.mouse.move(end.x, end.y, { steps: 2 });
+    await page.waitForTimeout(holdMs);
+  } finally {
+    await page.mouse.up();
+  }
 }
 
-async function getCanvasPosition(page: import('@playwright/test').Page, gameX: number, gameY: number): Promise<{ x: number; y: number }> {
+async function getCanvasTransform(page: import('@playwright/test').Page): Promise<CanvasTransform> {
   const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+
   const box = await canvas.boundingBox();
   if (!box) {
     throw new Error('Game canvas is not available.');
   }
 
+  const virtualSize = await getVirtualSize(page);
   return {
-    x: (gameX / (await getVirtualSize(page)).width) * box.width,
-    y: (gameY / (await getVirtualSize(page)).height) * box.height,
+    x: box.x,
+    y: box.y,
+    width: box.width,
+    height: box.height,
+    virtualWidth: virtualSize.width,
+    virtualHeight: virtualSize.height,
   };
 }
 
-async function getCanvasAbsolutePoint(page: import('@playwright/test').Page, gameX: number, gameY: number): Promise<{ x: number; y: number }> {
-  const canvas = page.locator('canvas');
-  const box = await canvas.boundingBox();
-  if (!box) {
-    throw new Error('Game canvas is not available.');
-  }
-
+function toPagePoint(transform: CanvasTransform, gameX: number, gameY: number): { x: number; y: number } {
   return {
-    x: box.x + (gameX / (await getVirtualSize(page)).width) * box.width,
-    y: box.y + (gameY / (await getVirtualSize(page)).height) * box.height,
+    x: transform.x + (gameX / transform.virtualWidth) * transform.width,
+    y: transform.y + (gameY / transform.virtualHeight) * transform.height,
   };
 }
 

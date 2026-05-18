@@ -44,6 +44,7 @@ export class UIScene extends Phaser.Scene {
   private classStatusText!: Phaser.GameObjects.Text;
   private statSummaryText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
+  private timerSubtitleText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
   private killsText!: Phaser.GameObjects.Text;
@@ -140,7 +141,7 @@ export class UIScene extends Phaser.Scene {
     this.controlGuideSubLabels = [];
     this.controlGuideMode = this.readControlGuideMode();
 
-    const topLeftPanel = this.add.rectangle(20, 16, 390, 148, 0x102033, 0.86).setOrigin(0);
+    const topLeftPanel = this.add.rectangle(20, 16, 390, 166, 0x102033, 0.88).setOrigin(0);
     topLeftPanel.setStrokeStyle(1, 0x4b6b8a, 0.84);
     topLeftPanel.setScrollFactor(0);
 
@@ -179,28 +180,38 @@ export class UIScene extends Phaser.Scene {
     this.classStatusText = this.add
       .text(38, 120, 'Class Basic', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '17px',
-        color: '#bae6fd',
+        fontSize: '14px',
+        color: '#7cb8d8',
       })
       .setScrollFactor(0);
 
     this.statSummaryText = this.add
-      .text(176, 120, 'Stats DMG0 RLD0 SPD0 REG0', {
+      .text(176, 120, 'DMG0 RLD0 SPD0 REG0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
-        color: '#cbd5e1',
-        wordWrap: { width: 210 },
+        fontSize: '13px',
+        color: '#94a3b8',
+        wordWrap: { width: 218 },
       })
       .setScrollFactor(0);
 
     this.timerText = this.add
-      .text(viewWidth / 2, 34, '00:00', {
+      .text(viewWidth / 2, 26, '00:00', {
         fontFamily: 'Georgia, serif',
-        fontSize: '36px',
+        fontSize: '42px',
         color: '#e0f2fe',
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
+
+    this.timerSubtitleText = this.add
+      .text(viewWidth / 2, 78, '', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '13px',
+        color: '#4e7190',
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setVisible(false);
 
     this.alertText = this.add
       .text(viewWidth / 2, 76, '', {
@@ -276,44 +287,46 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setVisible(false);
 
-    const topRightPanel = this.add.rectangle(viewWidth - 320, 16, 300, 148, 0x102033, 0.86).setOrigin(0);
+    const topRightPanel = this.add.rectangle(viewWidth - 320, 16, 300, 166, 0x102033, 0.88).setOrigin(0);
     topRightPanel.setStrokeStyle(1, 0x4b6b8a, 0.84);
     topRightPanel.setScrollFactor(0);
 
     this.scoreText = this.add
-      .text(viewWidth - 44, 30, 'Score 0', {
+      .text(viewWidth - 30, 28, 'Score 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '22px',
+        fontSize: '24px',
         color: '#fef08a',
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
     this.goldText = this.add
-      .text(viewWidth - 44, 68, 'Run Gold 0', {
+      .text(viewWidth - 30, 70, 'Run Gold 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
+        fontSize: '19px',
         color: '#fde68a',
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
     this.killsText = this.add
-      .text(viewWidth - 44, 104, 'Kills 0', {
+      .text(viewWidth - 30, 108, 'Kills 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '19px',
-        color: '#d7e2ef',
+        fontSize: '18px',
+        color: '#94a3b8',
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
+    const bottomLeftPanel = this.add.rectangle(20, viewHeight - 130, 254, 116, 0x0d1e30, 0.9).setOrigin(0);
+    bottomLeftPanel.setStrokeStyle(1, 0x2a4a68, 0.82);
+    bottomLeftPanel.setScrollFactor(0);
+
     this.weaponSummaryText = this.add
-      .text(38, viewHeight - 116, 'Weapon --', {
+      .text(38, viewHeight - 118, 'Weapon --', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#e0f2fe',
-        backgroundColor: '#111827',
-        padding: { left: 8, right: 8, top: 4, bottom: 4 },
+        fontSize: '15px',
+        color: '#bfdbfe',
       })
       .setScrollFactor(0);
 
@@ -429,18 +442,21 @@ export class UIScene extends Phaser.Scene {
     const xpLabel = `LV ${level}  XP ${xp}/${xpNext}`;
     const statSummary = this.formatStatSummary(tankStatLevels);
 
-    this.setTextIfChanged(this.heroText, heroName || '--');
+    this.setTextIfChanged(this.heroText, `${heroName || '--'} • ${classTitle}`);
     this.setTextIfChanged(this.hpValueText, `HP ${currentHp}/${maxHp}`);
     this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 320, 0, 320);
     this.setTextIfChanged(this.levelValueText, xpLabel);
     this.setTextIfChanged(this.classStatusText, `Class ${classTitle}${classChoiceActive ? ' - Choose now' : ''}`);
     this.classStatusText.setColor(classChoiceActive ? '#fef08a' : '#bae6fd');
-    this.setTextIfChanged(this.statSummaryText, `Stats ${statSummary}${statPoints > 0 ? `  +${statPoints}` : ''}`);
-    this.statSummaryText.setColor(statPoints > 0 ? '#fef08a' : '#cbd5e1');
+    this.setTextIfChanged(this.statSummaryText, `${statSummary}${statPoints > 0 ? `  +${statPoints}` : ''}`);
+    this.statSummaryText.setColor(statPoints > 0 ? '#fef08a' : '#94a3b8');
     this.setTextIfChanged(
       this.timerText,
       this.formatStageTimer(stagePhase, elapsedMs, bossSpawnTimeMs || targetMs, bossHp, bossMaxHp, bossPhase),
     );
+    const timerHint = this.getTimerSubtitleHint(stagePhase);
+    this.setTextIfChanged(this.timerSubtitleText, timerHint);
+    this.timerSubtitleText.setVisible(Boolean(timerHint) && !alertMessage && !levelUpActive && !classChoiceActive && !endActive);
     this.setTextIfChanged(this.goldText, `Run Gold ${runGold}`);
     this.setTextIfChanged(this.killsText, `Kills ${kills}`);
     this.setTextIfChanged(this.scoreText, `Score ${score}`);
@@ -1737,6 +1753,18 @@ export class UIScene extends Phaser.Scene {
     const baseColor = Number(card.getData('baseColor') ?? 0x101827);
     card.setFillStyle(baseColor, hovered ? 1 : 0.99);
     card.setStrokeStyle(2, hovered ? 0xfef08a : 0x38bdf8, hovered ? 1 : 0.9);
+  }
+
+  private getTimerSubtitleHint(stagePhase: string): string {
+    switch (stagePhase) {
+      case 'boss':
+        return 'dodge and fire';
+      case 'victory':
+      case 'defeat':
+        return '';
+      default:
+        return 'farm shapes \u2022 spend stats \u2022 prepare';
+    }
   }
 
   private setTextIfChanged(target: Phaser.GameObjects.Text, nextText: string): void {
