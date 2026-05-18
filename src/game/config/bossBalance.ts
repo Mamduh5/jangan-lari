@@ -5,7 +5,7 @@ export const RUN_TARGET_DURATION_MS = STAGE_BOSS_SPAWN_TIME_MS;
 export const RUN_ACTIVE_DELTA_CAP_MS = 100;
 
 // Boss health and tuning
-export const BOSS_FIRST_PASS_MAX_HEALTH = 120000;
+export const BOSS_FIRST_PASS_MAX_HEALTH = 72000;
 export const BOSS_TARGET_FAST_KILL_MS = 60000;
 export const BOSS_PHASE_TWO_HEALTH_RATIO = 0.5;
 export const BOSS_PHASE_TWO_DAMAGE_MULTIPLIER = 1.24;
@@ -29,6 +29,9 @@ export const BOSS_SUMMON_HEALTH_MULTIPLIER = 2.2;
 export const BOSS_SUMMON_DAMAGE_MULTIPLIER = 0.78;
 export const BOSS_SUMMON_SPEED_MULTIPLIER = 1.08;
 export const BOSS_SUMMON_XP_VALUE = 1;
+
+//Miniboss health and tuning
+export const MINIBOSS_MAX_HEALTH = 9100
 
 // Miniboss skills
 export const MINIBOSS_LINE_STRIKE_MIN_LENGTH = 420;
