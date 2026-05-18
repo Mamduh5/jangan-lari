@@ -252,7 +252,7 @@ export class UIScene extends Phaser.Scene {
     this.eventPanel = this.add.rectangle(0, 0, 0, 0, 0x000000, 0).setScrollFactor(0).setVisible(false);
 
     this.eventTitleText = this.add
-      .text(viewWidth / 2, 86, '', {
+      .text(viewWidth / 2, 142, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '15px',
         color: '#fde68a',
@@ -264,7 +264,7 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.eventBodyText = this.add
-      .text(viewWidth / 2, 108, '', {
+      .text(viewWidth / 2, 166, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '13px',
         color: '#e2e8f0',
@@ -650,9 +650,9 @@ export class UIScene extends Phaser.Scene {
     const viewWidth = GAME_WIDTH;
     const viewHeight = GAME_HEIGHT;
 
-    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.8)
+    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0)
     this.levelUpHeadingText = this.add
-      .text(viewWidth / 2, 112, 'BONUS PICK', {
+      .text(viewWidth / 2, 218, 'BONUS PICK', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '24px',
         color: '#bfdbfe',
@@ -669,9 +669,10 @@ export class UIScene extends Phaser.Scene {
         wordWrap: { width: 720 },
       })
       .setOrigin(0.5)
-      .setScrollFactor(0);
+      .setScrollFactor(0)
+      .setAlpha(0);
     this.levelUpTimerText = this.add
-      .text(viewWidth / 2, 198, '15.0', {
+      .text(viewWidth / 2, 262, '15.0', {
         fontFamily: 'Georgia, serif',
         fontSize: '38px',
         color: '#fef08a',
@@ -682,8 +683,9 @@ export class UIScene extends Phaser.Scene {
     const children: Phaser.GameObjects.GameObject[] = [backdrop, this.levelUpHeadingText, this.levelUpSubheadingText, this.levelUpTimerText];
 
     for (let index = 0; index < 3; index += 1) {
-      const x = 258 + index * 382;
-      const card = this.add.rectangle(x, 372, 286, 166, 0x111827, 0.99).setOrigin(0.5).setScrollFactor(0);
+      const cardY = viewHeight / 2 + 36;
+      const x = viewWidth / 2 + (index - 1) * 382;
+      const card = this.add.rectangle(x, cardY, 286, 166, 0x111827, 0.99).setOrigin(0.5).setScrollFactor(0);
       card.setStrokeStyle(2, 0x334155, 1);
       card.setInteractive({ useHandCursor: true });
       card.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.selectUpgrade(index, pointer));
@@ -691,7 +693,7 @@ export class UIScene extends Phaser.Scene {
       card.on('pointerout', () => this.applyLevelUpCardHover(index, false));
 
       const badge = this.add
-        .text(x - 106, 320, '--', {
+        .text(x - 106, cardY - 52, '--', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '14px',
           color: '#eff6ff',
@@ -707,12 +709,12 @@ export class UIScene extends Phaser.Scene {
       weaponTagBarrel.setOrigin(0.2, 0.5);
       const weaponTagMuzzle = this.add.circle(11, 0, 4, 0xfef3c7, 0.96);
       const weaponTag = this.add
-        .container(x + 100, 320, [weaponTagFrame, weaponTagBarrel, weaponTagMuzzle])
+        .container(x + 100, cardY - 52, [weaponTagFrame, weaponTagBarrel, weaponTagMuzzle])
         .setScrollFactor(0)
         .setVisible(false);
 
       const button = this.add
-        .text(x - 106, 348, '', {
+        .text(x - 106, cardY - 24, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '24px',
           color: '#f8fafc',
@@ -722,7 +724,7 @@ export class UIScene extends Phaser.Scene {
         .setScrollFactor(0);
 
       const description = this.add
-        .text(x - 106, 384, '', {
+        .text(x - 106, cardY + 12, '', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '14px',
           color: '#cbd5e1',
