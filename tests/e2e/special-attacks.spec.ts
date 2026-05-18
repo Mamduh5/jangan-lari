@@ -73,6 +73,7 @@ type RunSceneDebug = {
   ) => void;
   debugShowMinibossLineTelegraph: () => void;
   debugShowMinibossVolleyTelegraph: () => void;
+  debugExecuteMinibossVolley: () => void;
   spawnBossShockwave: (x: number, y: number, radius: number, damage: number, durationMs: number) => void;
 };
 
@@ -157,8 +158,9 @@ test.describe('miniboss skill snapshot labeling', () => {
     expect(telegraphEntry?.warningOnly).toBe(true);
     expect(telegraphEntry?.damageActive).toBe(false);
     expect(telegraphEntry?.effectActive).toBe(true);
-    expect(telegraphEntry?.damageRadius).toBeGreaterThan(0);
-    expect(telegraphEntry?.visualRange).toBeGreaterThan(telegraphEntry?.damageRadius ?? 0);
+    expect(telegraphEntry?.damageRadius).toBeNull();
+    expect(telegraphEntry?.visualRange).toBeGreaterThan(0);
+    expect(telegraphEntry?.visualWidth).toBeGreaterThan(0);
 
     await page.waitForTimeout(600);
 
@@ -204,6 +206,49 @@ test.describe('miniboss skill snapshot labeling', () => {
 
     const hpAfterStrike = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
     expect(hpAfterStrike).toBeLessThan(startingHp);
+    expect(runtimeErrors).toEqual([]);
+  });
+
+  test('volley execute is labeled active in snapshot and damages the player inside a lane', async ({ page }) => {
+    const runtimeErrors = trackRuntimeErrors(page);
+    await startRun(page);
+
+    const startingHp = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
+    expect(startingHp).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      const game = window.__JANGAN_LARI_GAME__!;
+      const runScene = game.scene.getScene('RunScene') as unknown as RunSceneDebug;
+      runScene.debugExecuteMinibossVolley();
+    });
+
+    await page.waitForFunction(() => {
+      const debug = (window as unknown as { __JANGAN_LARI_DEBUG__?: DebugHandle }).__JANGAN_LARI_DEBUG__;
+      const attacks = debug?.getGameplaySnapshot().run?.enemyAttacks ?? [];
+      return attacks.some((a) => a.kind === 'miniboss-volley' && a.warningOnly === false && a.phase === 'active');
+    });
+
+    const snapshotDuringActive = await page.evaluate(() => {
+      const debug = (window as unknown as { __JANGAN_LARI_DEBUG__?: DebugHandle }).__JANGAN_LARI_DEBUG__;
+      return debug?.getGameplaySnapshot().run?.enemyAttacks ?? [];
+    });
+
+    const activeEntry = snapshotDuringActive.find((a) => a.kind === 'miniboss-volley' && !a.warningOnly);
+    expect(activeEntry).toBeDefined();
+    expect(activeEntry?.phase).toBe('active');
+    expect(activeEntry?.warningOnly).toBe(false);
+    expect(activeEntry?.damageActive).toBe(true);
+    expect(activeEntry?.damageWidth).toBeGreaterThan(0);
+    expect(activeEntry?.visualRange).toBeGreaterThan(0);
+
+    await page.waitForFunction(
+      (baselineHp) => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1) < baselineHp,
+      startingHp,
+    );
+
+    const hpAfterVolley = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
+    expect(hpAfterVolley).toBeLessThan(startingHp);
+    expect(hpAfterVolley).toBe(startingHp - 13);
     expect(runtimeErrors).toEqual([]);
   });
 

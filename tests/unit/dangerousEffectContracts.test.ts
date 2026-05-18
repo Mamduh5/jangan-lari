@@ -5,7 +5,7 @@ import {
   createMinibossLineAttackContract,
   createMinibossVolleyContract,
   lineAttackDamageAndVisualMatch,
-  minibossVolleyProjectileDamageAndVisualMatch,
+  minibossVolleyLaneDamageAndVisualMatch,
 } from '../../src/game/systems/dangerousEffectContracts';
 
 describe('dangerous effect contracts', () => {
@@ -39,11 +39,14 @@ describe('dangerous effect contracts', () => {
     expect(phaseTwo.damageMultiplier).toBeGreaterThan(phaseOne.damageMultiplier);
   });
 
-  test('miniboss volley projectiles use the same visual and damage radius', () => {
+  test('miniboss volley lanes use matching damage and visual geometry', () => {
     const contract = createMinibossVolleyContract();
 
-    expect(contract.projectileCount).toBeGreaterThan(1);
-    expect(contract.projectileDamageRadius).toBe(contract.projectileVisualRadius);
-    expect(minibossVolleyProjectileDamageAndVisualMatch(contract)).toBe(true);
+    expect(contract.laneCount).toBeGreaterThan(1);
+    expect(contract.laneDamageWidth).toBeGreaterThan(0);
+    expect(contract.laneVisualWidth).toBeGreaterThan(0);
+    expect(contract.laneHalfWidth * 2).toBe(contract.laneDamageWidth);
+    expect(contract.activeMs).toBeGreaterThan(0);
+    expect(minibossVolleyLaneDamageAndVisualMatch(contract)).toBe(true);
   });
 });

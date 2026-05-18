@@ -12,11 +12,12 @@ import {
   MINIBOSS_LINE_STRIKE_LENGTH,
   MINIBOSS_LINE_STRIKE_TELEGRAPH_MS,
   MINIBOSS_LINE_STRIKE_WIDTH,
+  MINIBOSS_VOLLEY_ACTIVE_MS,
   MINIBOSS_VOLLEY_COOLDOWN_MS,
   MINIBOSS_VOLLEY_DAMAGE,
+  MINIBOSS_VOLLEY_LANE_DAMAGE_WIDTH,
+  MINIBOSS_VOLLEY_LANE_VISUAL_WIDTH,
   MINIBOSS_VOLLEY_PROJECTILE_COUNT,
-  MINIBOSS_VOLLEY_PROJECTILE_RADIUS,
-  MINIBOSS_VOLLEY_PROJECTILE_SPEED,
   MINIBOSS_VOLLEY_SPREAD_DEGREES,
   MINIBOSS_VOLLEY_TELEGRAPH_LANE_LENGTH,
   MINIBOSS_VOLLEY_TELEGRAPH_MS,
@@ -51,14 +52,15 @@ export type BossShockwaveContract = {
 export type MinibossVolleyContract = {
   kind: 'miniboss-volley';
   telegraphMs: number;
-  telegraphLaneLength: number;
-  cooldownMs: number;
-  projectileCount: number;
-  projectileDamageRadius: number;
-  projectileVisualRadius: number;
-  projectileSpeed: number;
-  projectileDamage: number;
+  activeMs: number;
+  laneLength: number;
+  laneCount: number;
+  laneDamageWidth: number;
+  laneVisualWidth: number;
+  laneHalfWidth: number;
   spreadDegrees: number;
+  damage: number;
+  cooldownMs: number;
 };
 
 export function createMinibossLineAttackContract(length = MINIBOSS_LINE_STRIKE_LENGTH): LineAttackEffectContract {
@@ -102,14 +104,15 @@ export function createMinibossVolleyContract(): MinibossVolleyContract {
   return {
     kind: 'miniboss-volley',
     telegraphMs: MINIBOSS_VOLLEY_TELEGRAPH_MS,
-    telegraphLaneLength: MINIBOSS_VOLLEY_TELEGRAPH_LANE_LENGTH,
-    cooldownMs: MINIBOSS_VOLLEY_COOLDOWN_MS,
-    projectileCount: MINIBOSS_VOLLEY_PROJECTILE_COUNT,
-    projectileDamageRadius: MINIBOSS_VOLLEY_PROJECTILE_RADIUS,
-    projectileVisualRadius: MINIBOSS_VOLLEY_PROJECTILE_RADIUS,
-    projectileSpeed: MINIBOSS_VOLLEY_PROJECTILE_SPEED,
-    projectileDamage: MINIBOSS_VOLLEY_DAMAGE,
+    activeMs: MINIBOSS_VOLLEY_ACTIVE_MS,
+    laneLength: MINIBOSS_VOLLEY_TELEGRAPH_LANE_LENGTH,
+    laneCount: MINIBOSS_VOLLEY_PROJECTILE_COUNT,
+    laneDamageWidth: MINIBOSS_VOLLEY_LANE_DAMAGE_WIDTH,
+    laneVisualWidth: MINIBOSS_VOLLEY_LANE_VISUAL_WIDTH,
+    laneHalfWidth: MINIBOSS_VOLLEY_LANE_DAMAGE_WIDTH / 2,
     spreadDegrees: MINIBOSS_VOLLEY_SPREAD_DEGREES,
+    damage: MINIBOSS_VOLLEY_DAMAGE,
+    cooldownMs: MINIBOSS_VOLLEY_COOLDOWN_MS,
   };
 }
 
@@ -131,11 +134,12 @@ export function bossShockwaveDamageAndVisualMatch(contract: BossShockwaveContrac
   );
 }
 
-export function minibossVolleyProjectileDamageAndVisualMatch(contract: MinibossVolleyContract): boolean {
+export function minibossVolleyLaneDamageAndVisualMatch(contract: MinibossVolleyContract): boolean {
   return (
-    contract.projectileCount > 0 &&
-    contract.projectileDamageRadius > 0 &&
-    contract.projectileDamageRadius === contract.projectileVisualRadius &&
-    contract.projectileSpeed > 0
+    contract.laneCount > 0 &&
+    contract.laneDamageWidth > 0 &&
+    contract.laneLength > 0 &&
+    contract.laneHalfWidth * 2 === contract.laneDamageWidth &&
+    contract.activeMs > 0
   );
 }

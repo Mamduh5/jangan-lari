@@ -242,6 +242,22 @@ export class RunScene extends Phaser.Scene {
     durationMs: number;
     elapsedMs: number;
   }> = [];
+  private volleyAttacks: Array<{
+    kind: 'miniboss-volley';
+    lanes: Array<{
+      x: number;
+      y: number;
+      direction: { x: number; y: number };
+      length: number;
+      halfWidth: number;
+      visualWidth: number;
+    }>;
+    damage: number;
+    durationMs: number;
+    activeVisualMs: number;
+    elapsedMs: number;
+    hasHitPlayer: boolean;
+  }> = [];
   private enemyBolts: Array<{
     orb: Phaser.GameObjects.Arc;
     halo: Phaser.GameObjects.Arc;
@@ -384,6 +400,7 @@ export class RunScene extends Phaser.Scene {
     this.shockwaveAttacks = [];
     this.enemyBolts = [];
     this.lineTelegraphTracking = [];
+    this.volleyAttacks = [];
     this.ownedWeaponIds.clear();
     this.takenUniqueUpgradeIds.clear();
     this.combatResponseImpactCounts = {};
@@ -559,6 +576,7 @@ export class RunScene extends Phaser.Scene {
     this.updateBossSummons();
     this.updateSkillTelegraphs(delta);
     this.updateLineStrikeAttacks(delta);
+    this.updateVolleyAttacks(delta);
     this.updateShockwaveAttacks(delta);
     this.updateEnemyBolts(delta);
     this.player.updateHpRegen(delta);
@@ -676,12 +694,12 @@ export class RunScene extends Phaser.Scene {
         kind: telegraph.kind,
         phase: 'warning' as const,
         warningOnly: true,
-        damageRange: telegraph.damageRadius,
+        damageRange: telegraph.laneLength ?? telegraph.damageRadius,
         visualRange: telegraph.laneLength ?? telegraph.visualRadius,
-        damageWidth: null,
+        damageWidth: telegraph.laneWidth ?? null,
         visualWidth: telegraph.laneWidth ?? null,
-        damageRadius: telegraph.damageRadius,
-        visualRadius: telegraph.visualRadius,
+        damageRadius: telegraph.damageRadius > 0 ? telegraph.damageRadius : null,
+        visualRadius: telegraph.visualRadius > 0 ? telegraph.visualRadius : null,
         damageActive: false,
         effectActive: telegraph.elapsedMs < telegraph.durationMs,
         remainingMs: Math.max(0, telegraph.durationMs - telegraph.elapsedMs),
@@ -713,6 +731,20 @@ export class RunScene extends Phaser.Scene {
         damageActive: attack.elapsedMs < attack.durationMs,
         effectActive: attack.elapsedMs < attack.activeVisualMs,
         remainingMs: Math.max(0, attack.durationMs - attack.elapsedMs),
+      })),
+      ...this.volleyAttacks.map((volley) => ({
+        kind: 'miniboss-volley' as const,
+        phase: 'active' as const,
+        warningOnly: false,
+        damageRange: volley.lanes[0]?.length ?? 0,
+        visualRange: volley.lanes[0]?.length ?? 0,
+        damageWidth: volley.lanes[0] ? volley.lanes[0].halfWidth * 2 : null,
+        visualWidth: volley.lanes[0]?.visualWidth ?? null,
+        damageRadius: null,
+        visualRadius: null,
+        damageActive: volley.elapsedMs < volley.durationMs,
+        effectActive: volley.elapsedMs < volley.activeVisualMs,
+        remainingMs: Math.max(0, volley.durationMs - volley.elapsedMs),
       })),
       ...this.shockwaveAttacks.map((attack) => ({
         kind: 'boss-shockwave' as const,
@@ -1210,7 +1242,7 @@ export class RunScene extends Phaser.Scene {
     const contract = createMinibossVolleyContract();
     this.time.delayedCall(contract.telegraphMs, () => {
       if (!this.isEnded) {
-        this.spawnMinibossVolley(x, y, { x: direction.x, y: direction.y });
+        this.executeMinibossVolley(x, y, { x: direction.x, y: direction.y });
       }
     });
     this.publishHudState();
@@ -1284,6 +1316,15 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.showMinibossVolleyTelegraph(this.player.x, this.player.y, { x: 1, y: 0 });
+    this.publishHudState();
+  }
+
+  public debugExecuteMinibossVolley(): void {
+    if (!this.player?.active || this.isEnded || this.isTransitioningToMenu) {
+      return;
+    }
+
+    this.executeMinibossVolley(this.player.x, this.player.y, { x: 1, y: 0 });
     this.publishHudState();
   }
 
@@ -1620,6 +1661,10 @@ export class RunScene extends Phaser.Scene {
 
     if (this.lineTelegraphTracking.length > 0) {
       return 'line-strike-telegraph';
+    }
+
+    if (this.volleyAttacks.some((v) => v.elapsedMs < v.durationMs)) {
+      return 'volley';
     }
 
     if (this.lineStrikeAttacks.some((attack) => attack.elapsedMs < attack.durationMs)) {
@@ -2775,7 +2820,7 @@ export class RunScene extends Phaser.Scene {
       case 'miniboss-volley-execute':
         this.registry.set('run.instructions', 'Volley live. Keep moving.');
         this.setAlert('miniboss', 'Volley live', 900);
-        this.spawnMinibossVolley(signal.x, signal.y, signal.direction);
+        this.executeMinibossVolley(signal.x, signal.y, signal.direction);
         playCue('miniboss-release');
         break;
       case 'ranged-shot':
@@ -2855,54 +2900,69 @@ export class RunScene extends Phaser.Scene {
     const centerX = x + direction.x * (length / 2);
     const centerY = y + direction.y * (length / 2);
     const angle = Math.atan2(direction.y, direction.x);
-    const fillAlpha = phase === 'warning' ? 0.1 : 0.26;
-    const lane = this.add.rectangle(centerX, centerY, length, width, color, fillAlpha).setDepth(8);
-    lane.setRotation(angle);
-    lane.setStrokeStyle(phase === 'warning' ? 2 : 4, color, phase === 'warning' ? 0.88 : 1);
-
-    const laneCore = this.add
-      .rectangle(
-        centerX,
-        centerY,
-        length,
-        phase === 'warning' ? Math.max(10, width * 0.14) : Math.max(12, width * 0.22),
-        0xffffff,
-        phase === 'warning' ? 0.16 : 0.4,
-      )
-      .setDepth(8);
-    laneCore.setRotation(angle);
-
-    const upperEdge = this.add.rectangle(centerX, centerY - width / 2, length, 3, color, phase === 'warning' ? 0.75 : 1).setDepth(8);
-    upperEdge.setRotation(angle);
-    const lowerEdge = this.add.rectangle(centerX, centerY + width / 2, length, 3, color, phase === 'warning' ? 0.75 : 1).setDepth(8);
-    lowerEdge.setRotation(angle);
-
-    const impactCap = this.add.circle(x + direction.x * length, y + direction.y * length, width * 0.4, color, 0.18).setDepth(8);
-    impactCap.setStrokeStyle(phase === 'warning' ? 3 : 4, phase === 'warning' ? color : 0xffffff, 0.95);
+    const endX = x + direction.x * length;
+    const endY = y + direction.y * length;
 
     if (phase === 'warning') {
+      const aimStem = this.add
+        .rectangle(centerX, centerY, length, Math.max(2, width * 0.04), color, 0.52)
+        .setDepth(8);
+      aimStem.setRotation(angle);
+      aimStem.setStrokeStyle(1, color, 0.55);
+
+      const endCap = this.add.circle(endX, endY, Math.max(4, width * 0.12), color, 0).setDepth(8);
+      endCap.setStrokeStyle(2, color, 0.7);
+
       this.tweens.add({
-        targets: [lane, laneCore, upperEdge, lowerEdge, impactCap],
-        alpha: '+=0.18',
+        targets: [aimStem, endCap],
+        alpha: '+=0.2',
         duration: Math.max(120, durationMs - 120),
         ease: 'Sine.InOut',
         yoyo: true,
       });
-    }
 
-    this.tweens.add({
-      targets: [lane, laneCore, upperEdge, lowerEdge, impactCap],
-      alpha: 0,
-      duration: durationMs,
-      ease: 'Quad.Out',
-      onComplete: () => {
-        lane.destroy();
-        laneCore.destroy();
-        upperEdge.destroy();
-        lowerEdge.destroy();
-        impactCap.destroy();
-      },
-    });
+      this.tweens.add({
+        targets: [aimStem, endCap],
+        alpha: 0,
+        duration: durationMs,
+        ease: 'Quad.Out',
+        onComplete: () => {
+          aimStem.destroy();
+          endCap.destroy();
+        },
+      });
+    } else {
+      const lane = this.add.rectangle(centerX, centerY, length, width, color, 0.62).setDepth(8);
+      lane.setRotation(angle);
+      lane.setStrokeStyle(3, color, 1);
+
+      const laneCore = this.add
+        .rectangle(centerX, centerY, length, Math.max(10, width * 0.26), 0xffffff, 0.88)
+        .setDepth(8);
+      laneCore.setRotation(angle);
+
+      const upperEdge = this.add.rectangle(centerX, centerY - width / 2, length, 3, color, 1).setDepth(8);
+      upperEdge.setRotation(angle);
+      const lowerEdge = this.add.rectangle(centerX, centerY + width / 2, length, 3, color, 1).setDepth(8);
+      lowerEdge.setRotation(angle);
+
+      const impactCap = this.add.circle(endX, endY, width * 0.38, color, 0.3).setDepth(8);
+      impactCap.setStrokeStyle(3, 0xffffff, 1);
+
+      this.tweens.add({
+        targets: [lane, laneCore, upperEdge, lowerEdge, impactCap],
+        alpha: 0,
+        duration: durationMs,
+        ease: 'Quad.Out',
+        onComplete: () => {
+          lane.destroy();
+          laneCore.destroy();
+          upperEdge.destroy();
+          lowerEdge.destroy();
+          impactCap.destroy();
+        },
+      });
+    }
   }
 
   private showBossShockwaveTelegraph(x: number, y: number, radius: number, durationMs = createBossShockwaveContract(this.bossPhase).telegraphMs): void {
@@ -2977,33 +3037,32 @@ export class RunScene extends Phaser.Scene {
 
   private showMinibossVolleyTelegraph(x: number, y: number, direction: { x: number; y: number }): void {
     const contract = createMinibossVolleyContract();
-    const length = contract.telegraphLaneLength;
-    const width = contract.projectileVisualRadius * 2;
+    const warningLaneWidth = 12;
     this.skillTelegraphs.push({
       kind: 'miniboss-volley',
       x,
       y,
-      visualRadius: contract.projectileVisualRadius,
-      damageRadius: contract.projectileDamageRadius,
+      visualRadius: 0,
+      damageRadius: 0,
       durationMs: contract.telegraphMs,
       elapsedMs: 0,
-      laneLength: length,
-      laneWidth: width,
+      laneLength: contract.laneLength,
+      laneWidth: warningLaneWidth,
     });
 
     const baseAngle = Math.atan2(direction.y, direction.x);
     const startAngle = baseAngle - Phaser.Math.DegToRad(contract.spreadDegrees / 2);
     const step =
-      contract.projectileCount <= 1 ? 0 : Phaser.Math.DegToRad(contract.spreadDegrees / (contract.projectileCount - 1));
+      contract.laneCount <= 1 ? 0 : Phaser.Math.DegToRad(contract.spreadDegrees / (contract.laneCount - 1));
 
-    for (let index = 0; index < contract.projectileCount; index += 1) {
+    for (let index = 0; index < contract.laneCount; index += 1) {
       const angle = startAngle + step * index;
       this.showLineAttackTelegraph(
         x,
         y,
         { x: Math.cos(angle), y: Math.sin(angle) },
-        length,
-        width,
+        contract.laneLength,
+        warningLaneWidth,
         0xfef08a,
         contract.telegraphMs,
         'warning',
@@ -3011,28 +3070,76 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  private spawnMinibossVolley(x: number, y: number, direction: { x: number; y: number }): void {
+  private executeMinibossVolley(x: number, y: number, direction: { x: number; y: number }): void {
     const contract = createMinibossVolleyContract();
     const baseAngle = Math.atan2(direction.y, direction.x);
     const startAngle = baseAngle - Phaser.Math.DegToRad(contract.spreadDegrees / 2);
     const step =
-      contract.projectileCount <= 1 ? 0 : Phaser.Math.DegToRad(contract.spreadDegrees / (contract.projectileCount - 1));
+      contract.laneCount <= 1 ? 0 : Phaser.Math.DegToRad(contract.spreadDegrees / (contract.laneCount - 1));
 
-    for (let index = 0; index < contract.projectileCount; index += 1) {
+    const lanes: (typeof this.volleyAttacks)[number]['lanes'] = [];
+    for (let index = 0; index < contract.laneCount; index += 1) {
       const angle = startAngle + step * index;
-      this.spawnEnemyBolt(
+      const dir = { x: Math.cos(angle), y: Math.sin(angle) };
+      this.showLineAttackTelegraph(x, y, dir, contract.laneLength, contract.laneVisualWidth, 0xfef08a, contract.activeMs, 'active');
+      lanes.push({
         x,
         y,
-        { x: Math.cos(angle), y: Math.sin(angle) },
-        contract.projectileSpeed,
-        contract.projectileDamage,
-        ENEMY_ARCHETYPES.dreadnought.color,
-        contract.projectileVisualRadius,
-      );
+        direction: dir,
+        length: contract.laneLength,
+        halfWidth: contract.laneHalfWidth,
+        visualWidth: contract.laneVisualWidth,
+      });
     }
 
-    this.createBurstCircle(x, y, 0xfef08a, 18, 58, 220, 0.58);
+    this.createBurstCircle(x, y, 0xfef08a, 22, 66, 240, 0.76);
     this.cameras.main.shake(90, 0.0018);
+    this.volleyAttacks.push({
+      kind: 'miniboss-volley',
+      lanes,
+      damage: contract.damage,
+      durationMs: contract.activeMs,
+      activeVisualMs: contract.activeMs,
+      elapsedMs: 0,
+      hasHitPlayer: false,
+    });
+  }
+
+  private updateVolleyAttacks(deltaMs: number): void {
+    if (this.volleyAttacks.length === 0) {
+      return;
+    }
+
+    const nextAttacks: typeof this.volleyAttacks = [];
+
+    for (const volley of this.volleyAttacks) {
+      volley.elapsedMs += deltaMs;
+
+      if (!volley.hasHitPlayer) {
+        for (const lane of volley.lanes) {
+          if (this.isPlayerInsideLineAttack(lane.x, lane.y, lane.direction, lane.length, lane.halfWidth)) {
+            volley.hasHitPlayer = true;
+            const tookDamage = this.player.takeDamage(volley.damage, this.time.now);
+            if (tookDamage) {
+              this.createBurstCircle(this.player.x, this.player.y, 0xfef08a, 14, 46, 220, 0.82);
+              this.showFloatingText(this.player.x, this.player.y - 28, `${volley.damage}`, '#fef9c3', 18);
+              if (!this.player.isAlive()) {
+                this.volleyAttacks = [];
+                this.endRun(false, 'Defeat', 'The Dreadnought swept the field.');
+                return;
+              }
+            }
+            break;
+          }
+        }
+      }
+
+      if (volley.elapsedMs < volley.durationMs) {
+        nextAttacks.push(volley);
+      }
+    }
+
+    this.volleyAttacks = nextAttacks;
   }
 
   private isPlayerInsideLineAttack(
