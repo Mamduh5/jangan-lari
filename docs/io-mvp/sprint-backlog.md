@@ -644,3 +644,32 @@ Acceptance checks:
 - Pause button remains visible and tappable during normal gameplay and hidden behind modal overlays.
 - Level-up reward choice, class choice, stat allocation, pause menu, end screen, and orientation warning remain intact.
 - Focused validation remains limited to unit, build, diff check, HUD e2e, pause-menu e2e, mobile-alpha UI e2e, and optional mobile-layout/controls e2e.
+
+## Sprint A17: Mobile APK/Web Manual Release Checklist
+
+Goal: Create a practical manual release checklist for web build/browser playtest and Android APK/mobile wrapper playtest without adding features or changing gameplay.
+
+Status note:
+- Added `docs/io-mvp/release-checklist.md` with web build checklist, Android APK checklist, manual gameplay checklist, known non-goals, and release blocker checklist.
+- Updated `android/README.md` to fix broken PowerShell path comments.
+- Verified package scripts exist and match documented commands; no script names invented.
+- Ran `npm test`, `npm run build`, and `git diff --check` as the standard validation gate.
+- Optional focused e2e commands documented but not required as a blocker.
+
+Intentionally skipped:
+- No gameplay logic changes.
+- No UI behavior changes.
+- No boss or miniboss behavior changes.
+- No collision changes.
+- No enemy stat, reward, XP, gold, spawn timing, event timing, economy, or balance changes.
+- No gameplay content additions.
+- No gameplay-bot recalibration.
+- No Play Store submission, monetization, ads, accounts, analytics, backend, multiplayer, or online leaderboard.
+
+Acceptance checks:
+- Release checklist doc exists and is practical.
+- Checklist covers web build/manual playtest.
+- Checklist covers Android APK/manual device playtest.
+- Sprint backlog contains A17.
+- No gameplay or UI behavior changed.
+- No boss/miniboss/collision/content/balance/gameplay-bot changes.
