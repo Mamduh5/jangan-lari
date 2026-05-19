@@ -618,3 +618,29 @@ Acceptance checks:
 - Restart starts a fresh run without abandoned-run rewards.
 - Return to Main Menu exits cleanly without abandoned-run rewards.
 - Focused validation remains limited to unit, build, diff check, pause-menu e2e, mobile HUD, and mobile-alpha UI e2e.
+
+## Sprint A16: Final HUD Minimal Pass
+
+Goal: Make the in-run HUD minimal, readable, and non-distracting so the arena remains the focus during active combat.
+
+Status note:
+- Reduced the top-left player state to a smaller hero/class line, clear HP bar/value, and hidden duplicate level/XP text while keeping snapshot fields alive.
+- Kept class/status and stat-summary text available in snapshots, but only shows them during relevant active UI moments such as class choice or spendable stat points.
+- Compacted score, run gold, and kills in the top-right without a background panel.
+- Simplified the bottom-left run state to a small weapon summary plus the XP bar/level label, with weapon icon boxes hidden instead of deleted.
+- Kept timer/boss HP as the only persistent center text; event, reward, and alert text remains temporary and lightweight without active-gameplay panels.
+
+Intentionally skipped:
+- No gameplay logic changes.
+- No boss or miniboss behavior changes.
+- No collision changes.
+- No enemy stat, reward, XP, gold, spawn timing, event timing, economy, or balance changes.
+- No gameplay content additions.
+- No gameplay-bot work.
+
+Acceptance checks:
+- Active gameplay HUD is visibly cleaner and less noisy than A15.
+- HP, XP/level, boss timer/boss HP, score, run gold, kills, and pause remain available.
+- Pause button remains visible and tappable during normal gameplay and hidden behind modal overlays.
+- Level-up reward choice, class choice, stat allocation, pause menu, end screen, and orientation warning remain intact.
+- Focused validation remains limited to unit, build, diff check, HUD e2e, pause-menu e2e, mobile-alpha UI e2e, and optional mobile-layout/controls e2e.

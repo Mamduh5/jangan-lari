@@ -147,58 +147,61 @@ export class UIScene extends Phaser.Scene {
     this.controlGuideMode = this.readControlGuideMode();
 
     this.heroText = this.add
-      .text(38, 28, '--', {
+      .text(30, 22, '--', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '23px',
-        color: '#f8fafc',
-        wordWrap: { width: 336 },
+        fontSize: '16px',
+        color: '#dbeafe',
+        wordWrap: { width: 282 },
       })
       .setScrollFactor(0);
 
-    const hpBarFrame = this.add.rectangle(38, 72, 320, 24, 0x1b2f46, 0.98).setOrigin(0, 0.5);
-    hpBarFrame.setStrokeStyle(1, 0x6b8bae, 0.88);
+    const hpBarFrame = this.add.rectangle(30, 54, 280, 16, 0x0f172a, 0.48).setOrigin(0, 0.5);
+    hpBarFrame.setStrokeStyle(1, 0x6b8bae, 0.52);
     hpBarFrame.setScrollFactor(0);
 
-    this.hpBarFill = this.add.rectangle(38, 72, 0, 18, 0xf87171, 1).setOrigin(0, 0.5);
+    this.hpBarFill = this.add.rectangle(30, 54, 0, 10, 0xf87171, 0.96).setOrigin(0, 0.5);
     this.hpBarFill.setScrollFactor(0);
 
     this.hpValueText = this.add
-      .text(38, 92, 'HP --/--', {
+      .text(30, 66, 'HP --/--', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '17px',
+        fontSize: '14px',
         color: '#fecaca',
       })
       .setScrollFactor(0);
 
     this.levelValueText = this.add
-      .text(176, 92, 'LV 1  XP 0/0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '17px',
-        color: '#bfdbfe',
-      })
-      .setScrollFactor(0);
-
-    this.classStatusText = this.add
-      .text(38, 120, 'Class Basic', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#7cb8d8',
-      })
-      .setScrollFactor(0);
-
-    this.statSummaryText = this.add
-      .text(176, 120, 'DMG0 RLD0 SPD0 REG0', {
+      .text(126, 66, 'LV 1  XP 0/0', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '13px',
-        color: '#94a3b8',
-        wordWrap: { width: 218 },
+        color: '#bfdbfe',
       })
-      .setScrollFactor(0);
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.classStatusText = this.add
+      .text(30, 86, 'Class Basic', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '13px',
+        color: '#7cb8d8',
+      })
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.statSummaryText = this.add
+      .text(30, 86, 'DMG0 RLD0 SPD0 REG0', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '12px',
+        color: '#fef08a',
+        wordWrap: { width: 268 },
+      })
+      .setScrollFactor(0)
+      .setVisible(false);
 
     this.timerText = this.add
-      .text(viewWidth / 2, 26, '00:00', {
+      .text(viewWidth / 2, 20, '00:00', {
         fontFamily: 'Georgia, serif',
-        fontSize: '28px',
+        fontSize: '24px',
         color: '#e0f2fe',
       })
       .setOrigin(0.5, 0)
@@ -215,24 +218,24 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.alertText = this.add
-      .text(viewWidth / 2, 76, '', {
+      .text(viewWidth / 2, 58, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         color: '#dbeafe',
         stroke: '#000000',
-        strokeThickness: 4,
+        strokeThickness: 3,
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setVisible(false);
 
     this.rewardText = this.add
-      .text(viewWidth / 2, 112, '', {
+      .text(viewWidth / 2, 88, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
+        fontSize: '13px',
         color: '#fef3c7',
         stroke: '#000000',
-        strokeThickness: 4,
+        strokeThickness: 3,
         wordWrap: { width: 640 },
         align: 'center',
       })
@@ -257,9 +260,9 @@ export class UIScene extends Phaser.Scene {
     this.eventPanel = this.add.rectangle(0, 0, 0, 0, 0x000000, 0).setScrollFactor(0).setVisible(false);
 
     this.eventTitleText = this.add
-      .text(viewWidth / 2, 142, '', {
+      .text(viewWidth / 2, 118, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
+        fontSize: '14px',
         color: '#fde68a',
         stroke: '#000000',
         strokeThickness: 3,
@@ -269,9 +272,9 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.eventBodyText = this.add
-      .text(viewWidth / 2, 166, '', {
+      .text(viewWidth / 2, 140, '', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
+        fontSize: '12px',
         color: '#e2e8f0',
         stroke: '#000000',
         strokeThickness: 3,
@@ -288,49 +291,52 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.scoreText = this.add
-      .text(viewWidth - 30, 28, 'Score 0', {
+      .text(viewWidth - 30, 22, 'Score 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '24px',
+        fontSize: '17px',
         color: '#fef08a',
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
     this.goldText = this.add
-      .text(viewWidth - 30, 70, 'Run Gold 0', {
+      .text(viewWidth - 30, 48, 'Run Gold 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '19px',
+        fontSize: '14px',
         color: '#fde68a',
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
     this.killsText = this.add
-      .text(viewWidth - 30, 108, 'Kills 0', {
+      .text(viewWidth - 30, 72, 'Kills 0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
+        fontSize: '14px',
         color: '#94a3b8',
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
 
     this.weaponSummaryText = this.add
-      .text(38, viewHeight - 118, 'Weapon --', {
+      .text(30, viewHeight - 74, 'Weapon --', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
-        color: '#bfdbfe',
+        fontSize: '12px',
+        color: '#93c5fd',
       })
       .setScrollFactor(0);
 
     for (let index = 0; index < 4; index += 1) {
-      const frame = this.add.rectangle(38 + index * 52, viewHeight - 88, 40, 40, 0x172033, 0.98).setOrigin(0);
-      frame.setStrokeStyle(1, 0x334155, 0.92);
-      frame.setScrollFactor(0);
+      const frame = this.add
+        .rectangle(30 + index * 34, viewHeight - 54, 24, 24, 0x172033, 0.16)
+        .setOrigin(0)
+        .setScrollFactor(0)
+        .setVisible(false);
+      frame.setStrokeStyle(1, 0x334155, 0.32);
 
       const icon = this.add
-        .text(58 + index * 52, viewHeight - 68, '--', {
+        .text(42 + index * 34, viewHeight - 42, '--', {
           fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '13px',
+          fontSize: '10px',
           color: '#eff6ff',
         })
         .setOrigin(0.5)
@@ -341,17 +347,17 @@ export class UIScene extends Phaser.Scene {
       this.weaponIconTexts.push(icon);
     }
 
-    const xpBarFrame = this.add.rectangle(38, viewHeight - 38, 312, 20, 0x172554, 0.98).setOrigin(0, 0.5);
-    xpBarFrame.setStrokeStyle(1, 0x60a5fa, 0.9);
+    const xpBarFrame = this.add.rectangle(30, viewHeight - 38, 280, 14, 0x172554, 0.42).setOrigin(0, 0.5);
+    xpBarFrame.setStrokeStyle(1, 0x60a5fa, 0.5);
     xpBarFrame.setScrollFactor(0);
 
-    this.xpBarFill = this.add.rectangle(38, viewHeight - 38, 0, 14, 0x38bdf8, 1).setOrigin(0, 0.5);
+    this.xpBarFill = this.add.rectangle(30, viewHeight - 38, 0, 8, 0x38bdf8, 0.96).setOrigin(0, 0.5);
     this.xpBarFill.setScrollFactor(0);
 
     this.xpBarLabel = this.add
-      .text(38, viewHeight - 18, 'LV 1  XP 0/0', {
+      .text(30, viewHeight - 20, 'LV 1  XP 0/0', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
+        fontSize: '12px',
         color: '#bfdbfe',
       })
       .setScrollFactor(0);
@@ -439,12 +445,14 @@ export class UIScene extends Phaser.Scene {
 
     this.setTextIfChanged(this.heroText, `${heroName || '--'} • ${classTitle}`);
     this.setTextIfChanged(this.hpValueText, `HP ${currentHp}/${maxHp}`);
-    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 320, 0, 320);
+    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 280, 0, 280);
     this.setTextIfChanged(this.levelValueText, xpLabel);
     this.setTextIfChanged(this.classStatusText, `Class ${classTitle}${classChoiceActive ? ' - Choose now' : ''}`);
     this.classStatusText.setColor(classChoiceActive ? '#fef08a' : '#bae6fd');
+    this.classStatusText.setVisible(classChoiceActive);
     this.setTextIfChanged(this.statSummaryText, `${statSummary}${statPoints > 0 ? `  +${statPoints}` : ''}`);
     this.statSummaryText.setColor(statPoints > 0 ? '#fef08a' : '#94a3b8');
+    this.statSummaryText.setVisible(statPoints > 0 && !levelUpActive && !classChoiceActive && !endActive);
     this.setTextIfChanged(
       this.timerText,
       this.formatStageTimer(stagePhase, elapsedMs, bossSpawnTimeMs || targetMs, bossHp, bossMaxHp, bossPhase),
@@ -457,7 +465,7 @@ export class UIScene extends Phaser.Scene {
     this.setTextIfChanged(this.scoreText, `Score ${score}`);
     this.setTextIfChanged(this.weaponSummaryText, this.formatWeaponSummary(weaponNames, classTitle));
     this.setTextIfChanged(this.xpBarLabel, xpLabel);
-    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 312, 0, 312);
+    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 280, 0, 280);
     this.refreshWeaponIcons(weaponNames);
     this.refreshAlert(alertKind, alertMessage);
     this.refreshRewardToast(rewardMessage, rewardColor);
@@ -1052,12 +1060,12 @@ export class UIScene extends Phaser.Scene {
 
   private createPauseButton(): Phaser.GameObjects.Text {
     const button = this.add
-      .text(GAME_WIDTH - 72, 158, 'II', {
+      .text(GAME_WIDTH - 64, 126, 'II', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '20px',
+        fontSize: '18px',
         color: '#e0f2fe',
-        backgroundColor: '#0f172a',
-        padding: { left: 18, right: 18, top: 9, bottom: 9 },
+        backgroundColor: '#111827',
+        padding: { left: 16, right: 16, top: 8, bottom: 8 },
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -1065,7 +1073,7 @@ export class UIScene extends Phaser.Scene {
 
     button.on('pointerdown', () => this.openPauseMenu());
     button.on('pointerover', () => button.setStyle({ color: '#ffffff', backgroundColor: '#1f2937' }));
-    button.on('pointerout', () => button.setStyle({ color: '#e0f2fe', backgroundColor: '#0f172a' }));
+    button.on('pointerout', () => button.setStyle({ color: '#e0f2fe', backgroundColor: '#111827' }));
     button.setDepth(82);
 
     return button;
@@ -1652,14 +1660,16 @@ export class UIScene extends Phaser.Scene {
       if (!definition) {
         frame.setFillStyle(0x172033, 0.98);
         frame.setStrokeStyle(1, 0x334155, 0.92);
+        frame.setVisible(false);
         label.setVisible(false);
         continue;
       }
 
-      frame.setFillStyle(definition.projectileColor, 0.28);
-      frame.setStrokeStyle(1, definition.projectileStrokeColor, 0.98);
+      frame.setFillStyle(definition.projectileColor, 0.16);
+      frame.setStrokeStyle(1, definition.projectileStrokeColor, 0.32);
+      frame.setVisible(false);
       this.setTextIfChanged(label, definition.shortLabel);
-      label.setVisible(true);
+      label.setVisible(false);
     }
   }
 
