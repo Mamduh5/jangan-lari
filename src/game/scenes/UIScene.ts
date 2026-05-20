@@ -108,7 +108,12 @@ export class UIScene extends Phaser.Scene {
   private pauseMenuContainer!: Phaser.GameObjects.Container;
   private pauseMenuSummaryText!: Phaser.GameObjects.Text;
   private pauseMenuButtons: Phaser.GameObjects.Text[] = [];
-  private activeAbilityButton!: Phaser.GameObjects.Text;
+  private activeAbilityButton!: Phaser.GameObjects.Container;
+  private activeAbilityButtonBase!: Phaser.GameObjects.Arc;
+  private activeAbilityButtonLabel!: Phaser.GameObjects.Text;
+  private activeAbilityButtonHitArea!: Phaser.GameObjects.Arc;
+  private readonly activeAbilityButtonRadius = 32;
+  private readonly activeAbilityButtonHitRadius = 44;
 
   private readonly handleSelectUpgradeOne = (): void => {
     this.selectUpgrade(0);
@@ -550,7 +555,9 @@ export class UIScene extends Phaser.Scene {
     pauseButton: { x: number; y: number; width: number; height: number };
     activeAbilityButtonVisible: boolean;
     activeAbilityButtonText: string;
-    activeAbilityButton: { x: number; y: number; width: number; height: number };
+    activeAbilityReady: boolean;
+    activeAbilityCooldownMs: number;
+    activeAbilityButton: { x: number; y: number; width: number; height: number; radius: number };
     pauseMenuVisible: boolean;
     pauseMenuButtons: string[];
     pauseMenuButtonBounds: Array<{ text: string; x: number; y: number; width: number; height: number }>;
@@ -601,12 +608,15 @@ export class UIScene extends Phaser.Scene {
         height: this.pauseButton.displayHeight,
       },
       activeAbilityButtonVisible: this.activeAbilityButton.visible,
-      activeAbilityButtonText: this.activeAbilityButton.text,
+      activeAbilityButtonText: this.activeAbilityButtonLabel.text,
+      activeAbilityReady: Boolean(this.registry.get('run.activeAbilityReady')),
+      activeAbilityCooldownMs: Number(this.registry.get('run.activeAbilityCooldownMs') ?? 0),
       activeAbilityButton: {
         x: this.activeAbilityButton.x,
         y: this.activeAbilityButton.y,
-        width: this.activeAbilityButton.displayWidth,
-        height: this.activeAbilityButton.displayHeight,
+        width: this.activeAbilityButtonHitRadius * 2,
+        height: this.activeAbilityButtonHitRadius * 2,
+        radius: this.activeAbilityButtonRadius,
       },
       pauseMenuVisible: this.pauseMenuContainer.visible,
       pauseMenuButtons: this.pauseMenuButtons.filter((button) => button.visible).map((button) => button.text),
@@ -997,8 +1007,8 @@ export class UIScene extends Phaser.Scene {
 
   private createControlGuideVisuals(): Phaser.GameObjects.Container {
     const zoneConfigs = [
-      { x: GAME_WIDTH * 0.22, y: 552, color: 0x38bdf8, label: 'MOVE', subLabel: 'LEFT SIDE' },
-      { x: GAME_WIDTH * 0.78, y: 552, color: 0xfacc15, label: 'AIM', subLabel: 'RIGHT SIDE' },
+      { x: 290, y: 552, color: 0x38bdf8, label: 'MOVE', subLabel: 'LEFT SIDE' },
+      { x: 1310, y: 552, color: 0xfacc15, label: 'AIM', subLabel: 'RIGHT SIDE' },
     ];
     const children: Phaser.GameObjects.GameObject[] = [];
 
@@ -1110,25 +1120,44 @@ export class UIScene extends Phaser.Scene {
     return button;
   }
 
-  private createActiveAbilityButton(): Phaser.GameObjects.Text {
-    const button = this.add
-      .text(GAME_WIDTH - 96, GAME_HEIGHT - 80, 'Pulse', {
+  private createActiveAbilityButton(): Phaser.GameObjects.Container {
+    const x = 1244;
+    const y = 400;
+    this.activeAbilityButtonHitArea = this.add.circle(0, 0, this.activeAbilityButtonHitRadius, 0x000000, 0.001);
+    this.activeAbilityButtonHitArea.setInteractive({ useHandCursor: true });
+
+    this.activeAbilityButtonBase = this.add.circle(0, 0, this.activeAbilityButtonRadius, 0x123044, 0.88);
+    this.activeAbilityButtonBase.setStrokeStyle(3, 0x7dd3fc, 0.9);
+
+    const innerRing = this.add.circle(0, 0, this.activeAbilityButtonRadius - 7, 0x38bdf8, 0.1);
+    innerRing.setStrokeStyle(1, 0xe0f2fe, 0.28);
+
+    this.activeAbilityButtonLabel = this.add
+      .text(0, 0, 'P', {
         fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '17px',
+        fontSize: '20px',
         color: '#e0f2fe',
-        backgroundColor: '#0f172a',
-        padding: { left: 15, right: 15, top: 9, bottom: 9 },
       })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true });
+      .setOrigin(0.5);
 
-    button.on('pointerdown', () => this.activateBreakoutPulse());
-    button.on('pointerover', () => button.setStyle({ color: '#ffffff', backgroundColor: '#1e3a5f' }));
-    button.on('pointerout', () => this.refreshActiveAbilityButtonStyle());
-    button.setDepth(82);
+    this.activeAbilityButtonHitArea.on('pointerdown', () => this.activateBreakoutPulse());
+    this.activeAbilityButtonHitArea.on('pointerover', () => {
+      this.activeAbilityButtonBase.setFillStyle(0x1e3a5f, 0.96);
+      this.activeAbilityButtonBase.setStrokeStyle(3, 0xffffff, 0.95);
+      this.activeAbilityButtonLabel.setColor('#ffffff');
+    });
+    this.activeAbilityButtonHitArea.on('pointerout', () => this.refreshActiveAbilityButtonStyle());
 
-    return button;
+    const container = this.add.container(x, y, [
+      this.activeAbilityButtonHitArea,
+      this.activeAbilityButtonBase,
+      innerRing,
+      this.activeAbilityButtonLabel,
+    ]);
+    container.setDepth(82);
+    container.setScrollFactor(0);
+
+    return container;
   }
 
   private createPauseMenuOverlay(): Phaser.GameObjects.Container {
@@ -1261,18 +1290,19 @@ export class UIScene extends Phaser.Scene {
     this.activeAbilityButton.setVisible(visible);
 
     if (!visible) {
-      this.activeAbilityButton.disableInteractive();
+      this.activeAbilityButtonHitArea.disableInteractive();
       return;
     }
 
-    if (!this.activeAbilityButton.input?.enabled) {
-      this.activeAbilityButton.setInteractive({ useHandCursor: true });
+    if (!this.activeAbilityButtonHitArea.input?.enabled) {
+      this.activeAbilityButtonHitArea.setInteractive({ useHandCursor: true });
     }
 
     const cooldownSeconds = Math.ceil(cooldownMs / 1000);
-    const buttonText = ready ? label : `${cooldownSeconds}s`;
-    this.setTextIfChanged(this.activeAbilityButton, buttonText);
+    const buttonText = ready ? 'P' : `${cooldownSeconds}`;
+    this.setTextIfChanged(this.activeAbilityButtonLabel, buttonText);
     this.activeAbilityButton.setData('ready', ready);
+    this.activeAbilityButton.setData('label', label);
     this.activeAbilityButton.setData('cooldownRatio', Phaser.Math.Clamp(cooldownMs / Math.max(1, cooldownTotalMs), 0, 1));
     this.refreshActiveAbilityButtonStyle();
   }
@@ -1284,10 +1314,9 @@ export class UIScene extends Phaser.Scene {
 
     const ready = Boolean(this.activeAbilityButton.getData('ready'));
     const cooldownRatio = Number(this.activeAbilityButton.getData('cooldownRatio') ?? 0);
-    this.activeAbilityButton.setStyle({
-      color: ready ? '#e0f2fe' : '#94a3b8',
-      backgroundColor: ready ? '#123044' : cooldownRatio > 0.5 ? '#111827' : '#172033',
-    });
+    this.activeAbilityButtonBase.setFillStyle(ready ? 0x123044 : cooldownRatio > 0.5 ? 0x111827 : 0x172033, ready ? 0.92 : 0.78);
+    this.activeAbilityButtonBase.setStrokeStyle(ready ? 3 : 2, ready ? 0x7dd3fc : 0x475569, ready ? 0.9 : 0.78);
+    this.activeAbilityButtonLabel.setColor(ready ? '#e0f2fe' : '#94a3b8');
   }
 
   private openPauseMenu(): void {

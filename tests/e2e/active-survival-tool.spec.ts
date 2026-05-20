@@ -24,7 +24,7 @@ test.describe('active survival tool', () => {
     await startRun(page);
     let hud = await getHudSnapshot(page);
     expect(hud.activeAbilityButtonVisible).toBe(true);
-    expect(hud.activeAbilityButtonText).toBe('Pulse');
+    expect(hud.activeAbilityButtonText).toBe('P');
 
     await clearEnemies(page);
     await setPlayerPosition(page, 1000, 700);

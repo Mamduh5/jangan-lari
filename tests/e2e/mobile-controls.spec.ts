@@ -73,7 +73,7 @@ test.describe('mobile control guides', () => {
     expect(movedRun.input.movementSource).toBe('pointer');
     expect(movedRun.input.movement.x).toBeGreaterThan(0.8);
     hud = await getHudSnapshot(page);
-    expect(hud.movementJoystickKnob.x).toBeGreaterThan(360);
+    expect(hud.movementJoystickKnob.x).toBeGreaterThan(330);
     await page.mouse.up();
 
     const virtualSize = await getVirtualSize(page);
