@@ -99,6 +99,50 @@ export type GameplayBotEventSnapshot = {
   rewardTargetFailures: number;
 };
 
+export type GameplayBotFormationSnapshot = {
+  enabled: boolean;
+  active: boolean;
+  lastFormationType: 'ring-breakout' | 'pincer' | 'sweep-wall' | '';
+  cooldownMs: number;
+  spawnCount: number;
+  waveCount: number;
+  spawnPoints: Array<{
+    x: number;
+    y: number;
+    distanceFromPlayer: number;
+    angle: number;
+  }>;
+};
+
+export type GameplayBotDangerZoneSnapshot = {
+  enabled: boolean;
+  activeCount: number;
+  warningCount: number;
+  damageActiveCount: number;
+  cooldownMs: number;
+  spawnCount: number;
+  lastPhase: 'warning' | 'active' | '';
+  zones: Array<{
+    x: number;
+    y: number;
+    radius: number;
+    phase: 'warning' | 'active';
+    elapsedMs: number;
+    remainingMs: number;
+    damage: number;
+  }>;
+};
+
+export type GameplayBotActiveAbilitySnapshot = {
+  label: string;
+  ready: boolean;
+  cooldownMs: number;
+  cooldownTotalMs: number;
+  protectionRemainingMs: number;
+  activationCount: number;
+  radius: number;
+};
+
 export type GameplayBotRunSnapshot = {
   config: {
     gameWidth: number;
@@ -258,6 +302,9 @@ export type GameplayBotRunSnapshot = {
     label: string;
     highlight: boolean;
   };
+  formationPressure: GameplayBotFormationSnapshot;
+  dangerZones: GameplayBotDangerZoneSnapshot;
+  activeAbility: GameplayBotActiveAbilitySnapshot;
   event: GameplayBotEventSnapshot;
   combatResponse: {
     hitStopStarts: number;

@@ -2,7 +2,6 @@ import { expect, test } from '@playwright/test';
 
 type HudSnapshot = {
   timer: string;
-  instructionText: string;
 };
 
 type RunSnapshot = {
@@ -71,7 +70,6 @@ test.describe('boss stage win condition', () => {
 
     const bossHud = await getHudSnapshot(page);
     expect(bossHud.timer).toContain('Boss HP');
-    expect(bossHud.instructionText).toContain('Defeat');
 
     await forceEnemyWave(page, 901_000);
     run = await getRunSnapshot(page);

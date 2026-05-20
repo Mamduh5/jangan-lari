@@ -89,7 +89,7 @@ test.describe('boss phase and skill pass', () => {
 
     await page.waitForFunction(() => {
       const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run as RunSnapshot | null;
-      return Boolean(run && run.enemyProjectiles.length >= 5);
+      return Boolean(run?.enemyAttacks.some((attack) => attack.kind === 'miniboss-volley' && attack.damageActive));
     });
 
     await defeatBoss(page);

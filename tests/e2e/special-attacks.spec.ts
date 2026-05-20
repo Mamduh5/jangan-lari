@@ -10,8 +10,14 @@ async function clickStartRun(page: import('@playwright/test').Page): Promise<voi
   }
 
   const virtualSize = await getVirtualSize(page);
-  const startButtonX = virtualSize.width / 2 - 250;
-  const startButtonY = 82;
+  const startButton = await page.evaluate(() => {
+    const menuScene = window.__JANGAN_LARI_GAME__?.scene.getScene('MenuScene') as
+      | { getMenuSnapshot?: () => { startButton?: { x: number; y: number } } }
+      | undefined;
+    return menuScene?.getMenuSnapshot?.().startButton ?? null;
+  });
+  const startButtonX = startButton?.x ?? virtualSize.width / 2 - 250;
+  const startButtonY = startButton?.y ?? 82;
 
   await canvas.click({
     position: {

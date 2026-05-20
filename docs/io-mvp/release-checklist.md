@@ -5,7 +5,7 @@ Practical checklist for a manual release-candidate pass on `io/mobile-alpha`. Th
 ## Branch And Context
 
 - Branch: `io/mobile-alpha`
-- Current state: A16 completed (final minimal HUD cleanup)
+- Current state: A22 completed (formation pressure, danger zones, Breakout Pulse, and boss tuning)
 - Frozen foundation: `io/mvp-foundation`
 
 ## Package Scripts Verified
@@ -25,6 +25,14 @@ There is no package script dedicated to `pause-menu.spec.ts`; run it manually wh
 
 ```bash
 npx playwright test tests/e2e/pause-menu.spec.ts
+```
+
+There are no package scripts dedicated to the new A19-A21 focused specs; run them manually when needed:
+
+```bash
+npx playwright test tests/e2e/formation-pressure.spec.ts
+npx playwright test tests/e2e/danger-zone.spec.ts
+npx playwright test tests/e2e/active-survival-tool.spec.ts
 ```
 
 `npm install` and `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` are direct tool commands, not package scripts.
@@ -215,7 +223,12 @@ Use this during either web or APK testing to confirm the core loop is intact.
 - [ ] Pick reward: level-up shows choices; selection applies.
 - [ ] Spend stat points: stat allocation opens and increments are visible.
 - [ ] Survive miniboss: miniboss spawns safely and its attacks are readable.
+- [ ] Survive a formation wave: pressure is clear, with no unavoidable hard cage.
+- [ ] Read a danger zone: warning appears before damage and moving out feels possible.
+- [ ] Use Breakout Pulse: the active button/`E` opens space when surrounded and enters cooldown.
+- [ ] Pause during pressure: formation/danger/pulse state resumes cleanly after pause.
 - [ ] Survive boss phase: boss spawns at expected time, normal spawns suppressed.
+- [ ] Confirm boss tuning: summons and shockwaves feel fair with collision and Breakout Pulse.
 - [ ] Defeat boss or reach end condition: victory or defeat screen appears.
 - [ ] Return to menu: clean transition.
 - [ ] Restart run: new run starts without leftover state.

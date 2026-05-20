@@ -30,3 +30,20 @@ export const FIRST_ELITE_SPAWN_AT_MS = 35000;
 
 // Alert cooldown for wave template names
 export const WAVE_TEMPLATE_ALERT_COOLDOWN_MS = 7000;
+
+// Mid-run formation pressure
+export const FORMATION_PRESSURE_FIRST_MS = 60000;
+export const FORMATION_PRESSURE_COOLDOWN_MS = 32000;
+export const FORMATION_PRESSURE_RETRY_MS = 3500;
+export const FORMATION_RING_RADIUS = 390;
+export const FORMATION_PINCER_DISTANCE = 500;
+export const FORMATION_SWEEP_DISTANCE = 520;
+
+// Mid-run movement pressure
+export const DANGER_ZONE_FIRST_MS = 95000;
+export const DANGER_ZONE_COOLDOWN_MS = 22000;
+export const DANGER_ZONE_WARNING_MS = 950;
+export const DANGER_ZONE_ACTIVE_MS = 1250;
+export const DANGER_ZONE_RADIUS = 118;
+export const DANGER_ZONE_DAMAGE = 12;
+export const DANGER_ZONE_TICK_MS = 850;

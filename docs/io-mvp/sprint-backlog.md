@@ -721,3 +721,92 @@ Validation commands:
 - `npm run test:e2e:hud`
 - `npx playwright test tests/e2e/pause-menu.spec.ts`
 - Optional quick checks: `npm run test:e2e:mobile-layout`, `npm run test:e2e:controls`
+
+## Sprint A19: Enemy Formation Pressure Pass
+
+Goal: Make the middle of the run less sleepy by adding positional enemy formations that use existing enemy archetypes and A14 solid collision.
+
+Status note:
+- Added Ring Breakout, Pincer, and Sweep Wall formation waves after the opening build-up window.
+- Formations are scheduled with cooldowns and are suppressed during boss phase, run events, modal overlays, pause, and active major encounters.
+- Ring formations leave a breakout gap, pincer waves spawn from opposite sides, and sweep walls create a loose line without increasing the global enemy cap.
+- Debug snapshots expose formation type, cooldown, count, and spawn point distances for focused validation.
+
+Intentionally skipped:
+- No new enemies, weapons, heroes, upgrades, art assets, boss tuning, danger zones, active ability upgrades, backend, multiplayer, monetization, or gameplay-bot work.
+
+Acceptance checks:
+- At least two formation types exist; current pass includes three.
+- Formation spawn points keep safe distance from the player and respect the active enemy cap.
+- Ring formation leaves a gap and does not hard-cage the player.
+- Normal run start and existing solid collision behavior remain intact.
+
+Validation notes:
+- Added `tests/e2e/formation-pressure.spec.ts` to validate fair formation spawn geometry, ring gap, enemy cap, and runtime stability.
+
+## Sprint A20: Danger Zone / Movement Pressure Pass
+
+Goal: Add one readable movement-pressure hazard so the player must reposition instead of only circling and farming.
+
+Status note:
+- Added temporary warning-zone to active-damage-zone hazards using Phaser shape visuals.
+- Danger zones begin only after formation pressure has entered the run, use a long cooldown, and avoid boss phase, run events, pause, modal overlays, and active major encounters.
+- Warning and active states use distinct in-world styling; damage is meaningful but limited and uses existing player invulnerability behavior.
+- Danger-zone progression is update-loop driven, so warning/active timers do not advance during manual or system pause.
+
+Intentionally skipped:
+- No new art assets, hazard variants, tutorial panels, HUD clutter, active survival tool, boss tuning, backend, multiplayer, or gameplay-bot work.
+
+Acceptance checks:
+- Warning appears before damage.
+- Active zone can damage the player after the warning delay.
+- Pause/modal states stop danger-zone progression.
+- Danger-zone visuals and state are cleaned up on boss phase, end, restart, and scene shutdown.
+
+Validation notes:
+- Added `tests/e2e/danger-zone.spec.ts` to validate warning-before-damage, active damage, pause freeze, and runtime stability.
+
+## Sprint A21: Active Survival Tool Prototype
+
+Goal: Add one intentional emergency survival tool that answers formation and danger pressure without becoming a weapon system.
+
+Status note:
+- Added Breakout Pulse as a single cooldown-based active ability.
+- Pulse is available through a compact mobile HUD button and keyboard `E`.
+- Activation briefly extends player invulnerability and knocks nearby normal enemies and boss-owned summons away; elites/minibosses receive reduced knockback and the boss is immune.
+- Registry/debug snapshots expose ability readiness, cooldown, total cooldown, activation count, and radius.
+
+Intentionally skipped:
+- No skill tree, multiple active abilities, ability upgrades, mana/resource system, new weapons, new heroes, new assets, upgrade-pool redesign, backend, multiplayer, or gameplay-bot work.
+
+Acceptance checks:
+- Active ability button is visible during normal gameplay and hidden behind pause, level-up, class-choice, end, and orientation overlays.
+- Activation starts cooldown and cannot be repeated during cooldown.
+- Nearby enemies are pushed far enough to open space without damaging or trivializing the boss.
+- Cooldown does not progress while gameplay is paused.
+
+Validation notes:
+- Added `tests/e2e/active-survival-tool.spec.ts` to validate button visibility, cooldown, repeat prevention, enemy knockback, overlay hiding, and runtime stability.
+
+## Sprint A22: Boss Tuning / Branch Close
+
+Goal: Tune the Behemoth fight against the new formation, danger-zone, and active-pulse pressure curve without rewriting the boss.
+
+Status note:
+- Kept normal formations and danger zones suppressed during boss phase; boss summons remain the boss-owned pressure source.
+- Reduced Behemoth HP slightly so the final fight does not drag after a more awake mid-run.
+- Increased shockwave warning time, slightly shortened active damage time, and softened phase-two damage/cadence so collision plus summons stay fair.
+- Reduced summon batch/cap and slightly softened summon durability/damage so Breakout Pulse can open a path without erasing the fight.
+- Boss is immune to Breakout Pulse knockback; boss-owned summons can be knocked back.
+
+Intentionally skipped:
+- No new boss, boss art, boss phase, player upgrades, enemy types, weapons, heroes, backend, multiplayer, monetization, or gameplay-bot work.
+
+Acceptance checks:
+- Boss still spawns at stage time, phase two still triggers, summons remain capped, and boss defeat still wins the run.
+- Active Pulse does not damage or trivialize the boss.
+- Boss-owned summons interact fairly with pulse.
+- Branch is ready for release-checklist/manual-playtest pass.
+
+Validation notes:
+- Updated boss-focused coverage to include Breakout Pulse interaction with boss-owned summons and boss HP stability.

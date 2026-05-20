@@ -108,6 +108,7 @@ export class UIScene extends Phaser.Scene {
   private pauseMenuContainer!: Phaser.GameObjects.Container;
   private pauseMenuSummaryText!: Phaser.GameObjects.Text;
   private pauseMenuButtons: Phaser.GameObjects.Text[] = [];
+  private activeAbilityButton!: Phaser.GameObjects.Text;
 
   private readonly handleSelectUpgradeOne = (): void => {
     this.selectUpgrade(0);
@@ -385,6 +386,7 @@ export class UIScene extends Phaser.Scene {
     this.controlHintContainer = this.createControlHintOverlay();
     this.controlGuideToggleButton = this.createControlGuideToggleButton();
     this.pauseButton = this.createPauseButton();
+    this.activeAbilityButton = this.createActiveAbilityButton();
     this.pauseMenuContainer = this.createPauseMenuOverlay();
 
     this.input.keyboard?.on('keydown-ENTER', this.handleConfirmInput, this);
@@ -436,6 +438,10 @@ export class UIScene extends Phaser.Scene {
     const classChoiceActive = Boolean(this.registry.get('run.classChoiceActive'));
     const classChoiceChoices = (this.registry.get('run.classChoiceChoices') ?? []) as TankClassDefinition[];
     const statPoints = Number(this.registry.get('run.statPoints') ?? 0);
+    const activeAbilityReady = Boolean(this.registry.get('run.activeAbilityReady'));
+    const activeAbilityCooldownMs = Number(this.registry.get('run.activeAbilityCooldownMs') ?? 0);
+    const activeAbilityCooldownTotalMs = Number(this.registry.get('run.activeAbilityCooldownTotalMs') ?? 1);
+    const activeAbilityLabel = String(this.registry.get('run.activeAbilityLabel') ?? 'Pulse');
     const tankStatLevels = (this.registry.get('run.tankStatLevels') ?? {
       bulletDamage: 0,
       reload: 0,
@@ -478,6 +484,16 @@ export class UIScene extends Phaser.Scene {
     this.refreshStatAllocationPanel(statPoints, tankStatLevels, levelUpActive, classChoiceActive, endActive);
     this.refreshOrientationHint();
     this.refreshPauseControls(pauseMenuActive, levelUpActive, classChoiceActive, endActive, level, classTitle, score, runGold, elapsedMs, stagePhase);
+    this.refreshActiveAbilityButton(
+      activeAbilityReady,
+      activeAbilityCooldownMs,
+      activeAbilityCooldownTotalMs,
+      activeAbilityLabel,
+      pauseMenuActive,
+      levelUpActive,
+      classChoiceActive,
+      endActive,
+    );
     this.refreshControlGuideState(levelUpActive, classChoiceActive, endActive);
     this.refreshMobileCopyState();
 
@@ -532,6 +548,9 @@ export class UIScene extends Phaser.Scene {
     controlGuideToggleVisible: boolean;
     pauseButtonVisible: boolean;
     pauseButton: { x: number; y: number; width: number; height: number };
+    activeAbilityButtonVisible: boolean;
+    activeAbilityButtonText: string;
+    activeAbilityButton: { x: number; y: number; width: number; height: number };
     pauseMenuVisible: boolean;
     pauseMenuButtons: string[];
     pauseMenuButtonBounds: Array<{ text: string; x: number; y: number; width: number; height: number }>;
@@ -580,6 +599,14 @@ export class UIScene extends Phaser.Scene {
         y: this.pauseButton.y,
         width: this.pauseButton.displayWidth,
         height: this.pauseButton.displayHeight,
+      },
+      activeAbilityButtonVisible: this.activeAbilityButton.visible,
+      activeAbilityButtonText: this.activeAbilityButton.text,
+      activeAbilityButton: {
+        x: this.activeAbilityButton.x,
+        y: this.activeAbilityButton.y,
+        width: this.activeAbilityButton.displayWidth,
+        height: this.activeAbilityButton.displayHeight,
       },
       pauseMenuVisible: this.pauseMenuContainer.visible,
       pauseMenuButtons: this.pauseMenuButtons.filter((button) => button.visible).map((button) => button.text),
@@ -1083,6 +1110,27 @@ export class UIScene extends Phaser.Scene {
     return button;
   }
 
+  private createActiveAbilityButton(): Phaser.GameObjects.Text {
+    const button = this.add
+      .text(GAME_WIDTH - 96, GAME_HEIGHT - 80, 'Pulse', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '17px',
+        color: '#e0f2fe',
+        backgroundColor: '#0f172a',
+        padding: { left: 15, right: 15, top: 9, bottom: 9 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+
+    button.on('pointerdown', () => this.activateBreakoutPulse());
+    button.on('pointerover', () => button.setStyle({ color: '#ffffff', backgroundColor: '#1e3a5f' }));
+    button.on('pointerout', () => this.refreshActiveAbilityButtonStyle());
+    button.setDepth(82);
+
+    return button;
+  }
+
   private createPauseMenuOverlay(): Phaser.GameObjects.Container {
     const viewWidth = GAME_WIDTH;
     const viewHeight = GAME_HEIGHT;
@@ -1193,6 +1241,55 @@ export class UIScene extends Phaser.Scene {
     );
   }
 
+  private refreshActiveAbilityButton(
+    ready: boolean,
+    cooldownMs: number,
+    cooldownTotalMs: number,
+    label: string,
+    pauseMenuActive: boolean,
+    levelUpActive: boolean,
+    classChoiceActive: boolean,
+    endActive: boolean,
+  ): void {
+    const modalOverlayActive =
+      pauseMenuActive ||
+      levelUpActive ||
+      classChoiceActive ||
+      endActive ||
+      this.orientationHintContainer.visible;
+    const visible = this.scene.isActive('RunScene') && !modalOverlayActive;
+    this.activeAbilityButton.setVisible(visible);
+
+    if (!visible) {
+      this.activeAbilityButton.disableInteractive();
+      return;
+    }
+
+    if (!this.activeAbilityButton.input?.enabled) {
+      this.activeAbilityButton.setInteractive({ useHandCursor: true });
+    }
+
+    const cooldownSeconds = Math.ceil(cooldownMs / 1000);
+    const buttonText = ready ? label : `${cooldownSeconds}s`;
+    this.setTextIfChanged(this.activeAbilityButton, buttonText);
+    this.activeAbilityButton.setData('ready', ready);
+    this.activeAbilityButton.setData('cooldownRatio', Phaser.Math.Clamp(cooldownMs / Math.max(1, cooldownTotalMs), 0, 1));
+    this.refreshActiveAbilityButtonStyle();
+  }
+
+  private refreshActiveAbilityButtonStyle(): void {
+    if (!this.activeAbilityButton) {
+      return;
+    }
+
+    const ready = Boolean(this.activeAbilityButton.getData('ready'));
+    const cooldownRatio = Number(this.activeAbilityButton.getData('cooldownRatio') ?? 0);
+    this.activeAbilityButton.setStyle({
+      color: ready ? '#e0f2fe' : '#94a3b8',
+      backgroundColor: ready ? '#123044' : cooldownRatio > 0.5 ? '#111827' : '#172033',
+    });
+  }
+
   private openPauseMenu(): void {
     if (!this.scene.isActive('RunScene')) {
       return;
@@ -1200,6 +1297,15 @@ export class UIScene extends Phaser.Scene {
 
     const runScene = this.scene.get('RunScene') as RunScene;
     runScene.openManualPauseMenu();
+  }
+
+  private activateBreakoutPulse(): void {
+    if (!this.scene.isActive('RunScene')) {
+      return;
+    }
+
+    const runScene = this.scene.get('RunScene') as RunScene;
+    runScene.activateBreakoutPulse();
   }
 
   private closePauseMenu(pointer?: ActivePointerLike): void {

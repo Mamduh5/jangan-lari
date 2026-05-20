@@ -176,6 +176,14 @@ export class Player extends Phaser.GameObjects.Rectangle {
     return true;
   }
 
+  extendInvulnerability(durationMs: number, currentTime: number): void {
+    if (!this.isAlive() || durationMs <= 0) {
+      return;
+    }
+
+    this.invulnerableUntil = Math.max(this.invulnerableUntil, currentTime + durationMs);
+  }
+
   heal(amount: number): number {
     if (!this.isAlive() || amount <= 0 || this.health >= this.maxHealth) {
       return 0;

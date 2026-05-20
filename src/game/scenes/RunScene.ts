@@ -27,6 +27,25 @@ import {
   ENDING_FLASH_MS,
   EVENT_ENEMY_STAT_MULTIPLIER,
   FIRST_ELITE_XP_BONUS,
+  BREAKOUT_PULSE_BOSS_KNOCKBACK_MULTIPLIER,
+  BREAKOUT_PULSE_COOLDOWN_MS,
+  BREAKOUT_PULSE_ELITE_KNOCKBACK_MULTIPLIER,
+  BREAKOUT_PULSE_INVULNERABILITY_MS,
+  BREAKOUT_PULSE_KNOCKBACK,
+  BREAKOUT_PULSE_RADIUS,
+  DANGER_ZONE_ACTIVE_MS,
+  DANGER_ZONE_COOLDOWN_MS,
+  DANGER_ZONE_DAMAGE,
+  DANGER_ZONE_FIRST_MS,
+  DANGER_ZONE_RADIUS,
+  DANGER_ZONE_TICK_MS,
+  DANGER_ZONE_WARNING_MS,
+  FORMATION_PINCER_DISTANCE,
+  FORMATION_PRESSURE_COOLDOWN_MS,
+  FORMATION_PRESSURE_FIRST_MS,
+  FORMATION_PRESSURE_RETRY_MS,
+  FORMATION_RING_RADIUS,
+  FORMATION_SWEEP_DISTANCE,
   GAME_HEIGHT,
   GAME_WIDTH,
   LEVEL_UP_FLASH_MS,
@@ -159,6 +178,31 @@ type ActiveRunEvent =
       rewardGold: number;
       rewardXp: number;
     };
+
+type FormationType = 'ring-breakout' | 'pincer' | 'sweep-wall';
+
+type FormationSpawnPoint = {
+  x: number;
+  y: number;
+  distanceFromPlayer: number;
+  angle: number;
+};
+
+type DangerZonePhase = 'warning' | 'active';
+
+type DangerZone = {
+  x: number;
+  y: number;
+  radius: number;
+  warningMs: number;
+  activeMs: number;
+  elapsedMs: number;
+  damage: number;
+  nextDamageAtMs: number;
+  warningVisual: Phaser.GameObjects.Arc;
+  activeVisual: Phaser.GameObjects.Arc;
+  phase: DangerZonePhase;
+};
 
 export class RunScene extends Phaser.Scene {
   private player!: Player;
@@ -315,6 +359,18 @@ export class RunScene extends Phaser.Scene {
   private rewardTargetLabel?: Phaser.GameObjects.Text;
   private lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
   private statsMaxedToastShownForPoints = 0;
+  private nextFormationAtMs = FORMATION_PRESSURE_FIRST_MS;
+  private lastFormationType: FormationType | '' = '';
+  private formationSpawnCount = 0;
+  private formationWaveCount = 0;
+  private lastFormationSpawnPoints: FormationSpawnPoint[] = [];
+  private nextDangerZoneAtMs = DANGER_ZONE_FIRST_MS;
+  private dangerZones: DangerZone[] = [];
+  private lastDangerZonePhase: DangerZonePhase | '' = '';
+  private dangerZoneSpawnCount = 0;
+  private breakoutPulseCooldownRemainingMs = 0;
+  private breakoutPulseProtectionRemainingMs = 0;
+  private breakoutPulseActivationCount = 0;
 
   // These modifiers stack from heroes, permanent upgrades, and level-up picks.
   private globalWeaponDamageBonus = 0;
@@ -390,6 +446,18 @@ export class RunScene extends Phaser.Scene {
     this.rewardTargetLabel = undefined;
     this.lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
     this.statsMaxedToastShownForPoints = 0;
+    this.nextFormationAtMs = FORMATION_PRESSURE_FIRST_MS;
+    this.lastFormationType = '';
+    this.formationSpawnCount = 0;
+    this.formationWaveCount = 0;
+    this.lastFormationSpawnPoints = [];
+    this.nextDangerZoneAtMs = DANGER_ZONE_FIRST_MS;
+    this.clearDangerZones();
+    this.lastDangerZonePhase = '';
+    this.dangerZoneSpawnCount = 0;
+    this.breakoutPulseCooldownRemainingMs = 0;
+    this.breakoutPulseProtectionRemainingMs = 0;
+    this.breakoutPulseActivationCount = 0;
     this.globalWeaponDamageBonus = freshSession.globalWeaponDamageBonus;
     this.globalWeaponCooldownReduction = freshSession.globalWeaponCooldownReduction;
     this.globalProjectileSpeedBonus = freshSession.globalProjectileSpeedBonus;
@@ -503,6 +571,7 @@ export class RunScene extends Phaser.Scene {
     window.addEventListener('focus', this.handleWindowFocus);
 
     this.input.keyboard?.on('keydown-ESC', this.handleEscapeShortcut, this);
+    this.input.keyboard?.on('keydown-E', this.activateBreakoutPulse, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     this.refreshSystemPauseState();
   }
@@ -583,7 +652,11 @@ export class RunScene extends Phaser.Scene {
     this.updateEnemies();
     this.syncBossPhaseState();
     this.updateBossSummons();
+    this.trySpawnFormationPressure();
+    this.trySpawnDangerZone();
     this.updateSkillTelegraphs(delta);
+    this.updateDangerZones(delta);
+    this.updateBreakoutPulse(delta);
     this.updateLineStrikeAttacks(delta);
     this.updateVolleyAttacks(delta);
     this.updateShockwaveAttacks(delta);
@@ -827,6 +900,8 @@ export class RunScene extends Phaser.Scene {
     const bossSkillDamageActive = this.shockwaveAttacks.some((attack) => attack.elapsedMs < attack.durationMs);
     const activeMinibossSkill = this.getActiveMinibossSkillName();
     const bossSummonActiveCount = this.getActiveBossSummonCount();
+    const formationCooldownMs = Math.max(0, this.nextFormationAtMs - this.runElapsedMs);
+    const dangerZoneCooldownMs = Math.max(0, this.nextDangerZoneAtMs - this.runElapsedMs);
 
     return {
       config: {
@@ -977,6 +1052,42 @@ export class RunScene extends Phaser.Scene {
         id: this.spawnDirector?.getLastWaveTemplateId() ?? '',
         label: this.spawnDirector?.getLastWaveTemplateLabel() ?? '',
         highlight: this.spawnDirector?.getLastWaveTemplateHighlight() ?? false,
+      },
+      formationPressure: {
+        enabled: this.runElapsedMs >= FORMATION_PRESSURE_FIRST_MS,
+        active: this.lastFormationSpawnPoints.length > 0,
+        lastFormationType: this.lastFormationType,
+        cooldownMs: formationCooldownMs,
+        spawnCount: this.formationSpawnCount,
+        waveCount: this.formationWaveCount,
+        spawnPoints: this.lastFormationSpawnPoints.slice(0, 8),
+      },
+      dangerZones: {
+        enabled: this.formationWaveCount > 0 && this.runElapsedMs >= DANGER_ZONE_FIRST_MS,
+        activeCount: this.dangerZones.length,
+        warningCount: this.dangerZones.filter((zone) => zone.phase === 'warning').length,
+        damageActiveCount: this.dangerZones.filter((zone) => zone.phase === 'active').length,
+        cooldownMs: dangerZoneCooldownMs,
+        spawnCount: this.dangerZoneSpawnCount,
+        lastPhase: this.lastDangerZonePhase,
+        zones: this.dangerZones.map((zone) => ({
+          x: zone.x,
+          y: zone.y,
+          radius: zone.radius,
+          phase: zone.phase,
+          elapsedMs: zone.elapsedMs,
+          remainingMs: Math.max(0, zone.warningMs + zone.activeMs - zone.elapsedMs),
+          damage: zone.damage,
+        })),
+      },
+      activeAbility: {
+        label: 'Pulse',
+        ready: this.canActivateBreakoutPulse(),
+        cooldownMs: this.getBreakoutPulseCooldownMs(),
+        cooldownTotalMs: BREAKOUT_PULSE_COOLDOWN_MS,
+        protectionRemainingMs: this.breakoutPulseProtectionRemainingMs,
+        activationCount: this.breakoutPulseActivationCount,
+        radius: BREAKOUT_PULSE_RADIUS,
       },
       event: {
         active: this.activeRunEvent !== null,
@@ -1174,6 +1285,45 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
   }
 
+  public debugForceFormationPressure(type?: FormationType): boolean {
+    if (this.isEnded || this.isTransitioningToMenu) {
+      return false;
+    }
+
+    const spawned = this.spawnFormationPressure(type ?? this.pickNextFormationType(), true);
+    this.publishHudState();
+    return spawned;
+  }
+
+  public debugTriggerDangerZone(atPlayer = true): boolean {
+    if (!this.player?.active || this.isEnded || this.isTransitioningToMenu) {
+      return false;
+    }
+
+    const x = atPlayer ? this.player.x : Phaser.Math.Clamp(this.player.x + 130, 64, WORLD_WIDTH - 64);
+    const y = this.player.y;
+    const zone = this.createDangerZone(x, y);
+    this.dangerZones.push(zone);
+    this.dangerZoneSpawnCount += 1;
+    this.lastDangerZonePhase = 'warning';
+    this.publishHudState();
+    return true;
+  }
+
+  public debugTickDangerZones(deltaMs: number): void {
+    if (this.isEnded || this.isTransitioningToMenu || this.isManualPaused || this.isSystemPaused || this.isLevelingUp || this.isChoosingTankClass) {
+      return;
+    }
+
+    this.updateDangerZones(Math.max(0, Math.floor(deltaMs)));
+    this.publishHudState();
+  }
+
+  public debugSetBreakoutPulseCooldown(cooldownMs: number): void {
+    this.breakoutPulseCooldownRemainingMs = Phaser.Math.Clamp(Math.floor(cooldownMs), 0, BREAKOUT_PULSE_COOLDOWN_MS);
+    this.publishHudState();
+  }
+
   public debugSetRunElapsedMs(elapsedMs: number): void {
     if (this.isEnded || this.isTransitioningToMenu) {
       return;
@@ -1207,6 +1357,23 @@ export class RunScene extends Phaser.Scene {
     }
     this.spawnEnemyFromArchetype(archetype, this.getSpawnPoint(520, this.getEnemySpawnSafeRadius(archetype)));
     this.publishHudState();
+  }
+
+  public debugSpawnEnemyNearPlayer(archetypeId: EnemyArchetypeId = 'scuttler', offsetX = 96, offsetY = 0): boolean {
+    if (this.isEnded || this.isTransitioningToMenu || !this.enemies?.active || this.areNormalSpawnsSuppressed()) {
+      return false;
+    }
+
+    if (getAvailableEnemySpawnSlots(this.getActiveEnemyCount()) <= 0) {
+      return false;
+    }
+
+    const archetype = ENEMY_ARCHETYPES[archetypeId] ?? ENEMY_ARCHETYPES.scuttler;
+    const x = Phaser.Math.Clamp(this.player.x + offsetX, 48, WORLD_WIDTH - 48);
+    const y = Phaser.Math.Clamp(this.player.y + offsetY, 48, WORLD_HEIGHT - 48);
+    this.spawnEnemyFromArchetype(archetype, new Phaser.Math.Vector2(x, y));
+    this.publishHudState();
+    return true;
   }
 
   public debugDefeatBoss(): boolean {
@@ -1426,6 +1593,41 @@ export class RunScene extends Phaser.Scene {
     this.publishHudState();
   }
 
+  public canActivateBreakoutPulse(): boolean {
+    return (
+      this.player?.active &&
+      !this.isEnded &&
+      !this.isTransitioningToMenu &&
+      !this.isManualPaused &&
+      !this.isSystemPaused &&
+      !this.isLevelingUp &&
+      !this.isChoosingTankClass &&
+      !Boolean(this.registry.get('run.endActive')) &&
+      this.breakoutPulseCooldownRemainingMs <= 0
+    );
+  }
+
+  public getBreakoutPulseCooldownMs(): number {
+    return Math.max(0, Math.ceil(this.breakoutPulseCooldownRemainingMs));
+  }
+
+  public activateBreakoutPulse(): boolean {
+    if (!this.canActivateBreakoutPulse()) {
+      this.publishHudState();
+      return false;
+    }
+
+    this.breakoutPulseCooldownRemainingMs = BREAKOUT_PULSE_COOLDOWN_MS;
+    this.breakoutPulseProtectionRemainingMs = BREAKOUT_PULSE_INVULNERABILITY_MS;
+    this.breakoutPulseActivationCount += 1;
+    this.player.extendInvulnerability(BREAKOUT_PULSE_INVULNERABILITY_MS, this.time.now);
+    this.applyBreakoutPulseKnockback();
+    this.createBreakoutPulseVisual();
+    this.setAlert('objective', 'Pulse readying', 800);
+    this.publishHudState();
+    return true;
+  }
+
   private registerWeapon(definition: WeaponDefinition, announce = false): void {
     if (this.ownedWeaponIds.has(definition.id)) {
       return;
@@ -1642,6 +1844,7 @@ export class RunScene extends Phaser.Scene {
       bolt.halo.destroy();
     }
     this.enemyBolts = [];
+    this.clearDangerZones();
   }
 
   private getCurrentStagePhase(): StagePhase {
@@ -1782,6 +1985,230 @@ export class RunScene extends Phaser.Scene {
 
     if (!hasMajorEncounter) {
       this.presentWaveTemplateHighlight(waveResult.templateLabel, waveResult.templateHighlight);
+    }
+  }
+
+  private trySpawnFormationPressure(): void {
+    if (this.runElapsedMs < this.nextFormationAtMs || !this.canSpawnFormationPressure()) {
+      return;
+    }
+
+    this.spawnFormationPressure(this.pickNextFormationType(), false);
+  }
+
+  private canSpawnFormationPressure(): boolean {
+    return (
+      !this.isEnded &&
+      !this.isTransitioningToMenu &&
+      !this.isManualPaused &&
+      !this.isSystemPaused &&
+      !this.isLevelingUp &&
+      !this.isChoosingTankClass &&
+      !this.areNormalSpawnsSuppressed() &&
+      !this.activeRunEvent &&
+      !this.hasActiveMajorEncounterEnemy() &&
+      this.enemies?.active === true
+    );
+  }
+
+  private pickNextFormationType(): FormationType {
+    const rotation: FormationType[] = ['ring-breakout', 'pincer', 'sweep-wall'];
+    return rotation[this.formationWaveCount % rotation.length];
+  }
+
+  private spawnFormationPressure(type: FormationType, forced: boolean): boolean {
+    if (!this.canSpawnFormationPressure()) {
+      return false;
+    }
+
+    const availableSlots = getAvailableEnemySpawnSlots(this.getActiveEnemyCount());
+    if (availableSlots <= 0) {
+      this.nextFormationAtMs = this.runElapsedMs + FORMATION_PRESSURE_RETRY_MS;
+      return false;
+    }
+
+    const plan = this.buildFormationPlan(type, availableSlots);
+    if (plan.length === 0) {
+      this.nextFormationAtMs = this.runElapsedMs + FORMATION_PRESSURE_RETRY_MS;
+      return false;
+    }
+
+    for (const entry of plan) {
+      this.spawnEnemyFromArchetype(entry.archetype, entry.point);
+    }
+
+    this.lastFormationType = type;
+    this.formationSpawnCount = plan.length;
+    this.formationWaveCount += forced ? 0 : 1;
+    this.lastFormationSpawnPoints = plan.map((entry) => ({
+      x: entry.point.x,
+      y: entry.point.y,
+      distanceFromPlayer: Phaser.Math.Distance.Between(this.player.x, this.player.y, entry.point.x, entry.point.y),
+      angle: Phaser.Math.Angle.Between(this.player.x, this.player.y, entry.point.x, entry.point.y),
+    }));
+    this.nextFormationAtMs = this.runElapsedMs + FORMATION_PRESSURE_COOLDOWN_MS;
+    this.setAlert('objective', this.getFormationAlert(type), 900);
+    return true;
+  }
+
+  private buildFormationPlan(
+    type: FormationType,
+    availableSlots: number,
+  ): Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> {
+    switch (type) {
+      case 'ring-breakout':
+        return this.buildRingBreakoutFormation(availableSlots);
+      case 'pincer':
+        return this.buildPincerFormation(availableSlots);
+      case 'sweep-wall':
+      default:
+        return this.buildSweepWallFormation(availableSlots);
+    }
+  }
+
+  private buildRingBreakoutFormation(
+    availableSlots: number,
+  ): Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> {
+    const count = Math.min(6, availableSlots);
+    if (count < 4) {
+      return [];
+    }
+
+    const centerAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    const slots = 8;
+    const gapIndex = this.getClosestAngleIndex(centerAngle, slots);
+    const archetypes = [
+      ENEMY_ARCHETYPES.scuttler,
+      ENEMY_ARCHETYPES.mauler,
+      ENEMY_ARCHETYPES.harrier,
+      ENEMY_ARCHETYPES.scuttler,
+      ENEMY_ARCHETYPES.skimmer,
+      ENEMY_ARCHETYPES.mauler,
+    ];
+    const plan: Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> = [];
+
+    for (let index = 0; index < slots && plan.length < count; index += 1) {
+      const blockedForGap =
+        index === gapIndex ||
+        index === (gapIndex + 1) % slots ||
+        index === (gapIndex + slots - 1) % slots;
+      if (blockedForGap) {
+        continue;
+      }
+
+      const angle = (index / slots) * Math.PI * 2;
+      const point = this.clampFormationPoint(
+        this.player.x + Math.cos(angle) * FORMATION_RING_RADIUS,
+        this.player.y + Math.sin(angle) * FORMATION_RING_RADIUS,
+        ENEMY_SPAWN_PLAYER_SAFE_RADIUS,
+      );
+      plan.push({ archetype: archetypes[plan.length % archetypes.length], point });
+    }
+
+    return plan;
+  }
+
+  private buildPincerFormation(
+    availableSlots: number,
+  ): Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> {
+    const count = Math.min(6, availableSlots);
+    if (count < 4) {
+      return [];
+    }
+
+    const horizontal = Phaser.Math.Between(0, 1) === 0;
+    const offsets = [-128, 0, 128];
+    const archetypes = [
+      ENEMY_ARCHETYPES.mauler,
+      ENEMY_ARCHETYPES.scuttler,
+      ENEMY_ARCHETYPES.harrier,
+      ENEMY_ARCHETYPES.mauler,
+      ENEMY_ARCHETYPES.scuttler,
+      ENEMY_ARCHETYPES.skimmer,
+    ];
+    const plan: Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> = [];
+
+    for (const side of [-1, 1]) {
+      for (const offset of offsets) {
+        if (plan.length >= count) {
+          break;
+        }
+
+        const x = horizontal ? this.player.x + FORMATION_PINCER_DISTANCE * side : this.player.x + offset;
+        const y = horizontal ? this.player.y + offset : this.player.y + FORMATION_PINCER_DISTANCE * side;
+        plan.push({
+          archetype: archetypes[plan.length % archetypes.length],
+          point: this.clampFormationPoint(x, y, ENEMY_SPAWN_PLAYER_SAFE_RADIUS),
+        });
+      }
+    }
+
+    return plan;
+  }
+
+  private buildSweepWallFormation(
+    availableSlots: number,
+  ): Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> {
+    const count = Math.min(5, availableSlots);
+    if (count < 4) {
+      return [];
+    }
+
+    const side = Phaser.Math.Between(0, 3);
+    const horizontalWall = side === 0 || side === 2;
+    const direction = side === 0 || side === 3 ? -1 : 1;
+    const offsets = [-250, -120, 35, 175, 310];
+    const archetypes = [
+      ENEMY_ARCHETYPES.bulwark,
+      ENEMY_ARCHETYPES.scuttler,
+      ENEMY_ARCHETYPES.mauler,
+      ENEMY_ARCHETYPES.harrier,
+      ENEMY_ARCHETYPES.scuttler,
+    ];
+    const plan: Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> = [];
+
+    for (let index = 0; index < count; index += 1) {
+      const stagger = index % 2 === 0 ? 0 : 48;
+      const x = horizontalWall ? this.player.x + offsets[index] : this.player.x + FORMATION_SWEEP_DISTANCE * direction + stagger;
+      const y = horizontalWall ? this.player.y + FORMATION_SWEEP_DISTANCE * direction + stagger : this.player.y + offsets[index];
+      plan.push({
+        archetype: archetypes[index % archetypes.length],
+        point: this.clampFormationPoint(x, y, ENEMY_SPAWN_PLAYER_SAFE_RADIUS),
+      });
+    }
+
+    return plan;
+  }
+
+  private clampFormationPoint(x: number, y: number, safeRadius: number): Phaser.Math.Vector2 {
+    let nextX = Phaser.Math.Clamp(x, 48, WORLD_WIDTH - 48);
+    let nextY = Phaser.Math.Clamp(y, 48, WORLD_HEIGHT - 48);
+    const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, nextX, nextY);
+
+    if (distance < safeRadius) {
+      const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, nextX, nextY);
+      nextX = Phaser.Math.Clamp(this.player.x + Math.cos(angle) * safeRadius, 48, WORLD_WIDTH - 48);
+      nextY = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * safeRadius, 48, WORLD_HEIGHT - 48);
+    }
+
+    return new Phaser.Math.Vector2(nextX, nextY);
+  }
+
+  private getClosestAngleIndex(angle: number, slotCount: number): number {
+    const wrapped = Phaser.Math.Angle.Wrap(angle);
+    const normalized = wrapped < 0 ? wrapped + Math.PI * 2 : wrapped;
+    return Math.round((normalized / (Math.PI * 2)) * slotCount) % slotCount;
+  }
+
+  private getFormationAlert(type: FormationType): string {
+    switch (type) {
+      case 'ring-breakout':
+        return 'Breakout gap';
+      case 'pincer':
+        return 'Pincer wave';
+      case 'sweep-wall':
+      default:
+        return 'Sweep wall';
     }
   }
 
@@ -2522,6 +2949,211 @@ export class RunScene extends Phaser.Scene {
     for (const neutralShape of neutralShapes) {
       neutralShape.updatePresentation(this.time.now);
     }
+  }
+
+  private trySpawnDangerZone(): void {
+    if (this.runElapsedMs < this.nextDangerZoneAtMs || !this.canSpawnDangerZone()) {
+      return;
+    }
+
+    const center = this.chooseDangerZoneCenter();
+    this.dangerZones.push(this.createDangerZone(center.x, center.y));
+    this.dangerZoneSpawnCount += 1;
+    this.lastDangerZonePhase = 'warning';
+    this.nextDangerZoneAtMs = this.runElapsedMs + DANGER_ZONE_COOLDOWN_MS;
+  }
+
+  private canSpawnDangerZone(): boolean {
+    return (
+      this.formationWaveCount > 0 &&
+      this.dangerZones.length === 0 &&
+      !this.isEnded &&
+      !this.isTransitioningToMenu &&
+      !this.isManualPaused &&
+      !this.isSystemPaused &&
+      !this.isLevelingUp &&
+      !this.isChoosingTankClass &&
+      !this.areNormalSpawnsSuppressed() &&
+      !this.activeRunEvent &&
+      !this.hasActiveMajorEncounterEnemy()
+    );
+  }
+
+  private chooseDangerZoneCenter(): Phaser.Math.Vector2 {
+    const facing = this.player.getFacingDirection();
+    const pressureFromFront = Phaser.Math.Between(0, 100) < 62;
+    const angle = pressureFromFront
+      ? Math.atan2(facing.y, facing.x) + Phaser.Math.FloatBetween(-0.65, 0.65)
+      : Phaser.Math.FloatBetween(0, Math.PI * 2);
+    const distance = Phaser.Math.Between(90, 190);
+
+    return new Phaser.Math.Vector2(
+      Phaser.Math.Clamp(this.player.x + Math.cos(angle) * distance, 74, WORLD_WIDTH - 74),
+      Phaser.Math.Clamp(this.player.y + Math.sin(angle) * distance, 74, WORLD_HEIGHT - 74),
+    );
+  }
+
+  private createDangerZone(x: number, y: number): DangerZone {
+    const warningVisual = this.add.circle(x, y, DANGER_ZONE_RADIUS, 0xfacc15, 0.11).setDepth(7.2);
+    warningVisual.setStrokeStyle(4, 0xfef08a, 0.88);
+    const activeVisual = this.add.circle(x, y, DANGER_ZONE_RADIUS, 0xef4444, 0.22).setDepth(7.25);
+    activeVisual.setStrokeStyle(5, 0xfca5a5, 0.92);
+    activeVisual.setVisible(false);
+
+    return {
+      x,
+      y,
+      radius: DANGER_ZONE_RADIUS,
+      warningMs: DANGER_ZONE_WARNING_MS,
+      activeMs: DANGER_ZONE_ACTIVE_MS,
+      elapsedMs: 0,
+      damage: DANGER_ZONE_DAMAGE,
+      nextDamageAtMs: DANGER_ZONE_WARNING_MS,
+      warningVisual,
+      activeVisual,
+      phase: 'warning',
+    };
+  }
+
+  private updateDangerZones(deltaMs: number): void {
+    if (this.dangerZones.length === 0) {
+      return;
+    }
+
+    const nextZones: DangerZone[] = [];
+
+    for (const zone of this.dangerZones) {
+      zone.elapsedMs += deltaMs;
+      if (zone.phase === 'warning') {
+        const warningProgress = Phaser.Math.Clamp(zone.elapsedMs / zone.warningMs, 0, 1);
+        zone.warningVisual.setAlpha(0.16 + Math.sin(this.time.now * 0.018) * 0.05);
+        zone.warningVisual.setStrokeStyle(4 + Math.round(warningProgress * 2), 0xfef08a, 0.72 + warningProgress * 0.2);
+
+        if (zone.elapsedMs >= zone.warningMs) {
+          zone.phase = 'active';
+          this.lastDangerZonePhase = 'active';
+          zone.warningVisual.setVisible(false);
+          zone.activeVisual.setVisible(true);
+        }
+      }
+
+      if (zone.phase === 'active') {
+        const activeElapsed = zone.elapsedMs - zone.warningMs;
+        const activeProgress = Phaser.Math.Clamp(activeElapsed / zone.activeMs, 0, 1);
+        zone.activeVisual.setAlpha(0.28 - activeProgress * 0.08);
+        zone.activeVisual.setStrokeStyle(5, activeProgress < 0.55 ? 0xfca5a5 : 0xffffff, 0.92);
+        this.tryApplyDangerZoneDamage(zone);
+
+        if (activeElapsed >= zone.activeMs) {
+          this.destroyDangerZone(zone);
+          continue;
+        }
+      }
+
+      nextZones.push(zone);
+    }
+
+    this.dangerZones = nextZones;
+  }
+
+  private tryApplyDangerZoneDamage(zone: DangerZone): void {
+    if (zone.elapsedMs < zone.nextDamageAtMs) {
+      return;
+    }
+
+    const playerDistance = Phaser.Math.Distance.Between(this.player.x, this.player.y, zone.x, zone.y);
+    if (playerDistance > zone.radius + this.getPlayerHitRadius() * 0.65) {
+      return;
+    }
+
+    zone.nextDamageAtMs = zone.elapsedMs + DANGER_ZONE_TICK_MS;
+    const tookDamage = this.player.takeDamage(zone.damage, this.time.now);
+    if (!tookDamage) {
+      return;
+    }
+
+    this.cameras.main.shake(90, PLAYER_HIT_SHAKE_INTENSITY);
+    this.createBurstCircle(this.player.x, this.player.y, 0xf97316, 12, 38, 180, 0.76);
+    this.showFloatingText(this.player.x, this.player.y - 26, `${zone.damage}`, '#fed7aa', 17);
+    if (!this.player.isAlive()) {
+      this.endRun(false, 'Defeat', 'You stayed in the danger zone.');
+    }
+  }
+
+  private clearDangerZones(): void {
+    for (const zone of this.dangerZones) {
+      this.destroyDangerZone(zone);
+    }
+    this.dangerZones = [];
+  }
+
+  private destroyDangerZone(zone: DangerZone): void {
+    zone.warningVisual.destroy();
+    zone.activeVisual.destroy();
+  }
+
+  private updateBreakoutPulse(deltaMs: number): void {
+    if (this.breakoutPulseCooldownRemainingMs > 0) {
+      this.breakoutPulseCooldownRemainingMs = Math.max(0, this.breakoutPulseCooldownRemainingMs - deltaMs);
+    }
+
+    if (this.breakoutPulseProtectionRemainingMs > 0) {
+      this.breakoutPulseProtectionRemainingMs = Math.max(0, this.breakoutPulseProtectionRemainingMs - deltaMs);
+    }
+  }
+
+  private applyBreakoutPulseKnockback(): void {
+    const activeEnemies = ((this.enemies?.getChildren() as Enemy[] | undefined) ?? []).filter(
+      (enemy) => enemy.active && enemy.isAlive(),
+    );
+
+    for (const enemy of activeEnemies) {
+      const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+      if (distance > BREAKOUT_PULSE_RADIUS) {
+        continue;
+      }
+
+      const direction = new Phaser.Math.Vector2(enemy.x - this.player.x, enemy.y - this.player.y);
+      if (direction.lengthSq() === 0) {
+        direction.set(1, 0);
+      }
+      direction.normalize();
+
+      const multiplier = enemy.isBoss()
+        ? BREAKOUT_PULSE_BOSS_KNOCKBACK_MULTIPLIER
+        : enemy.isElite() || enemy.isMiniboss()
+          ? BREAKOUT_PULSE_ELITE_KNOCKBACK_MULTIPLIER
+          : 1;
+      const pushDistance = BREAKOUT_PULSE_KNOCKBACK * multiplier;
+      if (pushDistance <= 0) {
+        continue;
+      }
+
+      const nextX = Phaser.Math.Clamp(enemy.x + direction.x * pushDistance, 36, WORLD_WIDTH - 36);
+      const nextY = Phaser.Math.Clamp(enemy.y + direction.y * pushDistance, 36, WORLD_HEIGHT - 36);
+      enemy.body.reset(nextX, nextY);
+      enemy.setPosition(nextX, nextY);
+      enemy.body.setVelocity(direction.x * enemy.getMoveSpeed() * 1.4, direction.y * enemy.getMoveSpeed() * 1.4);
+    }
+  }
+
+  private createBreakoutPulseVisual(): void {
+    const ring = this.add.circle(this.player.x, this.player.y, 32, 0x7dd3fc, 0).setDepth(9.5);
+    ring.setStrokeStyle(6, 0xe0f2fe, 0.96);
+    const halo = this.add.circle(this.player.x, this.player.y, 46, 0x38bdf8, 0.16).setDepth(9.4);
+    halo.setBlendMode(Phaser.BlendModes.ADD);
+
+    this.tweens.add({
+      targets: [ring, halo],
+      radius: BREAKOUT_PULSE_RADIUS,
+      alpha: 0,
+      duration: 360,
+      ease: 'Cubic.Out',
+      onComplete: () => {
+        ring.destroy();
+        halo.destroy();
+      },
+    });
   }
 
   private handleProjectileEnemyOverlap(projectile: Projectile, enemy: Enemy): void {
@@ -3837,6 +4469,17 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.controlHintVisible', this.controlHintVisible);
     this.registry.set('run.controlJoysticks', this.movementInput.getPointerGuideState());
     this.registry.set('run.inputSuppressed', this.movementInput.isSuppressed());
+    this.registry.set('run.formationPressureEnabled', this.runElapsedMs >= FORMATION_PRESSURE_FIRST_MS);
+    this.registry.set('run.lastFormationType', this.lastFormationType);
+    this.registry.set('run.formationCooldownMs', Math.max(0, this.nextFormationAtMs - this.runElapsedMs));
+    this.registry.set('run.formationSpawnCount', this.formationSpawnCount);
+    this.registry.set('run.dangerZoneActiveCount', this.dangerZones.length);
+    this.registry.set('run.dangerZoneWarningCount', this.dangerZones.filter((zone) => zone.phase === 'warning').length);
+    this.registry.set('run.dangerZoneDamageActiveCount', this.dangerZones.filter((zone) => zone.phase === 'active').length);
+    this.registry.set('run.activeAbilityReady', this.canActivateBreakoutPulse());
+    this.registry.set('run.activeAbilityCooldownMs', this.getBreakoutPulseCooldownMs());
+    this.registry.set('run.activeAbilityCooldownTotalMs', BREAKOUT_PULSE_COOLDOWN_MS);
+    this.registry.set('run.activeAbilityLabel', 'Pulse');
     this.maybeShowStatsMaxedToast();
   }
 
@@ -3946,6 +4589,8 @@ export class RunScene extends Phaser.Scene {
       bolt.halo.destroy();
     }
     this.enemyBolts = [];
+    this.clearDangerZones();
+    this.breakoutPulseProtectionRemainingMs = 0;
 
     this.cameras.main.shake(180, victory ? 0.0026 : 0.0034);
     if (victory) {
@@ -4200,6 +4845,7 @@ export class RunScene extends Phaser.Scene {
 
   private handleShutdown(): void {
     this.input.keyboard?.off('keydown-ESC', this.handleEscapeShortcut, this);
+    this.input.keyboard?.off('keydown-E', this.activateBreakoutPulse, this);
     document.removeEventListener('visibilitychange', this.handlePageVisibilityChange);
     window.removeEventListener('blur', this.handleWindowBlur);
     window.removeEventListener('focus', this.handleWindowFocus);
@@ -4232,6 +4878,7 @@ export class RunScene extends Phaser.Scene {
     this.lineStrikeAttacks = [];
     this.shockwaveAttacks = [];
     this.enemyBolts = [];
+    this.clearDangerZones();
 
     this.destroyPhysicsGroup(this.enemies);
     this.destroyPhysicsGroup(this.neutralShapes);

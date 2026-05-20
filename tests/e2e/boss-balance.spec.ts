@@ -14,10 +14,17 @@ type RunSnapshot = {
   victory: boolean;
   enemies: Array<{
     id: string;
+    x: number;
+    y: number;
+    distance: number;
+    hp: number;
     isBoss: boolean;
     isBossOwned: boolean;
     xpValue: number;
   }>;
+  activeAbility: {
+    activationCount: number;
+  };
   enemyPopulation: {
     activeCount: number;
     normalSpawnSlots: number;
@@ -61,6 +68,20 @@ test.describe('boss balance and boss-owned summons', () => {
     expect(run.enemies.filter((enemy) => !enemy.isBoss && !enemy.isBossOwned)).toHaveLength(0);
     expect(run.enemies.filter((enemy) => enemy.isBossOwned).every((enemy) => enemy.xpValue <= 1)).toBe(true);
 
+    const bossBeforePulse = run.enemies.find((enemy) => enemy.isBoss);
+    const summonBeforePulse = run.enemies.find((enemy) => enemy.isBossOwned);
+    expect(bossBeforePulse).toBeTruthy();
+    expect(summonBeforePulse).toBeTruthy();
+    await setPlayerPosition(page, summonBeforePulse!.x - 68, summonBeforePulse!.y);
+    await resetPulseCooldown(page);
+    await activatePulse(page);
+    run = await getRunSnapshot(page);
+    const bossAfterPulse = run.enemies.find((enemy) => enemy.isBoss);
+    const summonAfterPulse = run.enemies.find((enemy) => enemy.isBossOwned);
+    expect(run.activeAbility.activationCount).toBe(1);
+    expect(bossAfterPulse?.hp).toBe(bossBeforePulse?.hp);
+    expect(summonAfterPulse?.distance ?? 0).toBeGreaterThan(68);
+
     await forceEnemyWave(page, 901_000);
     run = await getRunSnapshot(page);
     expect(run.normalSpawnsSuppressed).toBe(true);
@@ -88,6 +109,38 @@ async function getRunSnapshot(page: import('@playwright/test').Page): Promise<Ru
     }
 
     return run;
+  });
+}
+
+async function setPlayerPosition(page: import('@playwright/test').Page, x: number, y: number): Promise<void> {
+  await page.evaluate(
+    ([nextX, nextY]) => {
+      const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as
+        | { debugSetPlayerPosition?: (x: number, y: number) => void }
+        | undefined;
+      runScene?.debugSetPlayerPosition?.(nextX, nextY);
+    },
+    [x, y],
+  );
+}
+
+async function resetPulseCooldown(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as
+      | { debugSetBreakoutPulseCooldown?: (cooldownMs: number) => void }
+      | undefined;
+    runScene?.debugSetBreakoutPulseCooldown?.(0);
+  });
+}
+
+async function activatePulse(page: import('@playwright/test').Page): Promise<void> {
+  await page.evaluate(() => {
+    const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as
+      | { activateBreakoutPulse?: () => boolean }
+      | undefined;
+    if (!runScene?.activateBreakoutPulse?.()) {
+      throw new Error('Failed to activate Breakout Pulse.');
+    }
   });
 }
 
