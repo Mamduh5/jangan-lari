@@ -679,3 +679,45 @@ Validation run:
 - `npm run build`
 - `git diff --check`
 - Optional quick checks: `npm run test:e2e:mobile-alpha-ui`, `npx playwright test tests/e2e/pause-menu.spec.ts`
+
+## Sprint A18: Asset-Ready Skin/Icon Slots
+
+Goal: Prepare stable slots and safe runtime hooks for future hero icons, weapon icons, enemy icons/sprites, UI badges, and decorative skins without requiring real assets now.
+
+Status note:
+- Added `docs/io-mvp/asset-slots.md` with recommended formats, folders, naming conventions, size guidance, transparency guidance, and fallback rules.
+- Added typed optional asset slot mappings in `src/game/data/assetSlots.ts` for heroes, hero skins, weapons, enemies, enemy sprites, tank classes, and UI icons.
+- Added no-throw resolver helpers in `src/game/utils/assetResolver.ts` so code can check existing Phaser textures without loading missing files.
+- Prepared MenuScene hero previews to use an already-loaded hero texture when present and otherwise keep the current shape preview.
+- Prepared UIScene weapon icon slots to recognize already-loaded weapon textures while keeping the A16 minimal hidden-icon behavior.
+- Added unit coverage for slot stability and safe texture fallback behavior.
+
+Intentionally skipped:
+- No real art assets added.
+- No player or enemy conversion from Rectangle to Sprite.
+- No collision/body changes.
+- No gameplay logic changes.
+- No UI layout redesign.
+- No boss or miniboss behavior changes.
+- No enemy stat, reward, XP, gold, spawn timing, event timing, economy, or balance changes.
+- No gameplay content additions.
+- No gameplay-bot work.
+- No APK release, Play Store, publishing, monetization, ads, accounts, analytics, backend, multiplayer, or online leaderboard work.
+
+Acceptance checks:
+- Asset slot documentation exists and is practical.
+- Stable asset key/path mappings exist.
+- Missing future assets do not cause runtime errors.
+- Current shape-based visuals continue to work as fallback.
+- Menu and HUD code are prepared for future assets without requiring assets now.
+- No gameplay or UI layout behavior changed.
+- No collision/boss/miniboss/balance/content/gameplay-bot changes.
+
+Validation commands:
+- `npm test`
+- `npm run build`
+- `git diff --check`
+- `npm run test:e2e:mobile-alpha-ui`
+- `npm run test:e2e:hud`
+- `npx playwright test tests/e2e/pause-menu.spec.ts`
+- Optional quick checks: `npm run test:e2e:mobile-layout`, `npm run test:e2e:controls`

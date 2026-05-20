@@ -5,6 +5,7 @@ import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLev
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import type { ActivePointerLike } from '../input/MovementInputController';
 import { getUpgradeRewardType, upgradeHasWeaponRewardTag, type UpgradeRewardType } from '../systems/rewardClassification';
+import { getWeaponIconAssetSlot, shouldUseTexture } from '../utils/assetResolver';
 import {
   CONTROL_GUIDE_MODES,
   loadGameSave,
@@ -60,6 +61,7 @@ export class UIScene extends Phaser.Scene {
   private eventTimerText!: Phaser.GameObjects.Text;
   private weaponIconFrames: Phaser.GameObjects.Rectangle[] = [];
   private weaponIconTexts: Phaser.GameObjects.Text[] = [];
+  private weaponIconImages: Array<Phaser.GameObjects.Image | null> = [];
   private weaponSummaryText!: Phaser.GameObjects.Text;
   private xpBarFill!: Phaser.GameObjects.Rectangle;
   private xpBarLabel!: Phaser.GameObjects.Text;
@@ -128,6 +130,7 @@ export class UIScene extends Phaser.Scene {
     const viewHeight = GAME_HEIGHT;
     this.weaponIconFrames = [];
     this.weaponIconTexts = [];
+    this.weaponIconImages = [];
     this.levelUpCards = [];
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
@@ -345,6 +348,7 @@ export class UIScene extends Phaser.Scene {
 
       this.weaponIconFrames.push(frame);
       this.weaponIconTexts.push(icon);
+      this.weaponIconImages.push(null);
     }
 
     const xpBarFrame = this.add.rectangle(30, viewHeight - 38, 280, 14, 0x172554, 0.42).setOrigin(0, 0.5);
@@ -1654,6 +1658,7 @@ export class UIScene extends Phaser.Scene {
     for (let index = 0; index < this.weaponIconTexts.length; index += 1) {
       const frame = this.weaponIconFrames[index];
       const label = this.weaponIconTexts[index];
+      let image = this.weaponIconImages[index];
       const weaponName = weaponNames[index];
       const definition = weaponName ? findWeaponDefinitionByName(weaponName) : undefined;
 
@@ -1662,6 +1667,7 @@ export class UIScene extends Phaser.Scene {
         frame.setStrokeStyle(1, 0x334155, 0.92);
         frame.setVisible(false);
         label.setVisible(false);
+        image?.setVisible(false);
         continue;
       }
 
@@ -1670,6 +1676,19 @@ export class UIScene extends Phaser.Scene {
       frame.setVisible(false);
       this.setTextIfChanged(label, definition.shortLabel);
       label.setVisible(false);
+      const iconSlot = getWeaponIconAssetSlot(definition.id);
+      if (shouldUseTexture(this, iconSlot)) {
+        if (!image) {
+          image = this.add
+            .image(42 + index * 34, GAME_HEIGHT - 42, iconSlot.key)
+            .setDisplaySize(20, 20)
+            .setScrollFactor(0)
+            .setVisible(false);
+          this.weaponIconImages[index] = image;
+        }
+        image.setTexture(iconSlot.key);
+      }
+      image?.setVisible(false);
     }
   }
 
@@ -1963,6 +1982,7 @@ export class UIScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-THREE', this.handleSelectUpgradeThree, this);
     this.weaponIconFrames = [];
     this.weaponIconTexts = [];
+    this.weaponIconImages = [];
     this.levelUpCards = [];
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
