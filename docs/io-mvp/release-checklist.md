@@ -1,4 +1,4 @@
-# Manual Release Checklist — IO Mobile Alpha
+# Manual Release Checklist - IO Mobile Alpha
 
 Practical checklist for a manual release-candidate pass on `io/mobile-alpha`. This document does not add features; it records the steps to verify that web and Android builds are playable enough for alpha.
 
@@ -7,6 +7,27 @@ Practical checklist for a manual release-candidate pass on `io/mobile-alpha`. Th
 - Branch: `io/mobile-alpha`
 - Current state: A16 completed (final minimal HUD cleanup)
 - Frozen foundation: `io/mvp-foundation`
+
+## Package Scripts Verified
+
+These commands exist in `package.json` and should be used exactly as written:
+
+- `npm test` -> `vitest run`
+- `npm run build` -> `tsc --noEmit && vite build`
+- `npm run preview` -> `vite preview`
+- `npm run test:e2e:mobile-alpha-ui` -> `playwright test tests/e2e/mobile-alpha-ui.spec.ts`
+- `npm run android:sync` -> `npm run build && cap sync android`
+- `npm run android:open` -> `cap open android`
+- `npm run android:build` -> `npm run android:sync && cap build android`
+- `npm run apk:dev` -> `npm run android:sync && cd android && gradlew.bat assembleDebug`
+
+There is no package script dedicated to `pause-menu.spec.ts`; run it manually when needed:
+
+```bash
+npx playwright test tests/e2e/pause-menu.spec.ts
+```
+
+`npm install` and `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` are direct tool commands, not package scripts.
 
 ## A. Web Build / Browser Playtest
 
@@ -239,6 +260,6 @@ If any of these are true, the build is **not** a valid alpha release candidate:
 
 ## Related Docs
 
-- `docs/io-mvp/android-wrapper.md` — Android wrapper setup, environment variables, and build scripts.
-- `docs/io-mvp/foundation-freeze.md` — verification commands and known limitations.
-- `docs/io-mvp/sprint-backlog.md` — sprint history and acceptance checks.
+- `docs/io-mvp/android-wrapper.md` - Android wrapper setup, environment variables, and build scripts.
+- `docs/io-mvp/foundation-freeze.md` - verification commands and known limitations.
+- `docs/io-mvp/sprint-backlog.md` - sprint history and acceptance checks.

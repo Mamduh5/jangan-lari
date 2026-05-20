@@ -673,3 +673,9 @@ Acceptance checks:
 - Sprint backlog contains A17.
 - No gameplay or UI behavior changed.
 - No boss/miniboss/collision/content/balance/gameplay-bot changes.
+
+Validation run:
+- `npm test`
+- `npm run build`
+- `git diff --check`
+- Optional quick checks: `npm run test:e2e:mobile-alpha-ui`, `npx playwright test tests/e2e/pause-menu.spec.ts`
