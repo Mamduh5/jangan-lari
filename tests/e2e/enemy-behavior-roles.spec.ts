@@ -58,23 +58,17 @@ test.describe('enemy behavior roles', () => {
     expect(runtimeErrors, `errors: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 
-  test('charger appears at 2-3 min with chasing or windup behaviorState', async ({ page }) => {
+  test('charger role enters windup, dash, and recovery states', async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     const runtimeErrors = trackRuntimeErrors(page);
 
     await startRun(page);
     await clearEnemies(page);
-    await forceEnemyWave(page, 145_000);
+    await setRunElapsed(page, 145_000);
+    await spawnEnemyNearPlayer(page, 'crusher', 250, 0);
 
-    const run = await getRunSnapshot(page);
-    const chargers = run.enemies.filter((e) => e.behavior === 'charger');
-    expect(chargers.length).toBeGreaterThan(0);
-
-    for (const charger of chargers) {
-      expect(charger.id).toBe('crusher');
-      const validStates = ['chasing', 'windup', 'dashing', 'recovering'];
-      expect(validStates).toContain(charger.behaviorState);
-    }
+    const states = await collectBehaviorStates(page, 'charger', ['windup', 'dashing', 'recovering'], 6_000);
+    expect(states).toEqual(expect.arrayContaining(['windup', 'dashing', 'recovering']));
     expect(runtimeErrors, `errors: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 
@@ -117,28 +111,18 @@ test.describe('enemy behavior roles', () => {
     expect(runtimeErrors, `errors: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 
-  test('blockers in bracing state expose isBlockingRoute', async ({ page }) => {
+  test('blocker role enters brace state and exposes isBlockingRoute', async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     const runtimeErrors = trackRuntimeErrors(page);
 
     await startRun(page);
     await clearEnemies(page);
-    await forceEnemyWave(page, 200_000);
+    await setRunElapsed(page, 145_000);
+    await spawnEnemyNearPlayer(page, 'bulwark', 200, 0);
 
-    let run = await getRunSnapshot(page);
-    const blockers = run.enemies.filter((e) => e.behavior === 'blocker');
-
-    if (blockers.some((e) => e.isBlockingRoute)) {
-      const bracing = blockers.filter((e) => e.isBlockingRoute);
-      for (const b of bracing) {
-        expect(b.behaviorState).toBe('bracing');
-      }
-    } else {
-      const nonBracing = blockers.filter((e) => !e.isBlockingRoute);
-      for (const b of nonBracing) {
-        expect(b.behaviorState).not.toBe('bracing');
-      }
-    }
+    const blocker = await waitForEnemyState(page, 'blocker', 'bracing', 4_000);
+    expect(blocker.id).toBe('bulwark');
+    expect(blocker.isBlockingRoute).toBe(true);
     expect(runtimeErrors, `errors: ${runtimeErrors.join(' | ')}`).toEqual([]);
   });
 
@@ -204,6 +188,15 @@ async function clearEnemies(page: import('@playwright/test').Page): Promise<void
   });
 }
 
+async function setRunElapsed(page: import('@playwright/test').Page, elapsedMs: number): Promise<void> {
+  await page.evaluate((nextElapsedMs) => {
+    const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as
+      | { debugSetRunElapsedMs?: (elapsedMs: number) => void }
+      | undefined;
+    runScene?.debugSetRunElapsedMs?.(nextElapsedMs);
+  }, elapsedMs);
+}
+
 async function forceEnemyWave(page: import('@playwright/test').Page, elapsedMs: number): Promise<void> {
   await page.evaluate((nextElapsedMs) => {
     const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as
@@ -211,6 +204,75 @@ async function forceEnemyWave(page: import('@playwright/test').Page, elapsedMs: 
       | undefined;
     runScene?.debugSpawnEnemyWaveAt?.(nextElapsedMs);
   }, elapsedMs);
+}
+
+async function spawnEnemyNearPlayer(
+  page: import('@playwright/test').Page,
+  archetypeId: string,
+  offsetX: number,
+  offsetY: number,
+): Promise<void> {
+  const spawned = await page.evaluate(({ id, x, y }) => {
+    const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as
+      | { debugSpawnEnemyNearPlayer?: (archetypeId: string, offsetX: number, offsetY: number) => boolean }
+      | undefined;
+    return runScene?.debugSpawnEnemyNearPlayer?.(id, x, y) ?? false;
+  }, { id: archetypeId, x: offsetX, y: offsetY });
+
+  expect(spawned).toBe(true);
+}
+
+async function collectBehaviorStates(
+  page: import('@playwright/test').Page,
+  behavior: string,
+  requiredStates: string[],
+  timeoutMs: number,
+): Promise<string[]> {
+  return page.evaluate(
+    ({ targetBehavior, required, timeout }) =>
+      new Promise<string[]>((resolve) => {
+        const seen = new Set<string>();
+        const deadline = performance.now() + timeout;
+
+        const tick = () => {
+          const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
+          for (const enemy of run?.enemies ?? []) {
+            if (enemy.behavior === targetBehavior) {
+              seen.add(enemy.behaviorState);
+            }
+          }
+
+          if (required.every((state) => seen.has(state)) || performance.now() >= deadline) {
+            resolve([...seen]);
+            return;
+          }
+
+          requestAnimationFrame(tick);
+        };
+
+        tick();
+      }),
+    { targetBehavior: behavior, required: requiredStates, timeout: timeoutMs },
+  );
+}
+
+async function waitForEnemyState(
+  page: import('@playwright/test').Page,
+  behavior: string,
+  state: string,
+  timeoutMs: number,
+): Promise<EnemySummary> {
+  const match = await page.waitForFunction(
+    ({ targetBehavior, targetState }) => {
+      const run = window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run;
+      return run?.enemies.find((enemy) => enemy.behavior === targetBehavior && enemy.behaviorState === targetState)
+        ?? null;
+    },
+    { targetBehavior: behavior, targetState: state },
+    { timeout: timeoutMs },
+  );
+
+  return match.jsonValue() as Promise<EnemySummary>;
 }
 
 function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
