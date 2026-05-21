@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 type HudSnapshot = {
   activeAbilityButtonVisible: boolean;
   activeAbilityButtonText: string;
+  activeAbilityButton: { x: number; y: number; width: number; height: number; radius: number };
 };
 
 type RunSnapshot = {
@@ -25,6 +26,10 @@ test.describe('active survival tool', () => {
     let hud = await getHudSnapshot(page);
     expect(hud.activeAbilityButtonVisible).toBe(true);
     expect(hud.activeAbilityButtonText).toBe('P');
+    expect(hud.activeAbilityButton).toMatchObject({ x: 82, y: 124, radius: 32 });
+    expect(hud.activeAbilityButton.x).toBeLessThan(130);
+    expect(hud.activeAbilityButton.y).toBeGreaterThan(90);
+    expect(hud.activeAbilityButton.y).toBeLessThan(170);
 
     await clearEnemies(page);
     await setPlayerPosition(page, 1000, 700);
@@ -123,10 +128,8 @@ async function spawnEnemyNearPlayer(page: import('@playwright/test').Page): Prom
 }
 
 async function activatePulse(page: import('@playwright/test').Page): Promise<void> {
-  await page.evaluate(() => {
-    const runScene = window.__JANGAN_LARI_GAME__?.scene.getScene('RunScene') as { activateBreakoutPulse?: () => boolean } | undefined;
-    runScene?.activateBreakoutPulse?.();
-  });
+  const hud = await getHudSnapshot(page);
+  await clickCanvasPoint(page, hud.activeAbilityButton.x, hud.activeAbilityButton.y);
 }
 
 async function openPauseMenu(page: import('@playwright/test').Page): Promise<void> {
@@ -171,4 +174,25 @@ function trackRuntimeErrors(page: import('@playwright/test').Page): string[] {
   });
 
   return runtimeErrors;
+}
+
+async function clickCanvasPoint(page: import('@playwright/test').Page, gameX: number, gameY: number): Promise<void> {
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+
+  const box = await canvas.boundingBox();
+  if (!box) {
+    throw new Error('Game canvas is not available.');
+  }
+  const virtualSize = await page.evaluate(() => ({
+    width: Number(window.__JANGAN_LARI_GAME__?.scale.width ?? 1600),
+    height: Number(window.__JANGAN_LARI_GAME__?.scale.height ?? 720),
+  }));
+
+  await canvas.click({
+    position: {
+      x: (gameX / virtualSize.width) * box.width,
+      y: (gameY / virtualSize.height) * box.height,
+    },
+  });
 }

@@ -1,5 +1,5 @@
 // Base player stats
-export const PLAYER_SPEED = 250;
+export const PLAYER_SPEED = 230;
 export const PLAYER_MOVE_SPEED_SOFT_CAP = 330;
 export const PLAYER_MOVE_SPEED_BONUS_ABOVE_SOFT_CAP_MULTIPLIER = 0.35;
 export const PLAYER_MAX_HP = 100;

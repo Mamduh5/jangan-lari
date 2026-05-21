@@ -1132,8 +1132,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createActiveAbilityButton(): Phaser.GameObjects.Container {
-    const x = 1244;
-    const y = 400;
+    const x = 82;
+    const y = 124;
     this.activeAbilityButtonHitArea = this.add.circle(0, 0, this.activeAbilityButtonHitRadius, 0x000000, 0.001);
     this.activeAbilityButtonHitArea.setInteractive({ useHandCursor: true });
 
