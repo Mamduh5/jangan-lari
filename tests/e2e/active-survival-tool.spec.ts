@@ -26,10 +26,10 @@ test.describe('active survival tool', () => {
     let hud = await getHudSnapshot(page);
     expect(hud.activeAbilityButtonVisible).toBe(true);
     expect(hud.activeAbilityButtonText).toBe('P');
-    expect(hud.activeAbilityButton).toMatchObject({ x: 82, y: 124, radius: 32 });
-    expect(hud.activeAbilityButton.x).toBeLessThan(130);
-    expect(hud.activeAbilityButton.y).toBeGreaterThan(90);
-    expect(hud.activeAbilityButton.y).toBeLessThan(170);
+    expect(hud.activeAbilityButton).toMatchObject({ x: 1244, y: 400, radius: 32 });
+    expect(hud.activeAbilityButton.x).toBeGreaterThan(1100);
+    expect(hud.activeAbilityButton.y).toBeGreaterThan(330);
+    expect(hud.activeAbilityButton.y).toBeLessThan(470);
 
     await clearEnemies(page);
     await setPlayerPosition(page, 1000, 700);

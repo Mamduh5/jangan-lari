@@ -12,7 +12,7 @@ type HudSnapshot = {
   kills: string;
   score: string;
   timer: string;
-  weaponSlots: Array<{ visible: boolean; label: string }>;
+  weaponSlots: Array<{ visible: boolean; label: string; x: number; y: number; width: number; height: number }>;
   instructionText: string;
   statPanelVisible: boolean;
   classChoiceVisible: boolean;
@@ -57,7 +57,8 @@ test.describe('mobile HUD readability', () => {
     expect(initialHud.statSummary).toContain('DMG0 RLD0 SPD0 REG0');
     expect(initialHud.weaponSummary).toMatch(/^Weapon Slot [A-Z]+/);
     expect(initialHud.weaponSummary).not.toContain('Arc Bolt');
-    expect(initialHud.weaponSlots.some((slot) => slot.visible && slot.label === 'AB')).toBe(true);
+    const primaryWeaponSlot = initialHud.weaponSlots.find((slot) => slot.visible && slot.label === 'AB');
+    expect(primaryWeaponSlot).toMatchObject({ x: 82, y: 124, width: 24, height: 24 });
     expect(initialHud.gold).toMatch(/^Run Gold \d+$/);
     expect(initialHud.kills).toBe('Kills 0');
     expect(initialHud.score).toBe('');

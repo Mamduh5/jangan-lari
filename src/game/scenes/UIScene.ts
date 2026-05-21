@@ -114,6 +114,10 @@ export class UIScene extends Phaser.Scene {
   private activeAbilityButtonHitArea!: Phaser.GameObjects.Arc;
   private readonly activeAbilityButtonRadius = 32;
   private readonly activeAbilityButtonHitRadius = 44;
+  private readonly weaponSlotStartX = 82;
+  private readonly weaponSlotY = 108;
+  private readonly weaponSlotSpacing = 34;
+  private readonly weaponSlotSize = 24;
 
   private readonly handleSelectUpgradeOne = (): void => {
     this.selectUpgrade(0);
@@ -341,14 +345,21 @@ export class UIScene extends Phaser.Scene {
 
     for (let index = 0; index < 4; index += 1) {
       const frame = this.add
-        .rectangle(30 + index * 34, viewHeight - 54, 24, 24, 0x172033, 0.18)
-        .setOrigin(0)
+        .rectangle(
+          this.weaponSlotStartX + index * this.weaponSlotSpacing,
+          this.weaponSlotY,
+          this.weaponSlotSize,
+          this.weaponSlotSize,
+          0x172033,
+          0.18,
+        )
+        .setOrigin(0.5)
         .setScrollFactor(0)
         .setVisible(false);
       frame.setStrokeStyle(1, 0x334155, 0.42);
 
       const icon = this.add
-        .text(42 + index * 34, viewHeight - 42, '--', {
+        .text(this.weaponSlotStartX + index * this.weaponSlotSpacing, this.weaponSlotY, '--', {
           fontFamily: 'Trebuchet MS, sans-serif',
           fontSize: '10px',
           color: '#eff6ff',
@@ -559,7 +570,7 @@ export class UIScene extends Phaser.Scene {
     controlGuideToggleVisible: boolean;
     pauseButtonVisible: boolean;
     pauseButton: { x: number; y: number; width: number; height: number };
-    weaponSlots: Array<{ visible: boolean; label: string }>;
+    weaponSlots: Array<{ visible: boolean; label: string; x: number; y: number; width: number; height: number }>;
     activeAbilityButtonVisible: boolean;
     activeAbilityButtonText: string;
     activeAbilityReady: boolean;
@@ -617,6 +628,10 @@ export class UIScene extends Phaser.Scene {
       weaponSlots: this.weaponIconTexts.map((label, index) => ({
         visible: this.weaponIconFrames[index]?.visible ?? false,
         label: label.text,
+        x: this.weaponIconFrames[index]?.x ?? 0,
+        y: this.weaponIconFrames[index]?.y ?? 0,
+        width: this.weaponSlotSize,
+        height: this.weaponSlotSize,
       })),
       activeAbilityButtonVisible: this.activeAbilityButton.visible,
       activeAbilityButtonText: this.activeAbilityButtonLabel.text,
@@ -1132,8 +1147,8 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createActiveAbilityButton(): Phaser.GameObjects.Container {
-    const x = 82;
-    const y = 124;
+    const x = 1244;
+    const y = 400;
     this.activeAbilityButtonHitArea = this.add.circle(0, 0, this.activeAbilityButtonHitRadius, 0x000000, 0.001);
     this.activeAbilityButtonHitArea.setInteractive({ useHandCursor: true });
 
@@ -1826,7 +1841,7 @@ export class UIScene extends Phaser.Scene {
       if (shouldUseTexture(this, iconSlot)) {
         if (!image) {
           image = this.add
-            .image(42 + index * 34, GAME_HEIGHT - 42, iconSlot.key)
+            .image(this.weaponSlotStartX + index * this.weaponSlotSpacing, this.weaponSlotY, iconSlot.key)
             .setDisplaySize(20, 20)
             .setScrollFactor(0)
             .setVisible(false);
