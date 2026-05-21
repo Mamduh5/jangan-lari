@@ -12,6 +12,7 @@ type HudSnapshot = {
   kills: string;
   score: string;
   timer: string;
+  weaponSlots: Array<{ visible: boolean; label: string }>;
   instructionText: string;
   statPanelVisible: boolean;
   classChoiceVisible: boolean;
@@ -50,14 +51,16 @@ test.describe('mobile HUD readability', () => {
     const initialHud = await getHudSnapshot(page);
     expect(initialHud.hero).toMatch(/^Runner\s+.\s+Basic$/);
     expect(initialHud.hp).toMatch(/^HP \d+\/\d+$/);
-    expect(initialHud.level).toMatch(/^LV 1  XP \d+\/\d+$/);
-    expect(initialHud.xp).toBe(initialHud.level);
+    expect(initialHud.level).toBe('LV 1');
+    expect(initialHud.xp).toBe('');
     expect(initialHud.classStatus).toContain('Class Basic');
     expect(initialHud.statSummary).toContain('DMG0 RLD0 SPD0 REG0');
-    expect(initialHud.weaponSummary).toContain('Weapon');
+    expect(initialHud.weaponSummary).toMatch(/^Weapon Slot [A-Z]+/);
+    expect(initialHud.weaponSummary).not.toContain('Arc Bolt');
+    expect(initialHud.weaponSlots.some((slot) => slot.visible && slot.label === 'AB')).toBe(true);
     expect(initialHud.gold).toMatch(/^Run Gold \d+$/);
     expect(initialHud.kills).toBe('Kills 0');
-    expect(initialHud.score).toMatch(/^Score \d+$/);
+    expect(initialHud.score).toBe('');
     expect(initialHud.timer).toMatch(/^Boss in \d\d:\d\d$/);
     expect(initialHud.instructionText).not.toMatch(/\b(Enter|Space|ESC)\b/);
     expect(initialHud.orientationHintVisible).toBe(true);
@@ -101,7 +104,7 @@ test.describe('mobile HUD readability', () => {
     expect(afterClassHud.hero).toMatch(/^Runner\s+.\s+Twin$/);
     expect(afterClassHud.classStatus).toContain('Class Twin');
     expect(afterClassHud.classChoiceVisible).toBe(false);
-    expect(afterClassHud.weaponSummary).toContain('Twin');
+    expect(afterClassHud.weaponSummary).not.toContain('Twin Fangs');
 
     const beforeMove = (await getRunSnapshot(page)).player;
     await dragCanvas(page, canvasTransform, 220, 360, 320, 360, 240);

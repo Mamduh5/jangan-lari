@@ -42,8 +42,8 @@ export const TANK_STAT_DEFINITIONS: Record<TankStatId, TankStatDefinition> = {
     label: 'Move Speed',
     shortLabel: 'SPD',
     maxLevel: 5,
-    effectPerLevel: 10,
-    summary: '+10 move speed',
+    effectPerLevel: TANK_STAT_MOVE_SPEED_PER_LEVEL,
+    summary: `+${TANK_STAT_MOVE_SPEED_PER_LEVEL} move speed`,
   },
   hpRegen: {
     id: 'hpRegen',
@@ -90,3 +90,4 @@ export function createTankStatEffectSnapshot(levels: TankStatLevels): TankStatEf
     hpRegenPerSecond: levels.hpRegen * TANK_STAT_DEFINITIONS.hpRegen.effectPerLevel,
   };
 }
+import { TANK_STAT_MOVE_SPEED_PER_LEVEL } from '../config/playerBalance';

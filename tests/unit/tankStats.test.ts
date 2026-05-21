@@ -1,5 +1,6 @@
 import { createTankStatEffectSnapshot, sanitizeTankStatLevels } from '../../src/game/data/tankStats';
 import { TankStatRuntime } from '../../src/game/systems/TankStatRuntime';
+import { TANK_STAT_MOVE_SPEED_PER_LEVEL } from '../../src/game/config/playerBalance';
 
 describe('tank stat runtime', () => {
   test('starts with zero stat levels and no available points', () => {
@@ -25,7 +26,7 @@ describe('tank stat runtime', () => {
       statId: 'moveSpeed',
       previousLevel: 0,
       nextLevel: 1,
-      effectDelta: 10,
+      effectDelta: TANK_STAT_MOVE_SPEED_PER_LEVEL,
     });
     expect(stats.getAvailablePoints()).toBe(1);
     expect(stats.getLevels().moveSpeed).toBe(1);
@@ -77,7 +78,7 @@ describe('tank stat runtime', () => {
     ).toEqual({
       bulletDamageBonus: 4,
       fireCooldownReductionMs: 60,
-      moveSpeedBonus: 10,
+      moveSpeedBonus: TANK_STAT_MOVE_SPEED_PER_LEVEL,
       hpRegenPerSecond: 1.4,
     });
   });

@@ -23,12 +23,12 @@ test.describe('local leaderboard pressure', () => {
 
     await page.goto('/');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.scene.isActive('MenuScene')));
-    await clickCanvasPoint(page, 560, 82);
+    await page.keyboard.press('Enter');
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_DEBUG__?.getGameplaySnapshot().run));
 
     const initialRun = await getRunSnapshot(page);
     const initialHud = await getHudSnapshot(page);
-    expect(initialHud.score).toMatch(/^Score \d+$/);
+    expect(initialHud.score).toBe('');
 
     await addScoreProgress(page, { neutralShapesDestroyed: 2, enemyKills: 1, elapsedMs: 4000 });
     await page.waitForFunction(

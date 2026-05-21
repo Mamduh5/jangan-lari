@@ -96,9 +96,9 @@ describe('enemy archetype role assignments', () => {
     expect(ENEMY_ROLE_TAGS.hexcaster).toContain('ranged');
   });
 
-  test('elite enemies retain their behaviors unchanged', () => {
+  test('elite enemies use direct pressure behaviors instead of harmless kiting', () => {
     expect(ENEMY_ARCHETYPES.overlord.behavior).toBe('dash');
-    expect(ENEMY_ARCHETYPES.riftblade.behavior).toBe('strafe');
+    expect(ENEMY_ARCHETYPES.riftblade.behavior).toBe('dash');
     expect(ENEMY_ARCHETYPES.dreadnought.behavior).toBe('dash');
     expect(ENEMY_ARCHETYPES.behemoth.behavior).toBe('dash');
   });
@@ -123,7 +123,7 @@ describe('enemy archetype role assignments', () => {
     expect(ENEMY_ARCHETYPES.bulwark.maxHealth).toBeGreaterThanOrEqual(maxHp);
   });
 
-  test('interceptors have preferredDistance set for interception orbit', () => {
+  test('interceptors have preferredDistance set for close route cutting', () => {
     expect(ENEMY_ARCHETYPES.skimmer.preferredDistance).toBeDefined();
     expect(ENEMY_ARCHETYPES.harrier.preferredDistance).toBeDefined();
     const skimmerDist = ENEMY_ARCHETYPES.skimmer.preferredDistance!;

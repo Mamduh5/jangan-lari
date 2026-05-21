@@ -3,6 +3,8 @@ import {
   PLAYER_HIT_FLASH_MS,
   PLAYER_HIT_INVULNERABILITY_MS,
   PLAYER_MAX_HP,
+  PLAYER_MOVE_SPEED_BONUS_ABOVE_SOFT_CAP_MULTIPLIER,
+  PLAYER_MOVE_SPEED_SOFT_CAP,
   PLAYER_PICKUP_RANGE,
   PLAYER_SPEED,
   PLAYER_START_LEVEL,
@@ -228,7 +230,14 @@ export class Player extends Phaser.GameObjects.Rectangle {
   }
 
   addMoveSpeed(amount: number): void {
-    this.speed += amount;
+    if (amount <= 0) {
+      return;
+    }
+
+    const roomBeforeSoftCap = Math.max(0, PLAYER_MOVE_SPEED_SOFT_CAP - this.speed);
+    const fullValueBonus = Math.min(amount, roomBeforeSoftCap);
+    const softenedBonus = Math.max(0, amount - fullValueBonus) * PLAYER_MOVE_SPEED_BONUS_ABOVE_SOFT_CAP_MULTIPLIER;
+    this.speed += fullValueBonus + softenedBonus;
     this.body.setMaxVelocity(this.speed, this.speed);
   }
 

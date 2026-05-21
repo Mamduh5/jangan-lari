@@ -43,3 +43,13 @@ export const BUFF_SHRINE_EVENT: BuffShrineBalance = {
 };
 
 export const MAP_EVENT_ENCOUNTER_BUFFER_MS = 9000;
+
+export const REWARD_TARGET_ENEMY_BALANCE = {
+  name: 'Cache Runner',
+  maxHealth: 92,
+  speed: 192,
+  contactDamage: 12,
+  xpValue: 12,
+  preferredDistance: 72,
+  strafeStrength: 0,
+} as const;

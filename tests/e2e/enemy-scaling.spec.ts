@@ -47,12 +47,12 @@ test.describe('enemy population and scaling', () => {
     await setRunElapsedMs(page, 180_000);
     run = await getRunSnapshot(page);
     expect(run.enemyScaling.stack).toBe(2);
+    expect(run.enemyScaling.multipliers.hp).toBeCloseTo(1.68);
     expect(run.enemyScaling.multipliers).toMatchObject({
-      hp: 1.4,
-      speed: 1.05,
-      damage: 1.12,
-      projectileCooldown: 0.95,
-      projectileSpeed: 1.05,
+      speed: 1.09,
+      damage: 1.16,
+      projectileCooldown: 0.944,
+      projectileSpeed: 1.07,
     });
 
     await spawnReadabilityEnemy(page, 'hexcaster');
@@ -64,12 +64,12 @@ test.describe('enemy population and scaling', () => {
     run = await getRunSnapshot(page);
     const hexcaster = run.enemies.find((enemy) => enemy.id === 'hexcaster');
     expect(hexcaster).toMatchObject({
-      maxHp: 59,
-      moveSpeed: 101,
-      contactDamage: 10,
-      shotDamage: 16,
-      shotCooldownMs: 1663,
-      shotSpeed: 352,
+      maxHp: 161,
+      moveSpeed: 116,
+      contactDamage: 12,
+      shotDamage: 19,
+      shotCooldownMs: 1558,
+      shotSpeed: 375,
     });
 
     await clearEnemies(page);

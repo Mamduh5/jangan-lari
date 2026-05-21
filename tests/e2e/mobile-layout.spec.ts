@@ -49,11 +49,11 @@ test.describe('mobile landscape layout', () => {
 
     const initialHud = await getHudSnapshot(page);
     expect(initialHud.hp).toMatch(/^HP \d+\/\d+$/);
-    expect(initialHud.level).toMatch(/^LV 1  XP \d+\/\d+$/);
+    expect(initialHud.level).toBe('LV 1');
     expect(initialHud.classStatus).toContain('Class Basic');
     expect(initialHud.statSummary).toContain('DMG0 RLD0 SPD0 REG0');
     expect(initialHud.gold).toBe('Run Gold 0');
-    expect(initialHud.score).toMatch(/^Score \d+$/);
+    expect(initialHud.score).toBe('');
     expect(initialHud.orientationHintVisible).toBe(false);
 
     const run = await getRunSnapshot(page);

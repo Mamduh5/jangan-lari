@@ -1,4 +1,5 @@
 import type { WeaponId } from './weapons';
+import { RUNNER_MOVE_SPEED_BONUS, SHADE_MOVE_SPEED_BONUS } from '../config/playerBalance';
 
 export type HeroId = 'runner' | 'vanguard' | 'shade' | 'verdant';
 
@@ -35,7 +36,7 @@ export const HEROES: Record<HeroId, HeroDefinition> = {
     startingWeaponId: 'arc-bolt',
     passiveLabel: 'Quickstep: moves faster and fires slightly sooner.',
     maxHealthBonus: 0,
-    moveSpeedBonus: 24,
+    moveSpeedBonus: RUNNER_MOVE_SPEED_BONUS,
     pickupRangeBonus: 0,
     startingDamageBonus: 0,
     fireCooldownReductionMs: 35,
@@ -79,7 +80,7 @@ export const HEROES: Record<HeroId, HeroDefinition> = {
     startingWeaponId: 'twin-fangs',
     passiveLabel: 'Slipstream: higher speed and tighter opening cadence.',
     maxHealthBonus: 0,
-    moveSpeedBonus: 36,
+    moveSpeedBonus: SHADE_MOVE_SPEED_BONUS,
     pickupRangeBonus: 0,
     startingDamageBonus: 0,
     fireCooldownReductionMs: 55,

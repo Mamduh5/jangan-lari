@@ -89,7 +89,7 @@ import {
   type BossFightState,
   type BossStateDefinition,
 } from '../config/bossBalance';
-import { BUFF_SHRINE_EVENT, MAP_EVENT_ENCOUNTER_BUFFER_MS } from '../config/mapEventBalance';
+import { BUFF_SHRINE_EVENT, MAP_EVENT_ENCOUNTER_BUFFER_MS, REWARD_TARGET_ENEMY_BALANCE } from '../config/mapEventBalance';
 import {
   WAVE_FORMATION_COOLDOWN_MS,
   WAVE_FORMATION_ENABLE_TIME_MS,
@@ -2787,13 +2787,7 @@ export class RunScene extends Phaser.Scene {
 
     const rewardTargetArchetype: EnemyArchetype = applyEventEnemyStatMultiplier({
       ...ENEMY_ARCHETYPES.harrier,
-      name: 'Cache Runner',
-      maxHealth: 36,
-      speed: 154,
-      contactDamage: 10,
-      xpValue: 12,
-      preferredDistance: 150,
-      strafeStrength: 0.55,
+      ...REWARD_TARGET_ENEMY_BALANCE,
     });
     const targetEnemy = this.spawnEnemyFromArchetype(
       rewardTargetArchetype,

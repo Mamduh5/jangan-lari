@@ -317,7 +317,7 @@ test.describe('miniboss skill snapshot labeling', () => {
 
     const hpAfterVolley = await page.evaluate(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.hp') ?? -1));
     expect(hpAfterVolley).toBeLessThan(startingHp);
-    expect(hpAfterVolley).toBe(startingHp - 13);
+    expect(hpAfterVolley).toBe(startingHp - 16);
     expect(runtimeErrors).toEqual([]);
   });
 

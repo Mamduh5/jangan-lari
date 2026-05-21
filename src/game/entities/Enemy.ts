@@ -13,6 +13,8 @@ import {
   CHARGER_WARN_COLOR,
   CHARGER_WINDUP_MS,
   INTERCEPT_APPROACH_STRAFE_STRENGTH,
+  INTERCEPT_DISTANCE_FORWARD_SPEED_SCALE,
+  INTERCEPT_MIN_FORWARD_SPEED_SCALE,
   INTERCEPT_PREDICTION_TIME_S,
 } from '../config/enemyBehaviorBalance';
 import type { EnemyArchetype } from '../data/enemies';
@@ -541,7 +543,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const orbit = new Phaser.Math.Vector2(-forward.y * this.strafeDirection, forward.x * this.strafeDirection);
 
     const velocity = forward
-      .scale(this.speed * (0.65 + distanceError * 0.35))
+      .scale(this.speed * (INTERCEPT_MIN_FORWARD_SPEED_SCALE + distanceError * INTERCEPT_DISTANCE_FORWARD_SPEED_SCALE))
       .add(orbit.scale(this.speed * INTERCEPT_APPROACH_STRAFE_STRENGTH));
     this.body.setVelocity(velocity.x, velocity.y);
     this.behaviorState = 'intercepting';

@@ -17,20 +17,22 @@ export const BEHAVIOR_ROLE_RANGED = 'ranged' as const;
 // Punishes straight-line running.
 // ============================================================
 export const INTERCEPT_PREDICTION_TIME_S = 0.72;    // seconds ahead to predict player position
-export const INTERCEPT_APPROACH_STRAFE_STRENGTH = 0.52; // lateral offset while intercepting
-export const INTERCEPT_PREFERRED_DISTANCE = 140;    // px — closes to this range then orbits
+export const INTERCEPT_APPROACH_STRAFE_STRENGTH = 0.18; // lateral route-cutting offset, not orbiting
+export const INTERCEPT_PREFERRED_DISTANCE = 68;    // px - closes aggressively instead of circling
+export const INTERCEPT_MIN_FORWARD_SPEED_SCALE = 0.92;
+export const INTERCEPT_DISTANCE_FORWARD_SPEED_SCALE = 0.28;
 
 // ============================================================
 // Charger behavior (crusher)
 // State machine: chasing → windup → dashing → recovering
 // Windup telegraph makes the dash readable.
 // ============================================================
-export const CHARGER_WINDUP_MS = 520;           // freeze + visual telegraph before dash
-export const CHARGER_DASH_SPEED = 660;          // px/s — committed dash velocity
-export const CHARGER_DASH_DURATION_MS = 340;    // ms dash remains active
-export const CHARGER_RECOVERY_MS = 460;         // ms slow/vulnerable after dash
-export const CHARGER_COOLDOWN_MS = 2400;        // ms between attack cycles
-export const CHARGER_TRIGGER_DISTANCE = 280;    // px — max distance to start windup
+export const CHARGER_WINDUP_MS = 470;           // freeze + visual telegraph before dash
+export const CHARGER_DASH_SPEED = 760;          // px/s - committed dash velocity
+export const CHARGER_DASH_DURATION_MS = 380;    // ms dash remains active
+export const CHARGER_RECOVERY_MS = 380;         // ms slow/vulnerable after dash
+export const CHARGER_COOLDOWN_MS = 1900;        // ms between attack cycles
+export const CHARGER_TRIGGER_DISTANCE = 330;    // px - max distance to start windup
 export const CHARGER_WARN_COLOR = 0xff4400;     // stroke color during windup
 
 // ============================================================

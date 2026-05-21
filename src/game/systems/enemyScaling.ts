@@ -5,6 +5,10 @@ import {
   ENEMY_SCALING_INTERVAL_MS,
   ENEMY_SCALING_MAJOR_ENCOUNTER_FACTOR,
   ENEMY_SCALING_MAX_STACK,
+  ENEMY_SCALING_PROJECTILE_COOLDOWN_FLOOR_MS,
+  ENEMY_SCALING_PROJECTILE_COOLDOWN_MIN_MULTIPLIER,
+  ENEMY_SCALING_PROJECTILE_COOLDOWN_PER_STACK,
+  ENEMY_SCALING_PROJECTILE_SPEED_PER_STACK,
   ENEMY_SCALING_SPEED_PER_STACK,
   EVENT_ENEMY_SPEED_MULTIPLIER,
   EVENT_ENEMY_STAT_MULTIPLIER,
@@ -38,8 +42,11 @@ export function getEnemyScalingMultipliers(stack: number, majorEncounterFactor =
     hp: 1 + effectiveStack * ENEMY_SCALING_HP_PER_STACK,
     speed: 1 + effectiveStack * ENEMY_SCALING_SPEED_PER_STACK,
     damage: 1 + effectiveStack * ENEMY_SCALING_DAMAGE_PER_STACK,
-    projectileCooldown: Math.max(0.82, 1 - effectiveStack * 0.025),
-    projectileSpeed: 1 + effectiveStack * 0.025,
+    projectileCooldown: Math.max(
+      ENEMY_SCALING_PROJECTILE_COOLDOWN_MIN_MULTIPLIER,
+      1 - effectiveStack * ENEMY_SCALING_PROJECTILE_COOLDOWN_PER_STACK,
+    ),
+    projectileSpeed: 1 + effectiveStack * ENEMY_SCALING_PROJECTILE_SPEED_PER_STACK,
   };
 }
 
@@ -78,7 +85,7 @@ export function applyEnemyScaling(archetype: EnemyArchetype, elapsedMs: number):
     shotCooldownMs:
       archetype.shotCooldownMs === undefined
         ? undefined
-        : Math.max(850, Math.round(archetype.shotCooldownMs * multipliers.projectileCooldown)),
+        : Math.max(ENEMY_SCALING_PROJECTILE_COOLDOWN_FLOOR_MS, Math.round(archetype.shotCooldownMs * multipliers.projectileCooldown)),
   };
 }
 

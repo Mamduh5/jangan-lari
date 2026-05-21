@@ -30,13 +30,12 @@ describe('enemy scaling', () => {
   });
 
   test('calculates deterministic stat multipliers', () => {
-    expect(getEnemyScalingMultipliers(2)).toEqual({
-      hp: 1.4,
-      speed: 1.05,
-      damage: 1.12,
-      projectileCooldown: 0.95,
-      projectileSpeed: 1.05,
-    });
+    const multipliers = getEnemyScalingMultipliers(2);
+    expect(multipliers.hp).toBeCloseTo(1.68);
+    expect(multipliers.speed).toBe(1.09);
+    expect(multipliers.damage).toBe(1.16);
+    expect(multipliers.projectileCooldown).toBe(0.944);
+    expect(multipliers.projectileSpeed).toBe(1.07);
   });
 
   test('scales regular enemies more strongly than major encounters', () => {
@@ -45,10 +44,10 @@ describe('enemy scaling', () => {
     const boss = applyEnemyScaling(ENEMY_ARCHETYPES.behemoth, elapsedMs);
 
     expect(getEnemyMajorEncounterFactor(ENEMY_ARCHETYPES.hexcaster)).toBe(1);
-    expect(getEnemyMajorEncounterFactor(ENEMY_ARCHETYPES.behemoth)).toBe(0.5);
-    expect(hexcaster.maxHealth).toBe(94);
-    expect(hexcaster.shotCooldownMs).toBe(1575);
-    expect(boss.maxHealth).toBe(Math.round(BOSS_FIRST_PASS_MAX_HEALTH * 1.4));
+    expect(getEnemyMajorEncounterFactor(ENEMY_ARCHETYPES.behemoth)).toBe(0.65);
+    expect(hexcaster.maxHealth).toBe(227);
+    expect(hexcaster.shotCooldownMs).toBe(1465);
+    expect(boss.maxHealth).toBe(Math.round(BOSS_FIRST_PASS_MAX_HEALTH * 1.884));
   });
 
   test('reports scaling snapshot and active cap slots', () => {
@@ -66,10 +65,10 @@ describe('enemy scaling', () => {
     const base = ENEMY_ARCHETYPES.harrier;
     const eventEnemy = applyEventEnemyStatMultiplier(base);
 
-    expect(base.maxHealth).toBe(28);
-    expect(base.contactDamage).toBe(9);
-    expect(eventEnemy.maxHealth).toBe(140);
-    expect(eventEnemy.contactDamage).toBe(45);
+    expect(base.maxHealth).toBe(74);
+    expect(base.contactDamage).toBe(11);
+    expect(eventEnemy.maxHealth).toBe(370);
+    expect(eventEnemy.contactDamage).toBe(55);
     expect(eventEnemy.speed).toBeGreaterThan(base.speed);
   });
 });
