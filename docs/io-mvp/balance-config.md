@@ -9,19 +9,32 @@ This document maps where to tune gameplay numbers and why client config is not s
   - Core upgrade effect values: vitality regen, swiftness speed, power damage, rapid-fire cooldown reduction, velocity projectile speed, magnet pickup range, reach weapon range
   - Permanent upgrade effect values: max HP, move speed, pickup range, starting damage, HP regen per level
 
+- **World/map balance**: `src/game/config/worldBalance.ts`
+  - Virtual game size remains 1600x720
+  - Current world size and camera overscroll padding
+  - Spawn bounds padding and normal/boss/summon spawn distances
+
 - **Enemy/spawn/scaling balance**: `src/game/config/enemyBalance.ts`
   - Spawn interval, active cap, safe radii, spawn attempts
   - Time-based scaling intervals, max stack, per-stack multipliers
   - Miniboss and elite spawn timing
-  - Spawn director stage timing (opening, early ramp, first elite)
-  - Wave template alert cooldown
+
+- **Wave director balance**: `src/game/config/waveDirectorBalance.ts`
+  - Enemy role tags
+  - Time windows and unlock timing
+  - Wave templates, role bundles, weights, min/max counts, ranged caps, and density scaling
+  - Formation enable timing, cooldown, retry timing, and wave-template alert cooldown
 
 - **Boss/miniboss/event balance**: `src/game/config/bossBalance.ts`
   - Boss spawn time, run target duration, active delta cap
-  - Boss health, phase thresholds, phase-2 multipliers
+  - Boss health, speed, contact damage, dash timing, phase thresholds, phase-2 multipliers
   - Boss shockwave radius, telegraph, damage active window, cooldown
-  - Boss summon timing, batch size, cap, stat multipliers
+  - Boss state sequences, crossfire projectiles, summon compositions, summon timing, batch size, cap, stat multipliers
   - Miniboss line-strike and volley geometry/timing
+
+- **Map event balance**: `src/game/config/mapEventBalance.ts`
+  - Power Core earliest time, interval, duration, radius, claim radius, and placement safety
+  - Power Core buff type, buff duration, shield duration, Pulse cooldown refund, visual colors, and pressure enemy composition
 
 - **Weapon/reward balance**: `src/game/config/rewardBalance.ts`
   - XP gem attract speed
@@ -33,7 +46,6 @@ This document maps where to tune gameplay numbers and why client config is not s
   - First elite XP bonus
 
 - **Global runtime constants**: `src/game/config/constants.ts`
-  - Game/world dimensions, camera overscroll padding
   - Audio defaults
   - Hit shake visual feedback
   - Re-exports from grouped balance files for backward compatibility
@@ -53,6 +65,9 @@ This document maps where to tune gameplay numbers and why client config is not s
 - Elite/BOSS XP bonuses
 - Wave alert cooldowns
 - Stage timing values
+- World/camera bounds
+- Map event placement, rewards, buff values, or pressure enemies
+- Boss state timing, summon composition, crossfire values, HP, damage, speed, or attack cooldowns
 
 Scenes should orchestrate gameplay, not own tunable balance numbers.
 

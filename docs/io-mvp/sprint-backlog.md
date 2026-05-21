@@ -810,3 +810,78 @@ Acceptance checks:
 
 Validation notes:
 - Updated boss-focused coverage to include Breakout Pulse interaction with boss-owned summons and boss HP stability.
+
+## Sprint A23: Wave Director Enemy Role Progression
+
+Goal: Replace mostly random enemy waves with time-based role progression.
+
+Status note:
+- Added `src/game/config/waveDirectorBalance.ts` as the owner for enemy unlock windows, role tags, wave templates, formation timing, ranged caps, and density scaling.
+- Opening waves now start with Scuttlers only, then unlock fast enemies, blockers/chargers, ranged priority threats, and late mixed role bundles.
+- Formation pressure now chooses role-bundle templates from the active wave window instead of only decorative archetype lists.
+
+Intentionally skipped:
+- No new enemies, heroes, weapons, real art assets, upgrade synergy system, backend, multiplayer, accounts, monetization, or gameplay-bot work.
+
+Acceptance checks:
+- Early run starts simpler than the previous mixed chaos.
+- Ranged enemies do not appear from second zero.
+- Mid/late waves include deliberate blocker/ranged/fast/charger pairings.
+- Enemy cap remains respected.
+
+## Sprint A24: Larger Map And Power Core Event
+
+Goal: Make the existing map larger and add one map event that gives the player a reason to move.
+
+Status note:
+- Added `src/game/config/worldBalance.ts` for world size, camera bounds, and spawn distances while keeping the virtual 1600x720 FIT layout unchanged.
+- Increased the current world to 3200x2200 and kept camera/world bounds config-driven.
+- Added `src/game/config/mapEventBalance.ts` and a Power Core event that spawns a contestable shrine with nearby enemy pressure.
+- Claiming the core grants a short shield plus Breakout Pulse cooldown refund; values are config-owned.
+
+Intentionally skipped:
+- No new map, real art assets, long text panels, new upgrade systems, backend, multiplayer, monetization, or gameplay-bot work.
+
+Acceptance checks:
+- Current map is larger but still starts with immediate action.
+- The Power Core creates a specific movement objective.
+- Event visuals are in-world and clean up on event end, restart, menu, and boss transition.
+
+## Sprint A25: Boss State Redesign
+
+Goal: Make Behemoth feel like a state-based boss instead of a weaker miniboss-shaped stat block.
+
+Status note:
+- Added configurable boss state sequences: approach, shockwave, summon, crossfire, and recovery.
+- Boss shockwave and crossfire states create readable movement checks; summon states use capped role-based compositions instead of only Scuttlers.
+- Phase 2 switches to a faster state loop with stronger summon compositions while normal waves/events remain suppressed.
+- Boss HP, speed, contact damage, dash timing, state timing, crossfire, and summon composition live in boss config.
+
+Intentionally skipped:
+- No new boss type, boss art, sprite conversion, new weapons, new heroes, upgrade synergy, backend, multiplayer, monetization, or gameplay-bot work.
+
+Acceptance checks:
+- Boss has recognizable pressure states.
+- Boss-owned summons have roles and remain capped.
+- Breakout Pulse still opens space against summons while boss remains resistant/immune to knockback.
+- Boss defeat remains the only boss-phase victory path.
+
+## Sprint A26: Branch Close Playtest And Tuning
+
+Goal: Close this gameplay-direction pass with config tuning, docs, and focused validation only.
+
+Status note:
+- Added focused unit/e2e coverage for wave progression and the Power Core event.
+- Updated the manual release checklist with A23-A26 playtest notes.
+- Branch-close tuning should continue by editing config modules only unless a real regression is found.
+
+Intentionally skipped:
+- No new mechanics beyond A23-A25.
+- No full `npm run test:e2e`.
+- No `gameplay-bot.spec.ts` edits or whole-file run.
+
+Acceptance checks:
+- Early-to-late enemy progression feels better in manual play.
+- Map event makes movement meaningful.
+- Boss feels more powerful than miniboss without becoming unfair or boring.
+- Passing automated tests is not enough; owner must still judge full-run game feel manually.

@@ -8,10 +8,13 @@ import {
 import {
   BOSS_SPAWN_TIME_MS,
   BOSS_SPAWN_PLAYER_SAFE_RADIUS,
+  BOSS_SPAWN_DISTANCE,
   BOSS_SUMMON_BATCH_SIZE,
   BOSS_SUMMON_FIRST_DELAY_MS,
   BOSS_SUMMON_INTERVAL_MS,
   BOSS_SUMMON_MAX_ACTIVE,
+  BOSS_SUMMON_SPAWN_DISTANCE,
+  BOSS_SUMMON_SPAWN_DISTANCE_STEP,
   BOSS_TARGET_FAST_KILL_MS,
   CAMERA_OVERSCROLL_PADDING_X,
   CAMERA_OVERSCROLL_PADDING_Y,
@@ -41,9 +44,6 @@ import {
   DANGER_ZONE_TICK_MS,
   DANGER_ZONE_WARNING_MS,
   FORMATION_PINCER_DISTANCE,
-  FORMATION_PRESSURE_COOLDOWN_MS,
-  FORMATION_PRESSURE_FIRST_MS,
-  FORMATION_PRESSURE_RETRY_MS,
   FORMATION_RING_RADIUS,
   FORMATION_SWEEP_DISTANCE,
   GAME_HEIGHT,
@@ -55,6 +55,7 @@ import {
   NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS,
   NEUTRAL_SHAPE_SPAWN_INTERVAL_MS,
   NEUTRAL_SHAPE_SPAWN_PADDING,
+  NORMAL_ENEMY_SPAWN_DISTANCE,
   PERMANENT_HP_REGEN_PER_LEVEL,
   PERMANENT_MAX_HP_PER_LEVEL,
   PERMANENT_MOVE_SPEED_PER_LEVEL,
@@ -72,10 +73,30 @@ import {
   SWIFTNESS_MOVE_SPEED_BONUS,
   VELOCITY_PROJECTILE_SPEED_BONUS,
   VITALITY_REGEN_PER_SECOND,
-  WAVE_TEMPLATE_ALERT_COOLDOWN_MS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from '../config/constants';
+import {
+  BOSS_CROSSFIRE_COLOR,
+  BOSS_CROSSFIRE_PROJECTILE_COUNT_PHASE_1,
+  BOSS_CROSSFIRE_PROJECTILE_COUNT_PHASE_2,
+  BOSS_CROSSFIRE_PROJECTILE_DAMAGE,
+  BOSS_CROSSFIRE_PROJECTILE_RADIUS,
+  BOSS_CROSSFIRE_PROJECTILE_SPEED,
+  BOSS_STATE_SEQUENCE_PHASE_1,
+  BOSS_STATE_SEQUENCE_PHASE_2,
+  BOSS_SUMMON_COMPOSITIONS,
+  type BossFightState,
+  type BossStateDefinition,
+} from '../config/bossBalance';
+import { BUFF_SHRINE_EVENT, MAP_EVENT_ENCOUNTER_BUFFER_MS } from '../config/mapEventBalance';
+import {
+  WAVE_FORMATION_COOLDOWN_MS,
+  WAVE_FORMATION_ENABLE_TIME_MS,
+  WAVE_FORMATION_RETRY_MS,
+  WAVE_TEMPLATE_ALERT_COOLDOWN_MS,
+  getWaveDirectorWindow,
+} from '../config/waveDirectorBalance';
 import { HEROES } from '../data/heroes';
 import { chooseNeutralShapeKind } from '../data/neutralShapes';
 import {
@@ -155,7 +176,7 @@ import {
   type StagePhase,
 } from '../utils/stagePhase';
 
-type RunEventType = 'challenge-wave' | 'reward-target';
+type RunEventType = 'challenge-wave' | 'reward-target' | 'buff-shrine';
 
 type ActiveRunEvent =
   | {
@@ -177,6 +198,19 @@ type ActiveRunEvent =
       targetEnemy: Enemy;
       rewardGold: number;
       rewardXp: number;
+    }
+  | {
+      type: 'buff-shrine';
+      title: string;
+      objective: string;
+      startedAtMs: number;
+      endsAtMs: number;
+      x: number;
+      y: number;
+      pressureEnemies: Enemy[];
+      shrineVisual: Phaser.GameObjects.Arc;
+      claimRing: Phaser.GameObjects.Arc;
+      label: Phaser.GameObjects.Text;
     };
 
 type FormationType = 'ring-breakout' | 'pincer' | 'sweep-wall';
@@ -231,6 +265,11 @@ export class RunScene extends Phaser.Scene {
   private bossPhase: BossPhase = 1;
   private bossPhaseTwoTriggered = false;
   private nextBossSummonAtMs = Number.POSITIVE_INFINITY;
+  private bossFightState: BossFightState = 'approach';
+  private bossStateIndex = 0;
+  private bossStateEndsAtMs = Number.POSITIVE_INFINITY;
+  private bossStateActionDone = false;
+  private bossSummonCompositionIndex = 0;
   private colliders: Phaser.Physics.Arcade.Collider[] = [];
   private combatResponse!: CombatResponseController;
   private combatResponseImpactCounts: Partial<Record<WeaponId, number>> = {};
@@ -354,12 +393,16 @@ export class RunScene extends Phaser.Scene {
   private challengeWaveFailureCount = 0;
   private rewardTargetSuccessCount = 0;
   private rewardTargetFailureCount = 0;
+  private nextBuffShrineAtMs = BUFF_SHRINE_EVENT.earliestTimeMs;
+  private buffShrineSuccessCount = 0;
+  private buffShrineFailureCount = 0;
+  private activeMapBuff: { type: 'shield-pulse'; remainingMs: number } | null = null;
   private controlHintVisible = false;
   private rewardTargetMarker?: Phaser.GameObjects.Arc;
   private rewardTargetLabel?: Phaser.GameObjects.Text;
   private lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
   private statsMaxedToastShownForPoints = 0;
-  private nextFormationAtMs = FORMATION_PRESSURE_FIRST_MS;
+  private nextFormationAtMs = WAVE_FORMATION_ENABLE_TIME_MS;
   private lastFormationType: FormationType | '' = '';
   private formationSpawnCount = 0;
   private formationWaveCount = 0;
@@ -440,13 +483,17 @@ export class RunScene extends Phaser.Scene {
     this.challengeWaveFailureCount = 0;
     this.rewardTargetSuccessCount = 0;
     this.rewardTargetFailureCount = 0;
+    this.nextBuffShrineAtMs = BUFF_SHRINE_EVENT.earliestTimeMs;
+    this.buffShrineSuccessCount = 0;
+    this.buffShrineFailureCount = 0;
+    this.activeMapBuff = null;
     this.rewardTargetMarker?.destroy();
     this.rewardTargetMarker = undefined;
     this.rewardTargetLabel?.destroy();
     this.rewardTargetLabel = undefined;
     this.lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
     this.statsMaxedToastShownForPoints = 0;
-    this.nextFormationAtMs = FORMATION_PRESSURE_FIRST_MS;
+    this.nextFormationAtMs = WAVE_FORMATION_ENABLE_TIME_MS;
     this.lastFormationType = '';
     this.formationSpawnCount = 0;
     this.formationWaveCount = 0;
@@ -479,6 +526,11 @@ export class RunScene extends Phaser.Scene {
     this.bossPhase = 1;
     this.bossPhaseTwoTriggered = false;
     this.nextBossSummonAtMs = Number.POSITIVE_INFINITY;
+    this.bossFightState = 'approach';
+    this.bossStateIndex = 0;
+    this.bossStateEndsAtMs = Number.POSITIVE_INFINITY;
+    this.bossStateActionDone = false;
+    this.bossSummonCompositionIndex = 0;
 
     const selectedHero = HEROES[this.saveData.selectedHero];
 
@@ -498,6 +550,11 @@ export class RunScene extends Phaser.Scene {
     this.bossPhase = 1;
     this.bossPhaseTwoTriggered = false;
     this.nextBossSummonAtMs = Number.POSITIVE_INFINITY;
+    this.bossFightState = 'approach';
+    this.bossStateIndex = 0;
+    this.bossStateEndsAtMs = Number.POSITIVE_INFINITY;
+    this.bossStateActionDone = false;
+    this.bossSummonCompositionIndex = 0;
     this.movementInput = new MovementInputController(this, createMovementKeys(this));
     this.lastMovementInput = {
       movement: { x: 0, y: 0 },
@@ -651,12 +708,14 @@ export class RunScene extends Phaser.Scene {
     this.updateNeutralShapes();
     this.updateEnemies();
     this.syncBossPhaseState();
+    this.updateBossStateDirector();
     this.updateBossSummons();
     this.trySpawnFormationPressure();
     this.trySpawnDangerZone();
     this.updateSkillTelegraphs(delta);
     this.updateDangerZones(delta);
     this.updateBreakoutPulse(delta);
+    this.updateActiveMapBuff(delta);
     this.updateLineStrikeAttacks(delta);
     this.updateVolleyAttacks(delta);
     this.updateShockwaveAttacks(delta);
@@ -926,6 +985,8 @@ export class RunScene extends Phaser.Scene {
         bossPhase: this.bossPhase,
         bossActive: Boolean(activeBoss),
       }),
+      bossFightState: activeBoss ? this.bossFightState : '',
+      bossStateRemainingMs: activeBoss ? Math.max(0, this.bossStateEndsAtMs - this.runElapsedMs) : 0,
       activeBossSkill,
       bossSkillTelegraphActive,
       bossSkillDamageActive,
@@ -1054,7 +1115,7 @@ export class RunScene extends Phaser.Scene {
         highlight: this.spawnDirector?.getLastWaveTemplateHighlight() ?? false,
       },
       formationPressure: {
-        enabled: this.runElapsedMs >= FORMATION_PRESSURE_FIRST_MS,
+        enabled: this.runElapsedMs >= WAVE_FORMATION_ENABLE_TIME_MS,
         active: this.lastFormationSpawnPoints.length > 0,
         lastFormationType: this.lastFormationType,
         cooldownMs: formationCooldownMs,
@@ -1095,10 +1156,17 @@ export class RunScene extends Phaser.Scene {
         title: this.activeRunEvent?.title ?? '',
         objective: this.activeRunEvent?.objective ?? '',
         remainingMs: this.activeRunEvent ? Math.max(0, this.activeRunEvent.endsAtMs - this.runElapsedMs) : 0,
+        x: this.activeRunEvent?.type === 'buff-shrine' ? this.activeRunEvent.x : null,
+        y: this.activeRunEvent?.type === 'buff-shrine' ? this.activeRunEvent.y : null,
+        claimRadius: this.activeRunEvent?.type === 'buff-shrine' ? BUFF_SHRINE_EVENT.claimRadius : null,
+        buffType: this.activeMapBuff?.type ?? '',
+        buffRemainingMs: this.activeMapBuff?.remainingMs ?? 0,
         challengeWaveSuccesses: this.challengeWaveSuccessCount,
         challengeWaveFailures: this.challengeWaveFailureCount,
         rewardTargetSuccesses: this.rewardTargetSuccessCount,
         rewardTargetFailures: this.rewardTargetFailureCount,
+        buffShrineSuccesses: this.buffShrineSuccessCount,
+        buffShrineFailures: this.buffShrineFailureCount,
       },
       combatResponse: {
         hitStopStarts: combatResponseMetrics.hitStopStarts,
@@ -1223,7 +1291,15 @@ export class RunScene extends Phaser.Scene {
       return false;
     }
 
-    return type === 'challenge-wave' ? this.startChallengeWaveEvent(true) : this.startRewardTargetEvent(true);
+    if (type === 'challenge-wave') {
+      return this.startChallengeWaveEvent(true);
+    }
+
+    if (type === 'buff-shrine') {
+      return this.startBuffShrineEvent(true);
+    }
+
+    return this.startRewardTargetEvent(true);
   }
 
   public debugAddScoreProgress(options: { neutralShapesDestroyed?: number; enemyKills?: number; elapsedMs?: number } = {}): void {
@@ -1355,7 +1431,7 @@ export class RunScene extends Phaser.Scene {
     if (this.areNormalSpawnsSuppressed() && !archetype.isBoss) {
       return;
     }
-    this.spawnEnemyFromArchetype(archetype, this.getSpawnPoint(520, this.getEnemySpawnSafeRadius(archetype)));
+    this.spawnEnemyFromArchetype(archetype, this.getSpawnPoint(NORMAL_ENEMY_SPAWN_DISTANCE, this.getEnemySpawnSafeRadius(archetype)));
     this.publishHudState();
   }
 
@@ -1799,12 +1875,13 @@ export class RunScene extends Phaser.Scene {
     this.bossPhase = 1;
     this.bossPhaseTwoTriggered = false;
     this.nextBossSummonAtMs = Number.POSITIVE_INFINITY;
+    this.beginBossStateSequence();
     this.spawnDirector.markBossSpawned();
     this.clearBossPhaseClutter();
 
     const existingBoss = this.getActiveBossEnemy();
     if (!existingBoss) {
-      const spawnPoint = this.getSpawnPoint(700, BOSS_SPAWN_PLAYER_SAFE_RADIUS);
+      const spawnPoint = this.getSpawnPoint(BOSS_SPAWN_DISTANCE, BOSS_SPAWN_PLAYER_SAFE_RADIUS);
       this.bossEnemy = this.spawnEnemyFromArchetype(ENEMY_ARCHETYPES.behemoth, spawnPoint);
       this.bossEnemy.setBossPhase(this.bossPhase);
       this.presentEncounterSpawn(ENEMY_ARCHETYPES.behemoth, spawnPoint);
@@ -1890,6 +1967,7 @@ export class RunScene extends Phaser.Scene {
     this.bossPhase = result.phase;
     this.bossPhaseTwoTriggered = result.phaseTwoTriggered;
     this.nextBossSummonAtMs = this.runElapsedMs + BOSS_SUMMON_FIRST_DELAY_MS;
+    this.beginBossStateSequence();
     boss.setBossPhase(result.phase);
     this.registry.set('run.instructions', 'Boss phase 2. Shockwaves and summons.');
     this.setAlert('boss', 'Boss phase 2', 1800);
@@ -1935,6 +2013,108 @@ export class RunScene extends Phaser.Scene {
     return '';
   }
 
+  private beginBossStateSequence(): void {
+    const sequence = this.getBossStateSequence();
+    this.bossStateIndex = 0;
+    this.bossFightState = sequence[0]?.state ?? 'approach';
+    this.bossStateEndsAtMs = this.runElapsedMs + (sequence[0]?.durationMs ?? 4000);
+    this.bossStateActionDone = false;
+  }
+
+  private getBossStateSequence(): BossStateDefinition[] {
+    return this.bossPhase === 2 ? BOSS_STATE_SEQUENCE_PHASE_2 : BOSS_STATE_SEQUENCE_PHASE_1;
+  }
+
+  private updateBossStateDirector(): void {
+    const boss = this.getActiveBossEnemy();
+    if (!boss || this.stagePhase !== 'boss' || this.isEnded || this.isManualPaused || this.isSystemPaused) {
+      return;
+    }
+
+    this.runBossStateAction(boss);
+
+    if (this.runElapsedMs < this.bossStateEndsAtMs) {
+      return;
+    }
+
+    const sequence = this.getBossStateSequence();
+    if (sequence.length === 0) {
+      return;
+    }
+
+    this.bossStateIndex = (this.bossStateIndex + 1) % sequence.length;
+    const nextState = sequence[this.bossStateIndex];
+    this.bossFightState = nextState.state;
+    this.bossStateEndsAtMs = this.runElapsedMs + nextState.durationMs;
+    this.bossStateActionDone = false;
+    this.runBossStateAction(boss);
+  }
+
+  private runBossStateAction(boss: Enemy): void {
+    if (this.bossStateActionDone) {
+      return;
+    }
+
+    switch (this.bossFightState) {
+      case 'shockwave':
+        this.triggerBossShockwaveFromBoss(boss);
+        this.bossStateActionDone = true;
+        break;
+      case 'summon':
+        this.spawnBossSummonBatch(false);
+        this.bossStateActionDone = true;
+        break;
+      case 'crossfire':
+        this.spawnBossCrossfire(boss);
+        this.bossStateActionDone = true;
+        break;
+      case 'recovery':
+        this.registry.set('run.instructions', 'Boss recovering. Push damage.');
+        this.bossStateActionDone = true;
+        break;
+      case 'approach':
+      default:
+        this.registry.set('run.instructions', this.bossPhase === 2 ? 'Boss raging. Keep space.' : 'Boss pressuring. Keep moving.');
+        this.bossStateActionDone = true;
+        break;
+    }
+  }
+
+  private triggerBossShockwaveFromBoss(boss: Enemy): void {
+    const contract = createBossShockwaveContract(this.bossPhase);
+    const damage = Math.round(Math.max(24, boss.contactDamage - 6) * contract.damageMultiplier);
+    this.showBossShockwaveTelegraph(boss.x, boss.y, contract.radius, contract.telegraphMs);
+    this.time.delayedCall(contract.telegraphMs, () => {
+      if (!this.isEnded && boss.active && boss.isAlive()) {
+        this.spawnBossShockwave(boss.x, boss.y, contract.radius, damage, contract.damageActiveMs, contract.thickness);
+      }
+    });
+    this.setAlert('boss', 'Shockwave charging', 900);
+    playCue('dash-warning');
+  }
+
+  private spawnBossCrossfire(boss: Enemy): void {
+    const projectileCount = this.bossPhase === 2 ? BOSS_CROSSFIRE_PROJECTILE_COUNT_PHASE_2 : BOSS_CROSSFIRE_PROJECTILE_COUNT_PHASE_1;
+    const offset = Phaser.Math.FloatBetween(0, Math.PI * 2);
+
+    for (let index = 0; index < projectileCount; index += 1) {
+      const angle = offset + (Math.PI * 2 * index) / projectileCount;
+      this.spawnEnemyBolt(
+        boss.x,
+        boss.y,
+        { x: Math.cos(angle), y: Math.sin(angle) },
+        BOSS_CROSSFIRE_PROJECTILE_SPEED,
+        BOSS_CROSSFIRE_PROJECTILE_DAMAGE,
+        BOSS_CROSSFIRE_COLOR,
+        BOSS_CROSSFIRE_PROJECTILE_RADIUS,
+      );
+    }
+
+    this.createBurstCircle(boss.x, boss.y, BOSS_CROSSFIRE_COLOR, 24, 82, 240, 0.68);
+    this.setAlert('boss', 'Crossfire', 900);
+    playCue('boss-release');
+  }
+
   private enforceBossPhaseEnemyFocus(): void {
     if (!this.areNormalSpawnsSuppressed()) {
       return;
@@ -1978,7 +2158,10 @@ export class RunScene extends Phaser.Scene {
         normalSpawnsUsed += 1;
       }
 
-      const spawnPoint = this.getSpawnPoint(archetype.isBoss ? 700 : 520, this.getEnemySpawnSafeRadius(archetype));
+      const spawnPoint = this.getSpawnPoint(
+        archetype.isBoss ? BOSS_SPAWN_DISTANCE : NORMAL_ENEMY_SPAWN_DISTANCE,
+        this.getEnemySpawnSafeRadius(archetype),
+      );
       this.spawnEnemyFromArchetype(archetype, spawnPoint);
       this.presentEncounterSpawn(archetype, spawnPoint);
     }
@@ -2012,7 +2195,10 @@ export class RunScene extends Phaser.Scene {
   }
 
   private pickNextFormationType(): FormationType {
-    const rotation: FormationType[] = ['ring-breakout', 'pincer', 'sweep-wall'];
+    const configuredTypes = getWaveDirectorWindow(this.runElapsedMs).templates
+      .map((template) => template.formation)
+      .filter((formation): formation is FormationType => formation !== 'loose');
+    const rotation: FormationType[] = configuredTypes.length > 0 ? configuredTypes : ['ring-breakout', 'pincer', 'sweep-wall'];
     return rotation[this.formationWaveCount % rotation.length];
   }
 
@@ -2023,13 +2209,13 @@ export class RunScene extends Phaser.Scene {
 
     const availableSlots = getAvailableEnemySpawnSlots(this.getActiveEnemyCount());
     if (availableSlots <= 0) {
-      this.nextFormationAtMs = this.runElapsedMs + FORMATION_PRESSURE_RETRY_MS;
+    this.nextFormationAtMs = this.runElapsedMs + WAVE_FORMATION_RETRY_MS;
       return false;
     }
 
     const plan = this.buildFormationPlan(type, availableSlots);
     if (plan.length === 0) {
-      this.nextFormationAtMs = this.runElapsedMs + FORMATION_PRESSURE_RETRY_MS;
+      this.nextFormationAtMs = this.runElapsedMs + WAVE_FORMATION_RETRY_MS;
       return false;
     }
 
@@ -2046,7 +2232,7 @@ export class RunScene extends Phaser.Scene {
       distanceFromPlayer: Phaser.Math.Distance.Between(this.player.x, this.player.y, entry.point.x, entry.point.y),
       angle: Phaser.Math.Angle.Between(this.player.x, this.player.y, entry.point.x, entry.point.y),
     }));
-    this.nextFormationAtMs = this.runElapsedMs + FORMATION_PRESSURE_COOLDOWN_MS;
+    this.nextFormationAtMs = this.runElapsedMs + WAVE_FORMATION_COOLDOWN_MS;
     this.setAlert('objective', this.getFormationAlert(type), 900);
     return true;
   }
@@ -2077,14 +2263,14 @@ export class RunScene extends Phaser.Scene {
     const centerAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
     const slots = 8;
     const gapIndex = this.getClosestAngleIndex(centerAngle, slots);
-    const archetypes = [
+    const archetypes = this.getFormationRoleBundle('ring-breakout', [
       ENEMY_ARCHETYPES.scuttler,
       ENEMY_ARCHETYPES.mauler,
       ENEMY_ARCHETYPES.harrier,
       ENEMY_ARCHETYPES.scuttler,
       ENEMY_ARCHETYPES.skimmer,
       ENEMY_ARCHETYPES.mauler,
-    ];
+    ]);
     const plan: Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> = [];
 
     for (let index = 0; index < slots && plan.length < count; index += 1) {
@@ -2118,14 +2304,14 @@ export class RunScene extends Phaser.Scene {
 
     const horizontal = Phaser.Math.Between(0, 1) === 0;
     const offsets = [-128, 0, 128];
-    const archetypes = [
+    const archetypes = this.getFormationRoleBundle('pincer', [
       ENEMY_ARCHETYPES.mauler,
       ENEMY_ARCHETYPES.scuttler,
       ENEMY_ARCHETYPES.harrier,
       ENEMY_ARCHETYPES.mauler,
       ENEMY_ARCHETYPES.scuttler,
       ENEMY_ARCHETYPES.skimmer,
-    ];
+    ]);
     const plan: Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> = [];
 
     for (const side of [-1, 1]) {
@@ -2158,13 +2344,13 @@ export class RunScene extends Phaser.Scene {
     const horizontalWall = side === 0 || side === 2;
     const direction = side === 0 || side === 3 ? -1 : 1;
     const offsets = [-250, -120, 35, 175, 310];
-    const archetypes = [
+    const archetypes = this.getFormationRoleBundle('sweep-wall', [
       ENEMY_ARCHETYPES.bulwark,
       ENEMY_ARCHETYPES.scuttler,
       ENEMY_ARCHETYPES.mauler,
       ENEMY_ARCHETYPES.harrier,
       ENEMY_ARCHETYPES.scuttler,
-    ];
+    ]);
     const plan: Array<{ archetype: EnemyArchetype; point: Phaser.Math.Vector2 }> = [];
 
     for (let index = 0; index < count; index += 1) {
@@ -2192,6 +2378,17 @@ export class RunScene extends Phaser.Scene {
     }
 
     return new Phaser.Math.Vector2(nextX, nextY);
+  }
+
+  private getFormationRoleBundle(type: FormationType, fallback: EnemyArchetype[]): EnemyArchetype[] {
+    const window = getWaveDirectorWindow(this.runElapsedMs);
+    const template = window.templates.find((candidate) => candidate.formation === type);
+    if (!template) {
+      return fallback;
+    }
+
+    const bundle = template.composition.map((id) => ENEMY_ARCHETYPES[id]).filter(Boolean);
+    return bundle.length > 0 ? bundle : fallback;
   }
 
   private getClosestAngleIndex(angle: number, slotCount: number): number {
@@ -2244,7 +2441,12 @@ export class RunScene extends Phaser.Scene {
   }
 
   private spawnBossSummonBatch(forced: boolean): number {
-    if (!this.enemies?.active || this.stagePhase !== 'boss' || this.bossPhase !== 2 || !this.getActiveBossEnemy()) {
+    if (
+      !this.enemies?.active ||
+      this.stagePhase !== 'boss' ||
+      (!forced && this.bossPhase !== 2 && this.bossFightState !== 'summon') ||
+      !this.getActiveBossEnemy()
+    ) {
       return 0;
     }
 
@@ -2255,9 +2457,14 @@ export class RunScene extends Phaser.Scene {
       return 0;
     }
 
-    const summonArchetype = createBossSummonArchetype(ENEMY_ARCHETYPES.scuttler);
+    const composition = this.getNextBossSummonComposition();
     for (let index = 0; index < summonCount; index += 1) {
-      const spawnPoint = this.getSpawnPoint(500 + index * 34, ENEMY_SPAWN_PLAYER_SAFE_RADIUS);
+      const baseId = composition[index % composition.length] ?? 'scuttler';
+      const summonArchetype = createBossSummonArchetype(ENEMY_ARCHETYPES[baseId]);
+      const spawnPoint = this.getSpawnPoint(
+        BOSS_SUMMON_SPAWN_DISTANCE + index * BOSS_SUMMON_SPAWN_DISTANCE_STEP,
+        ENEMY_SPAWN_PLAYER_SAFE_RADIUS,
+      );
       const summon = this.spawnEnemyFromArchetype(summonArchetype, spawnPoint);
       summon.setBossOwned(true);
       this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ADD', 0xfca5a5);
@@ -2270,6 +2477,13 @@ export class RunScene extends Phaser.Scene {
     }
     this.publishHudState();
     return summonCount;
+  }
+
+  private getNextBossSummonComposition(): Array<keyof typeof ENEMY_ARCHETYPES> {
+    const compositions = BOSS_SUMMON_COMPOSITIONS[this.bossPhase];
+    const composition = compositions[this.bossSummonCompositionIndex % compositions.length] ?? ['scuttler'];
+    this.bossSummonCompositionIndex += 1;
+    return composition;
   }
 
   private getActiveBossSummonCount(): number {
@@ -2428,6 +2642,22 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    if (activeEvent.type === 'buff-shrine') {
+      activeEvent.pressureEnemies = activeEvent.pressureEnemies.filter((enemy) => enemy.active && enemy.isAlive());
+      this.updateBuffShrineVisual(activeEvent);
+
+      const distance = Phaser.Math.Distance.Between(this.player.x, this.player.y, activeEvent.x, activeEvent.y);
+      if (distance <= BUFF_SHRINE_EVENT.claimRadius) {
+        this.resolveBuffShrineSuccess(activeEvent);
+        return;
+      }
+
+      if (this.runElapsedMs >= activeEvent.endsAtMs) {
+        this.resolveRunEventFailure(activeEvent, 'Power core faded.');
+      }
+      return;
+    }
+
     if (!activeEvent.targetEnemy.active || !activeEvent.targetEnemy.isAlive()) {
       return;
     }
@@ -2440,6 +2670,15 @@ export class RunScene extends Phaser.Scene {
 
   private tryStartScheduledRunEvent(): void {
     if (this.areNormalSpawnsSuppressed()) {
+      return;
+    }
+
+    if (
+      this.runElapsedMs >= this.nextBuffShrineAtMs &&
+      this.canStartRunEvent(BUFF_SHRINE_EVENT.durationMs) &&
+      this.getActiveBuffShrineCount() < BUFF_SHRINE_EVENT.maxActiveEvents
+    ) {
+      this.startBuffShrineEvent();
       return;
     }
 
@@ -2479,7 +2718,7 @@ export class RunScene extends Phaser.Scene {
     const nextEliteSpawnAtMs = this.spawnDirector.getNextEliteSpawnAtMs();
     const nextMinibossSpawnAtMs = this.spawnDirector.getNextMinibossSpawnAtMs();
     const nextBossSpawnAtMs = this.spawnDirector.hasBossSpawned() ? Number.POSITIVE_INFINITY : BOSS_SPAWN_TIME_MS;
-    const safeWindowRequiredMs = durationMs + RUN_EVENT_ENCOUNTER_BUFFER_MS;
+    const safeWindowRequiredMs = durationMs + RUN_EVENT_ENCOUNTER_BUFFER_MS + MAP_EVENT_ENCOUNTER_BUFFER_MS;
 
     return (
       nextEliteSpawnAtMs - this.runElapsedMs > safeWindowRequiredMs &&
@@ -2579,6 +2818,123 @@ export class RunScene extends Phaser.Scene {
     return true;
   }
 
+  private startBuffShrineEvent(force = false): boolean {
+    if (this.areNormalSpawnsSuppressed()) {
+      return false;
+    }
+
+    if (!force && !this.canStartRunEvent(BUFF_SHRINE_EVENT.durationMs)) {
+      return false;
+    }
+
+    const point = this.chooseBuffShrinePoint();
+    const shrineVisual = this.add.circle(point.x, point.y, BUFF_SHRINE_EVENT.shrineRadius, BUFF_SHRINE_EVENT.fillColor, 0.2).setDepth(7.4);
+    shrineVisual.setStrokeStyle(4, BUFF_SHRINE_EVENT.strokeColor, 0.95);
+    shrineVisual.setBlendMode(Phaser.BlendModes.ADD);
+    const claimRing = this.add.circle(point.x, point.y, BUFF_SHRINE_EVENT.claimRadius, BUFF_SHRINE_EVENT.fillColor, 0.05).setDepth(7.35);
+    claimRing.setStrokeStyle(2, BUFF_SHRINE_EVENT.strokeColor, 0.76);
+    const label = this.add
+      .text(point.x, point.y - BUFF_SHRINE_EVENT.claimRadius - 20, 'CORE', {
+        fontFamily: 'Trebuchet MS, sans-serif',
+        fontSize: '14px',
+        color: BUFF_SHRINE_EVENT.labelColor,
+        stroke: '#0f172a',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(7.45);
+
+    const pressureEnemies = this.spawnBuffShrinePressure(point);
+    this.activeRunEvent = {
+      type: 'buff-shrine',
+      title: 'Power Core',
+      objective: 'Claim the core.',
+      startedAtMs: this.runElapsedMs,
+      endsAtMs: this.runElapsedMs + BUFF_SHRINE_EVENT.durationMs,
+      x: point.x,
+      y: point.y,
+      pressureEnemies,
+      shrineVisual,
+      claimRing,
+      label,
+    };
+    this.nextBuffShrineAtMs = this.runElapsedMs + BUFF_SHRINE_EVENT.intervalMs;
+    this.registry.set('run.instructions', 'Power core active.');
+    this.setAlert('objective', 'Power core', 1300);
+    this.showSpawnIndicator(point.x, point.y, 'CORE', BUFF_SHRINE_EVENT.strokeColor);
+    this.cameras.main.flash(90, 140, 210, 255, false);
+    playCue('elite-arrival');
+    return true;
+  }
+
+  private chooseBuffShrinePoint(): Phaser.Math.Vector2 {
+    const edge = BUFF_SHRINE_EVENT.edgePadding;
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const x = Phaser.Math.Between(edge, WORLD_WIDTH - edge);
+      const y = Phaser.Math.Between(edge, WORLD_HEIGHT - edge);
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) >= BUFF_SHRINE_EVENT.safeDistanceFromPlayer) {
+        return new Phaser.Math.Vector2(x, y);
+      }
+    }
+
+    const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    return new Phaser.Math.Vector2(
+      Phaser.Math.Clamp(this.player.x + Math.cos(angle) * BUFF_SHRINE_EVENT.safeDistanceFromPlayer, edge, WORLD_WIDTH - edge),
+      Phaser.Math.Clamp(this.player.y + Math.sin(angle) * BUFF_SHRINE_EVENT.safeDistanceFromPlayer, edge, WORLD_HEIGHT - edge),
+    );
+  }
+
+  private spawnBuffShrinePressure(point: Phaser.Math.Vector2): Enemy[] {
+    const availableSlots = getAvailableEnemySpawnSlots(this.getActiveEnemyCount());
+    const pressureIds = BUFF_SHRINE_EVENT.enemyPressure.slice(0, availableSlots);
+
+    return pressureIds.map((id, index) => {
+      const archetype = applyEventEnemyStatMultiplier(ENEMY_ARCHETYPES[id]);
+      const angle = (Math.PI * 2 * index) / Math.max(1, pressureIds.length) + Phaser.Math.FloatBetween(-0.24, 0.24);
+      const spawnPoint = new Phaser.Math.Vector2(
+        Phaser.Math.Clamp(point.x + Math.cos(angle) * BUFF_SHRINE_EVENT.pressureSpawnDistance, 48, WORLD_WIDTH - 48),
+        Phaser.Math.Clamp(point.y + Math.sin(angle) * BUFF_SHRINE_EVENT.pressureSpawnDistance, 48, WORLD_HEIGHT - 48),
+      );
+      const enemy = this.spawnEnemyFromArchetype(archetype, spawnPoint);
+      enemy.setEventMarker(BUFF_SHRINE_EVENT.strokeColor);
+      return enemy;
+    });
+  }
+
+  private updateBuffShrineVisual(activeEvent: Extract<ActiveRunEvent, { type: 'buff-shrine' }>): void {
+    const remainingRatio = Phaser.Math.Clamp((activeEvent.endsAtMs - this.runElapsedMs) / BUFF_SHRINE_EVENT.durationMs, 0, 1);
+    const pulse = 1 + Math.sin(this.time.now * 0.012) * 0.06;
+    activeEvent.shrineVisual.setScale(pulse);
+    activeEvent.claimRing.setAlpha(0.05 + remainingRatio * 0.06);
+    activeEvent.claimRing.setStrokeStyle(2 + Math.round((1 - remainingRatio) * 2), BUFF_SHRINE_EVENT.strokeColor, 0.62 + remainingRatio * 0.2);
+    activeEvent.label.setAlpha(0.78 + Math.sin(this.time.now * 0.015) * 0.12);
+  }
+
+  private resolveBuffShrineSuccess(activeEvent: Extract<ActiveRunEvent, { type: 'buff-shrine' }>): void {
+    if (this.activeRunEvent !== activeEvent) {
+      return;
+    }
+
+    this.buffShrineSuccessCount += 1;
+    this.activeMapBuff = { type: BUFF_SHRINE_EVENT.buffType, remainingMs: BUFF_SHRINE_EVENT.buffDurationMs };
+    this.breakoutPulseProtectionRemainingMs = Math.max(
+      this.breakoutPulseProtectionRemainingMs,
+      BUFF_SHRINE_EVENT.shieldInvulnerabilityMs,
+    );
+    this.breakoutPulseCooldownRemainingMs = Math.max(
+      0,
+      this.breakoutPulseCooldownRemainingMs - BUFF_SHRINE_EVENT.pulseCooldownRefundMs,
+    );
+    this.player.extendInvulnerability(BUFF_SHRINE_EVENT.shieldInvulnerabilityMs, this.time.now);
+    this.createBurstCircle(activeEvent.x, activeEvent.y, BUFF_SHRINE_EVENT.fillColor, 26, 112, 320, 0.86);
+    this.showFloatingText(this.player.x, this.player.y - 70, 'Shield + Pulse', BUFF_SHRINE_EVENT.labelColor, 18);
+    this.showRewardToast('Power core: shield and Pulse refund', BUFF_SHRINE_EVENT.labelColor);
+    this.registry.set('run.instructions', 'Power core claimed.');
+    this.setAlert('objective', 'Core claimed', 1400);
+    this.clearActiveRunEvent();
+    playCue('elite-reward');
+  }
+
   private resolveRunEventSuccess(activeEvent: ActiveRunEvent, detail: string): void {
     if (this.activeRunEvent !== activeEvent) {
       return;
@@ -2587,9 +2943,12 @@ export class RunScene extends Phaser.Scene {
     if (activeEvent.type === 'challenge-wave') {
       this.challengeWaveSuccessCount += 1;
       this.grantRunEventReward('Challenge reward', activeEvent.rewardGold, 0, activeEvent.rewardLevelUps);
-    } else {
+    } else if (activeEvent.type === 'reward-target') {
       this.rewardTargetSuccessCount += 1;
       this.grantRunEventReward('Reward target secured', activeEvent.rewardGold, activeEvent.rewardXp, 0);
+    } else {
+      this.resolveBuffShrineSuccess(activeEvent);
+      return;
     }
 
     this.showRewardToast(
@@ -2611,16 +2970,26 @@ export class RunScene extends Phaser.Scene {
 
     if (activeEvent.type === 'challenge-wave') {
       this.challengeWaveFailureCount += 1;
-    } else {
+    } else if (activeEvent.type === 'reward-target') {
       this.rewardTargetFailureCount += 1;
+    } else {
+      this.buffShrineFailureCount += 1;
     }
 
     this.showRewardToast(
-      activeEvent.type === 'challenge-wave' ? 'Challenge wave ended with no bonus reward.' : 'Reward target escaped.',
+      activeEvent.type === 'challenge-wave'
+        ? 'Challenge wave ended with no bonus reward.'
+        : activeEvent.type === 'reward-target'
+          ? 'Reward target escaped.'
+          : 'Power core faded.',
       '#fca5a5',
     );
     this.registry.set('run.instructions', detail);
-    this.setAlert('objective', activeEvent.type === 'challenge-wave' ? 'Challenge ended' : 'Target escaped', 1400);
+    this.setAlert(
+      'objective',
+      activeEvent.type === 'challenge-wave' ? 'Challenge ended' : activeEvent.type === 'reward-target' ? 'Target escaped' : 'Core faded',
+      1400,
+    );
     this.clearActiveRunEvent();
   }
 
@@ -2661,8 +3030,23 @@ export class RunScene extends Phaser.Scene {
       this.activeRunEvent.targetEnemy.setEventMarker(null);
     }
 
+    if (this.activeRunEvent?.type === 'buff-shrine') {
+      this.activeRunEvent.shrineVisual.destroy();
+      this.activeRunEvent.claimRing.destroy();
+      this.activeRunEvent.label.destroy();
+      for (const enemy of this.activeRunEvent.pressureEnemies) {
+        if (enemy.active) {
+          enemy.setEventMarker(null);
+        }
+      }
+    }
+
     this.activeRunEvent = null;
     this.destroyRewardTargetMarker();
+  }
+
+  private getActiveBuffShrineCount(): number {
+    return this.activeRunEvent?.type === 'buff-shrine' ? 1 : 0;
   }
 
   private updateRewardTargetMarker(): void {
@@ -3102,6 +3486,17 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
+  private updateActiveMapBuff(deltaMs: number): void {
+    if (!this.activeMapBuff) {
+      return;
+    }
+
+    this.activeMapBuff.remainingMs = Math.max(0, this.activeMapBuff.remainingMs - deltaMs);
+    if (this.activeMapBuff.remainingMs <= 0) {
+      this.activeMapBuff = null;
+    }
+  }
+
   private applyBreakoutPulseKnockback(): void {
     const activeEnemies = ((this.enemies?.getChildren() as Enemy[] | undefined) ?? []).filter(
       (enemy) => enemy.active && enemy.isAlive(),
@@ -3323,6 +3718,11 @@ export class RunScene extends Phaser.Scene {
       if (activeEvent.challengeEnemies.length === 0) {
         this.resolveRunEventSuccess(activeEvent, 'Challenge wave cleared before the timer expired.');
       }
+      return;
+    }
+
+    if (activeEvent.type === 'buff-shrine') {
+      activeEvent.pressureEnemies = activeEvent.pressureEnemies.filter((trackedEnemy) => trackedEnemy !== enemy && trackedEnemy.active && trackedEnemy.isAlive());
     }
   }
 
@@ -4441,6 +4841,8 @@ export class RunScene extends Phaser.Scene {
       bossPhase: this.bossPhase,
       bossActive: Boolean(activeBoss),
     }));
+    this.registry.set('run.bossFightState', activeBoss ? this.bossFightState : '');
+    this.registry.set('run.bossStateRemainingMs', activeBoss ? Math.max(0, this.bossStateEndsAtMs - this.runElapsedMs) : 0);
     this.registry.set('run.activeBossSkill', this.getActiveBossSkillName());
     this.registry.set('run.bossSkillTelegraphActive', this.skillTelegraphs.some((telegraph) => telegraph.kind === 'boss-shockwave'));
     this.registry.set('run.bossSkillDamageActive', this.shockwaveAttacks.some((attack) => attack.elapsedMs < attack.durationMs));
@@ -4465,11 +4867,13 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.eventTitle', this.activeRunEvent?.title ?? '');
     this.registry.set('run.eventText', this.activeRunEvent?.objective ?? '');
     this.registry.set('run.eventRemainingMs', this.activeRunEvent ? Math.max(0, this.activeRunEvent.endsAtMs - this.runElapsedMs) : 0);
+    this.registry.set('run.mapBuffType', this.activeMapBuff?.type ?? '');
+    this.registry.set('run.mapBuffRemainingMs', this.activeMapBuff?.remainingMs ?? 0);
     this.registry.set('run.controlGuideMode', this.saveData.controlGuideMode);
     this.registry.set('run.controlHintVisible', this.controlHintVisible);
     this.registry.set('run.controlJoysticks', this.movementInput.getPointerGuideState());
     this.registry.set('run.inputSuppressed', this.movementInput.isSuppressed());
-    this.registry.set('run.formationPressureEnabled', this.runElapsedMs >= FORMATION_PRESSURE_FIRST_MS);
+    this.registry.set('run.formationPressureEnabled', this.runElapsedMs >= WAVE_FORMATION_ENABLE_TIME_MS);
     this.registry.set('run.lastFormationType', this.lastFormationType);
     this.registry.set('run.formationCooldownMs', Math.max(0, this.nextFormationAtMs - this.runElapsedMs));
     this.registry.set('run.formationSpawnCount', this.formationSpawnCount);

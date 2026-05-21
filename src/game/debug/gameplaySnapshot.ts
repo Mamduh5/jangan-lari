@@ -89,14 +89,21 @@ export type GameplayBotEnemyAttackSummary = {
 
 export type GameplayBotEventSnapshot = {
   active: boolean;
-  type: 'challenge-wave' | 'reward-target' | '';
+  type: 'challenge-wave' | 'reward-target' | 'buff-shrine' | '';
   title: string;
   objective: string;
   remainingMs: number;
+  x: number | null;
+  y: number | null;
+  claimRadius: number | null;
+  buffType: string;
+  buffRemainingMs: number;
   challengeWaveSuccesses: number;
   challengeWaveFailures: number;
   rewardTargetSuccesses: number;
   rewardTargetFailures: number;
+  buffShrineSuccesses: number;
+  buffShrineFailures: number;
 };
 
 export type GameplayBotFormationSnapshot = {
@@ -162,6 +169,8 @@ export type GameplayBotRunSnapshot = {
   bossTargetFastKillMs: number;
   bossOwnedEnemyCount: number;
   bossPhasePressure: string;
+  bossFightState: string;
+  bossStateRemainingMs: number;
   activeBossSkill: string;
   bossSkillTelegraphActive: boolean;
   bossSkillDamageActive: boolean;

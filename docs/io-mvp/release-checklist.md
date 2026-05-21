@@ -16,6 +16,12 @@ These commands exist in `package.json` and should be used exactly as written:
 - `npm run build` -> `tsc --noEmit && vite build`
 - `npm run preview` -> `vite preview`
 - `npm run test:e2e:mobile-alpha-ui` -> `playwright test tests/e2e/mobile-alpha-ui.spec.ts`
+- `npm run test:e2e:hud` -> `playwright test tests/e2e/mobile-hud.spec.ts`
+- `npm run test:e2e:controls` -> `playwright test tests/e2e/mobile-controls.spec.ts`
+- `npm run test:e2e:mobile-layout` -> `playwright test tests/e2e/mobile-layout.spec.ts`
+- `npm run test:e2e:boss-stage` -> `playwright test tests/e2e/boss-stage.spec.ts`
+- `npm run test:e2e:boss-phase` -> `playwright test tests/e2e/boss-phase.spec.ts`
+- `npm run test:e2e:boss-balance` -> `playwright test tests/e2e/boss-balance.spec.ts`
 - `npm run android:sync` -> `npm run build && cap sync android`
 - `npm run android:open` -> `cap open android`
 - `npm run android:build` -> `npm run android:sync && cap build android`
@@ -33,6 +39,8 @@ There are no package scripts dedicated to the new A19-A21 focused specs; run the
 npx playwright test tests/e2e/formation-pressure.spec.ts
 npx playwright test tests/e2e/danger-zone.spec.ts
 npx playwright test tests/e2e/active-survival-tool.spec.ts
+npx playwright test tests/e2e/wave-director.spec.ts
+npx playwright test tests/e2e/map-event.spec.ts
 ```
 
 `npm install` and `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` are direct tool commands, not package scripts.
@@ -226,9 +234,12 @@ Use this during either web or APK testing to confirm the core loop is intact.
 - [ ] Survive a formation wave: pressure is clear, with no unavoidable hard cage.
 - [ ] Read a danger zone: warning appears before damage and moving out feels possible.
 - [ ] Use Breakout Pulse: the active button/`E` opens space when surrounded and enters cooldown.
+- [ ] Judge wave progression: first minute is simple, mid-run introduces fast/blocker/ranged roles, late run mixes roles without unfair cages.
+- [ ] Contest a Power Core: event appears away from the player, creates pressure around a specific space, and feels worth taking.
 - [ ] Pause during pressure: formation/danger/pulse state resumes cleanly after pause.
 - [ ] Survive boss phase: boss spawns at expected time, normal spawns suppressed.
-- [ ] Confirm boss tuning: summons and shockwaves feel fair with collision and Breakout Pulse.
+- [ ] Confirm boss states: approach, shockwave, summon, crossfire, and recovery are readable and scarier than the miniboss.
+- [ ] Confirm boss tuning: summons, shockwaves, crossfire, collision, and Breakout Pulse feel fair together.
 - [ ] Defeat boss or reach end condition: victory or defeat screen appears.
 - [ ] Return to menu: clean transition.
 - [ ] Restart run: new run starts without leftover state.
@@ -251,6 +262,7 @@ These are explicitly out of scope for this alpha release checklist:
 - No PWA packaging.
 - No aspect-ratio refactor or letterbox elimination.
 - No new content (weapons, heroes, classes, enemies, maps).
+- No gameplay-bot recalibration for A23-A26; use focused specs only.
 
 ---
 
@@ -263,6 +275,8 @@ If any of these are true, the build is **not** a valid alpha release candidate:
 - [ ] **Touch controls broken:** left/right drag does not move or aim.
 - [ ] **Run cannot start:** Start Run does not enter the run scene.
 - [ ] **Run cannot end:** boss defeat or player death does not trigger an end screen.
+- [ ] **Map event broken:** Power Core cannot be reached, cannot be claimed, or leaves stale objects after ending.
+- [ ] **Boss identity regressed:** boss is less threatening than miniboss, lacks readable states, or stacks unreadable pressure.
 - [ ] **Pause/restart/menu broken:** pause overlay missing, resume dead, or return-to-menu crashes.
 - [ ] **Reward/class/stat overlays untappable:** level-up, class choice, or stat buttons do not respond.
 - [ ] **Serious runtime errors:** unhandled exceptions during normal play.

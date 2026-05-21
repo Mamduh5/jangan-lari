@@ -1,4 +1,13 @@
-import { BOSS_FIRST_PASS_MAX_HEALTH, MINIBOSS_MAX_HEALTH } from '../config/constants';
+import {
+  BOSS_CONTACT_DAMAGE,
+  BOSS_DASH_COOLDOWN_MS,
+  BOSS_DASH_DURATION_MS,
+  BOSS_DASH_SPEED_MULTIPLIER,
+  BOSS_FIRST_PASS_MAX_HEALTH,
+  BOSS_MOVE_SPEED,
+  MINIBOSS_MAX_HEALTH,
+} from '../config/constants';
+import type { EnemyRole } from '../config/waveDirectorBalance';
 
 export type EnemyArchetypeId =
   | 'scuttler'
@@ -39,6 +48,7 @@ export type EnemyArchetype = {
   isElite?: boolean;
   isMiniboss?: boolean;
   isBoss?: boolean;
+  roles?: EnemyRole[];
 };
 
 export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
@@ -53,6 +63,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     contactDamage: 8,
     xpValue: 5,
     behavior: 'chase',
+    roles: ['fodder'],
   },
   skimmer: {
     id: 'skimmer',
@@ -67,6 +78,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     behavior: 'strafe',
     preferredDistance: 160,
     strafeStrength: 0.7,
+    roles: ['fast'],
   },
   harrier: {
     id: 'harrier',
@@ -81,6 +93,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     behavior: 'strafe',
     preferredDistance: 235,
     strafeStrength: 1.08,
+    roles: ['fast'],
   },
   mauler: {
     id: 'mauler',
@@ -93,6 +106,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     contactDamage: 14,
     xpValue: 8,
     behavior: 'chase',
+    roles: ['blocker'],
   },
   crusher: {
     id: 'crusher',
@@ -108,6 +122,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     dashCooldownMs: 1700,
     dashDurationMs: 280,
     dashSpeedMultiplier: 2.35,
+    roles: ['charger'],
   },
   bulwark: {
     id: 'bulwark',
@@ -120,6 +135,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     contactDamage: 19,
     xpValue: 13,
     behavior: 'chase',
+    roles: ['blocker'],
   },
   hexcaster: {
     id: 'hexcaster',
@@ -137,6 +153,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     shotCooldownMs: 1750,
     shotSpeed: 335,
     shotDamage: 14,
+    roles: ['ranged'],
   },
   overlord: {
     id: 'overlord',
@@ -155,6 +172,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     rewardGold: 12,
     rewardLevelUps: 1,
     isElite: true,
+    roles: ['elite', 'charger'],
   },
   riftblade: {
     id: 'riftblade',
@@ -172,6 +190,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     rewardGold: 10,
     rewardLevelUps: 1,
     isElite: true,
+    roles: ['elite', 'fast'],
   },
   dreadnought: {
     id: 'dreadnought',
@@ -190,6 +209,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     rewardGold: 26,
     rewardLevelUps: 1,
     isMiniboss: true,
+    roles: ['elite', 'charger', 'blocker'],
   },
   behemoth: {
     id: 'behemoth',
@@ -198,14 +218,15 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     color: 0xdc2626,
     strokeColor: 0xfee2e2,
     maxHealth: BOSS_FIRST_PASS_MAX_HEALTH,
-    speed: 78,
-    contactDamage: 42,
+    speed: BOSS_MOVE_SPEED,
+    contactDamage: BOSS_CONTACT_DAMAGE,
     xpValue: 96,
     behavior: 'dash',
-    dashCooldownMs: 1025,
-    dashDurationMs: 520,
-    dashSpeedMultiplier: 2.35,
+    dashCooldownMs: BOSS_DASH_COOLDOWN_MS,
+    dashDurationMs: BOSS_DASH_DURATION_MS,
+    dashSpeedMultiplier: BOSS_DASH_SPEED_MULTIPLIER,
     rewardGold: 40,
     isBoss: true,
+    roles: ['elite', 'charger'],
   },
 };

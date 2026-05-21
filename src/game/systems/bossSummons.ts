@@ -50,6 +50,7 @@ export function createBossSummonArchetype(base: EnemyArchetype): EnemyArchetype 
     isElite: false,
     isMiniboss: false,
     isBoss: false,
+    roles: ['bossOwned', ...(base.roles ?? [])],
   };
 }
 

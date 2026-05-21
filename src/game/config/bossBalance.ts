@@ -1,3 +1,5 @@
+import type { EnemyArchetypeId } from '../data/enemies';
+
 // Boss spawn and run duration
 export const STAGE_BOSS_SPAWN_TIME_MS = 900000;
 export const BOSS_SPAWN_TIME_MS = STAGE_BOSS_SPAWN_TIME_MS;
@@ -6,6 +8,11 @@ export const RUN_ACTIVE_DELTA_CAP_MS = 100;
 
 // Boss health and tuning
 export const BOSS_FIRST_PASS_MAX_HEALTH = 69000;
+export const BOSS_CONTACT_DAMAGE = 48;
+export const BOSS_MOVE_SPEED = 88;
+export const BOSS_DASH_COOLDOWN_MS = 940;
+export const BOSS_DASH_DURATION_MS = 560;
+export const BOSS_DASH_SPEED_MULTIPLIER = 2.45;
 export const BOSS_TARGET_FAST_KILL_MS = 60000;
 export const BOSS_PHASE_TWO_HEALTH_RATIO = 0.5;
 export const BOSS_PHASE_TWO_DAMAGE_MULTIPLIER = 1.18;
@@ -23,12 +30,56 @@ export const BOSS_SHOCKWAVE_COOLDOWN_MAX_MS = 5000;
 // Boss summons
 export const BOSS_SUMMON_FIRST_DELAY_MS = 3200;
 export const BOSS_SUMMON_INTERVAL_MS = 8400;
-export const BOSS_SUMMON_BATCH_SIZE = 2;
-export const BOSS_SUMMON_MAX_ACTIVE = 5;
+export const BOSS_SUMMON_BATCH_SIZE = 3;
+export const BOSS_SUMMON_MAX_ACTIVE = 6;
 export const BOSS_SUMMON_HEALTH_MULTIPLIER = 2;
 export const BOSS_SUMMON_DAMAGE_MULTIPLIER = 0.72;
 export const BOSS_SUMMON_SPEED_MULTIPLIER = 1.08;
 export const BOSS_SUMMON_XP_VALUE = 1;
+
+export type BossFightState = 'approach' | 'shockwave' | 'summon' | 'crossfire' | 'recovery';
+
+export type BossStateDefinition = {
+  state: BossFightState;
+  durationMs: number;
+};
+
+export const BOSS_STATE_SEQUENCE_PHASE_1: BossStateDefinition[] = [
+  { state: 'approach', durationMs: 5200 },
+  { state: 'shockwave', durationMs: 2600 },
+  { state: 'recovery', durationMs: 2200 },
+  { state: 'summon', durationMs: 2800 },
+  { state: 'approach', durationMs: 4200 },
+  { state: 'crossfire', durationMs: 2600 },
+  { state: 'recovery', durationMs: 1800 },
+];
+
+export const BOSS_STATE_SEQUENCE_PHASE_2: BossStateDefinition[] = [
+  { state: 'approach', durationMs: 3600 },
+  { state: 'shockwave', durationMs: 2200 },
+  { state: 'summon', durationMs: 2400 },
+  { state: 'crossfire', durationMs: 2400 },
+  { state: 'recovery', durationMs: 1500 },
+];
+
+export const BOSS_CROSSFIRE_PROJECTILE_COUNT_PHASE_1 = 5;
+export const BOSS_CROSSFIRE_PROJECTILE_COUNT_PHASE_2 = 7;
+export const BOSS_CROSSFIRE_PROJECTILE_SPEED = 315;
+export const BOSS_CROSSFIRE_PROJECTILE_DAMAGE = 15;
+export const BOSS_CROSSFIRE_PROJECTILE_RADIUS = 8;
+export const BOSS_CROSSFIRE_COLOR = 0xfca5a5;
+
+export const BOSS_SUMMON_COMPOSITIONS: Record<1 | 2, EnemyArchetypeId[][]> = {
+  1: [
+    ['mauler', 'hexcaster'],
+    ['crusher', 'skimmer'],
+  ],
+  2: [
+    ['bulwark', 'hexcaster', 'skimmer'],
+    ['crusher', 'hexcaster', 'harrier'],
+    ['mauler', 'bulwark', 'hexcaster'],
+  ],
+};
 
 //Miniboss health and tuning
 export const MINIBOSS_MAX_HEALTH = 9100
