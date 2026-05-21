@@ -885,3 +885,20 @@ Acceptance checks:
 - Map event makes movement meaningful.
 - Boss feels more powerful than miniboss without becoming unfair or boring.
 - Passing automated tests is not enough; owner must still judge full-run game feel manually.
+
+## Sprint A29: Final Gameplay UI/UX Cleanup
+
+Goal: Polish the active gameplay HUD/control layout before the final A17 release checklist pass without changing gameplay.
+
+Status note:
+- Kept Breakout Pulse as a circular right-thumb skill button above the AIM control.
+- Kept the active weapon icon/asset-ready slot in the HP/XP HUD cluster.
+- Kept active HUD text minimal: HP in bar, XP as a bar, Gold/Kills visible, Score hidden.
+
+Intentionally skipped:
+- No gameplay balance, player speed, enemy, boss, wave, map, Power Core, weapon logic, asset, or gameplay-bot changes.
+
+Acceptance checks:
+- Pulse remains tappable and hidden behind pause, reward/class overlays, end screen, and orientation warning.
+- Weapon icon reads as HUD information near HP/XP and does not show long weapon name text.
+- Focused HUD, control, layout, active survival tool, and pause-menu validations pass.

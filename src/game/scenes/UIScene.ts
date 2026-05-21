@@ -115,7 +115,7 @@ export class UIScene extends Phaser.Scene {
   private readonly activeAbilityButtonRadius = 32;
   private readonly activeAbilityButtonHitRadius = 44;
   private readonly weaponSlotStartX = 82;
-  private readonly weaponSlotY = 108;
+  private readonly weaponSlotY = 124;
   private readonly weaponSlotSpacing = 34;
   private readonly weaponSlotSize = 24;
 
