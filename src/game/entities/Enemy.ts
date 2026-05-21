@@ -1,6 +1,20 @@
 import Phaser from 'phaser';
 import { getEnemyCombatResponseProfile, type EnemyCombatResponseProfile } from '../combat/combatResponse';
 import { ENEMY_HIT_FLASH_MS } from '../config/constants';
+import {
+  BLOCKER_BRACE_COOLDOWN_MS,
+  BLOCKER_BRACE_DURATION_MS,
+  BLOCKER_BRACE_TRIGGER_DISTANCE,
+  CHARGER_COOLDOWN_MS,
+  CHARGER_DASH_DURATION_MS,
+  CHARGER_DASH_SPEED,
+  CHARGER_RECOVERY_MS,
+  CHARGER_TRIGGER_DISTANCE,
+  CHARGER_WARN_COLOR,
+  CHARGER_WINDUP_MS,
+  INTERCEPT_APPROACH_STRAFE_STRENGTH,
+  INTERCEPT_PREDICTION_TIME_S,
+} from '../config/enemyBehaviorBalance';
 import type { EnemyArchetype } from '../data/enemies';
 import {
   computeMinibossLineStrikeDynamicLength,
@@ -8,6 +22,15 @@ import {
   createMinibossLineAttackContract,
   createMinibossVolleyContract,
 } from '../systems/dangerousEffectContracts';
+
+export type EnemyBehaviorState =
+  | 'chasing'
+  | 'intercepting'
+  | 'windup'
+  | 'dashing'
+  | 'recovering'
+  | 'bracing'
+  | 'strafing';
 
 export type EnemyAttackSignal =
   | {
@@ -82,6 +105,17 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private deathPresentationActive = false;
   private eventMarkerColor: number | null = null;
   private bossOwned = false;
+  private behaviorState: EnemyBehaviorState = 'chasing';
+  private chargerWindupUntil = 0;
+  private chargerDashUntil = 0;
+  private chargerRecoveryUntil = 0;
+  private chargerNextAttackAt = 0;
+  private chargerDashVector = new Phaser.Math.Vector2(0, 0);
+  private blockerBraceUntil = 0;
+  private blockerBraceNextAt = 0;
+  private lastTargetPos = new Phaser.Math.Vector2(0, 0);
+  private lastTargetPosTime = 0;
+  private targetApparentVelocity = new Phaser.Math.Vector2(0, 0);
   private readonly roleVisuals: Array<{
     object: Phaser.GameObjects.Shape;
     forward: number;
@@ -109,6 +143,14 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
     if (archetype.behavior === 'ranged') {
       this.nextRangedShotAt = scene.time.now + Phaser.Math.Between(1100, 1900);
+    }
+
+    if (archetype.behavior === 'charger') {
+      this.chargerNextAttackAt = scene.time.now + Phaser.Math.Between(800, 1800);
+    }
+
+    if (archetype.behavior === 'blocker') {
+      this.blockerBraceNextAt = scene.time.now + Phaser.Math.Between(600, 1400);
     }
 
     const strokeWidth = archetype.isBoss ? 4 : archetype.isMiniboss ? 4 : archetype.isElite ? 3 : 2;
@@ -191,6 +233,24 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     return this.archetype.behavior === 'ranged';
   }
 
+  getBehaviorState(): EnemyBehaviorState {
+    return this.behaviorState;
+  }
+
+  isPriorityThreat(): boolean {
+    if (this.archetype.behavior === 'ranged') {
+      return true;
+    }
+    if (this.archetype.behavior === 'charger') {
+      return this.behaviorState === 'windup' || this.behaviorState === 'dashing';
+    }
+    return false;
+  }
+
+  isBlockingRoute(): boolean {
+    return this.behaviorState === 'bracing';
+  }
+
   getRewardGold(): number {
     return this.archetype.rewardGold ?? 0;
   }
@@ -254,6 +314,15 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       case 'dash':
         this.applyDashMovement(towardTarget, currentTime);
         break;
+      case 'intercept':
+        this.applyInterceptMovement(towardTarget, currentTime);
+        break;
+      case 'charger':
+        this.applyChargerMovement(towardTarget, currentTime);
+        break;
+      case 'blocker':
+        this.applyBlockerMovement(towardTarget, currentTime);
+        break;
       default:
         this.applyChaseMovement(towardTarget);
         break;
@@ -282,6 +351,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const shockwaveCharging = this.isBoss() && this.shockwaveQueued && currentTime < this.shockwaveWindupUntil;
     const rangedCharging =
       this.archetype.behavior === 'ranged' && currentTime >= this.nextRangedShotAt - 260 && currentTime < this.nextRangedShotAt;
+    const chargerWindupActive = this.archetype.behavior === 'charger' && this.behaviorState === 'windup';
+    const chargerDashingActive = this.archetype.behavior === 'charger' && this.behaviorState === 'dashing';
+    const blockerBracingActive = this.archetype.behavior === 'blocker' && this.behaviorState === 'bracing';
 
     if (shockwaveCharging) {
       const windupProgress = Phaser.Math.Clamp(
@@ -320,6 +392,33 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setResponseScale((1.01 + chargeProgress * 0.1) * (hitReactionActive ? 0.95 : 1));
       this.setStrokeStyle(this.baseStrokeWidth + 1, 0xe0f2fe, 0.96);
       this.setAlpha(hitReactionActive ? 0.82 : 0.94);
+      return;
+    }
+
+    if (chargerWindupActive) {
+      const windupProgress = Phaser.Math.Clamp(1 - (this.chargerWindupUntil - currentTime) / CHARGER_WINDUP_MS, 0, 1);
+      const chargePulse = 1 + Math.sin(currentTime * 0.018) * 0.05;
+      this.setResponseScale((1.04 + windupProgress * 0.18) * chargePulse * (hitReactionActive ? 0.97 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 2, CHARGER_WARN_COLOR, 1);
+      this.setAlpha(0.78 + windupProgress * 0.22);
+      return;
+    }
+
+    if (chargerDashingActive) {
+      const dashRemaining = Math.max(0, this.chargerDashUntil - currentTime);
+      const dashProgress = 1 - Phaser.Math.Clamp(dashRemaining / CHARGER_DASH_DURATION_MS, 0, 1);
+      this.setResponseScale((1.12 - dashProgress * 0.04) * (hitReactionActive ? 0.97 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 1, 0xffa060, 0.95);
+      this.setAlpha(hitReactionActive ? 0.88 : 1);
+      return;
+    }
+
+    if (blockerBracingActive) {
+      const braceProgress = Phaser.Math.Clamp(1 - (this.blockerBraceUntil - currentTime) / BLOCKER_BRACE_DURATION_MS, 0, 1);
+      const bracePulse = 1 + Math.sin(currentTime * 0.008) * 0.03;
+      this.setResponseScale((1.06 + braceProgress * 0.06) * bracePulse * (hitReactionActive ? 0.95 : 1));
+      this.setStrokeStyle(this.baseStrokeWidth + 2, 0xbbe080, 1);
+      this.setAlpha(hitReactionActive ? 0.82 : 0.97);
       return;
     }
 
@@ -410,6 +509,116 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private applyChaseMovement(towardTarget: Phaser.Math.Vector2): void {
     towardTarget.normalize();
     this.body.setVelocity(towardTarget.x * this.speed, towardTarget.y * this.speed);
+    this.behaviorState = 'chasing';
+  }
+
+  private updateTargetTracking(targetX: number, targetY: number, currentTime: number): void {
+    const dtSec = (currentTime - this.lastTargetPosTime) / 1000;
+    if (dtSec > 0.016 && dtSec < 1.5) {
+      this.targetApparentVelocity.set(
+        (targetX - this.lastTargetPos.x) / dtSec,
+        (targetY - this.lastTargetPos.y) / dtSec,
+      );
+    }
+    this.lastTargetPos.set(targetX, targetY);
+    this.lastTargetPosTime = currentTime;
+  }
+
+  private applyInterceptMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
+    const targetX = this.x + towardTarget.x;
+    const targetY = this.y + towardTarget.y;
+    this.updateTargetTracking(targetX, targetY, currentTime);
+
+    const predictedX = targetX + this.targetApparentVelocity.x * INTERCEPT_PREDICTION_TIME_S;
+    const predictedY = targetY + this.targetApparentVelocity.y * INTERCEPT_PREDICTION_TIME_S;
+
+    const toPredicted = new Phaser.Math.Vector2(predictedX - this.x, predictedY - this.y);
+    const distance = Math.max(1, towardTarget.length());
+    const preferredDistance = this.archetype.preferredDistance ?? 140;
+    const distanceError = Phaser.Math.Clamp((distance - preferredDistance) / Math.max(1, preferredDistance), -0.6, 1);
+
+    const forward = toPredicted.clone().normalize();
+    const orbit = new Phaser.Math.Vector2(-forward.y * this.strafeDirection, forward.x * this.strafeDirection);
+
+    const velocity = forward
+      .scale(this.speed * (0.65 + distanceError * 0.35))
+      .add(orbit.scale(this.speed * INTERCEPT_APPROACH_STRAFE_STRENGTH));
+    this.body.setVelocity(velocity.x, velocity.y);
+    this.behaviorState = 'intercepting';
+  }
+
+  private applyChargerMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
+    const distance = towardTarget.length();
+
+    if (this.behaviorState === 'dashing') {
+      if (currentTime < this.chargerDashUntil) {
+        this.body.setVelocity(this.chargerDashVector.x, this.chargerDashVector.y);
+        return;
+      }
+      this.chargerRecoveryUntil = currentTime + CHARGER_RECOVERY_MS;
+      this.chargerNextAttackAt = this.chargerRecoveryUntil + CHARGER_COOLDOWN_MS;
+      this.behaviorState = 'recovering';
+    }
+
+    if (this.behaviorState === 'recovering') {
+      if (currentTime < this.chargerRecoveryUntil) {
+        const fwd = towardTarget.clone().normalize();
+        this.body.setVelocity(fwd.x * this.speed * 0.24, fwd.y * this.speed * 0.24);
+        return;
+      }
+      this.behaviorState = 'chasing';
+    }
+
+    if (this.behaviorState === 'windup') {
+      if (currentTime < this.chargerWindupUntil) {
+        this.body.setVelocity(0, 0);
+        return;
+      }
+      this.chargerDashVector.set(
+        this.chargerDashVector.x * CHARGER_DASH_SPEED,
+        this.chargerDashVector.y * CHARGER_DASH_SPEED,
+      );
+      this.chargerDashUntil = currentTime + CHARGER_DASH_DURATION_MS;
+      this.behaviorState = 'dashing';
+      this.body.setVelocity(this.chargerDashVector.x, this.chargerDashVector.y);
+      return;
+    }
+
+    if (currentTime >= this.chargerNextAttackAt && distance <= CHARGER_TRIGGER_DISTANCE) {
+      this.chargerDashVector = towardTarget.clone().normalize();
+      this.chargerWindupUntil = currentTime + CHARGER_WINDUP_MS;
+      this.behaviorState = 'windup';
+      this.body.setVelocity(0, 0);
+      return;
+    }
+
+    const fwd = towardTarget.clone().normalize();
+    this.body.setVelocity(fwd.x * this.speed, fwd.y * this.speed);
+    this.behaviorState = 'chasing';
+  }
+
+  private applyBlockerMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
+    const distance = towardTarget.length();
+
+    if (this.behaviorState === 'bracing') {
+      if (currentTime < this.blockerBraceUntil) {
+        this.body.setVelocity(0, 0);
+        return;
+      }
+      this.behaviorState = 'chasing';
+      this.blockerBraceNextAt = currentTime + BLOCKER_BRACE_COOLDOWN_MS;
+    }
+
+    if (currentTime >= this.blockerBraceNextAt && distance <= BLOCKER_BRACE_TRIGGER_DISTANCE) {
+      this.blockerBraceUntil = currentTime + BLOCKER_BRACE_DURATION_MS;
+      this.behaviorState = 'bracing';
+      this.body.setVelocity(0, 0);
+      return;
+    }
+
+    const fwd = towardTarget.clone().normalize();
+    this.body.setVelocity(fwd.x * this.speed, fwd.y * this.speed);
+    this.behaviorState = 'chasing';
   }
 
   private applyStrafeMovement(towardTarget: Phaser.Math.Vector2): void {
@@ -422,6 +631,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     const velocity = forward.scale(this.speed * distanceError).add(orbit.scale(this.speed * strafeStrength));
     this.body.setVelocity(velocity.x, velocity.y);
+    this.behaviorState = 'strafing';
   }
 
   private applyRangedMovement(towardTarget: Phaser.Math.Vector2, currentTime: number): void {
@@ -740,8 +950,15 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     } else if (this.archetype.behavior === 'strafe') {
       this.addRoleVisual(scene.add.triangle(this.x, this.y, 0, size * 0.34, size * 0.5, 0, size * 0.5, size * 0.68, 0xe0f2fe, 0.75), 0, -size * 0.52, 0);
       this.addRoleVisual(scene.add.triangle(this.x, this.y, 0, 0, size * 0.5, size * 0.34, 0, size * 0.68, 0xe0f2fe, 0.75), 0, size * 0.52, 0);
+    } else if (this.archetype.behavior === 'intercept') {
+      this.addRoleVisual(scene.add.triangle(this.x, this.y, 0, size * 0.5, size * 0.46, 0, size * 0.92, size * 0.5, 0xfbbf24, 0.84), size * 0.36, 0, 0);
+    } else if (this.archetype.behavior === 'charger') {
+      this.addRoleVisual(scene.add.triangle(this.x, this.y, 0, size * 0.5, size * 0.44, 0, size * 0.88, size * 0.5, 0xff7722, 0.92), size * 0.42, 0, 0);
     } else if (this.archetype.behavior === 'dash') {
       this.addRoleVisual(scene.add.triangle(this.x, this.y, 0, size * 0.5, size * 0.44, 0, size * 0.88, size * 0.5, 0xffedd5, 0.86), size * 0.42, 0, 0);
+    } else if (this.archetype.behavior === 'blocker') {
+      this.addRoleVisual(scene.add.rectangle(this.x, this.y, size * 0.74, size * 0.13, 0x84dd50, 0.86), 0, -size * 0.3, 0);
+      this.addRoleVisual(scene.add.rectangle(this.x, this.y, size * 0.74, size * 0.13, 0x84dd50, 0.86), 0, size * 0.3, 0);
     } else {
       this.addRoleVisual(scene.add.rectangle(this.x, this.y, size * 0.28, size * 0.12, this.archetype.strokeColor, 0.9), size * 0.44, 0, 0);
     }

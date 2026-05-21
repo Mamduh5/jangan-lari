@@ -828,6 +828,7 @@ export class RunScene extends Phaser.Scene {
         shotSpeed: enemy.archetype.shotSpeed ?? null,
         scalingStack: enemyScaling.stack,
         behavior: enemy.getBehavior(),
+        behaviorState: enemy.getBehaviorState(),
         xpValue: getEnemyXpReward(enemy.archetype),
         isRanged: enemy.isRangedShooter(),
         hasRangedWeapon: enemy.isRangedShooter(),
@@ -835,6 +836,8 @@ export class RunScene extends Phaser.Scene {
         isBoss: enemy.isBoss(),
         isBossOwned: enemy.isBossOwned(),
         isEventTarget: enemy.isEventMarked(),
+        isPriorityThreat: enemy.isPriorityThreat(),
+        isBlockingRoute: enemy.isBlockingRoute(),
       }))
       .sort((left, right) => left.distance - right.distance)
       .slice(0, 14);

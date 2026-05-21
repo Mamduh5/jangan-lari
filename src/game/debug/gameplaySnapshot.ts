@@ -24,6 +24,7 @@ export type GameplayBotEnemySummary = {
   shotSpeed: number | null;
   scalingStack: number;
   behavior: EnemyBehavior;
+  behaviorState: string;
   xpValue: number;
   isRanged: boolean;
   hasRangedWeapon: boolean;
@@ -31,6 +32,8 @@ export type GameplayBotEnemySummary = {
   isBoss: boolean;
   isBossOwned: boolean;
   isEventTarget: boolean;
+  isPriorityThreat: boolean;
+  isBlockingRoute: boolean;
 };
 
 export type GameplayBotGemSummary = {

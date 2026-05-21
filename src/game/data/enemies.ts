@@ -22,7 +22,7 @@ export type EnemyArchetypeId =
   | 'dreadnought'
   | 'behemoth';
 
-export type EnemyBehavior = 'chase' | 'strafe' | 'dash' | 'ranged';
+export type EnemyBehavior = 'chase' | 'strafe' | 'dash' | 'ranged' | 'intercept' | 'charger' | 'blocker';
 
 export type EnemyArchetype = {
   id: EnemyArchetypeId;
@@ -72,13 +72,12 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     color: 0x38bdf8,
     strokeColor: 0xe0f2fe,
     maxHealth: 32,
-    speed: 122,
+    speed: 128,
     contactDamage: 10,
-    xpValue: 7,
-    behavior: 'strafe',
-    preferredDistance: 160,
-    strafeStrength: 0.7,
-    roles: ['fast'],
+    xpValue: 8,
+    behavior: 'intercept',
+    preferredDistance: 140,
+    roles: ['interceptor'],
   },
   harrier: {
     id: 'harrier',
@@ -87,13 +86,12 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     color: 0xa78bfa,
     strokeColor: 0xede9fe,
     maxHealth: 28,
-    speed: 154,
+    speed: 162,
     contactDamage: 9,
-    xpValue: 6,
-    behavior: 'strafe',
-    preferredDistance: 235,
-    strafeStrength: 1.08,
-    roles: ['fast'],
+    xpValue: 7,
+    behavior: 'intercept',
+    preferredDistance: 140,
+    roles: ['interceptor'],
   },
   mauler: {
     id: 'mauler',
@@ -102,10 +100,10 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     color: 0xf97316,
     strokeColor: 0xffedd5,
     maxHealth: 68,
-    speed: 98,
+    speed: 96,
     contactDamage: 14,
-    xpValue: 8,
-    behavior: 'chase',
+    xpValue: 9,
+    behavior: 'blocker',
     roles: ['blocker'],
   },
   crusher: {
@@ -115,13 +113,10 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     color: 0xef4444,
     strokeColor: 0xfee2e2,
     maxHealth: 90,
-    speed: 80,
+    speed: 88,
     contactDamage: 16,
-    xpValue: 10,
-    behavior: 'dash',
-    dashCooldownMs: 1700,
-    dashDurationMs: 280,
-    dashSpeedMultiplier: 2.35,
+    xpValue: 12,
+    behavior: 'charger',
     roles: ['charger'],
   },
   bulwark: {
@@ -131,10 +126,10 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     color: 0x84cc16,
     strokeColor: 0xecfccb,
     maxHealth: 144,
-    speed: 58,
+    speed: 55,
     contactDamage: 19,
-    xpValue: 13,
-    behavior: 'chase',
+    xpValue: 14,
+    behavior: 'blocker',
     roles: ['blocker'],
   },
   hexcaster: {

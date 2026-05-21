@@ -1,6 +1,6 @@
 import type { EnemyArchetypeId } from '../data/enemies';
 
-export type EnemyRole = 'fodder' | 'fast' | 'blocker' | 'ranged' | 'charger' | 'elite' | 'bossOwned';
+export type EnemyRole = 'fodder' | 'fast' | 'interceptor' | 'blocker' | 'ranged' | 'charger' | 'elite' | 'bossOwned';
 
 export type WeightedEnemyEntry = {
   id: EnemyArchetypeId;
@@ -30,8 +30,8 @@ export type WaveDirectorWindow = {
 
 export const ENEMY_ROLE_TAGS: Record<EnemyArchetypeId, EnemyRole[]> = {
   scuttler: ['fodder'],
-  skimmer: ['fast'],
-  harrier: ['fast'],
+  skimmer: ['interceptor'],
+  harrier: ['interceptor'],
   mauler: ['blocker'],
   crusher: ['charger'],
   bulwark: ['blocker'],
@@ -93,12 +93,13 @@ export const WAVE_DIRECTOR_WINDOWS: WaveDirectorWindow[] = [
       },
       {
         id: 'fast-tail',
-        label: 'Fast Tail',
+        label: 'Intercept Pincer',
         formation: 'pincer',
-        composition: ['scuttler', 'skimmer', 'harrier'],
+        composition: ['skimmer', 'harrier', 'scuttler'],
         flexPool: [
-          { id: 'scuttler', weight: 50 },
-          { id: 'skimmer', weight: 50 },
+          { id: 'scuttler', weight: 45 },
+          { id: 'skimmer', weight: 35 },
+          { id: 'harrier', weight: 20 },
         ],
       },
     ],
@@ -208,23 +209,24 @@ export const WAVE_DIRECTOR_WINDOWS: WaveDirectorWindow[] = [
         label: 'Wall Crossfire',
         highlight: true,
         formation: 'sweep-wall',
-        composition: ['bulwark', 'mauler', 'hexcaster', 'scuttler'],
+        composition: ['bulwark', 'hexcaster', 'crusher', 'skimmer'],
         flexPool: [
-          { id: 'scuttler', weight: 35 },
+          { id: 'scuttler', weight: 30 },
           { id: 'skimmer', weight: 25 },
-          { id: 'mauler', weight: 20 },
-          { id: 'hexcaster', weight: 20 },
+          { id: 'mauler', weight: 22 },
+          { id: 'hexcaster', weight: 23 },
         ],
       },
       {
         id: 'fast-and-fodder',
-        label: 'Fast and Fodder',
+        label: 'Intercept Flood',
         formation: 'pincer',
-        composition: ['harrier', 'skimmer', 'scuttler', 'scuttler', 'mauler'],
+        composition: ['harrier', 'skimmer', 'mauler', 'scuttler', 'scuttler'],
         flexPool: [
-          { id: 'scuttler', weight: 50 },
+          { id: 'scuttler', weight: 45 },
           { id: 'harrier', weight: 25 },
-          { id: 'skimmer', weight: 25 },
+          { id: 'skimmer', weight: 20 },
+          { id: 'mauler', weight: 10 },
         ],
       },
       {
@@ -277,11 +279,12 @@ export const WAVE_DIRECTOR_WINDOWS: WaveDirectorWindow[] = [
         label: 'Collapse Pack',
         highlight: true,
         formation: 'ring-breakout',
-        composition: ['crusher', 'harrier', 'harrier', 'mauler', 'scuttler'],
+        composition: ['crusher', 'harrier', 'skimmer', 'mauler', 'scuttler'],
         flexPool: [
-          { id: 'scuttler', weight: 35 },
-          { id: 'mauler', weight: 35 },
-          { id: 'crusher', weight: 30 },
+          { id: 'scuttler', weight: 30 },
+          { id: 'mauler', weight: 28 },
+          { id: 'crusher', weight: 22 },
+          { id: 'harrier', weight: 20 },
         ],
       },
       {
