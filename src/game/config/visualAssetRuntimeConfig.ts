@@ -27,7 +27,7 @@ export const VISUAL_ASSET_RUNTIME_CONFIG: Record<VisualAssetRuntimeCategory, boo
   heroMenuIcons: true,
   weaponHudIcons: true,
   heroSkins: false,
-  projectileSprites: false,
+  projectileSprites: true,
   enemySprites: false,
   enemyIcons: false,
   bossSprites: false,
