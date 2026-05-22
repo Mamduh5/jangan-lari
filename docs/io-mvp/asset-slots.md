@@ -72,9 +72,15 @@ Slot groups:
 - Hero icon slots for menu cards and selected-loadout previews.
 - Hero skin slots for future decorative player overlays.
 - Weapon icon slots for HUD, codex, reward badges, or weapon cards.
+- Projectile sprite slots for future projectile presentation.
 - Enemy icon/sprite slots for codex, encounter docs, and optional decorative overlays.
+- Pickup icon slots for future collectible presentation.
+- Effect sprite slots for future combat and reward presentation.
+- Map prop and tile slots for future arena decoration.
+- Core, weapon-unlock, signature, and branch upgrade icon slots.
 - Tank class icon slots for class-choice presentation.
 - UI icon slots for gold, pause, score, XP, HP, stat, class, reward, and codex badges.
+- UI button slots for play, retry, and close affordances.
 
 The resolver helpers live in `src/game/utils/assetResolver.ts` and are intentionally no-throw. Use `shouldUseTexture(scene, slot)` before adding a Phaser image for any optional slot.
 
@@ -110,3 +116,20 @@ Replacement process:
 3. Add a key to `PRESENT_VISUAL_ASSET_KEYS` only after the file exists.
 4. Add a key to `PRELOAD_VISUAL_ASSET_KEYS` only when an active runtime surface needs that texture.
 5. Leave unready slots absent from `presentVisualAssets.ts`; the resolver fallback will keep shape or text visuals.
+
+## Second-Pass Full Pack Expansion
+
+The full `jangan-lari-asset-pack-fidelity-v1.zip` was inspected before slot expansion. See `docs/io-mvp/asset-pack-integration.md` for the full audit.
+
+Second-pass changes add optional slots and copied future-only files for:
+
+- Projectile sprites.
+- Pickup icons, including magnet and XP gem variants.
+- Effect sprites.
+- Map props.
+- Tile details.
+- Core and weapon-unlock upgrade icons.
+- Signature and branch upgrade icons.
+- Play, retry, and close UI button icons.
+
+These second-pass files are present in `public/assets/...` and tracked by `PRESENT_VISUAL_ASSET_KEYS`, but they are not in `PRELOAD_VISUAL_ASSET_KEYS`. They are not rendered by gameplay, UI, projectile, pickup, map, player, or enemy runtime systems in this pass.
