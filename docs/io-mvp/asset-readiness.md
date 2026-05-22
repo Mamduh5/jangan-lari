@@ -10,6 +10,7 @@ Enabled now:
 
 - `heroMenuIcons`
 - `weaponHudIcons`
+- `pickupIcons`
 
 Future-ready but disabled:
 
@@ -19,7 +20,6 @@ Future-ready but disabled:
 - `enemyIcons`
 - `bossSprites`
 - `minibossSprites`
-- `pickupIcons`
 - `effectSprites`
 - `mapProps`
 - `tiles`
@@ -61,7 +61,7 @@ All slots are optional. Resolver helpers return `false` or `null` when a slot is
 | Boss sprite overlay | `BOSS_SPRITE_ASSET_SLOTS` | Yes | No | Boss rectangle and boss effects | High | Separate runtime category from normal enemies. |
 | Miniboss sprite overlay | `MINIBOSS_SPRITE_ASSET_SLOTS` | Yes | No | Miniboss rectangle and telegraphs | High | Separate runtime category from normal enemies. |
 | Elite visual layer | `ENEMY_SPRITE_ASSET_SLOTS` plus role markers | Yes | No | Current stroke/marker treatment | Medium | Keep elite readability before art replacement. |
-| XP/gold/magnet/health pickups | `PICKUP_ICON_ASSET_SLOTS` | Yes | No | XP gem circles and current pickup shapes | Medium | XP gem overlay hook exists and is disabled. |
+| XP/gold/magnet/health pickups | `PICKUP_ICON_ASSET_SLOTS` | Yes | Yes | XP gem circles and current pickup shapes | Medium | XP gems render tiered pickup overlays; gold, magnet, and health remain slot-ready because they are not current in-world pickup entities. |
 | Power Core pickup/shrine | `POWER_CORE_MAP_EVENT_ICON_ASSET_SLOTS`, `MAP_PROP_ASSET_SLOTS` | Partial | No | Current shrine rings and CORE label | Medium | Power Core icon slot is missing; prop slots are future-only. |
 | Hit spark and impact effects | `EFFECT_SPRITE_ASSET_SLOTS` | Yes | No | Current circles/flashes | Medium | Covers hit pop, impact, death puff, XP collect, level-up burst. |
 | Pulse ring effect | `EFFECT_SPRITE_ASSET_SLOTS` | Partial | No | Current pulse ring | Medium | Use effect slots only after readability review. |

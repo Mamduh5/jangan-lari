@@ -62,16 +62,18 @@ All new slots are optional and included in `ALL_VISUAL_ASSET_SLOTS`.
 
 Second-pass copied assets are tracked by `PRESENT_VISUAL_ASSET_KEYS`. Projectile sprites have returned to future-only status and are excluded from `RUNTIME_PRELOAD_VISUAL_ASSET_KEYS` until projectile art quality and normalization are ready.
 
-Future-only includes copied assets that still have no runtime surface in this pass, such as hero skins, enemy icons/sprites, pickup icons, effects, props, tiles, upgrade icons, UI buttons, and basic UI icons not currently rendered by existing scenes.
+Future-only includes copied assets that still have no runtime surface in this pass, such as hero skins, enemy icons/sprites, effects, props, tiles, upgrade icons, UI buttons, and basic UI icons not currently rendered by existing scenes.
 
 ## Runtime-Preloaded Assets
 
-Only existing runtime surfaces are preloaded:
+Enabled runtime categories preload:
 
 - Hero menu/loadout icons: `hero-runner`, `hero-vanguard`, `hero-shade`, `hero-verdant`.
 - Weapon HUD icons: `weapon-arc-bolt`, `weapon-twin-fangs`, `weapon-ember-lance`, `weapon-bloom-cannon`, `weapon-phase-disc`, `weapon-sunwheel`, `weapon-shatterbell`.
 
-No projectile, pickup, effect, prop, tile, upgrade, signature, branch, player-skin, enemy-sprite, boss-sprite, miniboss-sprite, skill, status, map-event, tank-class, UI icon, or new UI button assets are preloaded.
+- Pickup icons: `pickup-gold`, `pickup-health`, `pickup-magnet`, `pickup-xp-small`, `pickup-xp-medium`, `pickup-xp-large`, `pickup-xp-huge`.
+
+No projectile, effect, prop, tile, upgrade, signature, branch, player-skin, enemy-sprite, boss-sprite, miniboss-sprite, skill, status, map-event, tank-class, UI icon, or new UI button assets are preloaded.
 
 ## Still Missing
 
@@ -82,7 +84,7 @@ These slots remain optional and are intentionally absent from `PRESENT_VISUAL_AS
 
 ## Intentionally Not Enabled
 
-- Runtime pickup sprites.
+- Runtime pickup sprites beyond current XP gem overlays.
 - Runtime effect sprites.
 - Runtime prop or tile rendering.
 - Runtime player skin overlays.

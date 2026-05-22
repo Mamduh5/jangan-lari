@@ -5,6 +5,12 @@ import { getPickupIconAssetSlot, shouldUseVisualAsset } from '../utils/assetReso
 import { Player } from './Player';
 
 const DEFAULT_XP_GEM_VALUE = 8;
+const XP_GEM_PICKUP_ICON_BY_TIER: Record<XpGemTier, 'xp-small' | 'xp-medium' | 'xp-large' | 'xp-huge'> = {
+  small: 'xp-small',
+  medium: 'xp-medium',
+  large: 'xp-large',
+  huge: 'xp-huge',
+};
 
 export class XPGem extends Phaser.GameObjects.Arc {
   declare body: Phaser.Physics.Arcade.Body;
@@ -75,11 +81,11 @@ export class XPGem extends Phaser.GameObjects.Arc {
     this.setScale(pulse);
     this.glow?.setPosition(this.x, this.y);
     this.glow?.setScale(pulse * (this.tier === 'huge' ? 1.12 : 1));
-    this.syncIconOverlay(pulse);
 
     const distance = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
     if (distance > player.getPickupRange()) {
       this.setAlpha(0.88);
+      this.syncIconOverlay(pulse);
       this.body.setVelocity(0, 0);
       return;
     }
@@ -87,6 +93,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
     const direction = new Phaser.Math.Vector2(player.x - this.x, player.y - this.y);
     if (direction.lengthSq() === 0) {
       this.body.setVelocity(0, 0);
+      this.syncIconOverlay(pulse);
       return;
     }
 
@@ -101,8 +108,8 @@ export class XPGem extends Phaser.GameObjects.Arc {
   playCollectFeedback(): void {
     this.setScale(1.45);
     this.glow?.setScale(1.75);
-    this.syncIconOverlay(1.45);
     this.setAlpha(1);
+    this.syncIconOverlay(1.45);
   }
 
   destroy(fromScene?: boolean): void {
@@ -114,7 +121,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
   }
 
   private refreshIconOverlay(scene: Phaser.Scene, radius: number): void {
-    const pickupId = `xp-${this.tier}` as const;
+    const pickupId = XP_GEM_PICKUP_ICON_BY_TIER[this.tier];
     const slot = getPickupIconAssetSlot(pickupId);
     this.iconOverlayActive = shouldUseVisualAsset(scene, 'pickupIcons', slot);
 
