@@ -59,7 +59,7 @@ Current rule:
 
 - If a texture key already exists in Phaser, UI code may render it.
 - If the texture key does not exist, UI code keeps the existing shape or text fallback.
-- This sprint does not preload missing files.
+- `BootScene` preloads only runtime-supported slots listed in `PRELOAD_VISUAL_ASSET_KEYS` in `src/game/data/presentVisualAssets.ts`; do not add a key there until the matching `public/` file exists and a runtime surface uses it.
 - Player and enemy core objects remain `Phaser.GameObjects.Rectangle` with their existing Arcade physics bodies.
 - Any future decorative sprite or image must not affect hitboxes, collision, movement, damage, XP, rewards, spawn timing, boss behavior, or balance.
 
@@ -77,3 +77,36 @@ Slot groups:
 - UI icon slots for gold, pause, score, XP, HP, stat, class, reward, and codex badges.
 
 The resolver helpers live in `src/game/utils/assetResolver.ts` and are intentionally no-throw. Use `shouldUseTexture(scene, slot)` before adding a Phaser image for any optional slot.
+
+## First-Pass Asset Integration
+
+Branch `asset-integration-alpha` adds first-pass owner-provided PNGs under existing A18 slot paths. These files prove the static asset and preload pipeline; they are not treated as final-quality art.
+
+Filled slot groups:
+
+- Hero icons: `hero-runner`, `hero-vanguard`, `hero-shade`, `hero-verdant`.
+- Hero skins: `skin-runner`, `skin-vanguard`, `skin-shade`, `skin-verdant`.
+- Weapon icons: `weapon-arc-bolt`, `weapon-twin-fangs`, `weapon-ember-lance`, `weapon-bloom-cannon`, `weapon-phase-disc`, `weapon-sunwheel`, `weapon-shatterbell`.
+- Enemy icons: scuttler, skimmer, harrier, mauler, crusher, bulwark, hexcaster, overlord, riftblade, miniboss dreadnought, and boss behemoth.
+- Enemy sprites: matching `sprite-enemy-*` files for the same enemy set. These are preloaded for the slot pipeline but are not used as gameplay hitboxes.
+- UI icons: `ui-gold`, `ui-pause`, `ui-xp`, `ui-hp`.
+
+Still missing:
+
+- Tank class icons: `class-basic`, `class-twin`, `class-sniper`.
+- UI icons: `ui-score`, `ui-stat`, `ui-class`, `ui-reward`, `ui-codex`.
+- Runtime decorative player skin overlays and runtime decorative enemy sprite overlays are not enabled in this pass.
+
+Source ZIP files left unused:
+
+- Effects, projectiles, props, tiles, upgrade icons, signature icons, branch icons, play/retry/close buttons, magnet pickup, and alternate XP gem sizes do not currently have matching A18 slots or runtime integration points in this branch.
+- Projectile art was not mapped to weapon icons because weapon HUD slots already received matching `ui-weapon-*` assets.
+- Ambiguous UI art was not renamed into unrelated slots unless the meaning was direct, such as pause, HP, XP, and gold.
+
+Replacement process:
+
+1. Replace the PNG at the existing `public/assets/...` path.
+2. Keep the filename and slot key stable unless `assetSlots.ts` is intentionally updated.
+3. Add a key to `PRESENT_VISUAL_ASSET_KEYS` only after the file exists.
+4. Add a key to `PRELOAD_VISUAL_ASSET_KEYS` only when an active runtime surface needs that texture.
+5. Leave unready slots absent from `presentVisualAssets.ts`; the resolver fallback will keep shape or text visuals.

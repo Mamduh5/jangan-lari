@@ -1,4 +1,6 @@
 import type Phaser from 'phaser';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   ALL_VISUAL_ASSET_SLOTS,
   ENEMY_ICON_ASSET_SLOTS,
@@ -6,6 +8,12 @@ import {
   UI_ICON_ASSET_SLOTS,
   WEAPON_ICON_ASSET_SLOTS,
 } from '../../src/game/data/assetSlots';
+import {
+  PRELOAD_VISUAL_ASSET_KEYS,
+  PRELOAD_VISUAL_ASSET_SLOTS,
+  PRESENT_VISUAL_ASSET_KEYS,
+  PRESENT_VISUAL_ASSET_SLOTS,
+} from '../../src/game/data/presentVisualAssets';
 import { hasTexture, shouldUseTexture } from '../../src/game/utils/assetResolver';
 
 describe('asset slot registry', () => {
@@ -23,6 +31,26 @@ describe('asset slot registry', () => {
   test('keeps slot keys unique', () => {
     const keys = ALL_VISUAL_ASSET_SLOTS.map((slot) => slot.key);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test('preloads only committed optional asset files', () => {
+    const allKeys = new Set(ALL_VISUAL_ASSET_SLOTS.map((slot) => slot.key));
+
+    for (const key of PRESENT_VISUAL_ASSET_KEYS) {
+      expect(allKeys.has(key)).toBe(true);
+    }
+
+    for (const key of PRELOAD_VISUAL_ASSET_KEYS) {
+      expect(PRESENT_VISUAL_ASSET_KEYS.has(key)).toBe(true);
+    }
+
+    for (const slot of PRESENT_VISUAL_ASSET_SLOTS) {
+      expect(existsSync(resolve(process.cwd(), 'public', slot.path))).toBe(true);
+    }
+
+    for (const slot of PRELOAD_VISUAL_ASSET_SLOTS) {
+      expect(existsSync(resolve(process.cwd(), 'public', slot.path))).toBe(true);
+    }
   });
 });
 
