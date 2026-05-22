@@ -128,6 +128,7 @@ import { createMovementKeys } from '../input/createMovementKeys';
 import { MovementInputController, type ActivePointerLike, type MovementInputSnapshot } from '../input/MovementInputController';
 import type { GameplayBotRunSnapshot } from '../debug/gameplaySnapshot';
 import { TANK_STAT_IDS, getTankStatDefinition, type TankStatId } from '../data/tankStats';
+import type { EffectAssetId } from '../data/assetSlots';
 import type { ControlGuideMode, GameSaveData } from '../save/saveData';
 import { loadGameSave, markControlHintDismissed, recordLocalLeaderboardEntry, updateControlGuideMode } from '../save/saveData';
 import { applyRunProgressToQuests } from '../save/saveQuests';
@@ -177,6 +178,7 @@ import {
   type StagePhase,
 } from '../utils/stagePhase';
 import {
+  getEffectSpriteAssetSlot,
   getPowerCoreMapEventIconAssetSlot,
   getProjectileSpriteAssetSlot,
   shouldUseVisualAsset,
@@ -3601,6 +3603,7 @@ export class RunScene extends Phaser.Scene {
 
     this.createBurstCircle(enemyX, enemyY, impactColor, Math.max(5, impactRadius * 0.7), impactFlashRadius, 90, 0.22);
     this.createBurstCircle(enemyX, enemyY, 0xffffff, Math.max(3, impactRadius * 0.28), Math.max(8, impactRadius * 1.15), 70, 0.18);
+    this.spawnEffectSprite('hit-pop', enemyX, enemyY, Math.max(20, impactRadius * 3.2), 130, this.depthForCombatEffect(enemy));
     this.applyCombatImpactResponse(projectile.getWeaponId(), enemy, enemyDied, enemyX, enemyY, impactColor, impactRadius, true);
     if (wasBoss && !enemyDied) {
       this.syncBossPhaseState();
@@ -3641,6 +3644,7 @@ export class RunScene extends Phaser.Scene {
 
     this.createBurstCircle(shapeX, shapeY, impactColor, Math.max(4, impactRadius * 0.55), baseBurstRadius, 80, 0.2);
     this.createBurstCircle(shapeX, shapeY, 0xffffff, Math.max(3, impactRadius * 0.22), Math.max(8, impactRadius), 65, 0.14);
+    this.spawnEffectSprite('hit-pop', shapeX, shapeY, Math.max(18, impactRadius * 3), 120, 8.8);
 
     if (shapeDestroyed) {
       const xpVisual = getXpGemVisual(xpValue);
@@ -3702,6 +3706,7 @@ export class RunScene extends Phaser.Scene {
     this.xpGems.add(gem);
     const xpVisual = getXpGemVisual(xpValue);
     this.createBurstCircle(x, y, xpVisual.glowColor, 10, xpVisual.radius * 4.2, 190, xpValue >= 24 ? 0.64 : 0.42);
+    this.spawnEffectSprite('enemy-death-puff', x, y, Math.max(34, enemy.archetype.size * 1.25), 220, 8.9);
 
     const rewardOutcome = this.grantEncounterRewards(enemy, x, y);
     this.handleRunEventEnemyDefeated(enemy);
@@ -4345,6 +4350,7 @@ export class RunScene extends Phaser.Scene {
     gem.playCollectFeedback();
     this.createBurstCircle(gem.x, gem.y, gem.getGlowColor(), 8, 26, 150, 0.9);
     this.createBurstCircle(this.player.x, this.player.y, gem.getFillColor(), 6, 24, 130, 0.2);
+    this.spawnEffectSprite('xp-collect', gem.x, gem.y, Math.max(22, getXpGemVisual(gemValue).radius * 2.6), 170, 9.2);
     if (gemValue >= 8) {
       this.showFloatingText(this.player.x, this.player.y - 22, `+${gemValue} XP`, getXpGemVisual(gemValue).textColor, 14);
     }
@@ -4427,6 +4433,7 @@ export class RunScene extends Phaser.Scene {
     this.pauseGameplaySystems();
     this.cameras.main.flash(LEVEL_UP_FLASH_MS, 255, 230, 130, false);
     this.createBurstCircle(this.player.x, this.player.y, 0xfde68a, 18, 82, 260, 0.95);
+    this.spawnEffectSprite('level-up-burst', this.player.x, this.player.y, 82, 260, 9.1);
     this.showFloatingText(this.player.x, this.player.y - 56, 'LEVEL UP', '#fde68a', 24);
   }
 
@@ -5275,6 +5282,40 @@ export class RunScene extends Phaser.Scene {
       ease: 'Quad.Out',
       onComplete: () => burst.destroy(),
     });
+  }
+
+  private spawnEffectSprite(
+    effectId: EffectAssetId,
+    x: number,
+    y: number,
+    displaySize: number,
+    durationMs: number,
+    depth: number,
+  ): void {
+    const slot = getEffectSpriteAssetSlot(effectId);
+    if (!shouldUseVisualAsset(this, 'effectSprites', slot)) {
+      return;
+    }
+
+    const sprite = this.add
+      .image(x, y, slot.key)
+      .setDepth(depth)
+      .setDisplaySize(displaySize, displaySize)
+      .setAlpha(0.82)
+      .setBlendMode(Phaser.BlendModes.ADD);
+
+    this.tweens.add({
+      targets: sprite,
+      scale: 1.18,
+      alpha: 0,
+      duration: durationMs,
+      ease: 'Quad.Out',
+      onComplete: () => sprite.destroy(),
+    });
+  }
+
+  private depthForCombatEffect(enemy: Enemy): number {
+    return Math.max(8.8, enemy.depth + 0.5);
   }
 
   private showFloatingText(x: number, y: number, text: string, color: string, fontSize: number): void {

@@ -11,6 +11,7 @@ Enabled now:
 - `heroMenuIcons`
 - `weaponHudIcons`
 - `pickupIcons`
+- `effectSprites`
 
 Future-ready but disabled:
 
@@ -20,7 +21,6 @@ Future-ready but disabled:
 - `enemyIcons`
 - `bossSprites`
 - `minibossSprites`
-- `effectSprites`
 - `mapProps`
 - `tiles`
 - `upgradeIcons`
@@ -63,10 +63,11 @@ All slots are optional. Resolver helpers return `false` or `null` when a slot is
 | Elite visual layer | `ENEMY_SPRITE_ASSET_SLOTS` plus role markers | Yes | No | Current stroke/marker treatment | Medium | Keep elite readability before art replacement. |
 | XP/gold/magnet/health pickups | `PICKUP_ICON_ASSET_SLOTS` | Yes | Yes | XP gem circles and current pickup shapes | Medium | XP gems render tiered pickup overlays; gold, magnet, and health remain slot-ready because they are not current in-world pickup entities. |
 | Power Core pickup/shrine | `POWER_CORE_MAP_EVENT_ICON_ASSET_SLOTS`, `MAP_PROP_ASSET_SLOTS` | Partial | No | Current shrine rings and CORE label | Medium | Power Core icon slot is missing; prop slots are future-only. |
-| Hit spark and impact effects | `EFFECT_SPRITE_ASSET_SLOTS` | Yes | No | Current circles/flashes | Medium | Covers hit pop, impact, death puff, XP collect, level-up burst. |
-| Pulse ring effect | `EFFECT_SPRITE_ASSET_SLOTS` | Partial | No | Current pulse ring | Medium | Use effect slots only after readability review. |
-| Boss shockwave visual | `EFFECT_SPRITE_ASSET_SLOTS.boss-shockwave` | Yes | No | Current shockwave ring/halo | High | Must not change damage radius or active frames. |
-| Miniboss line/volley visual | `EFFECT_SPRITE_ASSET_SLOTS.miniboss-line-strike` | Yes | No | Current telegraph and line shapes | High | Must not change contracts or collision. |
+| Hit spark and impact effects | `EFFECT_SPRITE_ASSET_SLOTS` | Yes | Yes | Current circles/flashes | Medium | `effect-hit-pop` is layered over existing projectile/enemy and neutral-shape hit feedback. |
+| Enemy death and pickup collect effects | `EFFECT_SPRITE_ASSET_SLOTS` | Yes | Yes | Current burst circles | Medium | `effect-enemy-death-puff`, `effect-xp-collect`, and `effect-level-up-burst` are decorative overlays only. |
+| Pulse ring effect | `EFFECT_SPRITE_ASSET_SLOTS` | Partial | No | Current pulse ring | Medium | No runtime pulse asset is wired yet. |
+| Boss shockwave visual | `EFFECT_SPRITE_ASSET_SLOTS.boss-shockwave` | Yes | Category enabled, not wired | Current shockwave ring/halo | High | Intentionally left on fallback; must not change damage radius or active frames. |
+| Miniboss line/volley visual | `EFFECT_SPRITE_ASSET_SLOTS.miniboss-line-strike` | Yes | Category enabled, not wired | Current telegraph and line shapes | High | Intentionally left on fallback; must not change contracts or collision. |
 | Danger zone warning/active visual | `EFFECT_SPRITE_ASSET_SLOTS` | Partial | No | Current warning/active circles | High | No slot-specific file yet for danger zones. |
 | Map props | `MAP_PROP_ASSET_SLOTS` | Yes | No | Current sparse arena | Medium | Future decorative only; no pathing/collision changes. |
 | Ground tiles/details | `TILE_ASSET_SLOTS` | Yes | No | Current background | Medium | Decorative only. |

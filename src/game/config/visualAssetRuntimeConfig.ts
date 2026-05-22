@@ -33,7 +33,7 @@ export const VISUAL_ASSET_RUNTIME_CONFIG: Record<VisualAssetRuntimeCategory, boo
   bossSprites: false,
   minibossSprites: false,
   pickupIcons: true,
-  effectSprites: false,
+  effectSprites: true,
   mapProps: false,
   tiles: false,
   upgradeIcons: false,

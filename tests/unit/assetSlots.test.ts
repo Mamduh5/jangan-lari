@@ -112,6 +112,12 @@ describe('asset slot registry', () => {
       expect(futureOnlyKeys.has(slot.key)).toBe(false);
     }
 
+    for (const slot of Object.values(EFFECT_SPRITE_ASSET_SLOTS)) {
+      expect(PRESENT_VISUAL_ASSET_KEYS.has(slot.key)).toBe(true);
+      expect(PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).toBe(true);
+      expect(futureOnlyKeys.has(slot.key)).toBe(false);
+    }
+
     expect(PRELOAD_VISUAL_ASSET_KEYS.has(PROJECTILE_SPRITE_ASSET_SLOTS['arc-bolt'].key)).toBe(false);
     expect(PRELOAD_VISUAL_ASSET_KEYS.has(PROJECTILE_SPRITE_ASSET_SLOTS['enemy-shot'].key)).toBe(false);
     expect(futureOnlyKeys.has(PROJECTILE_SPRITE_ASSET_SLOTS['arc-bolt'].key)).toBe(true);
@@ -136,17 +142,17 @@ describe('asset slot registry', () => {
 });
 
 describe('visual asset runtime config', () => {
-  test('enables only stable menu, weapon HUD, and pickup categories by default', () => {
+  test('enables only stable menu, weapon HUD, pickup, and effect categories by default', () => {
     expect(VISUAL_ASSET_RUNTIME_CONFIG.heroMenuIcons).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.weaponHudIcons).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.pickupIcons).toBe(true);
+    expect(VISUAL_ASSET_RUNTIME_CONFIG.effectSprites).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.projectileSprites).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.enemySprites).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.enemyIcons).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.bossSprites).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.minibossSprites).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.heroSkins).toBe(false);
-    expect(VISUAL_ASSET_RUNTIME_CONFIG.effectSprites).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.mapProps).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.tiles).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.upgradeIcons).toBe(false);
@@ -192,6 +198,8 @@ describe('asset resolver', () => {
     expect(shouldUseTexture(scene, projectileSlot)).toBe(false);
     expect(shouldUseVisualAsset(scene, 'pickupIcons', PICKUP_ICON_ASSET_SLOTS['xp-small'])).toBe(true);
     expect(shouldUseTexture(scene, PICKUP_ICON_ASSET_SLOTS['xp-small'])).toBe(true);
+    expect(shouldUseVisualAsset(scene, 'effectSprites', EFFECT_SPRITE_ASSET_SLOTS['hit-pop'])).toBe(true);
+    expect(shouldUseTexture(scene, EFFECT_SPRITE_ASSET_SLOTS['hit-pop'])).toBe(true);
     expect(shouldUseVisualAsset(scene, 'heroMenuIcons', HERO_ICON_ASSET_SLOTS.runner)).toBe(true);
     expect(shouldUseVisualAsset(scene, 'heroMenuIcons', projectileSlot)).toBe(false);
   });

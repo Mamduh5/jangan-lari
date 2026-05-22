@@ -132,7 +132,7 @@ Second-pass changes add optional slots and copied future-only files for:
 - Signature and branch upgrade icons.
 - Play, retry, and close UI button icons.
 
-These second-pass files are present in `public/assets/...` and tracked by `PRESENT_VISUAL_ASSET_KEYS`. Pickup icons are runtime-enabled for XP gem overlays. Projectile sprites have been moved back to future-only readiness because art normalization is not ready. Shape/text fallbacks remain the default for gameplay, UI, map, player, enemy, boss, miniboss, projectile, and upgrade surfaces unless the matching runtime category is explicitly enabled.
+These second-pass files are present in `public/assets/...` and tracked by `PRESENT_VISUAL_ASSET_KEYS`. Pickup icons are runtime-enabled for XP gem overlays. Low-risk effect sprites are runtime-enabled as decorative overlays for hit pop, enemy death puff, XP collect, and level-up burst. Boss shockwave and miniboss line-strike mechanics intentionally keep their fallback visuals. Projectile sprites have been moved back to future-only readiness because art normalization is not ready. Shape/text fallbacks remain the default for UI, map, player, enemy, boss, miniboss, projectile, and upgrade surfaces unless the matching runtime category is explicitly enabled.
 
 ## Asset Readiness Switch Layer
 
