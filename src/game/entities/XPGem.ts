@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { XP_GEM_ATTRACT_SPEED } from '../config/constants';
 import { getXpGemVisual, type XpGemTier } from '../systems/readabilityVisuals';
+import { getPickupIconAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 import { Player } from './Player';
 
 const DEFAULT_XP_GEM_VALUE = 8;
@@ -14,6 +15,8 @@ export class XPGem extends Phaser.GameObjects.Arc {
   private readonly gemStrokeColor: number;
   private readonly glowColor: number;
   private glow: Phaser.GameObjects.Arc | null = null;
+  private iconOverlay: Phaser.GameObjects.Image | null = null;
+  private iconOverlayActive = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, value = DEFAULT_XP_GEM_VALUE) {
     const visual = getXpGemVisual(value);
@@ -39,6 +42,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
     this.body.setAllowGravity(false);
     this.body.setCircle(visual.radius);
     this.body.setDrag(1200, 1200);
+    this.refreshIconOverlay(scene, visual.radius);
   }
 
   getValue(): number {
@@ -71,6 +75,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
     this.setScale(pulse);
     this.glow?.setPosition(this.x, this.y);
     this.glow?.setScale(pulse * (this.tier === 'huge' ? 1.12 : 1));
+    this.syncIconOverlay(pulse);
 
     const distance = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
     if (distance > player.getPickupRange()) {
@@ -88,6 +93,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
     const attractionSpeed = XP_GEM_ATTRACT_SPEED + Math.max(0, player.getPickupRange() - distance) * 2.4;
     this.setAlpha(1);
     this.setScale(1.08 + Math.sin(this.scene.time.now * 0.02) * 0.12);
+    this.syncIconOverlay(this.scaleX);
     direction.normalize();
     this.body.setVelocity(direction.x * attractionSpeed, direction.y * attractionSpeed);
   }
@@ -95,11 +101,41 @@ export class XPGem extends Phaser.GameObjects.Arc {
   playCollectFeedback(): void {
     this.setScale(1.45);
     this.glow?.setScale(1.75);
+    this.syncIconOverlay(1.45);
     this.setAlpha(1);
   }
 
   destroy(fromScene?: boolean): void {
     this.glow?.destroy();
+    this.iconOverlay?.destroy();
+    this.iconOverlay = null;
+    this.iconOverlayActive = false;
     super.destroy(fromScene);
+  }
+
+  private refreshIconOverlay(scene: Phaser.Scene, radius: number): void {
+    const pickupId = `xp-${this.tier}` as const;
+    const slot = getPickupIconAssetSlot(pickupId);
+    this.iconOverlayActive = shouldUseVisualAsset(scene, 'pickupIcons', slot);
+
+    if (!this.iconOverlayActive) {
+      this.iconOverlay?.setVisible(false);
+      return;
+    }
+
+    this.iconOverlay = scene.add.image(this.x, this.y, slot.key).setDepth(this.depth + 0.2);
+    this.iconOverlay.setDisplaySize(radius * 2.4, radius * 2.4).setAlpha(0.96);
+  }
+
+  private syncIconOverlay(scale: number): void {
+    if (!this.iconOverlay || !this.iconOverlayActive) {
+      return;
+    }
+
+    this.iconOverlay
+      .setPosition(this.x, this.y)
+      .setScale(scale)
+      .setAlpha(this.alpha)
+      .setVisible(this.visible && this.active);
   }
 }

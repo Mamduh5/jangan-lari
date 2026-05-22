@@ -1,11 +1,29 @@
 import Phaser from 'phaser';
+import type {
+  BranchUpgradeIconAssetId,
+  SignatureUpgradeIconAssetId,
+  UiButtonAssetId,
+  UiIconAssetId,
+  UpgradeIconAssetId,
+} from '../data/assetSlots';
 import type { UpgradeDefinition } from '../data/upgrades';
 import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import type { ActivePointerLike } from '../input/MovementInputController';
 import { getUpgradeRewardType, upgradeHasWeaponRewardTag, type UpgradeRewardType } from '../systems/rewardClassification';
-import { getWeaponIconAssetSlot, shouldUseTexture } from '../utils/assetResolver';
+import {
+  getBranchUpgradeIconAssetSlot,
+  getBuffStatusIconAssetSlot,
+  getSignatureUpgradeIconAssetSlot,
+  getSkillIconAssetSlot,
+  getTankClassIconAssetSlot,
+  getUiButtonAssetSlot,
+  getUiIconAssetSlot,
+  getUpgradeIconAssetSlot,
+  getWeaponIconAssetSlot,
+  shouldUseVisualAsset,
+} from '../utils/assetResolver';
 import {
   CONTROL_GUIDE_MODES,
   loadGameSave,
@@ -1141,6 +1159,7 @@ export class UIScene extends Phaser.Scene {
     button.on('pointerdown', () => this.openPauseMenu());
     button.on('pointerover', () => button.setStyle({ color: '#ffffff', backgroundColor: '#1f2937' }));
     button.on('pointerout', () => button.setStyle({ color: '#e0f2fe', backgroundColor: '#111827' }));
+    button.setData('assetIconReady', this.canRenderUiButtonIcon('close') || this.canRenderHudIcon('pause'));
     button.setDepth(82);
 
     return button;
@@ -1180,6 +1199,8 @@ export class UIScene extends Phaser.Scene {
       innerRing,
       this.activeAbilityButtonLabel,
     ]);
+    container.setData('assetIconReady', this.canRenderSkillIcon('breakout-pulse'));
+    container.setData('statusIconReady', this.canRenderBuffStatusIcon('shield-pulse'));
     container.setDepth(82);
     container.setScrollFactor(0);
 
@@ -1628,6 +1649,7 @@ export class UIScene extends Phaser.Scene {
       card.setData('baseColor', presentation.cardColor);
       card.setData('rewardType', presentation.rewardType);
       card.setData('hasWeaponTag', presentation.hasWeaponTag);
+      card.setData('assetIconReady', this.canRenderUpgradeChoiceIcon(choice));
       badge.setBackgroundColor(presentation.badgeColor);
       this.setTextIfChanged(badge, presentation.badgeText);
       this.setTextIfChanged(button, presentation.title);
@@ -1700,6 +1722,7 @@ export class UIScene extends Phaser.Scene {
       action.setVisible(true);
       card.setData('classId', choice.id);
       card.setData('baseColor', choice.id === 'twin' ? 0x0d2536 : 0x101b35);
+      card.setData('assetIconReady', this.canRenderTankClassIcon(choice.id));
       this.setTextIfChanged(title, choice.title);
       this.setTextIfChanged(description, choice.description);
       this.applyClassChoiceCardHover(index, false);
@@ -1815,6 +1838,46 @@ export class UIScene extends Phaser.Scene {
     return `Weapon Slot ${primaryWeapon}${extraCount > 0 ? ` +${extraCount}` : ''} / ${classTitle}`;
   }
 
+  private canRenderHudIcon(iconId: UiIconAssetId): boolean {
+    return shouldUseVisualAsset(this, 'uiIcons', getUiIconAssetSlot(iconId));
+  }
+
+  private canRenderUiButtonIcon(buttonId: UiButtonAssetId): boolean {
+    return shouldUseVisualAsset(this, 'uiButtons', getUiButtonAssetSlot(buttonId));
+  }
+
+  private canRenderSkillIcon(skillId: 'breakout-pulse'): boolean {
+    return shouldUseVisualAsset(this, 'skillIcons', getSkillIconAssetSlot(skillId));
+  }
+
+  private canRenderBuffStatusIcon(buffId: 'shield-pulse' | 'pulse-refund' | 'hp-regen'): boolean {
+    return shouldUseVisualAsset(this, 'buffStatusIcons', getBuffStatusIconAssetSlot(buffId));
+  }
+
+  private canRenderTankClassIcon(classId: TankClassDefinition['id']): boolean {
+    return shouldUseVisualAsset(this, 'tankClassIcons', getTankClassIconAssetSlot(classId));
+  }
+
+  private canRenderUpgradeChoiceIcon(choice: UpgradeDefinition): boolean {
+    if (choice.kind === 'signature') {
+      return shouldUseVisualAsset(
+        this,
+        'signatureUpgradeIcons',
+        getSignatureUpgradeIconAssetSlot(choice.id as SignatureUpgradeIconAssetId),
+      );
+    }
+
+    if (choice.kind === 'branch') {
+      return shouldUseVisualAsset(
+        this,
+        'branchUpgradeIcons',
+        getBranchUpgradeIconAssetSlot(choice.id as BranchUpgradeIconAssetId),
+      );
+    }
+
+    return shouldUseVisualAsset(this, 'upgradeIcons', getUpgradeIconAssetSlot(choice.id as UpgradeIconAssetId));
+  }
+
   private refreshWeaponIcons(weaponNames: string[]): void {
     for (let index = 0; index < this.weaponIconTexts.length; index += 1) {
       const frame = this.weaponIconFrames[index];
@@ -1838,7 +1901,7 @@ export class UIScene extends Phaser.Scene {
       this.setTextIfChanged(label, definition.shortLabel);
       label.setVisible(true);
       const iconSlot = getWeaponIconAssetSlot(definition.id);
-      if (shouldUseTexture(this, iconSlot)) {
+      if (shouldUseVisualAsset(this, 'weaponHudIcons', iconSlot)) {
         if (!image) {
           image = this.add
             .image(this.weaponSlotStartX + index * this.weaponSlotSpacing, this.weaponSlotY, iconSlot.key)
@@ -1849,7 +1912,7 @@ export class UIScene extends Phaser.Scene {
         }
         image.setTexture(iconSlot.key);
       }
-      image?.setVisible(shouldUseTexture(this, iconSlot));
+      image?.setVisible(shouldUseVisualAsset(this, 'weaponHudIcons', iconSlot));
       if (image?.visible) {
         label.setVisible(false);
       }

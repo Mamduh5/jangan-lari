@@ -4,7 +4,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { ENEMY_ARCHETYPES } from '../data/enemies';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
 import { WEAPON_DEFINITIONS } from '../data/weapons';
-import { getHeroIconAssetSlot, shouldUseTexture } from '../utils/assetResolver';
+import { getHeroIconAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 import {
   CONTROL_GUIDE_MODES,
   loadGameSave,
@@ -774,7 +774,7 @@ export class MenuScene extends Phaser.Scene {
     aura.setBlendMode(Phaser.BlendModes.ADD);
 
     const iconSlot = getHeroIconAssetSlot(hero.id);
-    if (shouldUseTexture(this, iconSlot)) {
+    if (shouldUseVisualAsset(this, 'heroMenuIcons', iconSlot)) {
       const icon = this.add.image(px, py, iconSlot.key).setDisplaySize(size, size);
       icon.setAngle(hero.appearance.angle);
       this.focusedHeroPreviewContainer = this.add.container(0, 0, [aura, icon]);
@@ -839,7 +839,7 @@ export class MenuScene extends Phaser.Scene {
     aura.setBlendMode(Phaser.BlendModes.ADD);
 
     const iconSlot = getHeroIconAssetSlot(hero.id);
-    if (shouldUseTexture(this, iconSlot)) {
+    if (shouldUseVisualAsset(this, 'heroMenuIcons', iconSlot)) {
       const icon = this.add.image(x, y, iconSlot.key).setDisplaySize(appearance.size * 1.25, appearance.size * 1.25);
       icon.setAngle(appearance.angle);
       return;

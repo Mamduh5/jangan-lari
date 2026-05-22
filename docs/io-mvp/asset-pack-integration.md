@@ -60,7 +60,7 @@ All new slots are optional and included in `ALL_VISUAL_ASSET_SLOTS`.
 
 ## Future-Only Assets
 
-Second-pass copied assets are tracked by `PRESENT_VISUAL_ASSET_KEYS`. Projectile sprites graduated to runtime preload in the projectile runtime pass; the remaining second-pass categories stay future-only and excluded from `PRELOAD_VISUAL_ASSET_KEYS`.
+Second-pass copied assets are tracked by `PRESENT_VISUAL_ASSET_KEYS`. Projectile sprites have returned to future-only status and are excluded from `RUNTIME_PRELOAD_VISUAL_ASSET_KEYS` until projectile art quality and normalization are ready.
 
 Future-only includes copied assets that still have no runtime surface in this pass, such as hero skins, enemy icons/sprites, pickup icons, effects, props, tiles, upgrade icons, UI buttons, and basic UI icons not currently rendered by existing scenes.
 
@@ -70,9 +70,8 @@ Only existing runtime surfaces are preloaded:
 
 - Hero menu/loadout icons: `hero-runner`, `hero-vanguard`, `hero-shade`, `hero-verdant`.
 - Weapon HUD icons: `weapon-arc-bolt`, `weapon-twin-fangs`, `weapon-ember-lance`, `weapon-bloom-cannon`, `weapon-phase-disc`, `weapon-sunwheel`, `weapon-shatterbell`.
-- Projectile sprites: `projectile-arc-bolt`, `projectile-twin-fangs`, `projectile-ember-lance`, `projectile-bloom-cannon`, `projectile-phase-disc`, `projectile-sunwheel`, `projectile-shatterbell`, `projectile-enemy-shot`.
 
-No pickup, effect, prop, tile, upgrade, signature, branch, player-skin, enemy-sprite, or new UI button assets are preloaded.
+No projectile, pickup, effect, prop, tile, upgrade, signature, branch, player-skin, enemy-sprite, boss-sprite, miniboss-sprite, skill, status, map-event, tank-class, UI icon, or new UI button assets are preloaded.
 
 ## Still Missing
 
@@ -88,6 +87,8 @@ These slots remain optional and are intentionally absent from `PRESENT_VISUAL_AS
 - Runtime prop or tile rendering.
 - Runtime player skin overlays.
 - Runtime enemy sprite overlays.
+- Runtime boss or miniboss sprite overlays.
+- Runtime projectile sprite overlays.
 - Gameplay hitbox or collision changes.
 - Upgrade/build synergy changes.
 
@@ -95,12 +96,12 @@ These categories need later gameplay or UI decisions before runtime use.
 
 ## Fallback Behavior
 
-Missing or unpreloaded assets do not crash the game. Runtime code must continue to use `shouldUseTexture(scene, slot)` before rendering optional textures. Existing shape/text fallbacks remain the active behavior when a texture is absent.
+Missing, disabled, or unpreloaded assets do not crash the game. Runtime code must continue to use `shouldUseVisualAsset(scene, category, slot)` before rendering optional textures. Existing shape/text fallbacks remain the active behavior when a texture is absent or disabled.
 
 ## Replacement Process
 
 1. Replace the PNG at the existing slot path under `public/assets/...`.
 2. Keep slot keys and paths stable unless `assetSlots.ts` is intentionally changed.
 3. Add a slot key to `PRESENT_VISUAL_ASSET_KEYS` only when the file exists.
-4. Add a slot key to `PRELOAD_VISUAL_ASSET_KEYS` only when an existing runtime surface renders it.
+4. Enable the matching runtime category only when an existing runtime surface is ready to render it.
 5. Keep final art quality review separate from slot and preload wiring.

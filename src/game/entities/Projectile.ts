@@ -3,7 +3,7 @@ import { getWeaponCombatResponseProfile } from '../combat/combatResponse';
 import { resolvePlayerProjectileVisualDiameter } from '../config/projectileVisualBalance';
 import type { WeaponDefinition } from '../data/weapons';
 import { resolveProjectileVisual, type ProjectileFaction, type ProjectileVisual } from '../systems/readabilityVisuals';
-import { getProjectileSpriteAssetSlot, shouldUseTexture } from '../utils/assetResolver';
+import { getProjectileSpriteAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 
 export class Projectile extends Phaser.GameObjects.Arc {
   declare body: Phaser.Physics.Arcade.Body;
@@ -230,7 +230,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
 
   private refreshSpriteOverlay(direction: Phaser.Math.Vector2): void {
     const slot = getProjectileSpriteAssetSlot(this.weaponId);
-    this.spriteOverlayActive = shouldUseTexture(this.scene, slot);
+    this.spriteOverlayActive = shouldUseVisualAsset(this.scene, 'projectileSprites', slot);
 
     if (!this.spriteOverlayActive) {
       this.spriteOverlay?.setVisible(false);

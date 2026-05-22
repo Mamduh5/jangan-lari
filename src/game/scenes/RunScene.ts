@@ -176,7 +176,11 @@ import {
   getStageVictoryCondition,
   type StagePhase,
 } from '../utils/stagePhase';
-import { getProjectileSpriteAssetSlot, shouldUseTexture } from '../utils/assetResolver';
+import {
+  getPowerCoreMapEventIconAssetSlot,
+  getProjectileSpriteAssetSlot,
+  shouldUseVisualAsset,
+} from '../utils/assetResolver';
 
 type RunEventType = 'challenge-wave' | 'reward-target' | 'buff-shrine';
 
@@ -227,6 +231,7 @@ type ActiveRunEvent =
       shrineVisual: Phaser.GameObjects.Arc;
       claimRing: Phaser.GameObjects.Arc;
       label: Phaser.GameObjects.Text;
+      icon?: Phaser.GameObjects.Image;
     };
 
 type FormationType = 'ring-breakout' | 'pincer' | 'sweep-wall';
@@ -2844,6 +2849,7 @@ export class RunScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(7.45);
+    const icon = this.createPowerCoreMapEventIcon(point.x, point.y);
 
     const pressureEnemies = this.spawnBuffShrinePressure(point);
     this.activeRunEvent = {
@@ -2858,6 +2864,7 @@ export class RunScene extends Phaser.Scene {
       shrineVisual,
       claimRing,
       label,
+      icon,
     };
     this.nextBuffShrineAtMs = this.runElapsedMs + BUFF_SHRINE_EVENT.intervalMs;
     this.registry.set('run.instructions', 'Power core active.');
@@ -2885,6 +2892,19 @@ export class RunScene extends Phaser.Scene {
     );
   }
 
+  private createPowerCoreMapEventIcon(x: number, y: number): Phaser.GameObjects.Image | undefined {
+    const slot = getPowerCoreMapEventIconAssetSlot('power-core');
+    if (!shouldUseVisualAsset(this, 'powerCoreMapEventIcons', slot)) {
+      return undefined;
+    }
+
+    return this.add
+      .image(x, y, slot.key)
+      .setDepth(7.46)
+      .setDisplaySize(BUFF_SHRINE_EVENT.shrineRadius * 1.8, BUFF_SHRINE_EVENT.shrineRadius * 1.8)
+      .setAlpha(0.96);
+  }
+
   private spawnBuffShrinePressure(point: Phaser.Math.Vector2): Enemy[] {
     const availableSlots = getAvailableEnemySpawnSlots(this.getActiveEnemyCount());
     const pressureIds = BUFF_SHRINE_EVENT.enemyPressure.slice(0, availableSlots);
@@ -2906,6 +2926,7 @@ export class RunScene extends Phaser.Scene {
     const remainingRatio = Phaser.Math.Clamp((activeEvent.endsAtMs - this.runElapsedMs) / BUFF_SHRINE_EVENT.durationMs, 0, 1);
     const pulse = 1 + Math.sin(this.time.now * 0.012) * 0.06;
     activeEvent.shrineVisual.setScale(pulse);
+    activeEvent.icon?.setScale(pulse);
     activeEvent.claimRing.setAlpha(0.05 + remainingRatio * 0.06);
     activeEvent.claimRing.setStrokeStyle(2 + Math.round((1 - remainingRatio) * 2), BUFF_SHRINE_EVENT.strokeColor, 0.62 + remainingRatio * 0.2);
     activeEvent.label.setAlpha(0.78 + Math.sin(this.time.now * 0.015) * 0.12);
@@ -3035,6 +3056,7 @@ export class RunScene extends Phaser.Scene {
       this.activeRunEvent.shrineVisual.destroy();
       this.activeRunEvent.claimRing.destroy();
       this.activeRunEvent.label.destroy();
+      this.activeRunEvent.icon?.destroy();
       for (const enemy of this.activeRunEvent.pressureEnemies) {
         if (enemy.active) {
           enemy.setEventMarker(null);
@@ -3998,7 +4020,7 @@ export class RunScene extends Phaser.Scene {
     radius: number,
   ): Phaser.GameObjects.Image | undefined {
     const slot = getProjectileSpriteAssetSlot('enemy-shot');
-    if (!shouldUseTexture(this, slot)) {
+    if (!shouldUseVisualAsset(this, 'projectileSprites', slot)) {
       return undefined;
     }
 

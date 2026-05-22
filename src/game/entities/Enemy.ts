@@ -24,6 +24,7 @@ import {
   createMinibossLineAttackContract,
   createMinibossVolleyContract,
 } from '../systems/dangerousEffectContracts';
+import { getEnemySpriteAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 
 export type EnemyBehaviorState =
   | 'chasing'
@@ -124,6 +125,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     side: number;
     angleOffset: number;
   }> = [];
+  private spriteOverlay: Phaser.GameObjects.Image | null = null;
+  private spriteOverlayActive = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -167,6 +170,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.body.setSize(bodySize, bodySize);
     this.body.setMaxVelocity(this.speed * 3, this.speed * 3);
     this.createRoleVisuals(scene);
+    this.refreshSpriteOverlay(scene);
   }
 
   isAlive(): boolean {
@@ -339,6 +343,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setAngle(Phaser.Math.RadToDeg(Math.atan2(velocity.y, velocity.x)) + 90);
     }
     this.syncRoleVisuals();
+    this.syncSpriteOverlay();
 
     if (this.deathPresentationActive) {
       this.setScale(this.responseScale.x, this.responseScale.y);
@@ -934,6 +939,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     for (const visual of this.roleVisuals) {
       visual.object.destroy();
     }
+    this.spriteOverlay?.destroy();
+    this.spriteOverlay = null;
+    this.spriteOverlayActive = false;
     this.roleVisuals.length = 0;
     this.responseScale.x = 1;
     this.responseScale.y = 1;
@@ -996,5 +1004,32 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       visual.object.setVisible(this.visible && this.active);
       visual.object.setAlpha(this.alpha);
     }
+  }
+
+  private refreshSpriteOverlay(scene: Phaser.Scene): void {
+    const slot = getEnemySpriteAssetSlot(this.archetype.id);
+    const category = this.isBoss() ? 'bossSprites' : this.isMiniboss() ? 'minibossSprites' : 'enemySprites';
+    this.spriteOverlayActive = shouldUseVisualAsset(scene, category, slot);
+
+    if (!this.spriteOverlayActive) {
+      this.spriteOverlay?.setVisible(false);
+      return;
+    }
+
+    this.spriteOverlay = scene.add.image(this.x, this.y, slot.key).setDepth(this.depth + 0.35);
+    this.spriteOverlay.setDisplaySize(this.archetype.size * 1.24, this.archetype.size * 1.24).setAlpha(0.92);
+  }
+
+  private syncSpriteOverlay(): void {
+    if (!this.spriteOverlay || !this.spriteOverlayActive) {
+      return;
+    }
+
+    this.spriteOverlay
+      .setPosition(this.x, this.y)
+      .setAngle(this.angle)
+      .setDepth(this.depth + 0.35)
+      .setAlpha(this.alpha)
+      .setVisible(this.visible && this.active);
   }
 }

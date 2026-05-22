@@ -18,6 +18,9 @@ export type VisualAssetKind =
   | 'upgrade-icon'
   | 'signature-upgrade-icon'
   | 'branch-upgrade-icon'
+  | 'skill-icon'
+  | 'buff-status-icon'
+  | 'power-core-map-event-icon'
   | 'tank-class-icon'
   | 'ui-icon'
   | 'ui-button';
@@ -60,6 +63,9 @@ export type UpgradeIconAssetId = Extract<
 >;
 export type SignatureUpgradeIconAssetId = Extract<UpgradeId, `signature-${string}`>;
 export type BranchUpgradeIconAssetId = Extract<UpgradeId, `branch-${string}`>;
+export type SkillIconAssetId = 'breakout-pulse';
+export type BuffStatusIconAssetId = 'shield-pulse' | 'pulse-refund' | 'hp-regen';
+export type PowerCoreMapEventIconAssetId = 'power-core' | 'challenge-wave' | 'reward-target';
 export type UiButtonAssetId = 'play' | 'retry' | 'close';
 
 function createSlot(kind: VisualAssetKind, key: string, path: string, description: string): VisualAssetSlot {
@@ -205,6 +211,14 @@ export const ENEMY_SPRITE_ASSET_SLOTS: Record<EnemyArchetypeId, VisualAssetSlot>
   ),
 };
 
+export const MINIBOSS_SPRITE_ASSET_SLOTS: Partial<Record<EnemyArchetypeId, VisualAssetSlot>> = {
+  dreadnought: ENEMY_SPRITE_ASSET_SLOTS.dreadnought,
+};
+
+export const BOSS_SPRITE_ASSET_SLOTS: Partial<Record<EnemyArchetypeId, VisualAssetSlot>> = {
+  behemoth: ENEMY_SPRITE_ASSET_SLOTS.behemoth,
+};
+
 export const PICKUP_ICON_ASSET_SLOTS: Record<PickupIconAssetId, VisualAssetSlot> = {
   gold: createSlot('pickup-icon', 'pickup-gold', 'assets/pickups/pickup-gold-coin.png', 'Gold pickup icon.'),
   health: createSlot('pickup-icon', 'pickup-health', 'assets/pickups/pickup-health-heart.png', 'Health pickup icon.'),
@@ -340,6 +354,22 @@ export const BRANCH_UPGRADE_ICON_ASSET_SLOTS: Record<BranchUpgradeIconAssetId, V
   ),
 };
 
+export const SKILL_ICON_ASSET_SLOTS: Record<SkillIconAssetId, VisualAssetSlot> = {
+  'breakout-pulse': createSlot('skill-icon', 'skill-breakout-pulse', 'assets/ui/skill-breakout-pulse.png', 'Breakout Pulse active ability icon.'),
+};
+
+export const BUFF_STATUS_ICON_ASSET_SLOTS: Record<BuffStatusIconAssetId, VisualAssetSlot> = {
+  'shield-pulse': createSlot('buff-status-icon', 'buff-shield-pulse', 'assets/ui/buff-shield-pulse.png', 'Power Core shield status icon.'),
+  'pulse-refund': createSlot('buff-status-icon', 'buff-pulse-refund', 'assets/ui/buff-pulse-refund.png', 'Power Core pulse cooldown refund status icon.'),
+  'hp-regen': createSlot('buff-status-icon', 'status-hp-regen', 'assets/ui/status-hp-regen.png', 'HP regeneration status icon.'),
+};
+
+export const POWER_CORE_MAP_EVENT_ICON_ASSET_SLOTS: Record<PowerCoreMapEventIconAssetId, VisualAssetSlot> = {
+  'power-core': createSlot('power-core-map-event-icon', 'map-event-power-core', 'assets/ui/map-event-power-core.png', 'Power Core map-event icon.'),
+  'challenge-wave': createSlot('power-core-map-event-icon', 'map-event-challenge-wave', 'assets/ui/map-event-challenge-wave.png', 'Challenge wave map-event icon.'),
+  'reward-target': createSlot('power-core-map-event-icon', 'map-event-reward-target', 'assets/ui/map-event-reward-target.png', 'Reward target map-event icon.'),
+};
+
 export const UI_ICON_ASSET_SLOTS: Record<UiIconAssetId, VisualAssetSlot> = {
   gold: createSlot('ui-icon', 'ui-gold', 'assets/ui/ui-gold.png', 'Gold UI icon.'),
   pause: createSlot('ui-icon', 'ui-pause', 'assets/ui/ui-pause.png', 'Pause UI icon.'),
@@ -372,6 +402,9 @@ export const ALL_VISUAL_ASSET_SLOTS: VisualAssetSlot[] = [
   ...Object.values(UPGRADE_ICON_ASSET_SLOTS),
   ...Object.values(SIGNATURE_UPGRADE_ICON_ASSET_SLOTS),
   ...Object.values(BRANCH_UPGRADE_ICON_ASSET_SLOTS),
+  ...Object.values(SKILL_ICON_ASSET_SLOTS),
+  ...Object.values(BUFF_STATUS_ICON_ASSET_SLOTS),
+  ...Object.values(POWER_CORE_MAP_EVENT_ICON_ASSET_SLOTS),
   ...Object.values(TANK_CLASS_ICON_ASSET_SLOTS),
   ...Object.values(UI_ICON_ASSET_SLOTS),
   ...Object.values(UI_BUTTON_ASSET_SLOTS),

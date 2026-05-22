@@ -59,7 +59,7 @@ Current rule:
 
 - If a texture key already exists in Phaser, UI code may render it.
 - If the texture key does not exist, UI code keeps the existing shape or text fallback.
-- `BootScene` preloads only runtime-supported slots listed in `PRELOAD_VISUAL_ASSET_KEYS` in `src/game/data/presentVisualAssets.ts`; do not add a key there until the matching `public/` file exists and a runtime surface uses it.
+- `BootScene` preloads only runtime-supported slots listed in `RUNTIME_PRELOAD_VISUAL_ASSET_KEYS` in `src/game/data/presentVisualAssets.ts`; committed disabled assets remain future-only.
 - Player and enemy core objects remain `Phaser.GameObjects.Rectangle` with their existing Arcade physics bodies.
 - Any future decorative sprite or image must not affect hitboxes, collision, movement, damage, XP, rewards, spawn timing, boss behavior, or balance.
 
@@ -82,7 +82,7 @@ Slot groups:
 - UI icon slots for gold, pause, score, XP, HP, stat, class, reward, and codex badges.
 - UI button slots for play, retry, and close affordances.
 
-The resolver helpers live in `src/game/utils/assetResolver.ts` and are intentionally no-throw. Use `shouldUseTexture(scene, slot)` before adding a Phaser image for any optional slot.
+The resolver helpers live in `src/game/utils/assetResolver.ts` and are intentionally no-throw. Use `shouldUseVisualAsset(scene, category, slot)` before adding a Phaser image for any optional slot.
 
 ## First-Pass Asset Integration
 
@@ -94,7 +94,7 @@ Filled slot groups:
 - Hero skins: `skin-runner`, `skin-vanguard`, `skin-shade`, `skin-verdant`.
 - Weapon icons: `weapon-arc-bolt`, `weapon-twin-fangs`, `weapon-ember-lance`, `weapon-bloom-cannon`, `weapon-phase-disc`, `weapon-sunwheel`, `weapon-shatterbell`.
 - Enemy icons: scuttler, skimmer, harrier, mauler, crusher, bulwark, hexcaster, overlord, riftblade, miniboss dreadnought, and boss behemoth.
-- Enemy sprites: matching `sprite-enemy-*` files for the same enemy set. These are preloaded for the slot pipeline but are not used as gameplay hitboxes.
+- Enemy sprites: matching `sprite-enemy-*` files for the same enemy set. These are future-only and are not used as gameplay hitboxes.
 - UI icons: `ui-gold`, `ui-pause`, `ui-xp`, `ui-hp`.
 
 Still missing:
@@ -114,7 +114,7 @@ Replacement process:
 1. Replace the PNG at the existing `public/assets/...` path.
 2. Keep the filename and slot key stable unless `assetSlots.ts` is intentionally updated.
 3. Add a key to `PRESENT_VISUAL_ASSET_KEYS` only after the file exists.
-4. Add a key to `PRELOAD_VISUAL_ASSET_KEYS` only when an active runtime surface needs that texture.
+4. Enable the matching runtime category only when an active runtime surface is ready to render that texture.
 5. Leave unready slots absent from `presentVisualAssets.ts`; the resolver fallback will keep shape or text visuals.
 
 ## Second-Pass Full Pack Expansion
@@ -132,4 +132,8 @@ Second-pass changes add optional slots and copied future-only files for:
 - Signature and branch upgrade icons.
 - Play, retry, and close UI button icons.
 
-These second-pass files are present in `public/assets/...` and tracked by `PRESENT_VISUAL_ASSET_KEYS`. Projectile sprites are preloaded and rendered as decorative overlays in the projectile runtime pass. Other second-pass categories remain out of `PRELOAD_VISUAL_ASSET_KEYS` and are not rendered by gameplay, UI, pickup, map, player, or enemy runtime systems in this pass.
+These second-pass files are present in `public/assets/...` and tracked by `PRESENT_VISUAL_ASSET_KEYS`. Projectile sprites have been moved back to future-only readiness because art normalization is not ready. Shape/text fallbacks remain the default for gameplay, UI, pickup, map, player, enemy, boss, miniboss, projectile, and upgrade surfaces unless the matching runtime category is explicitly enabled.
+
+## Asset Readiness Switch Layer
+
+The category-level switchboard is documented in `docs/io-mvp/asset-readiness.md`. Current runtime preload is derived from committed files plus enabled categories, not from every present file.

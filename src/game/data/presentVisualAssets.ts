@@ -1,4 +1,8 @@
 import { ALL_VISUAL_ASSET_SLOTS, type VisualAssetSlot } from './assetSlots';
+import {
+  getVisualAssetRuntimeCategoryForSlot,
+  isVisualAssetRuntimeCategoryEnabled,
+} from '../config/visualAssetRuntimeConfig';
 
 export const PRESENT_VISUAL_ASSET_KEYS = new Set<string>([
   'hero-runner',
@@ -102,32 +106,25 @@ export const PRESENT_VISUAL_ASSET_SLOTS: VisualAssetSlot[] = ALL_VISUAL_ASSET_SL
   PRESENT_VISUAL_ASSET_KEYS.has(slot.key),
 );
 
-export const PRELOAD_VISUAL_ASSET_KEYS = new Set<string>([
-  'hero-runner',
-  'hero-vanguard',
-  'hero-shade',
-  'hero-verdant',
-  'weapon-arc-bolt',
-  'weapon-twin-fangs',
-  'weapon-ember-lance',
-  'weapon-bloom-cannon',
-  'weapon-phase-disc',
-  'weapon-sunwheel',
-  'weapon-shatterbell',
-  'projectile-arc-bolt',
-  'projectile-twin-fangs',
-  'projectile-ember-lance',
-  'projectile-bloom-cannon',
-  'projectile-phase-disc',
-  'projectile-sunwheel',
-  'projectile-shatterbell',
-  'projectile-enemy-shot',
-]);
+export const RUNTIME_PRELOAD_VISUAL_ASSET_KEYS = new Set<string>(
+  PRESENT_VISUAL_ASSET_SLOTS.filter((slot) =>
+    isVisualAssetRuntimeCategoryEnabled(getVisualAssetRuntimeCategoryForSlot(slot)),
+  ).map((slot) => slot.key),
+);
 
-export const PRELOAD_VISUAL_ASSET_SLOTS: VisualAssetSlot[] = PRESENT_VISUAL_ASSET_SLOTS.filter((slot) =>
-  PRELOAD_VISUAL_ASSET_KEYS.has(slot.key),
+export const RUNTIME_PRELOAD_VISUAL_ASSET_SLOTS: VisualAssetSlot[] = PRESENT_VISUAL_ASSET_SLOTS.filter((slot) =>
+  RUNTIME_PRELOAD_VISUAL_ASSET_KEYS.has(slot.key),
 );
 
 export const FUTURE_ONLY_VISUAL_ASSET_SLOTS: VisualAssetSlot[] = PRESENT_VISUAL_ASSET_SLOTS.filter(
-  (slot) => !PRELOAD_VISUAL_ASSET_KEYS.has(slot.key),
+  (slot) => !RUNTIME_PRELOAD_VISUAL_ASSET_KEYS.has(slot.key),
 );
+
+export const FUTURE_ONLY_VISUAL_ASSET_KEYS = new Set<string>(FUTURE_ONLY_VISUAL_ASSET_SLOTS.map((slot) => slot.key));
+
+export const MISSING_OPTIONAL_VISUAL_ASSET_KEYS = new Set<string>(
+  ALL_VISUAL_ASSET_SLOTS.filter((slot) => !PRESENT_VISUAL_ASSET_KEYS.has(slot.key)).map((slot) => slot.key),
+);
+
+export const PRELOAD_VISUAL_ASSET_KEYS = RUNTIME_PRELOAD_VISUAL_ASSET_KEYS;
+export const PRELOAD_VISUAL_ASSET_SLOTS = RUNTIME_PRELOAD_VISUAL_ASSET_SLOTS;

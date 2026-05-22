@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PRELOAD_VISUAL_ASSET_SLOTS } from '../data/presentVisualAssets';
+import { RUNTIME_PRELOAD_VISUAL_ASSET_SLOTS } from '../data/presentVisualAssets';
 import { loadGameSave } from '../save/saveData';
 
 export class BootScene extends Phaser.Scene {
@@ -8,7 +8,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    for (const slot of PRELOAD_VISUAL_ASSET_SLOTS) {
+    for (const slot of RUNTIME_PRELOAD_VISUAL_ASSET_SLOTS) {
       this.load.image(slot.key, slot.path);
     }
   }

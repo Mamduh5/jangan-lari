@@ -14,6 +14,7 @@ import {
 import type { HeroDefinition } from '../data/heroes';
 import type { TankClassVisualIdentity } from '../data/tankClasses';
 import { resolveHpRegenTick } from '../systems/hpRegen';
+import { getHeroSkinAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 
 export class Player extends Phaser.GameObjects.Rectangle {
   declare body: Phaser.Physics.Arcade.Body;
@@ -23,6 +24,8 @@ export class Player extends Phaser.GameObjects.Rectangle {
   private readonly secondaryBarrel: Phaser.GameObjects.Rectangle;
   private readonly turret: Phaser.GameObjects.Arc;
   private readonly heroMarker: Phaser.GameObjects.Shape;
+  private skinOverlay: Phaser.GameObjects.Image | null = null;
+  private skinOverlayActive = false;
   private readonly baseBarrelWidth: number;
   private readonly baseBarrelHeight: number;
   private readonly visualSize: number;
@@ -117,6 +120,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.body.setMaxVelocity(this.speed, this.speed);
     this.body.setSize(bodySize, bodySize, true);
 
+    this.refreshSkinOverlay(hero);
     this.syncVisualDecorations(scene.time.now);
   }
 
@@ -347,6 +351,9 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.secondaryBarrel.destroy();
     this.turret.destroy();
     this.heroMarker.destroy();
+    this.skinOverlay?.destroy();
+    this.skinOverlay = null;
+    this.skinOverlayActive = false;
     super.destroy(fromScene);
   }
 
@@ -386,5 +393,31 @@ export class Player extends Phaser.GameObjects.Rectangle {
       this.y + this.facingDirection.y * markerOffset,
     );
     this.heroMarker.setAngle(facingAngle);
+    this.syncSkinOverlay(facingAngle);
+  }
+
+  private refreshSkinOverlay(hero: HeroDefinition): void {
+    const slot = getHeroSkinAssetSlot(hero.id);
+    this.skinOverlayActive = shouldUseVisualAsset(this.scene, 'heroSkins', slot);
+
+    if (!this.skinOverlayActive) {
+      this.skinOverlay?.setVisible(false);
+      return;
+    }
+
+    this.skinOverlay = this.scene.add.image(this.x, this.y, slot.key).setDepth(this.depth + 0.35);
+    this.skinOverlay.setDisplaySize(this.visualSize * 1.35, this.visualSize * 1.35).setAlpha(0.96);
+  }
+
+  private syncSkinOverlay(facingAngle: number): void {
+    if (!this.skinOverlay || !this.skinOverlayActive) {
+      return;
+    }
+
+    this.skinOverlay
+      .setPosition(this.x, this.y)
+      .setAngle(facingAngle)
+      .setDepth(this.depth + 0.35)
+      .setVisible(this.visible && this.active);
   }
 }
