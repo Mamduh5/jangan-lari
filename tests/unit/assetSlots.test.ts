@@ -2,6 +2,14 @@ import type Phaser from 'phaser';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  ENEMY_PROJECTILE_VISUAL_SCALE_MULTIPLIER,
+  PLAYER_PROJECTILE_VISUAL_SCALE_MULTIPLIER,
+  PROJECTILE_VISUAL_MAX_DIAMETER,
+  PROJECTILE_VISUAL_MIN_DIAMETER,
+  resolveEnemyProjectileVisualDiameter,
+  resolvePlayerProjectileVisualDiameter,
+} from '../../src/game/config/projectileVisualBalance';
+import {
   ALL_VISUAL_ASSET_SLOTS,
   BRANCH_UPGRADE_ICON_ASSET_SLOTS,
   EFFECT_SPRITE_ASSET_SLOTS,
@@ -77,6 +85,9 @@ describe('asset slot registry', () => {
       expect(PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).toBe(false);
       expect(existsSync(resolve(process.cwd(), 'public', slot.path))).toBe(true);
     }
+
+    expect(PRELOAD_VISUAL_ASSET_KEYS.has(PROJECTILE_SPRITE_ASSET_SLOTS['arc-bolt'].key)).toBe(true);
+    expect(PRELOAD_VISUAL_ASSET_KEYS.has(PROJECTILE_SPRITE_ASSET_SLOTS['enemy-shot'].key)).toBe(true);
   });
 
   test('keeps unfilled slots optional and out of the present manifest', () => {
@@ -120,5 +131,19 @@ describe('asset resolver', () => {
     expect(hasTexture(undefined, 'hero-runner')).toBe(false);
     expect(hasTexture(throwingScene, 'hero-runner')).toBe(false);
     expect(shouldUseTexture(throwingScene, HERO_ICON_ASSET_SLOTS.runner)).toBe(false);
+  });
+});
+
+describe('projectile visual balance', () => {
+  test('keeps overlay sizing config-driven and larger than gameplay radius without changing hitboxes', () => {
+    expect(PLAYER_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(2.4);
+    expect(ENEMY_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(2.2);
+    expect(PROJECTILE_VISUAL_MIN_DIAMETER).toBe(28);
+    expect(PROJECTILE_VISUAL_MAX_DIAMETER).toBe(68);
+
+    expect(resolvePlayerProjectileVisualDiameter('arc-bolt', 5)).toBe(28);
+    expect(resolvePlayerProjectileVisualDiameter('phase-disc', 9)).toBe(40);
+    expect(resolveEnemyProjectileVisualDiameter(8)).toBe(35);
+    expect(resolveEnemyProjectileVisualDiameter(40)).toBe(68);
   });
 });

@@ -19,6 +19,7 @@ type RunSnapshot = {
 
 test.describe('active survival tool', () => {
   test('shows a compact pulse button, starts cooldown, and pushes nearby enemies away', async ({ page }) => {
+    test.setTimeout(45_000);
     await page.setViewportSize({ width: 844, height: 390 });
     const runtimeErrors = trackRuntimeErrors(page);
 

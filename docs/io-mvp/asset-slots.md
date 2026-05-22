@@ -132,4 +132,4 @@ Second-pass changes add optional slots and copied future-only files for:
 - Signature and branch upgrade icons.
 - Play, retry, and close UI button icons.
 
-These second-pass files are present in `public/assets/...` and tracked by `PRESENT_VISUAL_ASSET_KEYS`, but they are not in `PRELOAD_VISUAL_ASSET_KEYS`. They are not rendered by gameplay, UI, projectile, pickup, map, player, or enemy runtime systems in this pass.
+These second-pass files are present in `public/assets/...` and tracked by `PRESENT_VISUAL_ASSET_KEYS`. Projectile sprites are preloaded and rendered as decorative overlays in the projectile runtime pass. Other second-pass categories remain out of `PRELOAD_VISUAL_ASSET_KEYS` and are not rendered by gameplay, UI, pickup, map, player, or enemy runtime systems in this pass.

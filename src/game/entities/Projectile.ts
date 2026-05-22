@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import { getWeaponCombatResponseProfile } from '../combat/combatResponse';
+import { resolvePlayerProjectileVisualDiameter } from '../config/projectileVisualBalance';
 import type { WeaponDefinition } from '../data/weapons';
 import { resolveProjectileVisual, type ProjectileFaction, type ProjectileVisual } from '../systems/readabilityVisuals';
+import { getProjectileSpriteAssetSlot, shouldUseTexture } from '../utils/assetResolver';
 
 export class Projectile extends Phaser.GameObjects.Arc {
   declare body: Phaser.Physics.Arcade.Body;
@@ -26,6 +28,10 @@ export class Projectile extends Phaser.GameObjects.Arc {
   private trailAccumulatorMs = 0;
   private travelScale = 0.9;
   private readonly responseScale = { x: 1, y: 1 };
+  private spriteOverlay: Phaser.GameObjects.Image | null = null;
+  private spriteOverlayActive = false;
+  private spriteOverlayDisplaySize = 0;
+  private fallbackAlpha = 1;
 
   constructor(scene: Phaser.Scene) {
     super(scene, -1000, -1000, 5, 0, 360, false, 0xfacc15);
@@ -68,7 +74,8 @@ export class Projectile extends Phaser.GameObjects.Arc {
     this.setRadius(weapon.projectileRadius);
     this.setFillStyle(this.visual.fillColor);
     this.setStrokeStyle(weapon.explosionRadius ? 4 : weapon.pierceCount ? 3 : 2, this.visual.strokeColor, 0.95);
-    this.setAlpha(weapon.projectileAlpha ?? 1);
+    this.fallbackAlpha = weapon.projectileAlpha ?? 1;
+    this.setAlpha(this.fallbackAlpha);
     this.setScale(weapon.firePattern === 'radial' ? 1.08 : weapon.pierceCount ? 1.12 : 0.9);
     this.setBlendMode(
       weapon.firePattern === 'radial' || weapon.pierceCount || weapon.explosionRadius
@@ -78,6 +85,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
     this.setActive(true);
     this.setVisible(true);
     this.setPosition(x, y);
+    this.refreshSpriteOverlay(normalizedDirection);
 
     this.body.enable = true;
     this.body.setCircle(weapon.projectileRadius);
@@ -130,6 +138,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
       this.remainingPierces -= 1;
       this.travelScale = Math.max(0.72, this.travelScale * 0.92);
       this.setScale(this.travelScale * this.responseScale.x, this.travelScale * this.responseScale.y);
+      this.syncSpriteOverlay();
       return false;
     }
 
@@ -155,6 +164,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
             : 1.08;
     this.travelScale = Math.min(scaleTarget, this.travelScale + deltaSeconds * 0.5);
     this.setScale(this.travelScale * this.responseScale.x, this.travelScale * this.responseScale.y);
+    this.syncSpriteOverlay();
     this.trailAccumulatorMs += deltaMs;
 
     if (this.shouldEmitTrail() && this.trailAccumulatorMs >= 36) {
@@ -174,6 +184,7 @@ export class Projectile extends Phaser.GameObjects.Arc {
     this.responseScale.y = 1;
     this.setActive(false);
     this.setVisible(false);
+    this.spriteOverlay?.setVisible(false);
     this.setPosition(-1000, -1000);
     this.body.stop();
     this.body.enable = false;
@@ -217,8 +228,55 @@ export class Projectile extends Phaser.GameObjects.Arc {
     });
   }
 
+  private refreshSpriteOverlay(direction: Phaser.Math.Vector2): void {
+    const slot = getProjectileSpriteAssetSlot(this.weaponId);
+    this.spriteOverlayActive = shouldUseTexture(this.scene, slot);
+
+    if (!this.spriteOverlayActive) {
+      this.spriteOverlay?.setVisible(false);
+      this.setAlpha(this.fallbackAlpha);
+      return;
+    }
+
+    if (!this.spriteOverlay) {
+      this.spriteOverlay = this.scene.add.image(this.x, this.y, slot.key).setDepth(this.depth + 0.2);
+    } else {
+      this.spriteOverlay.setTexture(slot.key);
+    }
+
+    this.spriteOverlayDisplaySize = resolvePlayerProjectileVisualDiameter(this.weaponId, this.visualRadius);
+    this.setAlpha(0);
+    this.spriteOverlay
+      .setActive(true)
+      .setVisible(this.visible)
+      .setDisplaySize(this.spriteOverlayDisplaySize, this.spriteOverlayDisplaySize)
+      .setAlpha(this.fallbackAlpha)
+      .setBlendMode(this.blendMode)
+      .setRotation(direction.angle());
+    this.syncSpriteOverlay();
+  }
+
+  private syncSpriteOverlay(): void {
+    if (!this.spriteOverlay || !this.spriteOverlayActive) {
+      return;
+    }
+
+    const velocity = this.body?.velocity;
+    if (velocity && velocity.lengthSq() > 0) {
+      this.spriteOverlay.setRotation(velocity.angle());
+    }
+
+    this.spriteOverlay
+      .setPosition(this.x, this.y)
+      .setDepth(this.depth + 0.2)
+      .setVisible(this.visible && this.active);
+  }
+
   destroy(fromScene?: boolean): void {
     this.scene.tweens.killTweensOf(this.responseScale);
+    this.spriteOverlay?.destroy();
+    this.spriteOverlay = null;
+    this.spriteOverlayActive = false;
     this.responseScale.x = 1;
     this.responseScale.y = 1;
     super.destroy(fromScene);

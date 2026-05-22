@@ -60,9 +60,9 @@ All new slots are optional and included in `ALL_VISUAL_ASSET_SLOTS`.
 
 ## Future-Only Assets
 
-All second-pass copied assets are future-only. They are tracked by `PRESENT_VISUAL_ASSET_KEYS` and excluded from `PRELOAD_VISUAL_ASSET_KEYS`.
+Second-pass copied assets are tracked by `PRESENT_VISUAL_ASSET_KEYS`. Projectile sprites graduated to runtime preload in the projectile runtime pass; the remaining second-pass categories stay future-only and excluded from `PRELOAD_VISUAL_ASSET_KEYS`.
 
-Future-only also includes first-pass copied assets that still have no runtime surface in this pass, such as hero skins, enemy icons/sprites, and basic UI icons not currently rendered by existing scenes.
+Future-only includes copied assets that still have no runtime surface in this pass, such as hero skins, enemy icons/sprites, pickup icons, effects, props, tiles, upgrade icons, UI buttons, and basic UI icons not currently rendered by existing scenes.
 
 ## Runtime-Preloaded Assets
 
@@ -70,8 +70,9 @@ Only existing runtime surfaces are preloaded:
 
 - Hero menu/loadout icons: `hero-runner`, `hero-vanguard`, `hero-shade`, `hero-verdant`.
 - Weapon HUD icons: `weapon-arc-bolt`, `weapon-twin-fangs`, `weapon-ember-lance`, `weapon-bloom-cannon`, `weapon-phase-disc`, `weapon-sunwheel`, `weapon-shatterbell`.
+- Projectile sprites: `projectile-arc-bolt`, `projectile-twin-fangs`, `projectile-ember-lance`, `projectile-bloom-cannon`, `projectile-phase-disc`, `projectile-sunwheel`, `projectile-shatterbell`, `projectile-enemy-shot`.
 
-No projectile, pickup, effect, prop, tile, upgrade, signature, branch, player-skin, enemy-sprite, or new UI button assets are preloaded.
+No pickup, effect, prop, tile, upgrade, signature, branch, player-skin, enemy-sprite, or new UI button assets are preloaded.
 
 ## Still Missing
 
@@ -82,7 +83,6 @@ These slots remain optional and are intentionally absent from `PRESENT_VISUAL_AS
 
 ## Intentionally Not Enabled
 
-- Runtime projectile sprites.
 - Runtime pickup sprites.
 - Runtime effect sprites.
 - Runtime prop or tile rendering.

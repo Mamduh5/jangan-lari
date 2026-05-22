@@ -90,6 +90,7 @@ import {
   type BossStateDefinition,
 } from '../config/bossBalance';
 import { BUFF_SHRINE_EVENT, MAP_EVENT_ENCOUNTER_BUFFER_MS, REWARD_TARGET_ENEMY_BALANCE } from '../config/mapEventBalance';
+import { resolveEnemyProjectileVisualDiameter } from '../config/projectileVisualBalance';
 import {
   WAVE_FORMATION_COOLDOWN_MS,
   WAVE_FORMATION_ENABLE_TIME_MS,
@@ -175,8 +176,23 @@ import {
   getStageVictoryCondition,
   type StagePhase,
 } from '../utils/stagePhase';
+import { getProjectileSpriteAssetSlot, shouldUseTexture } from '../utils/assetResolver';
 
 type RunEventType = 'challenge-wave' | 'reward-target' | 'buff-shrine';
+
+type EnemyBolt = {
+  orb: Phaser.GameObjects.Arc;
+  halo: Phaser.GameObjects.Arc;
+  sprite?: Phaser.GameObjects.Image;
+  vx: number;
+  vy: number;
+  radius: number;
+  damage: number;
+  elapsedMs: number;
+  lifetimeMs: number;
+  hasHitPlayer: boolean;
+  visual: ProjectileVisual;
+};
 
 type ActiveRunEvent =
   | {
@@ -341,18 +357,7 @@ export class RunScene extends Phaser.Scene {
     elapsedMs: number;
     hasHitPlayer: boolean;
   }> = [];
-  private enemyBolts: Array<{
-    orb: Phaser.GameObjects.Arc;
-    halo: Phaser.GameObjects.Arc;
-    vx: number;
-    vy: number;
-    radius: number;
-    damage: number;
-    elapsedMs: number;
-    lifetimeMs: number;
-    hasHitPlayer: boolean;
-    visual: ProjectileVisual;
-  }> = [];
+  private enemyBolts: EnemyBolt[] = [];
   private runElapsedMs = 0;
   private pendingLevelUps = 0;
   private levelUpRemainingMs = 0;
@@ -1920,8 +1925,7 @@ export class RunScene extends Phaser.Scene {
     this.shockwaveAttacks = [];
     this.skillTelegraphs = [];
     for (const bolt of this.enemyBolts) {
-      bolt.orb.destroy();
-      bolt.halo.destroy();
+      this.destroyEnemyBolt(bolt);
     }
     this.enemyBolts = [];
     this.clearDangerZones();
@@ -3265,6 +3269,7 @@ export class RunScene extends Phaser.Scene {
       bolt.orb.y += bolt.vy * (deltaMs / 1000);
       bolt.halo.x = bolt.orb.x;
       bolt.halo.y = bolt.orb.y;
+      this.syncEnemyBoltSprite(bolt);
 
       const expired =
         bolt.elapsedMs >= bolt.lifetimeMs ||
@@ -3279,13 +3284,17 @@ export class RunScene extends Phaser.Scene {
           bolt.hasHitPlayer = true;
           const tookDamage = this.player.takeDamage(bolt.damage, this.time.now);
           this.createBurstCircle(bolt.orb.x, bolt.orb.y, bolt.visual.trailColor, 8, 30, 170, 0.8);
-          bolt.orb.destroy();
-          bolt.halo.destroy();
+          this.destroyEnemyBolt(bolt);
 
           if (tookDamage) {
             this.cameras.main.shake(85, PLAYER_HIT_SHAKE_INTENSITY * 0.85);
             this.showFloatingText(this.player.x, this.player.y - 26, `${bolt.damage}`, '#fecaca', 17);
             if (!this.player.isAlive()) {
+              for (const pendingBolt of this.enemyBolts) {
+                if (pendingBolt !== bolt) {
+                  this.destroyEnemyBolt(pendingBolt);
+                }
+              }
               this.enemyBolts = [];
               this.endRun(false, 'Defeat', 'You were picked apart at range.');
               return;
@@ -3297,8 +3306,7 @@ export class RunScene extends Phaser.Scene {
       }
 
       if (expired) {
-        bolt.orb.destroy();
-        bolt.halo.destroy();
+        this.destroyEnemyBolt(bolt);
         continue;
       }
 
@@ -3962,11 +3970,16 @@ export class RunScene extends Phaser.Scene {
     orb.setStrokeStyle(3, visual.strokeColor, 0.98);
     const halo = this.add.circle(x, y, radius * 2.05, visual.trailColor, 0.2).setDepth(8.4);
     halo.setStrokeStyle(2, visual.dangerColor ?? visual.fillColor, 0.55);
+    const sprite = this.createEnemyBoltSprite(x, y, direction, radius);
+    if (sprite) {
+      orb.setAlpha(0);
+    }
     this.createBurstCircle(x, y, visual.trailColor, Math.max(5, radius * 0.9), Math.max(14, radius * 2.8), 120, 0.38);
 
     this.enemyBolts.push({
       orb,
       halo,
+      sprite,
       vx: direction.x * speed,
       vy: direction.y * speed,
       radius,
@@ -3976,6 +3989,41 @@ export class RunScene extends Phaser.Scene {
       hasHitPlayer: false,
       visual,
     });
+  }
+
+  private createEnemyBoltSprite(
+    x: number,
+    y: number,
+    direction: { x: number; y: number },
+    radius: number,
+  ): Phaser.GameObjects.Image | undefined {
+    const slot = getProjectileSpriteAssetSlot('enemy-shot');
+    if (!shouldUseTexture(this, slot)) {
+      return undefined;
+    }
+
+    const displaySize = resolveEnemyProjectileVisualDiameter(radius);
+    return this.add
+      .image(x, y, slot.key)
+      .setDepth(8.55)
+      .setDisplaySize(displaySize, displaySize)
+      .setAlpha(0.96)
+      .setRotation(Math.atan2(direction.y, direction.x))
+      .setBlendMode(Phaser.BlendModes.ADD);
+  }
+
+  private syncEnemyBoltSprite(bolt: EnemyBolt): void {
+    if (!bolt.sprite) {
+      return;
+    }
+
+    bolt.sprite.setPosition(bolt.orb.x, bolt.orb.y).setVisible(bolt.orb.visible && bolt.orb.active);
+  }
+
+  private destroyEnemyBolt(bolt: EnemyBolt): void {
+    bolt.orb.destroy();
+    bolt.halo.destroy();
+    bolt.sprite?.destroy();
   }
 
   private showLineAttackTelegraph(
@@ -4986,8 +5034,7 @@ export class RunScene extends Phaser.Scene {
     this.shockwaveAttacks = [];
     this.skillTelegraphs = [];
     for (const bolt of this.enemyBolts) {
-      bolt.orb.destroy();
-      bolt.halo.destroy();
+      this.destroyEnemyBolt(bolt);
     }
     this.enemyBolts = [];
     this.clearDangerZones();
@@ -5273,8 +5320,7 @@ export class RunScene extends Phaser.Scene {
       attack.halo.destroy();
     }
     for (const bolt of this.enemyBolts) {
-      bolt.orb.destroy();
-      bolt.halo.destroy();
+      this.destroyEnemyBolt(bolt);
     }
     this.lineStrikeAttacks = [];
     this.shockwaveAttacks = [];

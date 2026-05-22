@@ -114,6 +114,14 @@ export const PRELOAD_VISUAL_ASSET_KEYS = new Set<string>([
   'weapon-phase-disc',
   'weapon-sunwheel',
   'weapon-shatterbell',
+  'projectile-arc-bolt',
+  'projectile-twin-fangs',
+  'projectile-ember-lance',
+  'projectile-bloom-cannon',
+  'projectile-phase-disc',
+  'projectile-sunwheel',
+  'projectile-shatterbell',
+  'projectile-enemy-shot',
 ]);
 
 export const PRELOAD_VISUAL_ASSET_SLOTS: VisualAssetSlot[] = PRESENT_VISUAL_ASSET_SLOTS.filter((slot) =>
