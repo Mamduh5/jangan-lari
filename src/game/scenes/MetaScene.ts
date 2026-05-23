@@ -1,5 +1,6 @@
 ﻿import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
+import { getUiButtonAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 import { HEROES } from '../data/heroes';
 import {
   PERMANENT_UPGRADES,
@@ -25,6 +26,7 @@ export class MetaScene extends Phaser.Scene {
   private upgradeDetails: Phaser.GameObjects.Text[] = [];
   private questFrames: Phaser.GameObjects.Rectangle[] = [];
   private questTexts: Phaser.GameObjects.Text[] = [];
+  private backButtonIcon: Phaser.GameObjects.Image | null = null;
   private readonly handleExitToMenu = (): void => {
     this.scene.start('MenuScene');
   };
@@ -40,6 +42,7 @@ export class MetaScene extends Phaser.Scene {
     this.upgradeDetails = [];
     this.questFrames = [];
     this.questTexts = [];
+    this.backButtonIcon = null;
     const centerX = GAME_WIDTH / 2;
 
     this.cameras.main.setBackgroundColor('#0b1020');
@@ -184,6 +187,10 @@ export class MetaScene extends Phaser.Scene {
     backButton.on('pointerout', () => {
       backButton.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
     });
+    this.backButtonIcon = this.createCloseButtonIcon(
+      backButton.x - backButton.displayWidth / 2 + 12,
+      backButton.y,
+    );
 
     this.input.keyboard?.on('keydown-ESC', this.handleExitToMenu, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
@@ -248,6 +255,15 @@ export class MetaScene extends Phaser.Scene {
       );
       this.questTexts[index].setColor(completed ? '#86efac' : '#cbd5e1');
     }
+  }
+
+  private createCloseButtonIcon(x: number, y: number): Phaser.GameObjects.Image | null {
+    const slot = getUiButtonAssetSlot('close');
+    if (!shouldUseVisualAsset(this, 'uiButtons', slot)) {
+      return null;
+    }
+
+    return this.add.image(x, y, slot.key).setDisplaySize(20, 20).setAlpha(0.78);
   }
 
   private handleShutdown(): void {

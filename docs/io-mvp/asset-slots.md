@@ -96,6 +96,7 @@ Filled slot groups:
 - Enemy icons: scuttler, skimmer, harrier, mauler, crusher, bulwark, hexcaster, overlord, riftblade, miniboss dreadnought, and boss behemoth.
 - Enemy sprites: matching `sprite-enemy-*` files for the same enemy set. These are future-only and are not used as gameplay hitboxes.
 - UI icons: `ui-gold`, `ui-pause`, `ui-xp`, `ui-hp`.
+- UI buttons: `ui-button-play`, `ui-button-retry`, `ui-button-close`.
 
 Still missing:
 
@@ -105,7 +106,7 @@ Still missing:
 
 Source ZIP files left unused:
 
-- Effects, projectiles, props, tiles, upgrade icons, signature icons, branch icons, and play/retry/close buttons did not have matching A18 slots or runtime integration points in the first-pass branch.
+- Effects, projectiles, props, tiles, upgrade icons, signature icons, and branch icons did not have matching A18 runtime integration points in the first-pass branch.
 - Projectile art was not mapped to weapon icons because weapon HUD slots already received matching `ui-weapon-*` assets.
 - Ambiguous UI art was not renamed into unrelated slots unless the meaning was direct, such as pause, HP, XP, and gold.
 
@@ -132,7 +133,7 @@ Second-pass changes add optional slots and copied future-only files for:
 - Signature and branch upgrade icons.
 - Play, retry, and close UI button icons.
 
-These second-pass files are present in `public/assets/...` and tracked by `PRESENT_VISUAL_ASSET_KEYS`. Pickup icons are runtime-enabled for XP gem overlays. Low-risk effect sprites are runtime-enabled as decorative overlays for hit pop, enemy death puff, XP collect, and level-up burst. Boss shockwave and miniboss line-strike mechanics intentionally keep their fallback visuals. Projectile sprites have been moved back to future-only readiness because art normalization is not ready. Shape/text fallbacks remain the default for UI, map, player, enemy, boss, miniboss, projectile, and upgrade surfaces unless the matching runtime category is explicitly enabled.
+These second-pass files are present in `public/assets/...` and tracked by `PRESENT_VISUAL_ASSET_KEYS`. Pickup icons are runtime-enabled for XP gem overlays. Low-risk effect sprites are runtime-enabled as decorative overlays for hit pop, enemy death puff, XP collect, and level-up burst. UI icons/buttons are runtime-enabled for small decorative HUD and text-button affordances. Boss shockwave and miniboss line-strike mechanics intentionally keep their fallback visuals. Projectile sprites have been moved back to future-only readiness because art normalization is not ready. Shape/text fallbacks remain the default for map, player, enemy, boss, miniboss, projectile, upgrade, skill, status, class, and missing UI surfaces unless the matching runtime category is explicitly enabled.
 
 ## Asset Readiness Switch Layer
 

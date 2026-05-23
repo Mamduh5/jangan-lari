@@ -8,6 +8,7 @@ type MenuSnapshot = {
   controlGuideMode: ControlGuideMode;
   guideButtonText: string;
   startButton: { x: number; y: number };
+  startButtonIconVisible: boolean;
   guideButton: { x: number; y: number };
 };
 
@@ -42,6 +43,7 @@ test.describe('mobile alpha UI', () => {
     expect(menu.gameHeight).toBe(720);
     expect(menu.controlGuideMode).toBe('subtle');
     expect(menu.guideButtonText).toBe('Guide Subtle');
+    expect(menu.startButtonIconVisible).toBe(true);
 
     await clickCanvasPoint(page, menu.guideButton.x, menu.guideButton.y);
     await page.waitForFunction(() => {

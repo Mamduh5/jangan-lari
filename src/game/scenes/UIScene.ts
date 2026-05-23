@@ -66,6 +66,9 @@ export class UIScene extends Phaser.Scene {
   private timerSubtitleText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
+  private goldIconImage: Phaser.GameObjects.Image | null = null;
+  private hpIconImage: Phaser.GameObjects.Image | null = null;
+  private xpIconImage: Phaser.GameObjects.Image | null = null;
   private killsText!: Phaser.GameObjects.Text;
   private alertText!: Phaser.GameObjects.Text;
   private rewardText!: Phaser.GameObjects.Text;
@@ -123,9 +126,11 @@ export class UIScene extends Phaser.Scene {
   private controlHintContainer!: Phaser.GameObjects.Container;
   private controlGuideToggleButton!: Phaser.GameObjects.Text;
   private pauseButton!: Phaser.GameObjects.Text;
+  private pauseIconImage: Phaser.GameObjects.Image | null = null;
   private pauseMenuContainer!: Phaser.GameObjects.Container;
   private pauseMenuSummaryText!: Phaser.GameObjects.Text;
   private pauseMenuButtons: Phaser.GameObjects.Text[] = [];
+  private pauseMenuButtonIcons: Partial<Record<'close' | 'retry', Phaser.GameObjects.Image>> = {};
   private activeAbilityButton!: Phaser.GameObjects.Container;
   private activeAbilityButtonBase!: Phaser.GameObjects.Arc;
   private activeAbilityButtonLabel!: Phaser.GameObjects.Text;
@@ -175,6 +180,7 @@ export class UIScene extends Phaser.Scene {
     this.controlGuideLabels = [];
     this.controlGuideSubLabels = [];
     this.pauseMenuButtons = [];
+    this.pauseMenuButtonIcons = {};
     this.controlGuideMode = this.readControlGuideMode();
 
     this.heroText = this.add
@@ -203,6 +209,7 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
+    this.hpIconImage = this.createHudIconImage('hp', 18, 54, 16, 0.88);
 
     this.levelValueText = this.add
       .text(318, 68, 'LV 1', {
@@ -342,6 +349,7 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(1, 0)
       .setScrollFactor(0);
+    this.goldIconImage = this.createHudIconImage('gold', viewWidth - 122, 31, 18, 0.9);
 
     this.killsText = this.add
       .text(viewWidth - 30, 46, 'Kills 0', {
@@ -397,6 +405,7 @@ export class UIScene extends Phaser.Scene {
 
     this.xpBarFill = this.add.rectangle(30, 76, 0, 5, 0x38bdf8, 0.96).setOrigin(0, 0.5);
     this.xpBarFill.setScrollFactor(0);
+    this.xpIconImage = this.createHudIconImage('xp', 18, 76, 14, 0.82);
 
     this.xpBarLabel = this.add
       .text(0, 0, '', {
@@ -516,6 +525,7 @@ export class UIScene extends Phaser.Scene {
     this.setTextIfChanged(this.weaponSummaryText, this.formatWeaponSummary(weaponNames, classTitle));
     this.setTextIfChanged(this.xpBarLabel, '');
     this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 280, 0, 280);
+    this.refreshHudIconLayout();
     this.refreshWeaponIcons(weaponNames);
     this.refreshAlert(alertKind, alertMessage);
     this.refreshRewardToast(rewardMessage, rewardColor);
@@ -588,6 +598,8 @@ export class UIScene extends Phaser.Scene {
     controlGuideToggleVisible: boolean;
     pauseButtonVisible: boolean;
     pauseButton: { x: number; y: number; width: number; height: number };
+    hudIconVisible: { gold: boolean; hp: boolean; xp: boolean; pause: boolean };
+    uiButtonIconVisible: { close: boolean; retry: boolean };
     weaponSlots: Array<{ visible: boolean; label: string; x: number; y: number; width: number; height: number }>;
     activeAbilityButtonVisible: boolean;
     activeAbilityButtonText: string;
@@ -642,6 +654,16 @@ export class UIScene extends Phaser.Scene {
         y: this.pauseButton.y,
         width: this.pauseButton.displayWidth,
         height: this.pauseButton.displayHeight,
+      },
+      hudIconVisible: {
+        gold: Boolean(this.goldIconImage?.visible),
+        hp: Boolean(this.hpIconImage?.visible),
+        xp: Boolean(this.xpIconImage?.visible),
+        pause: Boolean(this.pauseIconImage?.visible),
+      },
+      uiButtonIconVisible: {
+        close: Boolean(this.pauseMenuContainer.visible && this.pauseMenuButtonIcons.close?.visible),
+        retry: Boolean(this.pauseMenuContainer.visible && this.pauseMenuButtonIcons.retry?.visible),
       },
       weaponSlots: this.weaponIconTexts.map((label, index) => ({
         visible: this.weaponIconFrames[index]?.visible ?? false,
@@ -1143,6 +1165,41 @@ export class UIScene extends Phaser.Scene {
     return button;
   }
 
+  private createHudIconImage(
+    iconId: UiIconAssetId,
+    x: number,
+    y: number,
+    size: number,
+    alpha: number,
+  ): Phaser.GameObjects.Image | null {
+    if (!this.canRenderHudIcon(iconId)) {
+      return null;
+    }
+
+    return this.add
+      .image(x, y, getUiIconAssetSlot(iconId).key)
+      .setDisplaySize(size, size)
+      .setAlpha(alpha)
+      .setScrollFactor(0);
+  }
+
+  private createUiButtonIconImage(
+    buttonId: UiButtonAssetId,
+    x: number,
+    y: number,
+    size: number,
+  ): Phaser.GameObjects.Image | null {
+    if (!this.canRenderUiButtonIcon(buttonId)) {
+      return null;
+    }
+
+    return this.add
+      .image(x, y, getUiButtonAssetSlot(buttonId).key)
+      .setDisplaySize(size, size)
+      .setAlpha(0.78)
+      .setScrollFactor(0);
+  }
+
   private createPauseButton(): Phaser.GameObjects.Text {
     const button = this.add
       .text(GAME_WIDTH - 64, 126, 'II', {
@@ -1161,6 +1218,8 @@ export class UIScene extends Phaser.Scene {
     button.on('pointerout', () => button.setStyle({ color: '#e0f2fe', backgroundColor: '#111827' }));
     button.setData('assetIconReady', this.canRenderUiButtonIcon('close') || this.canRenderHudIcon('pause'));
     button.setDepth(82);
+    this.pauseIconImage = this.createHudIconImage('pause', button.x, button.y, 22, 0.34);
+    this.pauseIconImage?.setDepth(81);
 
     return button;
   }
@@ -1246,9 +1305,39 @@ export class UIScene extends Phaser.Scene {
       this.returnToMainMenu();
     });
 
+    const resumeIcon = this.createUiButtonIconImage(
+      'close',
+      resumeButton.x - resumeButton.displayWidth / 2 + 13,
+      resumeButton.y,
+      18,
+    );
+    const restartIcon = this.createUiButtonIconImage(
+      'retry',
+      restartButton.x - restartButton.displayWidth / 2 + 13,
+      restartButton.y,
+      18,
+    );
+    this.pauseMenuButtonIcons.close = resumeIcon ?? undefined;
+    this.pauseMenuButtonIcons.retry = restartIcon ?? undefined;
     this.pauseMenuButtons.push(resumeButton, restartButton, menuButton);
 
-    const container = this.add.container(0, 0, [backdrop, panel, heading, this.pauseMenuSummaryText, resumeButton, restartButton, menuButton]);
+    const pauseMenuChildren: Phaser.GameObjects.GameObject[] = [
+      backdrop,
+      panel,
+      heading,
+      this.pauseMenuSummaryText,
+      resumeButton,
+      restartButton,
+      menuButton,
+    ];
+    if (resumeIcon) {
+      pauseMenuChildren.push(resumeIcon);
+    }
+    if (restartIcon) {
+      pauseMenuChildren.push(restartIcon);
+    }
+
+    const container = this.add.container(0, 0, pauseMenuChildren);
     container.setDepth(110);
     container.setScrollFactor(0);
     container.setVisible(false);
@@ -1297,6 +1386,7 @@ export class UIScene extends Phaser.Scene {
     const pauseButtonVisible = this.scene.isActive('RunScene') && !modalOverlayActive;
 
     this.pauseButton.setVisible(pauseButtonVisible);
+    this.pauseIconImage?.setVisible(pauseButtonVisible);
     if (pauseButtonVisible) {
       if (!this.pauseButton.input?.enabled) {
         this.pauseButton.setInteractive({ useHandCursor: true });
@@ -1919,6 +2009,19 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
+  private refreshHudIconLayout(): void {
+    this.hpIconImage?.setVisible(true);
+    this.xpIconImage?.setVisible(true);
+
+    if (!this.goldIconImage) {
+      return;
+    }
+
+    const bounds = this.goldText.getBounds();
+    this.goldIconImage.setPosition(bounds.left - 14, bounds.centerY);
+    this.goldIconImage.setVisible(this.goldText.visible);
+  }
+
   private refreshAlert(kind: string, message: string): void {
     if (!message) {
       this.alertText.setVisible(false);
@@ -2222,5 +2325,10 @@ export class UIScene extends Phaser.Scene {
     this.statButtons = {};
     this.statButtonLabels = {};
     this.pauseMenuButtons = [];
+    this.pauseMenuButtonIcons = {};
+    this.goldIconImage = null;
+    this.hpIconImage = null;
+    this.xpIconImage = null;
+    this.pauseIconImage = null;
   }
 }

@@ -27,7 +27,7 @@ export const VISUAL_ASSET_RUNTIME_CONFIG: Record<VisualAssetRuntimeCategory, boo
   heroMenuIcons: true,
   weaponHudIcons: true,
   heroSkins: false,
-  projectileSprites: true,
+  projectileSprites: false,
   enemySprites: false,
   enemyIcons: false,
   bossSprites: false,
@@ -43,8 +43,8 @@ export const VISUAL_ASSET_RUNTIME_CONFIG: Record<VisualAssetRuntimeCategory, boo
   buffStatusIcons: false,
   powerCoreMapEventIcons: false,
   tankClassIcons: false,
-  uiButtons: false,
-  uiIcons: false,
+  uiButtons: true,
+  uiIcons: true,
 };
 
 export function isVisualAssetRuntimeCategoryEnabled(category: VisualAssetRuntimeCategory): boolean {

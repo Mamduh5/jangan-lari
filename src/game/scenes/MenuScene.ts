@@ -3,8 +3,9 @@ import { primeAudioContext } from '../audio/audioCuePlayer';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/constants';
 import { ENEMY_ARCHETYPES } from '../data/enemies';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
+import type { UiButtonAssetId } from '../data/assetSlots';
 import { WEAPON_DEFINITIONS } from '../data/weapons';
-import { getHeroIconAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
+import { getHeroIconAssetSlot, getUiButtonAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 import {
   CONTROL_GUIDE_MODES,
   loadGameSave,
@@ -26,10 +27,12 @@ export class MenuScene extends Phaser.Scene {
   private heroInfoTexts: Phaser.GameObjects.Text[] = [];
   private heroPanels: Phaser.GameObjects.Rectangle[] = [];
   private startButton!: Phaser.GameObjects.Text;
+  private startButtonIcon: Phaser.GameObjects.Image | null = null;
   private metaButton!: Phaser.GameObjects.Text;
   private codexButton!: Phaser.GameObjects.Text;
   private guideButton!: Phaser.GameObjects.Text;
   private codexCloseButton!: Phaser.GameObjects.Text;
+  private codexCloseButtonIcon: Phaser.GameObjects.Image | null = null;
   private codexOverlay!: Phaser.GameObjects.Container;
   private codexOverlayVisible = false;
   private activeCodexSection: CodexSection = 'runner';
@@ -71,6 +74,8 @@ export class MenuScene extends Phaser.Scene {
     this.codexThreatTitleTexts = [];
     this.codexThreatBodyTexts = [];
     this.focusedHeroPreviewContainer = null;
+    this.startButtonIcon = null;
+    this.codexCloseButtonIcon = null;
 
     this.cameras.main.setBackgroundColor('#0b1020');
 
@@ -397,6 +402,12 @@ export class MenuScene extends Phaser.Scene {
     this.codexCloseButton = this.createMenuButton(1042, 96, 'Back', () => this.closeCodex());
     this.codexCloseButton.setFontSize('20px');
     this.codexCloseButton.setPadding(18, 10, 18, 10);
+    this.codexCloseButtonIcon = this.createUiButtonIcon(
+      'close',
+      this.codexCloseButton.x - this.codexCloseButton.displayWidth / 2 + 11,
+      this.codexCloseButton.y,
+      18,
+    );
 
     this.codexSectionEyebrow = this.add
       .text(394, 186, '', {
@@ -509,7 +520,7 @@ export class MenuScene extends Phaser.Scene {
     }
     this.codexThreatContainer = this.add.container(0, 0, codexThreatObjects);
 
-    this.codexOverlay = this.add.container(0, 0, [
+    const codexOverlayChildren: Phaser.GameObjects.GameObject[] = [
       codexBackdrop,
       codexPanel,
       codexHeader,
@@ -529,7 +540,11 @@ export class MenuScene extends Phaser.Scene {
       this.codexRunnerContainer,
       this.codexWeaponContainer,
       this.codexThreatContainer,
-    ]);
+    ];
+    if (this.codexCloseButtonIcon) {
+      codexOverlayChildren.push(this.codexCloseButtonIcon);
+    }
+    this.codexOverlay = this.add.container(0, 0, codexOverlayChildren);
     this.codexOverlay.setDepth(30);
     this.codexOverlay.setVisible(false);
 
@@ -553,6 +568,12 @@ export class MenuScene extends Phaser.Scene {
       this.startButton.setStyle({ color: '#111827', backgroundColor: '#fde68a' });
     });
     this.startButton.on('pointerdown', () => this.startRun());
+    this.startButtonIcon = this.createUiButtonIcon(
+      'play',
+      this.startButton.x - this.startButton.displayWidth / 2 + 14,
+      this.startButton.y,
+      24,
+    );
 
     this.metaButton = this.createMenuButton(454, 679, 'UPGRADES', () => this.openMeta());
     this.metaButton.setFontSize('20px');
@@ -617,6 +638,7 @@ export class MenuScene extends Phaser.Scene {
     controlGuideMode: ControlGuideMode;
     guideButtonText: string;
     startButton: { x: number; y: number };
+    startButtonIconVisible: boolean;
     guideButton: { x: number; y: number };
   } {
     return {
@@ -625,6 +647,7 @@ export class MenuScene extends Phaser.Scene {
       controlGuideMode: this.saveData.controlGuideMode,
       guideButtonText: this.guideButton.text,
       startButton: { x: this.startButton.x, y: this.startButton.y },
+      startButtonIconVisible: Boolean(this.startButtonIcon?.visible),
       guideButton: { x: this.guideButton.x, y: this.guideButton.y },
     };
   }
@@ -892,6 +915,20 @@ export class MenuScene extends Phaser.Scene {
 
     button.on('pointerdown', () => onClick());
     return button;
+  }
+
+  private createUiButtonIcon(
+    buttonId: UiButtonAssetId,
+    x: number,
+    y: number,
+    size: number,
+  ): Phaser.GameObjects.Image | null {
+    const slot = getUiButtonAssetSlot(buttonId);
+    if (!shouldUseVisualAsset(this, 'uiButtons', slot)) {
+      return null;
+    }
+
+    return this.add.image(x, y, slot.key).setDisplaySize(size, size).setAlpha(0.78);
   }
 
   private setFocusedHero(heroId: HeroDefinition['id']): void {

@@ -12,6 +12,8 @@ Enabled now:
 - `weaponHudIcons`
 - `pickupIcons`
 - `effectSprites`
+- `uiButtons`
+- `uiIcons`
 
 Future-ready but disabled:
 
@@ -30,8 +32,6 @@ Future-ready but disabled:
 - `buffStatusIcons`
 - `powerCoreMapEventIcons`
 - `tankClassIcons`
-- `uiButtons`
-- `uiIcons`
 
 To enable a category later, set that category to `true`, confirm the desired slot keys are in `PRESENT_VISUAL_ASSET_KEYS`, and add or finish the matching scene/entity render path only for that category. Do not enable runtime player, enemy, boss, miniboss, or projectile sprites until the art is normalized and reviewed.
 
@@ -51,7 +51,7 @@ All slots are optional. Resolver helpers return `false` or `null` when a slot is
 | Hero skin preview/runtime overlay | `HERO_SKIN_ASSET_SLOTS` | Yes | No | Player rectangle and tank decorations | High | Overlay hook exists in `Player`; body and hitbox stay unchanged. |
 | Weapon menu/HUD icon | `WEAPON_ICON_ASSET_SLOTS` | Yes | Yes | Weapon short label and frame | Low | HUD icon path is category-gated. |
 | Tank class icon | `TANK_CLASS_ICON_ASSET_SLOTS` | No | No | Class text cards | Low | Class-choice cards have readiness metadata only. |
-| HUD HP/XP/gold/kills/pause icons | `UI_ICON_ASSET_SLOTS` | Partial | No | Current HUD text/bars/buttons | Low | HP, XP, gold, and pause files exist; score/stat/class/reward/codex are missing. |
+| HUD HP/XP/gold/kills/pause icons | `UI_ICON_ASSET_SLOTS` | Partial | Yes | Current HUD text/bars/buttons | Low | Gold, HP, XP, and pause files are preloaded and render as small decorative UI icons. Score/stat/class/reward/codex are missing and stay on fallback. |
 | Active skill/Pulse icon | `SKILL_ICON_ASSET_SLOTS` | No | No | `P` active ability label | Low | Hook is ready for Breakout Pulse. |
 | Buff/status icons | `BUFF_STATUS_ICON_ASSET_SLOTS` | No | No | Current text/timer state | Low | Intended for Power Core shield/refund and regen status. |
 | Player projectile sprites | `PROJECTILE_SPRITE_ASSET_SLOTS` | Yes | No | Current projectile circles/trails | High | Overlay code remains gated; no hitbox changes. |
@@ -76,7 +76,7 @@ All slots are optional. Resolver helpers return `false` or `null` when a slot is
 | Permanent/meta upgrade icons | `UPGRADE_ICON_ASSET_SLOTS` | Yes | No | Current meta text UI | Low | Reuse core upgrade icon slots. |
 | Signature upgrade icons | `SIGNATURE_UPGRADE_ICON_ASSET_SLOTS` | Yes | No | Signature badge text | Low | Disabled until card layout explicitly adopts icons. |
 | Branch/tree icons | `BRANCH_UPGRADE_ICON_ASSET_SLOTS` | Yes | No | Branch badge text | Low | Disabled until tree UI exists. |
-| Codex/menu buttons | `UI_BUTTON_ASSET_SLOTS`, `UI_ICON_ASSET_SLOTS` | Partial | No | Current text buttons | Low | Play/retry/close files exist; other UI icons remain optional. |
+| Codex/menu buttons | `UI_BUTTON_ASSET_SLOTS`, `UI_ICON_ASSET_SLOTS` | Partial | Yes | Current text buttons | Low | Play/retry/close button files are preloaded and render as decorative icons beside existing text buttons. Other UI icons remain optional. |
 
 ## Naming Rules
 

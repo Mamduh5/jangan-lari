@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test';
 type HudSnapshot = {
   pauseButtonVisible: boolean;
   pauseButton: { x: number; y: number; width: number; height: number };
+  hudIconVisible: { pause: boolean };
+  uiButtonIconVisible: { close: boolean; retry: boolean };
   pauseMenuVisible: boolean;
   pauseMenuButtons: string[];
   pauseMenuButtonBounds: Array<{ text: string; x: number; y: number; width: number; height: number }>;
@@ -39,6 +41,7 @@ test.describe('pause menu', () => {
     await page.waitForFunction(() => Number(window.__JANGAN_LARI_GAME__?.registry.get('run.elapsedMs') ?? 0) >= 250);
     let hud = await getHudSnapshot(page);
     expect(hud.pauseButtonVisible).toBe(true);
+    expect(hud.hudIconVisible.pause).toBe(true);
 
     await clickCanvasPoint(page, transform, hud.pauseButton.x, hud.pauseButton.y);
     await page.waitForFunction(() => Boolean(window.__JANGAN_LARI_GAME__?.registry.get('run.pauseMenuActive')));
@@ -46,6 +49,8 @@ test.describe('pause menu', () => {
     hud = await getHudSnapshot(page);
     expect(hud.pauseMenuVisible).toBe(true);
     expect(hud.pauseMenuButtons).toEqual(['Resume', 'Restart Run', 'Return to Main Menu']);
+    expect(hud.uiButtonIconVisible.close).toBe(true);
+    expect(hud.uiButtonIconVisible.retry).toBe(true);
 
     const pausedElapsedMs = await getRunElapsedMs(page);
     await page.waitForTimeout(650);

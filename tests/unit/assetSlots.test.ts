@@ -118,6 +118,18 @@ describe('asset slot registry', () => {
       expect(futureOnlyKeys.has(slot.key)).toBe(false);
     }
 
+    for (const slot of [UI_ICON_ASSET_SLOTS.gold, UI_ICON_ASSET_SLOTS.pause, UI_ICON_ASSET_SLOTS.xp, UI_ICON_ASSET_SLOTS.hp]) {
+      expect(PRESENT_VISUAL_ASSET_KEYS.has(slot.key)).toBe(true);
+      expect(PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).toBe(true);
+      expect(futureOnlyKeys.has(slot.key)).toBe(false);
+    }
+
+    for (const slot of Object.values(UI_BUTTON_ASSET_SLOTS)) {
+      expect(PRESENT_VISUAL_ASSET_KEYS.has(slot.key)).toBe(true);
+      expect(PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).toBe(true);
+      expect(futureOnlyKeys.has(slot.key)).toBe(false);
+    }
+
     expect(PRELOAD_VISUAL_ASSET_KEYS.has(PROJECTILE_SPRITE_ASSET_SLOTS['arc-bolt'].key)).toBe(false);
     expect(PRELOAD_VISUAL_ASSET_KEYS.has(PROJECTILE_SPRITE_ASSET_SLOTS['enemy-shot'].key)).toBe(false);
     expect(futureOnlyKeys.has(PROJECTILE_SPRITE_ASSET_SLOTS['arc-bolt'].key)).toBe(true);
@@ -132,6 +144,11 @@ describe('asset slot registry', () => {
     expect(PRESENT_VISUAL_ASSET_KEYS.has(TANK_CLASS_ICON_ASSET_SLOTS.basic.key)).toBe(false);
     expect(MISSING_OPTIONAL_VISUAL_ASSET_KEYS.has(TANK_CLASS_ICON_ASSET_SLOTS.basic.key)).toBe(true);
     expect(MISSING_OPTIONAL_VISUAL_ASSET_KEYS.has(SKILL_ICON_ASSET_SLOTS['breakout-pulse'].key)).toBe(true);
+    expect(MISSING_OPTIONAL_VISUAL_ASSET_KEYS.has(UI_ICON_ASSET_SLOTS.score.key)).toBe(true);
+    expect(MISSING_OPTIONAL_VISUAL_ASSET_KEYS.has(UI_ICON_ASSET_SLOTS.stat.key)).toBe(true);
+    expect(MISSING_OPTIONAL_VISUAL_ASSET_KEYS.has(UI_ICON_ASSET_SLOTS.class.key)).toBe(true);
+    expect(MISSING_OPTIONAL_VISUAL_ASSET_KEYS.has(UI_ICON_ASSET_SLOTS.reward.key)).toBe(true);
+    expect(MISSING_OPTIONAL_VISUAL_ASSET_KEYS.has(UI_ICON_ASSET_SLOTS.codex.key)).toBe(true);
   });
 
   test('keeps every registered slot optional', () => {
@@ -142,7 +159,7 @@ describe('asset slot registry', () => {
 });
 
 describe('visual asset runtime config', () => {
-  test('enables only stable menu, weapon HUD, pickup, and effect categories by default', () => {
+  test('enables only stable menu, weapon HUD, pickup, effect, and UI categories by default', () => {
     expect(VISUAL_ASSET_RUNTIME_CONFIG.heroMenuIcons).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.weaponHudIcons).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.pickupIcons).toBe(true);
@@ -162,8 +179,8 @@ describe('visual asset runtime config', () => {
     expect(VISUAL_ASSET_RUNTIME_CONFIG.buffStatusIcons).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.powerCoreMapEventIcons).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.tankClassIcons).toBe(false);
-    expect(VISUAL_ASSET_RUNTIME_CONFIG.uiButtons).toBe(false);
-    expect(VISUAL_ASSET_RUNTIME_CONFIG.uiIcons).toBe(false);
+    expect(VISUAL_ASSET_RUNTIME_CONFIG.uiButtons).toBe(true);
+    expect(VISUAL_ASSET_RUNTIME_CONFIG.uiIcons).toBe(true);
   });
 });
 
@@ -200,6 +217,8 @@ describe('asset resolver', () => {
     expect(shouldUseTexture(scene, PICKUP_ICON_ASSET_SLOTS['xp-small'])).toBe(true);
     expect(shouldUseVisualAsset(scene, 'effectSprites', EFFECT_SPRITE_ASSET_SLOTS['hit-pop'])).toBe(true);
     expect(shouldUseTexture(scene, EFFECT_SPRITE_ASSET_SLOTS['hit-pop'])).toBe(true);
+    expect(shouldUseVisualAsset(scene, 'uiIcons', UI_ICON_ASSET_SLOTS.gold)).toBe(true);
+    expect(shouldUseVisualAsset(scene, 'uiButtons', UI_BUTTON_ASSET_SLOTS.play)).toBe(true);
     expect(shouldUseVisualAsset(scene, 'heroMenuIcons', HERO_ICON_ASSET_SLOTS.runner)).toBe(true);
     expect(shouldUseVisualAsset(scene, 'heroMenuIcons', projectileSlot)).toBe(false);
   });

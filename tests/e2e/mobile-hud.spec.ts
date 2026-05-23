@@ -17,6 +17,7 @@ type HudSnapshot = {
   statPanelVisible: boolean;
   classChoiceVisible: boolean;
   orientationHintVisible: boolean;
+  hudIconVisible: { gold: boolean; hp: boolean; xp: boolean; pause: boolean };
 };
 
 type RunSnapshot = {
@@ -60,6 +61,9 @@ test.describe('mobile HUD readability', () => {
     const primaryWeaponSlot = initialHud.weaponSlots.find((slot) => slot.visible && slot.label === 'AB');
     expect(primaryWeaponSlot).toMatchObject({ x: 82, y: 124, width: 24, height: 24 });
     expect(initialHud.gold).toMatch(/^Run Gold \d+$/);
+    expect(initialHud.hudIconVisible.gold).toBe(true);
+    expect(initialHud.hudIconVisible.hp).toBe(true);
+    expect(initialHud.hudIconVisible.xp).toBe(true);
     expect(initialHud.kills).toBe('Kills 0');
     expect(initialHud.score).toBe('');
     expect(initialHud.timer).toMatch(/^Boss in \d\d:\d\d$/);
