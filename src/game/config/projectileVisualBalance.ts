@@ -1,18 +1,18 @@
 import type { WeaponId } from '../data/weapons';
 
-export const PLAYER_PROJECTILE_VISUAL_SCALE_MULTIPLIER = 4.2;
-export const ENEMY_PROJECTILE_VISUAL_SCALE_MULTIPLIER = 3.6;
-export const PROJECTILE_VISUAL_MIN_DIAMETER = 48;
-export const PROJECTILE_VISUAL_MAX_DIAMETER = 108;
+export const PLAYER_PROJECTILE_VISUAL_SCALE_MULTIPLIER = 3.6;
+export const ENEMY_PROJECTILE_VISUAL_SCALE_MULTIPLIER = 3.2;
+export const PROJECTILE_VISUAL_MIN_DIAMETER = 42;
+export const PROJECTILE_VISUAL_MAX_DIAMETER = 94;
 
 export const PLAYER_PROJECTILE_VISUAL_SCALE_BY_WEAPON: Partial<Record<WeaponId, number>> = {
-  'arc-bolt': 4.4,
-  'twin-fangs': 4.8,
-  'ember-lance': 4.6,
-  'bloom-cannon': 4.2,
-  'phase-disc': 4.1,
-  sunwheel: 4.4,
-  shatterbell: 4.5,
+  'arc-bolt': 3.7,
+  'twin-fangs': 4.0,
+  'ember-lance': 3.9,
+  'bloom-cannon': 3.6,
+  'phase-disc': 3.5,
+  sunwheel: 3.7,
+  shatterbell: 3.8,
 };
 
 export function resolvePlayerProjectileVisualDiameter(weaponId: WeaponId, gameplayRadius: number): number {

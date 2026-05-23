@@ -60,9 +60,9 @@ All new slots are optional and included in `ALL_VISUAL_ASSET_SLOTS`.
 
 ## Future-Only Assets
 
-Second-pass copied assets are tracked by `PRESENT_VISUAL_ASSET_KEYS`. Projectile sprites have returned to future-only status and are excluded from `RUNTIME_PRELOAD_VISUAL_ASSET_KEYS` until projectile art quality and normalization are ready.
+Second-pass copied assets are tracked by `PRESENT_VISUAL_ASSET_KEYS`. Refined projectile sprites now pass basic alpha-bounds checks and are included in `RUNTIME_PRELOAD_VISUAL_ASSET_KEYS`; runtime code uses them only as decorative overlays.
 
-Future-only includes copied assets that still have no runtime surface in this pass, such as hero skins, enemy icons/sprites, props, tiles, upgrade icons, UI buttons, and basic UI icons not currently rendered by existing scenes. High-risk boss shockwave and miniboss line effect slots are present and preloaded with the effect category, but their mechanics stay on current fallback visuals.
+Future-only includes copied assets that still have no runtime surface in this pass, such as hero skins, enemy icons/sprites, props, tiles, and upgrade icons. High-risk boss shockwave and miniboss line effect slots are present and preloaded with the effect category, but their mechanics stay on current fallback visuals.
 
 ## Runtime-Preloaded Assets
 
@@ -71,11 +71,15 @@ Enabled runtime categories preload:
 - Hero menu/loadout icons: `hero-runner`, `hero-vanguard`, `hero-shade`, `hero-verdant`.
 - Weapon HUD icons: `weapon-arc-bolt`, `weapon-twin-fangs`, `weapon-ember-lance`, `weapon-bloom-cannon`, `weapon-phase-disc`, `weapon-sunwheel`, `weapon-shatterbell`.
 
+- Projectile sprites: `projectile-arc-bolt`, `projectile-twin-fangs`, `projectile-ember-lance`, `projectile-bloom-cannon`, `projectile-phase-disc`, `projectile-sunwheel`, `projectile-shatterbell`, `projectile-enemy-shot`.
+
 - Pickup icons: `pickup-gold`, `pickup-health`, `pickup-magnet`, `pickup-xp-small`, `pickup-xp-medium`, `pickup-xp-large`, `pickup-xp-huge`.
 
 - Effect sprites: `effect-boss-shockwave`, `effect-enemy-death-puff`, `effect-hit-pop`, `effect-level-up-burst`, `effect-miniboss-line-strike`, `effect-xp-collect`.
 
-No projectile, prop, tile, upgrade, signature, branch, player-skin, enemy-sprite, boss-sprite, miniboss-sprite, skill, status, map-event, tank-class, UI icon, or new UI button assets are preloaded.
+- UI icons and buttons: `ui-gold`, `ui-pause`, `ui-xp`, `ui-hp`, `ui-button-play`, `ui-button-retry`, `ui-button-close`.
+
+No prop, tile, upgrade, signature, branch, player-skin, enemy-sprite, boss-sprite, miniboss-sprite, skill, status, map-event, or tank-class assets are preloaded.
 
 ## Still Missing
 
@@ -92,7 +96,6 @@ These slots remain optional and are intentionally absent from `PRESENT_VISUAL_AS
 - Runtime player skin overlays.
 - Runtime enemy sprite overlays.
 - Runtime boss or miniboss sprite overlays.
-- Runtime projectile sprite overlays.
 - Gameplay hitbox or collision changes.
 - Upgrade/build synergy changes.
 

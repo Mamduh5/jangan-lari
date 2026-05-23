@@ -10,6 +10,7 @@ Enabled now:
 
 - `heroMenuIcons`
 - `weaponHudIcons`
+- `projectileSprites`
 - `pickupIcons`
 - `effectSprites`
 - `uiButtons`
@@ -18,7 +19,6 @@ Enabled now:
 Future-ready but disabled:
 
 - `heroSkins`
-- `projectileSprites`
 - `enemySprites`
 - `enemyIcons`
 - `bossSprites`
@@ -54,8 +54,8 @@ All slots are optional. Resolver helpers return `false` or `null` when a slot is
 | HUD HP/XP/gold/kills/pause icons | `UI_ICON_ASSET_SLOTS` | Partial | Yes | Current HUD text/bars/buttons | Low | Gold, HP, XP, and pause files are preloaded and render as small decorative UI icons. Score/stat/class/reward/codex are missing and stay on fallback. |
 | Active skill/Pulse icon | `SKILL_ICON_ASSET_SLOTS` | No | No | `P` active ability label | Low | Hook is ready for Breakout Pulse. |
 | Buff/status icons | `BUFF_STATUS_ICON_ASSET_SLOTS` | No | No | Current text/timer state | Low | Intended for Power Core shield/refund and regen status. |
-| Player projectile sprites | `PROJECTILE_SPRITE_ASSET_SLOTS` | Yes | No | Current projectile circles/trails | High | Overlay code remains gated; no hitbox changes. |
-| Enemy projectile sprites | `PROJECTILE_SPRITE_ASSET_SLOTS.enemy-shot` | Yes | No | Current enemy bolt circle/halo | High | Boss/miniboss shots use the same disabled projectile category. |
+| Player projectile sprites | `PROJECTILE_SPRITE_ASSET_SLOTS` | Yes | Yes | Current projectile circles/trails | High | Decorative overlay only; hitboxes, damage, speed, lifetime, and weapon logic stay unchanged. |
+| Enemy projectile sprites | `PROJECTILE_SPRITE_ASSET_SLOTS.enemy-shot` | Yes | Yes | Current enemy bolt circle/halo | High | Decorative overlay only; enemy-shot collision radius and boss/miniboss behavior stay unchanged. |
 | Enemy codex/icons | `ENEMY_ICON_ASSET_SLOTS` | Yes | No | Existing threat text and shape language | Medium | For non-runtime UI surfaces first. |
 | Runtime enemy sprites | `ENEMY_SPRITE_ASSET_SLOTS` | Yes | No | Enemy rectangles and role markers | High | Overlay hook exists; rectangles and Arcade bodies remain authoritative. |
 | Boss sprite overlay | `BOSS_SPRITE_ASSET_SLOTS` | Yes | No | Boss rectangle and boss effects | High | Separate runtime category from normal enemies. |

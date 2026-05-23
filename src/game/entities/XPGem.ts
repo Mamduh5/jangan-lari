@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { XP_GEM_ATTRACT_SPEED } from '../config/constants';
+import { resolveXpGemIconDiameter } from '../config/pickupVisualBalance';
 import { getXpGemVisual, type XpGemTier } from '../systems/readabilityVisuals';
 import { getPickupIconAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 import { Player } from './Player';
@@ -23,6 +24,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
   private glow: Phaser.GameObjects.Arc | null = null;
   private iconOverlay: Phaser.GameObjects.Image | null = null;
   private iconOverlayActive = false;
+  private iconOverlayDiameter = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, value = DEFAULT_XP_GEM_VALUE) {
     const visual = getXpGemVisual(value);
@@ -48,7 +50,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
     this.body.setAllowGravity(false);
     this.body.setCircle(visual.radius);
     this.body.setDrag(1200, 1200);
-    this.refreshIconOverlay(scene, visual.radius);
+    this.refreshIconOverlay(scene);
   }
 
   getValue(): number {
@@ -120,10 +122,11 @@ export class XPGem extends Phaser.GameObjects.Arc {
     super.destroy(fromScene);
   }
 
-  private refreshIconOverlay(scene: Phaser.Scene, radius: number): void {
+  private refreshIconOverlay(scene: Phaser.Scene): void {
     const pickupId = XP_GEM_PICKUP_ICON_BY_TIER[this.tier];
     const slot = getPickupIconAssetSlot(pickupId);
     this.iconOverlayActive = shouldUseVisualAsset(scene, 'pickupIcons', slot);
+    this.iconOverlayDiameter = resolveXpGemIconDiameter(this.tier);
 
     if (!this.iconOverlayActive) {
       this.iconOverlay?.setVisible(false);
@@ -131,7 +134,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
     }
 
     this.iconOverlay = scene.add.image(this.x, this.y, slot.key).setDepth(this.depth + 0.2);
-    this.iconOverlay.setDisplaySize(radius * 2.4, radius * 2.4).setAlpha(0.96);
+    this.iconOverlay.setDisplaySize(this.iconOverlayDiameter, this.iconOverlayDiameter).setAlpha(0.96);
   }
 
   private syncIconOverlay(scale: number): void {
@@ -141,7 +144,7 @@ export class XPGem extends Phaser.GameObjects.Arc {
 
     this.iconOverlay
       .setPosition(this.x, this.y)
-      .setScale(scale)
+      .setDisplaySize(this.iconOverlayDiameter * scale, this.iconOverlayDiameter * scale)
       .setAlpha(this.alpha)
       .setVisible(this.visible && this.active);
   }

@@ -9,6 +9,7 @@ import {
   resolveEnemyProjectileVisualDiameter,
   resolvePlayerProjectileVisualDiameter,
 } from '../../src/game/config/projectileVisualBalance';
+import { XP_GEM_ICON_DIAMETER_BY_TIER, resolveXpGemIconDiameter } from '../../src/game/config/pickupVisualBalance';
 import {
   ALL_VISUAL_ASSET_SLOTS,
   BUFF_STATUS_ICON_ASSET_SLOTS,
@@ -130,10 +131,11 @@ describe('asset slot registry', () => {
       expect(futureOnlyKeys.has(slot.key)).toBe(false);
     }
 
-    expect(PRELOAD_VISUAL_ASSET_KEYS.has(PROJECTILE_SPRITE_ASSET_SLOTS['arc-bolt'].key)).toBe(false);
-    expect(PRELOAD_VISUAL_ASSET_KEYS.has(PROJECTILE_SPRITE_ASSET_SLOTS['enemy-shot'].key)).toBe(false);
-    expect(futureOnlyKeys.has(PROJECTILE_SPRITE_ASSET_SLOTS['arc-bolt'].key)).toBe(true);
-    expect(futureOnlyKeys.has(PROJECTILE_SPRITE_ASSET_SLOTS['enemy-shot'].key)).toBe(true);
+    for (const slot of Object.values(PROJECTILE_SPRITE_ASSET_SLOTS)) {
+      expect(PRESENT_VISUAL_ASSET_KEYS.has(slot.key)).toBe(true);
+      expect(PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).toBe(true);
+      expect(futureOnlyKeys.has(slot.key)).toBe(false);
+    }
   });
 
   test('keeps unfilled slots optional and out of the present manifest', () => {
@@ -159,12 +161,12 @@ describe('asset slot registry', () => {
 });
 
 describe('visual asset runtime config', () => {
-  test('enables only stable menu, weapon HUD, pickup, effect, and UI categories by default', () => {
+  test('enables stable menu, weapon HUD, projectile, pickup, effect, and UI categories by default', () => {
     expect(VISUAL_ASSET_RUNTIME_CONFIG.heroMenuIcons).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.weaponHudIcons).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.pickupIcons).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.effectSprites).toBe(true);
-    expect(VISUAL_ASSET_RUNTIME_CONFIG.projectileSprites).toBe(false);
+    expect(VISUAL_ASSET_RUNTIME_CONFIG.projectileSprites).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.enemySprites).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.enemyIcons).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.bossSprites).toBe(false);
@@ -201,7 +203,7 @@ describe('asset resolver', () => {
     expect(shouldUseTexture(scene, HERO_ICON_ASSET_SLOTS.vanguard)).toBe(false);
   });
 
-  test('respects disabled categories even when a texture exists', () => {
+  test('uses enabled runtime categories and rejects wrong-category slots', () => {
     const scene = {
       textures: {
         exists: () => true,
@@ -211,8 +213,8 @@ describe('asset resolver', () => {
     const projectileSlot = getProjectileSpriteSlot('arc-bolt');
 
     expect(hasVisualAsset(scene, projectileSlot.key)).toBe(true);
-    expect(shouldUseVisualAsset(scene, 'projectileSprites', projectileSlot)).toBe(false);
-    expect(shouldUseTexture(scene, projectileSlot)).toBe(false);
+    expect(shouldUseVisualAsset(scene, 'projectileSprites', projectileSlot)).toBe(true);
+    expect(shouldUseTexture(scene, projectileSlot)).toBe(true);
     expect(shouldUseVisualAsset(scene, 'pickupIcons', PICKUP_ICON_ASSET_SLOTS['xp-small'])).toBe(true);
     expect(shouldUseTexture(scene, PICKUP_ICON_ASSET_SLOTS['xp-small'])).toBe(true);
     expect(shouldUseVisualAsset(scene, 'effectSprites', EFFECT_SPRITE_ASSET_SLOTS['hit-pop'])).toBe(true);
@@ -252,14 +254,30 @@ describe('asset resolver', () => {
 
 describe('projectile visual balance', () => {
   test('keeps overlay sizing config-driven and larger than gameplay radius without changing hitboxes', () => {
-    expect(PLAYER_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(4.2);
-    expect(ENEMY_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(3.6);
-    expect(PROJECTILE_VISUAL_MIN_DIAMETER).toBe(48);
-    expect(PROJECTILE_VISUAL_MAX_DIAMETER).toBe(108);
+    expect(PLAYER_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(3.6);
+    expect(ENEMY_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(3.2);
+    expect(PROJECTILE_VISUAL_MIN_DIAMETER).toBe(42);
+    expect(PROJECTILE_VISUAL_MAX_DIAMETER).toBe(94);
 
-    expect(resolvePlayerProjectileVisualDiameter('arc-bolt', 5)).toBe(48);
-    expect(resolvePlayerProjectileVisualDiameter('phase-disc', 9)).toBe(74);
-    expect(resolveEnemyProjectileVisualDiameter(8)).toBe(58);
-    expect(resolveEnemyProjectileVisualDiameter(40)).toBe(108);
+    expect(resolvePlayerProjectileVisualDiameter('arc-bolt', 5)).toBe(42);
+    expect(resolvePlayerProjectileVisualDiameter('phase-disc', 9)).toBe(63);
+    expect(resolveEnemyProjectileVisualDiameter(8)).toBe(51);
+    expect(resolveEnemyProjectileVisualDiameter(40)).toBe(94);
+  });
+});
+
+describe('pickup visual balance', () => {
+  test('keeps XP icon overlays compact without changing pickup values or bodies', () => {
+    expect(XP_GEM_ICON_DIAMETER_BY_TIER).toEqual({
+      small: 20,
+      medium: 24,
+      large: 30,
+      huge: 36,
+    });
+
+    expect(resolveXpGemIconDiameter('small')).toBe(20);
+    expect(resolveXpGemIconDiameter('medium')).toBe(24);
+    expect(resolveXpGemIconDiameter('large')).toBe(30);
+    expect(resolveXpGemIconDiameter('huge')).toBe(36);
   });
 });
