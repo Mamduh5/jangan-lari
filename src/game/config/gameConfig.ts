@@ -5,6 +5,7 @@ import { MenuScene } from '../scenes/MenuScene';
 import { MetaScene } from '../scenes/MetaScene';
 import { RunScene } from '../scenes/RunScene';
 import { UIScene } from '../scenes/UIScene';
+import { RoyaleScene } from '../royale/RoyaleScene';
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -29,5 +30,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     autoCenter: Phaser.Scale.CENTER_BOTH,
     expandParent: true,
   },
-  scene: [BootScene, MenuScene, MetaScene, RunScene, UIScene],
+  scene: [BootScene, MenuScene, MetaScene, RunScene, UIScene, RoyaleScene],
 };

@@ -26,6 +26,7 @@ export class MenuScene extends Phaser.Scene {
   private heroInfoTexts: Phaser.GameObjects.Text[] = [];
   private heroPanels: Phaser.GameObjects.Rectangle[] = [];
   private startButton!: Phaser.GameObjects.Text;
+  private royaleButton!: Phaser.GameObjects.Text;
   private metaButton!: Phaser.GameObjects.Text;
   private codexButton!: Phaser.GameObjects.Text;
   private guideButton!: Phaser.GameObjects.Text;
@@ -554,16 +555,20 @@ export class MenuScene extends Phaser.Scene {
     });
     this.startButton.on('pointerdown', () => this.startRun());
 
-    this.metaButton = this.createMenuButton(454, 679, 'UPGRADES', () => this.openMeta());
+    this.royaleButton = this.createMenuButton(438, 679, 'ROYALE PROTOTYPE', () => this.startRoyalePrototype());
+    this.royaleButton.setFontSize('17px');
+    this.royaleButton.setPadding(16, 10, 16, 10);
+
+    this.metaButton = this.createMenuButton(666, 679, 'UPGRADES', () => this.openMeta());
     this.metaButton.setFontSize('20px');
     this.metaButton.setPadding(18, 10, 18, 10);
 
-    this.codexButton = this.createMenuButton(600, 679, 'CODEX', () => this.openCodex());
+    this.codexButton = this.createMenuButton(812, 679, 'CODEX', () => this.openCodex());
     this.codexButton.setFontSize('20px');
     this.codexButton.setPadding(18, 10, 18, 10);
 
     this.statusText = this.add
-      .text(724, 679, 'Status/toast appears here only after a real action.', {
+      .text(930, 679, 'Status/toast appears here only after a real action.', {
         fontFamily: 'Trebuchet MS, sans-serif',
         fontSize: '14px',
         color: '#2e4459',
@@ -595,6 +600,24 @@ export class MenuScene extends Phaser.Scene {
     this.scene.launch('UIScene');
   }
 
+  public startRoyalePrototype(): void {
+    primeAudioContext();
+
+    if (this.scene.isActive('UIScene')) {
+      this.scene.stop('UIScene');
+    }
+
+    if (this.scene.isActive('RunScene')) {
+      this.scene.stop('RunScene');
+    }
+
+    if (this.scene.isActive('RoyaleScene')) {
+      this.scene.stop('RoyaleScene');
+    }
+
+    this.scene.start('RoyaleScene');
+  }
+
   private openMeta(): void {
     this.scene.start('MetaScene');
   }
@@ -617,6 +640,7 @@ export class MenuScene extends Phaser.Scene {
     controlGuideMode: ControlGuideMode;
     guideButtonText: string;
     startButton: { x: number; y: number };
+    royaleButton: { x: number; y: number };
     guideButton: { x: number; y: number };
   } {
     return {
@@ -625,6 +649,7 @@ export class MenuScene extends Phaser.Scene {
       controlGuideMode: this.saveData.controlGuideMode,
       guideButtonText: this.guideButton.text,
       startButton: { x: this.startButton.x, y: this.startButton.y },
+      royaleButton: { x: this.royaleButton.x, y: this.royaleButton.y },
       guideButton: { x: this.guideButton.x, y: this.guideButton.y },
     };
   }

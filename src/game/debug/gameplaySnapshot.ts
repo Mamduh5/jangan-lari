@@ -9,6 +9,7 @@ import type { UpgradeId } from '../data/upgrades';
 import type { UpgradeRewardType } from '../systems/rewardClassification';
 import type { WeaponId } from '../data/weapons';
 import type { StagePhase, StageVictoryCondition } from '../utils/stagePhase';
+import type { RoyaleSnapshot } from '../royale/RoyaleScene';
 
 export type GameplayBotEnemySummary = {
   id: EnemyArchetypeId;
@@ -332,6 +333,7 @@ export type GameplayBotSceneSnapshot = {
   menuActive: boolean;
   metaActive: boolean;
   runActive: boolean;
+  royaleActive: boolean;
   uiActive: boolean;
 };
 
@@ -339,6 +341,7 @@ export type GameplayBotSnapshot = {
   timestampMs: number;
   scenes: GameplayBotSceneSnapshot;
   run: GameplayBotRunSnapshot | null;
+  royale: RoyaleSnapshot | null;
 };
 
 export type GameplayDebugHandle = {
@@ -353,6 +356,7 @@ export function createGameplayDebugHandle(game: Phaser.Game): GameplayDebugHandl
         menuActive: game.scene.isActive('MenuScene'),
         metaActive: game.scene.isActive('MetaScene'),
         runActive: game.scene.isActive('RunScene'),
+        royaleActive: game.scene.isActive('RoyaleScene'),
         uiActive: game.scene.isActive('UIScene'),
       };
 
@@ -363,11 +367,19 @@ export function createGameplayDebugHandle(game: Phaser.Game): GameplayDebugHandl
         };
         run = runScene.getGameplayBotSnapshot?.() ?? null;
       }
+      let royale: RoyaleSnapshot | null = null;
+      if (scenes.royaleActive) {
+        const royaleScene = game.scene.getScene('RoyaleScene') as {
+          getRoyaleSnapshot?: () => RoyaleSnapshot;
+        };
+        royale = royaleScene.getRoyaleSnapshot?.() ?? null;
+      }
 
       return {
         timestampMs: game.loop.time,
         scenes,
         run,
+        royale,
       };
     },
     getCombatResponseTuning: () => getCombatResponseTuningSnapshot(),
