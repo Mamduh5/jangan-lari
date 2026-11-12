@@ -187,10 +187,10 @@ describe('visual asset runtime config', () => {
 });
 
 describe('reviewed character sprites', () => {
-  test('preloads and renders only Runner and Scuttler while broad categories stay disabled', () => {
+  test('preloads and renders only the four hero skins and Scuttler while broad categories stay disabled', () => {
     const scene = { textures: { exists: () => true } } as unknown as Pick<Phaser.Scene, 'textures'>;
     const sprites = ALL_VISUAL_ASSET_SLOTS.filter((slot) => slot.kind === 'hero-skin' || slot.kind === 'enemy-sprite');
-    const reviewed = ['skin-runner', 'sprite-enemy-scuttler'];
+    const reviewed = ['skin-runner', 'skin-vanguard', 'skin-shade', 'skin-verdant', 'sprite-enemy-scuttler'];
     expect(sprites.filter((slot) => PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).map((slot) => slot.key)).toEqual(reviewed);
     for (const slot of sprites) {
       expect(shouldUseVisualAsset(scene, getVisualAssetRuntimeCategoryForSlot(slot), slot)).toBe(reviewed.includes(slot.key));

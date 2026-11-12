@@ -113,6 +113,9 @@ export function getVisualAssetRuntimeCategoryForSlot(
 // Reviewed individually; broad sprite categories stay disabled.
 const REVIEWED_SPRITE_CATEGORIES: Readonly<Record<string, VisualAssetRuntimeCategory>> = {
   'skin-runner': 'heroSkins',
+  'skin-vanguard': 'heroSkins',
+  'skin-shade': 'heroSkins',
+  'skin-verdant': 'heroSkins',
   'sprite-enemy-scuttler': 'enemySprites',
 };
 
