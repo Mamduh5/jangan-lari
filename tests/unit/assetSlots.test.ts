@@ -254,15 +254,15 @@ describe('asset resolver', () => {
 
 describe('projectile visual balance', () => {
   test('keeps overlay sizing config-driven and larger than gameplay radius without changing hitboxes', () => {
-    expect(PLAYER_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(3.6);
-    expect(ENEMY_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(3.2);
-    expect(PROJECTILE_VISUAL_MIN_DIAMETER).toBe(42);
-    expect(PROJECTILE_VISUAL_MAX_DIAMETER).toBe(94);
+    expect(PLAYER_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(2.4);
+    expect(ENEMY_PROJECTILE_VISUAL_SCALE_MULTIPLIER).toBe(2.2);
+    expect(PROJECTILE_VISUAL_MIN_DIAMETER).toBe(28);
+    expect(PROJECTILE_VISUAL_MAX_DIAMETER).toBe(68);
 
-    expect(resolvePlayerProjectileVisualDiameter('arc-bolt', 5)).toBe(42);
-    expect(resolvePlayerProjectileVisualDiameter('phase-disc', 9)).toBe(63);
-    expect(resolveEnemyProjectileVisualDiameter(8)).toBe(51);
-    expect(resolveEnemyProjectileVisualDiameter(40)).toBe(94);
+    expect(resolvePlayerProjectileVisualDiameter('arc-bolt', 5)).toBe(28);
+    expect(resolvePlayerProjectileVisualDiameter('phase-disc', 9)).toBe(40);
+    expect(resolveEnemyProjectileVisualDiameter(8)).toBe(35);
+    expect(resolveEnemyProjectileVisualDiameter(40)).toBe(68);
   });
 });
 
