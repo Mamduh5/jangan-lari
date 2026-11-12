@@ -117,6 +117,12 @@ const REVIEWED_SPRITE_CATEGORIES: Readonly<Record<string, VisualAssetRuntimeCate
   'skin-shade': 'heroSkins',
   'skin-verdant': 'heroSkins',
   'sprite-enemy-scuttler': 'enemySprites',
+  'sprite-enemy-skimmer': 'enemySprites',
+  'sprite-enemy-harrier': 'enemySprites',
+  'sprite-enemy-mauler': 'enemySprites',
+  'sprite-enemy-crusher': 'enemySprites',
+  'sprite-enemy-bulwark': 'enemySprites',
+  'sprite-enemy-hexcaster': 'enemySprites',
 };
 
 export function isReviewedRuntimeSprite(slot: Pick<VisualAssetSlot, 'key' | 'kind'>): boolean {

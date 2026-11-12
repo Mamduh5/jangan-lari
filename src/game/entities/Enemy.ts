@@ -26,8 +26,7 @@ import {
 } from '../systems/dangerousEffectContracts';
 import { getEnemySpriteAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 
-/** Decorative-only footprint (game units) for the upright Scuttler sprite. */
-const SCUTTLER_VISUAL_SIZE = 36;
+import { getUprightEnemySpritePresentation } from '../data/enemySpritePresentation';
 
 export type EnemyBehaviorState =
   | 'chasing'
@@ -1044,9 +1043,9 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return;
     }
 
-    const upright = this.archetype.id === 'scuttler' && category === 'enemySprites';
-    if (upright) {
-      // Scuttler keeps its face readable: no spinning, only mirror toward horizontal travel.
+    const presentation = category === 'enemySprites' ? getUprightEnemySpritePresentation(this.archetype.id) : null;
+    if (presentation?.flipsWithMovement) {
+      // Upright art: no spinning, only mirror toward horizontal travel.
       const vx = this.body.velocity.x;
       if (vx < -8) {
         this.spriteFacesLeft = true;
@@ -1054,12 +1053,12 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
         this.spriteFacesLeft = false;
       }
     }
-    const displaySize = upright ? SCUTTLER_VISUAL_SIZE : this.archetype.size * 1.24;
+    const displaySize = presentation ? presentation.displaySize : this.archetype.size * 1.24;
     this.spriteOverlay
       .setTexture(slot.key)
       .setPosition(this.x, this.y)
-      .setAngle(upright ? 0 : this.angle - 90)
-      .setFlipX(upright && this.spriteFacesLeft)
+      .setAngle(presentation ? 0 : this.angle - 90)
+      .setFlipX(Boolean(presentation?.flipsWithMovement) && this.spriteFacesLeft)
       .setDisplaySize(displaySize * this.scaleX, displaySize * this.scaleY)
       .setDepth(this.depth + 0.35)
       .setAlpha(this.alpha)

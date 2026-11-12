@@ -47,6 +47,7 @@ import {
   shouldUseVisualAsset,
 } from '../../src/game/utils/assetResolver';
 import { VISUAL_ASSET_RUNTIME_CONFIG, getVisualAssetRuntimeCategoryForSlot } from '../../src/game/config/visualAssetRuntimeConfig';
+import { UPRIGHT_ENEMY_SPRITE_PRESENTATION, getUprightEnemySpritePresentation } from '../../src/game/data/enemySpritePresentation';
 
 describe('asset slot registry', () => {
   test('defines optional slots with stable public asset paths', () => {
@@ -187,15 +188,41 @@ describe('visual asset runtime config', () => {
 });
 
 describe('reviewed character sprites', () => {
-  test('preloads and renders only the four hero skins and Scuttler while broad categories stay disabled', () => {
+  test('preloads and renders only the hero skins and six-plus-Scuttler common enemies while broad categories stay disabled', () => {
     const scene = { textures: { exists: () => true } } as unknown as Pick<Phaser.Scene, 'textures'>;
     const sprites = ALL_VISUAL_ASSET_SLOTS.filter((slot) => slot.kind === 'hero-skin' || slot.kind === 'enemy-sprite');
-    const reviewed = ['skin-runner', 'skin-vanguard', 'skin-shade', 'skin-verdant', 'sprite-enemy-scuttler'];
-    expect(sprites.filter((slot) => PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).map((slot) => slot.key)).toEqual(reviewed);
+    const reviewed = [
+      'skin-runner', 'skin-vanguard', 'skin-shade', 'skin-verdant',
+      'sprite-enemy-scuttler', 'sprite-enemy-skimmer', 'sprite-enemy-harrier',
+      'sprite-enemy-mauler', 'sprite-enemy-crusher', 'sprite-enemy-bulwark', 'sprite-enemy-hexcaster',
+    ];
+    expect(sprites.filter((slot) => PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).map((slot) => slot.key).sort()).toEqual([...reviewed].sort());
     for (const slot of sprites) {
       expect(shouldUseVisualAsset(scene, getVisualAssetRuntimeCategoryForSlot(slot), slot)).toBe(reviewed.includes(slot.key));
       expect(shouldUseVisualAsset(scene, 'projectileSprites', slot)).toBe(false);
     }
+    for (const key of ['sprite-enemy-overlord', 'sprite-enemy-riftblade', 'sprite-enemy-miniboss-dreadnought', 'sprite-enemy-boss-behemoth']) {
+      expect(PRELOAD_VISUAL_ASSET_KEYS.has(key)).toBe(false);
+    }
+    expect(VISUAL_ASSET_RUNTIME_CONFIG.enemySprites).toBe(false);
+    expect(VISUAL_ASSET_RUNTIME_CONFIG.minibossSprites).toBe(false);
+    expect(VISUAL_ASSET_RUNTIME_CONFIG.bossSprites).toBe(false);
+  });
+
+  test('common enemy sprites fall back when their texture is missing', () => {
+    const missing = { textures: { exists: () => false } } as unknown as Pick<Phaser.Scene, 'textures'>;
+    for (const id of ['scuttler', 'skimmer', 'harrier', 'mauler', 'crusher', 'bulwark', 'hexcaster']) {
+      expect(shouldUseVisualAsset(missing, 'enemySprites', `sprite-enemy-${id}`)).toBe(false);
+    }
+  });
+
+  test('upright presentation is configured per common enemy without touching physics sizes', () => {
+    expect(Object.keys(UPRIGHT_ENEMY_SPRITE_PRESENTATION).sort()).toEqual(
+      ['bulwark', 'crusher', 'harrier', 'hexcaster', 'mauler', 'scuttler', 'skimmer'],
+    );
+    expect(getUprightEnemySpritePresentation('scuttler')?.displaySize).toBe(36);
+    expect(getUprightEnemySpritePresentation('overlord')).toBeNull();
+    expect(getUprightEnemySpritePresentation('behemoth')).toBeNull();
   });
 
   test('reviewed sprites still require a loaded texture and the matching category', () => {
