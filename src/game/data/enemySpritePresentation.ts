@@ -1,13 +1,15 @@
 import type { EnemyArchetypeId } from './enemies';
 
 /**
- * Decorative-only presentation for individually approved, upright common-enemy sprites.
+ * Decorative-only presentation for individually approved, upright enemy sprites.
  * `displaySize` is in game units and is independent of ENEMY_ARCHETYPES physics sizes.
  * `flipsWithMovement` is only true for art with a meaningful left/right orientation.
  */
 export interface EnemySpritePresentation {
   readonly displaySize: number;
   readonly flipsWithMovement: boolean;
+  /** Keep original warning strokes and role markers above special-enemy art. */
+  readonly preserveRoleCues?: boolean;
 }
 
 export const UPRIGHT_ENEMY_SPRITE_PRESENTATION: Readonly<Partial<Record<EnemyArchetypeId, EnemySpritePresentation>>> = {
@@ -18,6 +20,10 @@ export const UPRIGHT_ENEMY_SPRITE_PRESENTATION: Readonly<Partial<Record<EnemyArc
   crusher: { displaySize: 42, flipsWithMovement: false }, // wide symmetric slab
   bulwark: { displaySize: 46, flipsWithMovement: false }, // front-facing shield
   hexcaster: { displaySize: 36, flipsWithMovement: false }, // front-facing orb
+  overlord: { displaySize: 62, flipsWithMovement: false, preserveRoleCues: true }, // upright, near-frontal blob
+  riftblade: { displaySize: 56, flipsWithMovement: true, preserveRoleCues: true }, // eye/face right
+  dreadnought: { displaySize: 84, flipsWithMovement: true, preserveRoleCues: true }, // face right
+  behemoth: { displaySize: 112, flipsWithMovement: true, preserveRoleCues: true }, // face right
 };
 
 export function getUprightEnemySpritePresentation(id: EnemyArchetypeId): EnemySpritePresentation | null {

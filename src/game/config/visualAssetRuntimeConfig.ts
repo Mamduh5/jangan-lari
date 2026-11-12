@@ -123,6 +123,10 @@ const REVIEWED_SPRITE_CATEGORIES: Readonly<Record<string, VisualAssetRuntimeCate
   'sprite-enemy-crusher': 'enemySprites',
   'sprite-enemy-bulwark': 'enemySprites',
   'sprite-enemy-hexcaster': 'enemySprites',
+  'sprite-enemy-overlord': 'enemySprites',
+  'sprite-enemy-riftblade': 'enemySprites',
+  'sprite-enemy-miniboss-dreadnought': 'minibossSprites',
+  'sprite-enemy-boss-behemoth': 'bossSprites',
 };
 
 export function isReviewedRuntimeSprite(slot: Pick<VisualAssetSlot, 'key' | 'kind'>): boolean {

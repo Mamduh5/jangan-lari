@@ -1033,18 +1033,19 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const slot = getEnemySpriteAssetSlot(this.archetype.id);
     const category = this.isBoss() ? 'bossSprites' : this.isMiniboss() ? 'minibossSprites' : 'enemySprites';
     this.spriteOverlayActive = shouldUseVisualAsset(this.scene, category, slot);
-    // The Rectangle remains the collision body; only its fallback drawing is suppressed.
+    const presentation = getUprightEnemySpritePresentation(this.archetype.id);
+    const preserveRoleCues = presentation?.preserveRoleCues === true;
+    // The Rectangle remains the collision body; retain special-enemy warning strokes above the art.
     this.isFilled = !this.spriteOverlayActive;
-    this.isStroked = !this.spriteOverlayActive || this.eventMarkerColor !== null || this.bossOwned;
+    this.isStroked = !this.spriteOverlayActive || preserveRoleCues || this.eventMarkerColor !== null || this.bossOwned;
     for (const visual of this.roleVisuals) {
-      visual.object.setVisible(!this.spriteOverlayActive && this.visible && this.active);
+      visual.object.setVisible((!this.spriteOverlayActive || preserveRoleCues) && this.visible && this.active);
     }
     if (!this.spriteOverlayActive) {
       this.spriteOverlay.setVisible(false);
       return;
     }
 
-    const presentation = category === 'enemySprites' ? getUprightEnemySpritePresentation(this.archetype.id) : null;
     if (presentation?.flipsWithMovement) {
       // Upright art: no spinning, only mirror toward horizontal travel.
       const vx = this.body.velocity.x;
@@ -1061,7 +1062,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       .setAngle(presentation ? 0 : this.angle - 90)
       .setFlipX(Boolean(presentation?.flipsWithMovement) && this.spriteFacesLeft)
       .setDisplaySize(displaySize * this.scaleX, displaySize * this.scaleY)
-      .setDepth(this.depth + 0.35)
+      .setDepth(this.depth + (preserveRoleCues ? -0.1 : 0.35))
       .setAlpha(this.alpha)
       .setVisible(this.visible && this.active);
     if (this.fillColor === 0xffffff) {

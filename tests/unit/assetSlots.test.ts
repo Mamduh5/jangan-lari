@@ -46,7 +46,7 @@ import {
   shouldUseTexture,
   shouldUseVisualAsset,
 } from '../../src/game/utils/assetResolver';
-import { VISUAL_ASSET_RUNTIME_CONFIG, getVisualAssetRuntimeCategoryForSlot } from '../../src/game/config/visualAssetRuntimeConfig';
+import { VISUAL_ASSET_RUNTIME_CONFIG, getVisualAssetRuntimeCategoryForSlot, isReviewedRuntimeSprite } from '../../src/game/config/visualAssetRuntimeConfig';
 import { UPRIGHT_ENEMY_SPRITE_PRESENTATION, getUprightEnemySpritePresentation } from '../../src/game/data/enemySpritePresentation';
 
 describe('asset slot registry', () => {
@@ -188,13 +188,14 @@ describe('visual asset runtime config', () => {
 });
 
 describe('reviewed character sprites', () => {
-  test('preloads and renders only the hero skins and six-plus-Scuttler common enemies while broad categories stay disabled', () => {
+  test('preloads only individually approved character sprites while broad categories stay disabled', () => {
     const scene = { textures: { exists: () => true } } as unknown as Pick<Phaser.Scene, 'textures'>;
     const sprites = ALL_VISUAL_ASSET_SLOTS.filter((slot) => slot.kind === 'hero-skin' || slot.kind === 'enemy-sprite');
     const reviewed = [
       'skin-runner', 'skin-vanguard', 'skin-shade', 'skin-verdant',
       'sprite-enemy-scuttler', 'sprite-enemy-skimmer', 'sprite-enemy-harrier',
       'sprite-enemy-mauler', 'sprite-enemy-crusher', 'sprite-enemy-bulwark', 'sprite-enemy-hexcaster',
+      'sprite-enemy-overlord', 'sprite-enemy-riftblade', 'sprite-enemy-miniboss-dreadnought', 'sprite-enemy-boss-behemoth',
     ];
     expect(sprites.filter((slot) => PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).map((slot) => slot.key).sort()).toEqual([...reviewed].sort());
     for (const slot of sprites) {
@@ -202,7 +203,7 @@ describe('reviewed character sprites', () => {
       expect(shouldUseVisualAsset(scene, 'projectileSprites', slot)).toBe(false);
     }
     for (const key of ['sprite-enemy-overlord', 'sprite-enemy-riftblade', 'sprite-enemy-miniboss-dreadnought', 'sprite-enemy-boss-behemoth']) {
-      expect(PRELOAD_VISUAL_ASSET_KEYS.has(key)).toBe(false);
+      expect(PRELOAD_VISUAL_ASSET_KEYS.has(key)).toBe(true);
     }
     expect(VISUAL_ASSET_RUNTIME_CONFIG.enemySprites).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.minibossSprites).toBe(false);
@@ -216,13 +217,13 @@ describe('reviewed character sprites', () => {
     }
   });
 
-  test('upright presentation is configured per common enemy without touching physics sizes', () => {
+  test('upright presentation is configured for all individually approved enemies', () => {
     expect(Object.keys(UPRIGHT_ENEMY_SPRITE_PRESENTATION).sort()).toEqual(
-      ['bulwark', 'crusher', 'harrier', 'hexcaster', 'mauler', 'scuttler', 'skimmer'],
+      ['behemoth', 'bulwark', 'crusher', 'dreadnought', 'harrier', 'hexcaster', 'mauler', 'overlord', 'riftblade', 'scuttler', 'skimmer'],
     );
     expect(getUprightEnemySpritePresentation('scuttler')?.displaySize).toBe(36);
-    expect(getUprightEnemySpritePresentation('overlord')).toBeNull();
-    expect(getUprightEnemySpritePresentation('behemoth')).toBeNull();
+    expect(isReviewedRuntimeSprite({ key: 'sprite-enemy-unapproved', kind: 'enemy-sprite' })).toBe(false);
+    expect(isReviewedRuntimeSprite({ key: 'sprite-enemy-overlord', kind: 'enemy-icon' })).toBe(false);
   });
 
   test('reviewed sprites still require a loaded texture and the matching category', () => {
@@ -328,5 +329,34 @@ describe('pickup visual balance', () => {
     expect(resolveXpGemIconDiameter('medium')).toBe(24);
     expect(resolveXpGemIconDiameter('large')).toBe(30);
     expect(resolveXpGemIconDiameter('huge')).toBe(36);
+  });
+});
+
+
+describe('special enemy presentation', () => {
+  test('preserves a distinct common < elite < miniboss < boss size hierarchy', () => {
+    const config = UPRIGHT_ENEMY_SPRITE_PRESENTATION;
+    expect(config.overlord).toEqual({ displaySize: 62, flipsWithMovement: false, preserveRoleCues: true });
+    expect(config.riftblade).toEqual({ displaySize: 56, flipsWithMovement: true, preserveRoleCues: true });
+    expect(config.dreadnought).toEqual({ displaySize: 84, flipsWithMovement: true, preserveRoleCues: true });
+    expect(config.behemoth).toEqual({ displaySize: 112, flipsWithMovement: true, preserveRoleCues: true });
+    const largestCommon = Math.max(...Object.values(config).filter((entry) => !entry.preserveRoleCues).map((entry) => entry.displaySize));
+    expect(largestCommon).toBeLessThan(Math.min(config.overlord!.displaySize, config.riftblade!.displaySize));
+    expect(Math.max(config.overlord!.displaySize, config.riftblade!.displaySize)).toBeLessThan(config.dreadnought!.displaySize);
+    expect(config.dreadnought!.displaySize).toBeLessThan(config.behemoth!.displaySize);
+  });
+
+  test('fails safely for absent or unavailable special textures, with category isolation', () => {
+    const missing = { textures: { exists: () => false } } as unknown as Pick<Phaser.Scene, 'textures'>;
+    const unavailable = { textures: { exists: () => { throw new Error('texture manager unavailable'); } } } as unknown as Pick<Phaser.Scene, 'textures'>;
+    const loaded = { textures: { exists: () => true } } as unknown as Pick<Phaser.Scene, 'textures'>;
+    for (const key of ['sprite-enemy-overlord', 'sprite-enemy-riftblade', 'sprite-enemy-miniboss-dreadnought', 'sprite-enemy-boss-behemoth']) {
+      const slot = getVisualAssetSlotByKey(key)!;
+      const category = getVisualAssetRuntimeCategoryForSlot(slot);
+      expect(shouldUseVisualAsset(loaded, category, slot)).toBe(true);
+      expect(shouldUseVisualAsset(missing, category, slot)).toBe(false);
+      expect(shouldUseVisualAsset(unavailable, category, slot)).toBe(false);
+      expect(shouldUseVisualAsset(loaded, 'effectSprites', slot)).toBe(false);
+    }
   });
 });
