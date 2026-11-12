@@ -26,6 +26,9 @@ import {
 } from '../systems/dangerousEffectContracts';
 import { getEnemySpriteAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 
+/** Decorative-only footprint (game units) for the upright Scuttler sprite. */
+const SCUTTLER_VISUAL_SIZE = 36;
+
 export type EnemyBehaviorState =
   | 'chasing'
   | 'intercepting'
@@ -127,6 +130,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   }> = [];
   private spriteOverlay: Phaser.GameObjects.Image | null = null;
   private spriteOverlayActive = false;
+  private spriteFacesLeft = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -1040,11 +1044,23 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       return;
     }
 
+    const upright = this.archetype.id === 'scuttler' && category === 'enemySprites';
+    if (upright) {
+      // Scuttler keeps its face readable: no spinning, only mirror toward horizontal travel.
+      const vx = this.body.velocity.x;
+      if (vx < -8) {
+        this.spriteFacesLeft = true;
+      } else if (vx > 8) {
+        this.spriteFacesLeft = false;
+      }
+    }
+    const displaySize = upright ? SCUTTLER_VISUAL_SIZE : this.archetype.size * 1.24;
     this.spriteOverlay
       .setTexture(slot.key)
       .setPosition(this.x, this.y)
-      .setAngle(this.angle - 90)
-      .setDisplaySize(this.archetype.size * 1.24 * this.scaleX, this.archetype.size * 1.24 * this.scaleY)
+      .setAngle(upright ? 0 : this.angle - 90)
+      .setFlipX(upright && this.spriteFacesLeft)
+      .setDisplaySize(displaySize * this.scaleX, displaySize * this.scaleY)
       .setDepth(this.depth + 0.35)
       .setAlpha(this.alpha)
       .setVisible(this.visible && this.active);

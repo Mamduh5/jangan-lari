@@ -27,6 +27,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
   private skinOverlay: Phaser.GameObjects.Image | null = null;
   private skinOverlayActive = false;
   private skinOverlayKey: string | null = null;
+  private skinFacesLeft = false;
   private readonly baseBarrelWidth: number;
   private readonly baseBarrelHeight: number;
   private readonly visualSize: number;
@@ -419,6 +420,11 @@ export class Player extends Phaser.GameObjects.Rectangle {
     }
 
     this.skinOverlayActive = shouldUseVisualAsset(this.scene, 'heroSkins', this.skinOverlayKey);
+    if (this.facingDirection.x < -0.15) {
+      this.skinFacesLeft = true;
+    } else if (this.facingDirection.x > 0.15) {
+      this.skinFacesLeft = false;
+    }
     // Hide only the fallback drawing, keeping its Arcade body and gameplay state intact.
     this.isFilled = !this.skinOverlayActive;
     this.isStroked = !this.skinOverlayActive;
@@ -435,8 +441,10 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.skinOverlay
       .setTexture(this.skinOverlayKey)
       .setPosition(this.x, this.y)
-      .setAngle(Phaser.Math.RadToDeg(this.facingDirection.angle()))
-      .setDisplaySize(this.visualSize * 1.35 * this.scaleX, this.visualSize * 1.35 * this.scaleY)
+      // Decorative art stays upright; only mirror it toward the horizontal aim side.
+      .setAngle(0)
+      .setFlipX(this.skinFacesLeft)
+      .setDisplaySize(this.visualSize * 1.4 * this.scaleX, this.visualSize * 1.4 * this.scaleY)
       .setDepth(this.depth + 0.35)
       .setAlpha(this.alpha)
       .setVisible(this.visible && this.active);
