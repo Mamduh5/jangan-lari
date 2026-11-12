@@ -1,6 +1,6 @@
 // Spawn timing and caps
-export const ENEMY_SPAWN_INTERVAL_MS = 1600;
-export const ENEMY_ACTIVE_CAP = 28;
+export const ENEMY_SPAWN_INTERVAL_MS = 1900;
+export const ENEMY_ACTIVE_CAP = 22;
 export const ENEMY_SPAWN_PLAYER_SAFE_RADIUS = 360;
 export const ELITE_SPAWN_PLAYER_SAFE_RADIUS = 480;
 export const BOSS_SPAWN_PLAYER_SAFE_RADIUS = 620;
@@ -23,45 +23,45 @@ export const ENEMY_SCALING_MAJOR_ENCOUNTER_FACTOR = 0.65;
 export const ENEMY_ARCHETYPE_STAT_BALANCE = {
   scuttler: {
     maxHealth: 34,
-    speed: 150,
+    speed: 135,
     contactDamage: 8,
     xpValue: 5,
   },
   skimmer: {
     maxHealth: 92,
-    speed: 176,
+    speed: 158,
     contactDamage: 12,
     xpValue: 8,
     preferredDistance: 72,
   },
   harrier: {
     maxHealth: 74,
-    speed: 198,
+    speed: 178,
     contactDamage: 11,
     xpValue: 8,
     preferredDistance: 64,
   },
   mauler: {
     maxHealth: 160,
-    speed: 118,
+    speed: 106,
     contactDamage: 17,
     xpValue: 10,
   },
   crusher: {
     maxHealth: 132,
-    speed: 112,
+    speed: 101,
     contactDamage: 20,
     xpValue: 12,
   },
   bulwark: {
     maxHealth: 260,
-    speed: 82,
+    speed: 74,
     contactDamage: 23,
     xpValue: 15,
   },
   hexcaster: {
     maxHealth: 96,
-    speed: 106,
+    speed: 95,
     contactDamage: 10,
     xpValue: 12,
     preferredDistance: 360,

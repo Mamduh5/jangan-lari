@@ -138,6 +138,7 @@ import {
   applyEventEnemyStatMultiplier,
   applyEnemyScaling,
   getAvailableEnemySpawnSlots,
+  selectEnemyWaveWithinCap,
   getEnemyScalingSnapshot,
 } from '../systems/enemyScaling';
 import {
@@ -2160,18 +2161,7 @@ export class RunScene extends Phaser.Scene {
     const hasMajorEncounter = waveResult.wave.some(
       (archetype) => archetype.isElite || archetype.isMiniboss || archetype.isBoss,
     );
-    const availableNormalSlots = getAvailableEnemySpawnSlots(this.getActiveEnemyCount());
-    let normalSpawnsUsed = 0;
-
-    for (const archetype of waveResult.wave) {
-      const isMajorEncounter = Boolean(archetype.isElite || archetype.isMiniboss || archetype.isBoss);
-      if (!isMajorEncounter) {
-        if (normalSpawnsUsed >= availableNormalSlots) {
-          continue;
-        }
-        normalSpawnsUsed += 1;
-      }
-
+    for (const archetype of selectEnemyWaveWithinCap(waveResult.wave, this.getActiveEnemyCount())) {
       const spawnPoint = this.getSpawnPoint(
         archetype.isBoss ? BOSS_SPAWN_DISTANCE : NORMAL_ENEMY_SPAWN_DISTANCE,
         this.getEnemySpawnSafeRadius(archetype),

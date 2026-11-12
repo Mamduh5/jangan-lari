@@ -28,6 +28,8 @@ export const INTERCEPT_DISTANCE_FORWARD_SPEED_SCALE = 0.28;
 // Windup telegraph makes the dash readable.
 // ============================================================
 export const CHARGER_WINDUP_MS = 470;           // freeze + visual telegraph before dash
+// Preserve the pre-R3E per-axis physics cap (base speed 112 * 3), independently of chase tuning.
+export const CHARGER_VELOCITY_CAP_BASE_SPEED = 112;
 export const CHARGER_DASH_SPEED = 760;          // px/s - committed dash velocity
 export const CHARGER_DASH_DURATION_MS = 380;    // ms dash remains active
 export const CHARGER_RECOVERY_MS = 380;         // ms slow/vulnerable after dash

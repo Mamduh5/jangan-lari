@@ -7,6 +7,7 @@ import {
   BOSS_MOVE_SPEED,
   MINIBOSS_MAX_HEALTH,
 } from '../config/constants';
+import { CHARGER_VELOCITY_CAP_BASE_SPEED } from '../config/enemyBehaviorBalance';
 import { ENEMY_ARCHETYPE_STAT_BALANCE } from '../config/enemyBalance';
 import type { EnemyRole } from '../config/waveDirectorBalance';
 
@@ -33,6 +34,7 @@ export type EnemyArchetype = {
   strokeColor: number;
   maxHealth: number;
   speed: number;
+  velocityCapBaseSpeed?: number; // Independent baseline for the existing per-axis physics cap.
   contactDamage: number;
   xpValue: number;
   behavior: EnemyBehavior;
@@ -115,6 +117,7 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetype> = {
     strokeColor: 0xfee2e2,
     maxHealth: ENEMY_ARCHETYPE_STAT_BALANCE.crusher.maxHealth,
     speed: ENEMY_ARCHETYPE_STAT_BALANCE.crusher.speed,
+    velocityCapBaseSpeed: CHARGER_VELOCITY_CAP_BASE_SPEED,
     contactDamage: ENEMY_ARCHETYPE_STAT_BALANCE.crusher.contactDamage,
     xpValue: ENEMY_ARCHETYPE_STAT_BALANCE.crusher.xpValue,
     behavior: 'charger',

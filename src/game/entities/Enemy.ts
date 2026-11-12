@@ -171,7 +171,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     const bodySize = Math.max(16, archetype.size - 6);
     this.body.setSize(bodySize, bodySize);
-    this.body.setMaxVelocity(this.speed * 3, this.speed * 3);
+    const velocityCap = (archetype.velocityCapBaseSpeed ?? this.speed) * 3;
+    this.body.setMaxVelocity(velocityCap, velocityCap);
     this.createRoleVisuals(scene);
     this.refreshSpriteOverlay(scene);
   }

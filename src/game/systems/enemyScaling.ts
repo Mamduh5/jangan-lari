@@ -77,6 +77,9 @@ export function applyEnemyScaling(archetype: EnemyArchetype, elapsedMs: number):
     ...archetype,
     maxHealth: Math.max(1, Math.round(archetype.maxHealth * multipliers.hp)),
     speed: Math.max(1, Math.round(archetype.speed * multipliers.speed)),
+    velocityCapBaseSpeed: archetype.velocityCapBaseSpeed === undefined
+      ? undefined
+      : Math.max(1, Math.round(archetype.velocityCapBaseSpeed * multipliers.speed)),
     contactDamage: Math.max(1, Math.round(archetype.contactDamage * multipliers.damage)),
     shotDamage:
       archetype.shotDamage === undefined ? undefined : Math.max(1, Math.round(archetype.shotDamage * multipliers.damage)),
@@ -101,6 +104,9 @@ export function applyEventEnemyStatMultiplier(
     ...archetype,
     maxHealth: Math.max(1, Math.round(archetype.maxHealth * safeStatMultiplier)),
     speed: Math.max(1, Math.round(archetype.speed * safeSpeedMultiplier)),
+    velocityCapBaseSpeed: archetype.velocityCapBaseSpeed === undefined
+      ? undefined
+      : Math.max(1, Math.round(archetype.velocityCapBaseSpeed * safeSpeedMultiplier)),
     contactDamage: Math.max(1, Math.round(archetype.contactDamage * safeStatMultiplier)),
     shotDamage:
       archetype.shotDamage === undefined ? undefined : Math.max(1, Math.round(archetype.shotDamage * safeStatMultiplier)),
@@ -109,4 +115,22 @@ export function applyEventEnemyStatMultiplier(
 
 export function getAvailableEnemySpawnSlots(activeEnemyCount: number, activeCap = ENEMY_ACTIVE_CAP): number {
   return Math.max(0, activeCap - Math.max(0, activeEnemyCount));
+}
+
+// The cap limits normal pressure only; scheduled major encounters always pass.
+export function selectEnemyWaveWithinCap(
+  wave: readonly EnemyArchetype[],
+  activeEnemyCount: number,
+): EnemyArchetype[] {
+  let remainingNormalSlots = getAvailableEnemySpawnSlots(activeEnemyCount);
+  return wave.filter((archetype) => {
+    if (archetype.isElite || archetype.isMiniboss || archetype.isBoss) {
+      return true;
+    }
+    if (remainingNormalSlots <= 0) {
+      return false;
+    }
+    remainingNormalSlots -= 1;
+    return true;
+  });
 }

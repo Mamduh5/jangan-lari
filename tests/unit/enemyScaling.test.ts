@@ -1,14 +1,17 @@
 import {
   BOSS_FIRST_PASS_MAX_HEALTH,
   ENEMY_ACTIVE_CAP,
+  ENEMY_SPAWN_INTERVAL_MS,
   ENEMY_SCALING_INTERVAL_MS,
   ENEMY_SCALING_MAX_STACK,
 } from '../../src/game/config/constants';
+import { CHARGER_DASH_SPEED } from '../../src/game/config/enemyBehaviorBalance';
 import { ENEMY_ARCHETYPES } from '../../src/game/data/enemies';
 import {
   applyEventEnemyStatMultiplier,
   applyEnemyScaling,
   getAvailableEnemySpawnSlots,
+  selectEnemyWaveWithinCap,
   getEnemyMajorEncounterFactor,
   getEnemyScalingMultipliers,
   getEnemyScalingSnapshot,
@@ -70,5 +73,52 @@ describe('enemy scaling', () => {
     expect(eventEnemy.maxHealth).toBe(370);
     expect(eventEnemy.contactDamage).toBe(55);
     expect(eventEnemy.speed).toBeGreaterThan(base.speed);
+  });
+});
+
+
+describe('R3E normal pressure tuning', () => {
+  test('uses the requested base speeds without changing Crusher dash velocity', () => {
+    expect(Object.fromEntries(
+      ['scuttler', 'skimmer', 'harrier', 'mauler', 'crusher', 'bulwark', 'hexcaster'].map(
+        (id) => [id, ENEMY_ARCHETYPES[id as keyof typeof ENEMY_ARCHETYPES].speed],
+      ),
+    )).toEqual({ scuttler: 135, skimmer: 158, harrier: 178, mauler: 106, crusher: 101, bulwark: 74, hexcaster: 95 });
+    expect(CHARGER_DASH_SPEED).toBe(760);
+    expect(ENEMY_SPAWN_INTERVAL_MS).toBe(1900);
+    expect(ENEMY_ACTIVE_CAP).toBe(22);
+  });
+
+  test.each([22, 23, 40])('keeps every major encounter when the active count is %i', (activeCount) => {
+    const { scuttler, overlord, riftblade, dreadnought, behemoth } = ENEMY_ARCHETYPES;
+    const wave = [scuttler, overlord, scuttler, riftblade, dreadnought, behemoth];
+    expect(selectEnemyWaveWithinCap(wave, activeCount)).toEqual([overlord, riftblade, dreadnought, behemoth]);
+    expect(wave).toHaveLength(6);
+  });
+
+  test('major encounters do not consume the last normal slot or reorder the wave', () => {
+    const { scuttler, overlord, dreadnought, behemoth } = ENEMY_ARCHETYPES;
+    expect(selectEnemyWaveWithinCap([overlord, scuttler, dreadnought, scuttler, behemoth], 21))
+      .toEqual([overlord, scuttler, dreadnought, behemoth]);
+    expect(selectEnemyWaveWithinCap(Array(24).fill(scuttler), 0)).toHaveLength(22);
+    expect(selectEnemyWaveWithinCap([], 0)).toEqual([]);
+  });
+});
+
+
+describe('Crusher dash physics preservation', () => {
+  test('retains the old velocity cap at every scaling stack and after event scaling', () => {
+    const oldCrusher = { ...ENEMY_ARCHETYPES.crusher, speed: 112 };
+    for (let stack = 0; stack <= ENEMY_SCALING_MAX_STACK; stack += 1) {
+      const elapsed = stack * ENEMY_SCALING_INTERVAL_MS;
+      const oldScaled = applyEnemyScaling(oldCrusher, elapsed);
+      const tuned = applyEnemyScaling(ENEMY_ARCHETYPES.crusher, elapsed);
+      expect(tuned.speed).toBeLessThan(oldScaled.speed);
+      expect(tuned.velocityCapBaseSpeed! * 3).toBe(oldScaled.speed * 3);
+      // Event archetypes are modified before timed scaling in RunScene.
+      const oldEvent = applyEnemyScaling(applyEventEnemyStatMultiplier(oldCrusher), elapsed);
+      const event = applyEnemyScaling(applyEventEnemyStatMultiplier(ENEMY_ARCHETYPES.crusher), elapsed);
+      expect(event.velocityCapBaseSpeed! * 3).toBe(oldEvent.speed * 3);
+    }
   });
 });
