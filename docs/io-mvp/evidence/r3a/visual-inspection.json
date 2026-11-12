@@ -1,0 +1,90 @@
+[
+  {
+    "mode": "loaded sprites",
+    "snapshot": {
+      "runner": {
+        "position": [
+          1600,
+          1100
+        ],
+        "body": [
+          23,
+          23
+        ],
+        "filled": false,
+        "visible": true,
+        "image": {
+          "key": "skin-runner",
+          "position": [
+            1600,
+            1100
+          ],
+          "visible": true,
+          "alpha": 1
+        }
+      },
+      "scuttler": {
+        "position": [
+          1700,
+          1160
+        ],
+        "body": [
+          16,
+          16
+        ],
+        "filled": false,
+        "visible": true,
+        "image": {
+          "key": "sprite-enemy-scuttler",
+          "position": [
+            1700,
+            1160
+          ],
+          "visible": true,
+          "alpha": 1
+        }
+      },
+      "loaded": [
+        true,
+        true
+      ]
+    },
+    "errors": []
+  },
+  {
+    "mode": "missing PNG fallback",
+    "snapshot": {
+      "runner": {
+        "position": [
+          1600,
+          1100
+        ],
+        "body": [
+          23,
+          23
+        ],
+        "filled": true,
+        "visible": true,
+        "image": null
+      },
+      "scuttler": {
+        "position": [
+          1700,
+          1160
+        ],
+        "body": [
+          16,
+          16
+        ],
+        "filled": true,
+        "visible": true,
+        "image": null
+      },
+      "loaded": [
+        false,
+        false
+      ]
+    },
+    "errors": []
+  }
+]

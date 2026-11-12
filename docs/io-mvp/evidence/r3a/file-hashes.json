@@ -1,0 +1,86 @@
+[
+    {
+        "path":  "public/assets/heroes/skin-runner.png",
+        "sha256":  "31bfdb6bed881e1676057a29195bac1e2970dc82a22f35d17102f4f8802588cc"
+    },
+    {
+        "path":  "public/assets/enemies/sprite-enemy-scuttler.png",
+        "sha256":  "af5fbd42f47dc71294a2a367f70fcb7b987564a159239c8a710d5453d1cd311b"
+    },
+    {
+        "path":  "src/game/config/visualAssetRuntimeConfig.ts",
+        "sha256":  "bbdf674e99e630c2c53848edd6915393767f082e8f7fd9f1905584caca98527c"
+    },
+    {
+        "path":  "src/game/data/presentVisualAssets.ts",
+        "sha256":  "f6b8927e441466a9d4682f4cc73ec352a5d0cb792b2b3af1a019990bf3f09891"
+    },
+    {
+        "path":  "src/game/utils/assetResolver.ts",
+        "sha256":  "5ed12cfdf2fa6275b0d8da784744fbca8ae11eb1b42df20d81aacc3bd41cc217"
+    },
+    {
+        "path":  "src/game/scenes/BootScene.ts",
+        "sha256":  "bd9d42228b5d707c2f78f224546407f26b3c6407699f5e2cccffd3713fe8fce8"
+    },
+    {
+        "path":  "src/game/entities/Player.ts",
+        "sha256":  "101c5bcc7c11f732031364102e33b9a692d11ba1eab1835ca2ade6031a3d8d3d"
+    },
+    {
+        "path":  "src/game/entities/Enemy.ts",
+        "sha256":  "726d0931f8eee5afafeb9baf209c16d365963a7966c1a8c4bf73c10d17cc1364"
+    },
+    {
+        "path":  "tests/unit/assetSlots.test.ts",
+        "sha256":  "2f1f35396d97e89e7fb17bec03be227e9867be8fb90d9adb7d0bc94014cd81b6"
+    },
+    {
+        "path":  "tests/e2e/runner-scuttler-visuals.spec.ts",
+        "sha256":  "7fb2f0bd4ff4cf88925448da1bbb6864d999a0755a34cdd86b0651b0697dbaf0"
+    },
+    {
+        "path":  "docs/io-mvp/r3a-asset-integration.md",
+        "sha256":  "66358853e193343a8fac454d17d17f6829b623c97bdc177e414c1ab07911ce48"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/accepted-fallback.png",
+        "sha256":  "bf6b1d34d9ac10411ff699bf09f754c0ea155888f0df8480920bc04828526888"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/accepted-sprites.png",
+        "sha256":  "7192671dca4b50b12f7be5f2549b891c9691cd42179178e98f54576c6e22a54a"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/art-contact-sheet.png",
+        "sha256":  "cdefc27da4478e91a1f39c7ebd6e235b10b64338fddacc6a5da3f8bee67ada05"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/art-metrics.json",
+        "sha256":  "7da64bb4ccd08b2277d504847f4929dd3256e7ddb756e9e2d788f01f6bdf1959"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/art-prompts.md",
+        "sha256":  "488ec5370e539f1691f704b167545ffee82171bd0fb95beacd2254eb470282d5"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/failure-snapshots.json",
+        "sha256":  "b447bdf3b7bd7b8e0a5c922d321927fb44e01b1d44503372c64bf486104e52f0"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/runner-alive.png",
+        "sha256":  "716bcf122985c9d8f08935062ac2a68d6ddf4290a270b0055b047cd37614ea50"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/runner-moving.png",
+        "sha256":  "162d20031f69eac181d9182449431e750b27cb95773d056d2e4dd52281af8ce4"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/scuttler-spawn.png",
+        "sha256":  "4cd57594e14c6bfdaea0e31b7f8297b26949c6aa0f751a8bfcbb22cd15373906"
+    },
+    {
+        "path":  "docs/io-mvp/evidence/r3a/visual-inspection.json",
+        "sha256":  "8aaa0b61f596707356087d3eec506d36c9b109a7d3787b7ff11db6028e2ccff5"
+    }
+]

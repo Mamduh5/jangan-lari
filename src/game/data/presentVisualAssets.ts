@@ -1,8 +1,5 @@
 import { ALL_VISUAL_ASSET_SLOTS, type VisualAssetSlot } from './assetSlots';
-import {
-  getVisualAssetRuntimeCategoryForSlot,
-  isVisualAssetRuntimeCategoryEnabled,
-} from '../config/visualAssetRuntimeConfig';
+import { isVisualAssetSlotEnabled } from '../config/visualAssetRuntimeConfig';
 
 export const PRESENT_VISUAL_ASSET_KEYS = new Set<string>([
   'hero-runner',
@@ -108,7 +105,7 @@ export const PRESENT_VISUAL_ASSET_SLOTS: VisualAssetSlot[] = ALL_VISUAL_ASSET_SL
 
 export const RUNTIME_PRELOAD_VISUAL_ASSET_KEYS = new Set<string>(
   PRESENT_VISUAL_ASSET_SLOTS.filter((slot) =>
-    isVisualAssetRuntimeCategoryEnabled(getVisualAssetRuntimeCategoryForSlot(slot)),
+    isVisualAssetSlotEnabled(slot),
   ).map((slot) => slot.key),
 );
 

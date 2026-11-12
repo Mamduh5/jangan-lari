@@ -37,7 +37,7 @@ import {
 } from '../data/assetSlots';
 import {
   getVisualAssetRuntimeCategoryForSlot,
-  isVisualAssetRuntimeCategoryEnabled,
+  isVisualAssetSlotEnabled,
   type VisualAssetRuntimeCategory,
 } from '../config/visualAssetRuntimeConfig';
 import type { EnemyArchetypeId } from '../data/enemies';
@@ -93,12 +93,8 @@ export function shouldUseVisualAsset(
   category: VisualAssetRuntimeCategory,
   slotOrKey: VisualAssetSlot | string | null | undefined,
 ): slotOrKey is VisualAssetSlot {
-  if (!isVisualAssetRuntimeCategoryEnabled(category)) {
-    return false;
-  }
-
   const slot = typeof slotOrKey === 'string' ? getVisualAssetSlotByKey(slotOrKey) : slotOrKey;
-  if (!slot || getVisualAssetRuntimeCategoryForSlot(slot) !== category) {
+  if (!slot || getVisualAssetRuntimeCategoryForSlot(slot) !== category || !isVisualAssetSlotEnabled(slot)) {
     return false;
   }
 

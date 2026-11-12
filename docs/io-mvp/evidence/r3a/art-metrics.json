@@ -1,0 +1,140 @@
+{
+  "method": "Original imagegen drawings. Crop to alpha>8 bounds plus 3 source pixels; uniform high-quality bicubic downscale; align alpha-weighted mass near canvas center. Near-invisible source-canvas haze outside this padded crop is excluded. No procedural drawing, recoloring, or contact-sheet cropping.",
+  "visibleThreshold": "alpha > 8",
+  "centroidMethod": "All nonzero alpha weighted by alpha value",
+  "normalization": "256x256 RGBA; Runner dominant visible dimension 220px, Scuttler 225px; safe transparent margins",
+  "assets": [
+    {
+      "name": "Runner",
+      "path": "public/assets/heroes/skin-runner.png",
+      "recoverableOriginalCommit": "18a73de4d92ac9b6e5393edb7d674cf55e2b4b65",
+      "generatedSource": "exec-9531d6ed-91d8-42d7-a9a4-39af4f4a6a65.png",
+      "originalSha256": "75ae13544c972fc9c9706c68de179c5c676d532fbdcb4cf0b9cdb9cafeb7a66f",
+      "generatedSha256": "820defaf0ef601503d2595090e07b02c510f94d5d8b81519d0f55fed8f3c860d",
+      "finalSha256": "31bfdb6bed881e1676057a29195bac1e2970dc82a22f35d17102f4f8802588cc",
+      "original": {
+        "width": 256,
+        "height": 256,
+        "minX": 27,
+        "minY": 41,
+        "maxX": 214,
+        "maxY": 231,
+        "visibleWidth": 188,
+        "visibleHeight": 191,
+        "visiblePixels": 24416,
+        "borderMaxAlpha": 0,
+        "centroidX": 127.04012661333618,
+        "centroidY": 138.3095856401237,
+        "coveragePercent": 37.255859375,
+        "mode": "RGBA8"
+      },
+      "generated": {
+        "width": 1254,
+        "height": 1254,
+        "minX": 269,
+        "minY": 271,
+        "maxX": 954,
+        "maxY": 1010,
+        "visibleWidth": 686,
+        "visibleHeight": 740,
+        "visiblePixels": 334503,
+        "borderMaxAlpha": 0,
+        "centroidX": 638.6931391371168,
+        "centroidY": 666.3406064205194,
+        "coveragePercent": 21.271834436024815,
+        "mode": "RGBA8"
+      },
+      "final": {
+        "width": 256,
+        "height": 256,
+        "minX": 18,
+        "minY": 10,
+        "maxX": 221,
+        "maxY": 229,
+        "visibleWidth": 204,
+        "visibleHeight": 220,
+        "visiblePixels": 29845,
+        "borderMaxAlpha": 0,
+        "centroidX": 127.5932657657233,
+        "centroidY": 127.18239887820673,
+        "coveragePercent": 45.53985595703125,
+        "mode": "RGBA8",
+        "connectedComponentsAlphaAbove8": [
+          29845
+        ],
+        "largestComponentFraction": 1.0,
+        "fullyTransparentOuterBorder": true,
+        "differentFromOriginalBytes": true
+      }
+    },
+    {
+      "name": "Scuttler",
+      "path": "public/assets/enemies/sprite-enemy-scuttler.png",
+      "recoverableOriginalCommit": "18a73de4d92ac9b6e5393edb7d674cf55e2b4b65",
+      "generatedSource": "exec-4044b3b2-841e-4018-9c56-5e33fc9692f0.png",
+      "originalSha256": "b76af5e17e57d7c3852ad93cbb98661c85f9d37609250354f35dd668d62ac0d7",
+      "generatedSha256": "b6c4fa007d3716382442055d5ddef51fc40897cac9481efbf2f5c19ae6839fb3",
+      "finalSha256": "af5fbd42f47dc71294a2a367f70fcb7b987564a159239c8a710d5453d1cd311b",
+      "original": {
+        "width": 256,
+        "height": 256,
+        "minX": 31,
+        "minY": 68,
+        "maxX": 225,
+        "maxY": 226,
+        "visibleWidth": 195,
+        "visibleHeight": 159,
+        "visiblePixels": 23185,
+        "borderMaxAlpha": 0,
+        "centroidX": 127.46332412974479,
+        "centroidY": 148.74987226795344,
+        "coveragePercent": 35.37750244140625,
+        "mode": "RGBA8"
+      },
+      "generated": {
+        "width": 1254,
+        "height": 1254,
+        "minX": 162,
+        "minY": 364,
+        "maxX": 1100,
+        "maxY": 950,
+        "visibleWidth": 939,
+        "visibleHeight": 587,
+        "visiblePixels": 392601,
+        "borderMaxAlpha": 1,
+        "centroidX": 608.6353145692169,
+        "centroidY": 669.0550982048323,
+        "coveragePercent": 24.966423235121297,
+        "mode": "RGBA8"
+      },
+      "final": {
+        "width": 256,
+        "height": 256,
+        "minX": 20,
+        "minY": 55,
+        "maxX": 245,
+        "maxY": 195,
+        "visibleWidth": 226,
+        "visibleHeight": 141,
+        "visiblePixels": 22692,
+        "borderMaxAlpha": 0,
+        "centroidX": 127.14694658119353,
+        "centroidY": 127.38134016301801,
+        "coveragePercent": 34.625244140625,
+        "mode": "RGBA8",
+        "connectedComponentsAlphaAbove8": [
+          22691,
+          1
+        ],
+        "largestComponentFraction": 0.999956,
+        "fullyTransparentOuterBorder": true,
+        "differentFromOriginalBytes": true
+      }
+    }
+  ],
+  "duplicateAudit": {
+    "byteIdenticalTargets": false,
+    "alphaMaskIntersectionOverUnion": 0.5564,
+    "interpretation": "Distinct generated drawings, visually reviewed. Alpha mask overlap is a shape diagnostic, not an originality guarantee."
+  }
+}

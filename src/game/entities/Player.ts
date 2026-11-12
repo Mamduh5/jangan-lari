@@ -26,6 +26,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
   private readonly heroMarker: Phaser.GameObjects.Shape;
   private skinOverlay: Phaser.GameObjects.Image | null = null;
   private skinOverlayActive = false;
+  private skinOverlayKey: string | null = null;
   private readonly baseBarrelWidth: number;
   private readonly baseBarrelHeight: number;
   private readonly visualSize: number;
@@ -346,6 +347,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
   }
 
   destroy(fromScene?: boolean): void {
+    this.scene?.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncSkinOverlay, this);
     this.aura.destroy();
     this.barrel.destroy();
     this.secondaryBarrel.destroy();
@@ -354,6 +356,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.skinOverlay?.destroy();
     this.skinOverlay = null;
     this.skinOverlayActive = false;
+    this.skinOverlayKey = null;
     super.destroy(fromScene);
   }
 
@@ -393,7 +396,6 @@ export class Player extends Phaser.GameObjects.Rectangle {
       this.y + this.facingDirection.y * markerOffset,
     );
     this.heroMarker.setAngle(facingAngle);
-    this.syncSkinOverlay(facingAngle);
   }
 
   private refreshSkinOverlay(hero: HeroDefinition): void {
@@ -405,19 +407,45 @@ export class Player extends Phaser.GameObjects.Rectangle {
       return;
     }
 
+    this.skinOverlayKey = slot.key;
     this.skinOverlay = this.scene.add.image(this.x, this.y, slot.key).setDepth(this.depth + 0.35);
-    this.skinOverlay.setDisplaySize(this.visualSize * 1.35, this.visualSize * 1.35).setAlpha(0.96);
+    this.scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncSkinOverlay, this);
+    this.syncSkinOverlay();
   }
 
-  private syncSkinOverlay(facingAngle: number): void {
-    if (!this.skinOverlay || !this.skinOverlayActive) {
+  private syncSkinOverlay(): void {
+    if (!this.skinOverlay || !this.skinOverlayKey) {
+      return;
+    }
+
+    this.skinOverlayActive = shouldUseVisualAsset(this.scene, 'heroSkins', this.skinOverlayKey);
+    // Hide only the fallback drawing, keeping its Arcade body and gameplay state intact.
+    this.isFilled = !this.skinOverlayActive;
+    this.isStroked = !this.skinOverlayActive;
+    const showFallback = !this.skinOverlayActive && this.visible && this.active;
+    this.barrel.setVisible(showFallback);
+    this.secondaryBarrel.setVisible(showFallback && this.barrelCount === 2);
+    this.turret.setVisible(showFallback);
+    this.heroMarker.setVisible(showFallback);
+    if (!this.skinOverlayActive) {
+      this.skinOverlay.setVisible(false);
       return;
     }
 
     this.skinOverlay
+      .setTexture(this.skinOverlayKey)
       .setPosition(this.x, this.y)
-      .setAngle(facingAngle)
+      .setAngle(Phaser.Math.RadToDeg(this.facingDirection.angle()))
+      .setDisplaySize(this.visualSize * 1.35 * this.scaleX, this.visualSize * 1.35 * this.scaleY)
       .setDepth(this.depth + 0.35)
+      .setAlpha(this.alpha)
       .setVisible(this.visible && this.active);
+    if (!this.isAlive()) {
+      this.skinOverlay.setTint(0x64748b);
+    } else if (this.fillColor === 0xf87171) {
+      this.skinOverlay.setTintFill(0xf87171);
+    } else {
+      this.skinOverlay.clearTint();
+    }
   }
 }

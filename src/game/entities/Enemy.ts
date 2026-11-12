@@ -343,7 +343,6 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       this.setAngle(Phaser.Math.RadToDeg(Math.atan2(velocity.y, velocity.x)) + 90);
     }
     this.syncRoleVisuals();
-    this.syncSpriteOverlay();
 
     if (this.deathPresentationActive) {
       this.setScale(this.responseScale.x, this.responseScale.y);
@@ -934,6 +933,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   }
 
   destroy(fromScene?: boolean): void {
+    this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncSpriteOverlay, this);
     this.scene.tweens.killTweensOf(this);
     this.scene.tweens.killTweensOf(this.responseScale);
     for (const visual of this.roleVisuals) {
@@ -1017,19 +1017,41 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
 
     this.spriteOverlay = scene.add.image(this.x, this.y, slot.key).setDepth(this.depth + 0.35);
-    this.spriteOverlay.setDisplaySize(this.archetype.size * 1.24, this.archetype.size * 1.24).setAlpha(0.92);
+    scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncSpriteOverlay, this);
+    this.syncSpriteOverlay();
   }
 
   private syncSpriteOverlay(): void {
-    if (!this.spriteOverlay || !this.spriteOverlayActive) {
+    if (!this.spriteOverlay) {
+      return;
+    }
+
+    const slot = getEnemySpriteAssetSlot(this.archetype.id);
+    const category = this.isBoss() ? 'bossSprites' : this.isMiniboss() ? 'minibossSprites' : 'enemySprites';
+    this.spriteOverlayActive = shouldUseVisualAsset(this.scene, category, slot);
+    // The Rectangle remains the collision body; only its fallback drawing is suppressed.
+    this.isFilled = !this.spriteOverlayActive;
+    this.isStroked = !this.spriteOverlayActive || this.eventMarkerColor !== null || this.bossOwned;
+    for (const visual of this.roleVisuals) {
+      visual.object.setVisible(!this.spriteOverlayActive && this.visible && this.active);
+    }
+    if (!this.spriteOverlayActive) {
+      this.spriteOverlay.setVisible(false);
       return;
     }
 
     this.spriteOverlay
+      .setTexture(slot.key)
       .setPosition(this.x, this.y)
-      .setAngle(this.angle)
+      .setAngle(this.angle - 90)
+      .setDisplaySize(this.archetype.size * 1.24 * this.scaleX, this.archetype.size * 1.24 * this.scaleY)
       .setDepth(this.depth + 0.35)
       .setAlpha(this.alpha)
       .setVisible(this.visible && this.active);
+    if (this.fillColor === 0xffffff) {
+      this.spriteOverlay.setTintFill(0xffffff);
+    } else {
+      this.spriteOverlay.clearTint();
+    }
   }
 }

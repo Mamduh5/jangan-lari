@@ -109,3 +109,19 @@ export function getVisualAssetRuntimeCategoryForSlot(
 ): VisualAssetRuntimeCategory {
   return getVisualAssetRuntimeCategoryForKind(slot.kind, slot);
 }
+
+// Reviewed individually; broad sprite categories stay disabled.
+const REVIEWED_SPRITE_CATEGORIES: Readonly<Record<string, VisualAssetRuntimeCategory>> = {
+  'skin-runner': 'heroSkins',
+  'sprite-enemy-scuttler': 'enemySprites',
+};
+
+export function isReviewedRuntimeSprite(slot: Pick<VisualAssetSlot, 'key' | 'kind'>): boolean {
+  return Object.prototype.hasOwnProperty.call(REVIEWED_SPRITE_CATEGORIES, slot.key)
+    && REVIEWED_SPRITE_CATEGORIES[slot.key] === getVisualAssetRuntimeCategoryForSlot(slot);
+}
+
+export function isVisualAssetSlotEnabled(slot: Pick<VisualAssetSlot, 'key' | 'kind'>): boolean {
+  return isVisualAssetRuntimeCategoryEnabled(getVisualAssetRuntimeCategoryForSlot(slot))
+    || isReviewedRuntimeSprite(slot);
+}

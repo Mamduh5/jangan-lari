@@ -46,7 +46,7 @@ import {
   shouldUseTexture,
   shouldUseVisualAsset,
 } from '../../src/game/utils/assetResolver';
-import { VISUAL_ASSET_RUNTIME_CONFIG } from '../../src/game/config/visualAssetRuntimeConfig';
+import { VISUAL_ASSET_RUNTIME_CONFIG, getVisualAssetRuntimeCategoryForSlot } from '../../src/game/config/visualAssetRuntimeConfig';
 
 describe('asset slot registry', () => {
   test('defines optional slots with stable public asset paths', () => {
@@ -183,6 +183,28 @@ describe('visual asset runtime config', () => {
     expect(VISUAL_ASSET_RUNTIME_CONFIG.tankClassIcons).toBe(false);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.uiButtons).toBe(true);
     expect(VISUAL_ASSET_RUNTIME_CONFIG.uiIcons).toBe(true);
+  });
+});
+
+describe('reviewed character sprites', () => {
+  test('preloads and renders only Runner and Scuttler while broad categories stay disabled', () => {
+    const scene = { textures: { exists: () => true } } as unknown as Pick<Phaser.Scene, 'textures'>;
+    const sprites = ALL_VISUAL_ASSET_SLOTS.filter((slot) => slot.kind === 'hero-skin' || slot.kind === 'enemy-sprite');
+    const reviewed = ['skin-runner', 'sprite-enemy-scuttler'];
+    expect(sprites.filter((slot) => PRELOAD_VISUAL_ASSET_KEYS.has(slot.key)).map((slot) => slot.key)).toEqual(reviewed);
+    for (const slot of sprites) {
+      expect(shouldUseVisualAsset(scene, getVisualAssetRuntimeCategoryForSlot(slot), slot)).toBe(reviewed.includes(slot.key));
+      expect(shouldUseVisualAsset(scene, 'projectileSprites', slot)).toBe(false);
+    }
+  });
+
+  test('reviewed sprites still require a loaded texture and the matching category', () => {
+    const missing = { textures: { exists: () => false } } as unknown as Pick<Phaser.Scene, 'textures'>;
+    const loaded = { textures: { exists: () => true } } as unknown as Pick<Phaser.Scene, 'textures'>;
+    expect(shouldUseVisualAsset(missing, 'heroSkins', 'skin-runner')).toBe(false);
+    expect(shouldUseVisualAsset(missing, 'enemySprites', 'sprite-enemy-scuttler')).toBe(false);
+    expect(shouldUseVisualAsset(loaded, 'enemySprites', 'skin-runner')).toBe(false);
+    expect(shouldUseVisualAsset(loaded, 'heroSkins', 'sprite-enemy-scuttler')).toBe(false);
   });
 });
 
