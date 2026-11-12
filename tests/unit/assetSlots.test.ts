@@ -336,11 +336,11 @@ describe('pickup visual balance', () => {
 describe('special enemy presentation', () => {
   test('preserves a distinct common < elite < miniboss < boss size hierarchy', () => {
     const config = UPRIGHT_ENEMY_SPRITE_PRESENTATION;
-    expect(config.overlord).toEqual({ displaySize: 62, flipsWithMovement: false, preserveRoleCues: true });
-    expect(config.riftblade).toEqual({ displaySize: 56, flipsWithMovement: true, preserveRoleCues: true });
-    expect(config.dreadnought).toEqual({ displaySize: 84, flipsWithMovement: true, preserveRoleCues: true });
-    expect(config.behemoth).toEqual({ displaySize: 112, flipsWithMovement: true, preserveRoleCues: true });
-    const largestCommon = Math.max(...Object.values(config).filter((entry) => !entry.preserveRoleCues).map((entry) => entry.displaySize));
+    expect(config.overlord).toEqual({ displaySize: 62, flipsWithMovement: false });
+    expect(config.riftblade).toEqual({ displaySize: 56, flipsWithMovement: true });
+    expect(config.dreadnought).toEqual({ displaySize: 84, flipsWithMovement: true });
+    expect(config.behemoth).toEqual({ displaySize: 112, flipsWithMovement: true });
+    const largestCommon = Math.max(...['scuttler', 'skimmer', 'harrier', 'mauler', 'crusher', 'bulwark', 'hexcaster'].map((id) => getUprightEnemySpritePresentation(id as keyof typeof config)!.displaySize));
     expect(largestCommon).toBeLessThan(Math.min(config.overlord!.displaySize, config.riftblade!.displaySize));
     expect(Math.max(config.overlord!.displaySize, config.riftblade!.displaySize)).toBeLessThan(config.dreadnought!.displaySize);
     expect(config.dreadnought!.displaySize).toBeLessThan(config.behemoth!.displaySize);

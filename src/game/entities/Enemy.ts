@@ -130,6 +130,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private spriteOverlay: Phaser.GameObjects.Image | null = null;
   private spriteOverlayActive = false;
   private spriteFacesLeft = false;
+  private spriteStatusLabel: Phaser.GameObjects.Text | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -175,6 +176,24 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.body.setMaxVelocity(velocityCap, velocityCap);
     this.createRoleVisuals(scene);
     this.refreshSpriteOverlay(scene);
+  }
+
+  private hasActiveSpecialSprite(): boolean {
+    return this.spriteOverlayActive && Boolean(this.archetype?.isElite || this.archetype?.isMiniboss || this.archetype?.isBoss);
+  }
+
+  // Phaser style setters also enable shape drawing. Keep color/flash state for the
+  // sprite and fallback, but never re-enable a special enemy's legacy body.
+  setFillStyle(color?: number, alpha?: number): this {
+    super.setFillStyle(color, alpha);
+    if (this.hasActiveSpecialSprite()) this.isFilled = false;
+    return this;
+  }
+
+  setStrokeStyle(lineWidth?: number, color?: number, alpha?: number): this {
+    super.setStrokeStyle(lineWidth, color, alpha);
+    if (this.hasActiveSpecialSprite()) this.isStroked = false;
+    return this;
   }
 
   isAlive(): boolean {
@@ -943,6 +962,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     for (const visual of this.roleVisuals) {
       visual.object.destroy();
     }
+    this.spriteStatusLabel?.destroy();
+    this.spriteStatusLabel = null;
     this.spriteOverlay?.destroy();
     this.spriteOverlay = null;
     this.spriteOverlayActive = false;
@@ -1005,7 +1026,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     for (const visual of this.roleVisuals) {
       visual.object.setPosition(this.x + forwardX * visual.forward + sideX * visual.side, this.y + forwardY * visual.forward + sideY * visual.side);
       visual.object.setAngle(this.angle + visual.angleOffset);
-      visual.object.setVisible(this.visible && this.active);
+      visual.object.setVisible(!this.hasActiveSpecialSprite() && this.visible && this.active);
       visual.object.setAlpha(this.alpha);
     }
   }
@@ -1025,6 +1046,45 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.syncSpriteOverlay();
   }
 
+  private syncSpriteStatusLabel(): void {
+    if (!this.hasActiveSpecialSprite() || !this.visible || !this.active || this.deathPresentationActive) {
+      this.spriteStatusLabel?.setVisible(false);
+      return;
+    }
+
+    const now = this.scene.time.now;
+    const statuses: string[] = [];
+    // Read the existing windup state; no new timers or attack logic.
+    if (this.isBoss() && this.shockwaveQueued && now < this.shockwaveWindupUntil) {
+      statuses.push('SHOCKWAVE');
+    } else if (this.isMiniboss() && this.primedMinibossCharge && now < this.nextDashAt) {
+      statuses.push('CHARGE');
+    } else if (this.isMiniboss() && this.minibossVolleyQueued && now < this.minibossVolleyWindupUntil) {
+      statuses.push('VOLLEY');
+    } else if (this.isChargingDash(now)) {
+      statuses.push('CHARGE');
+    }
+    if (this.eventMarkerColor !== null) statuses.push('EVENT');
+    if (this.bossOwned) statuses.push('SUMMON');
+    if (statuses.length === 0) {
+      this.spriteStatusLabel?.setVisible(false);
+      return;
+    }
+
+    // Text only: no replacement body outlines, circles, triangles or halos.
+    this.spriteStatusLabel ??= this.scene.add.text(this.x, this.y, '', {
+      fontFamily: 'Trebuchet MS, sans-serif', fontSize: '11px', fontStyle: 'bold', color: '#fff1d6',
+    }).setOrigin(0.5, 1);
+    const size = getUprightEnemySpritePresentation(this.archetype.id)!.displaySize;
+    this.spriteStatusLabel
+      .setText(statuses.join(' / '))
+      .setColor(this.eventMarkerColor === null ? '#fff1d6' : `#${this.eventMarkerColor.toString(16).padStart(6, '0')}`)
+      .setPosition(this.x, this.y - size * Math.abs(this.scaleY) / 2 - 6)
+      .setDepth(this.depth + 0.45)
+      .setAlpha(this.alpha)
+      .setVisible(true);
+  }
+
   private syncSpriteOverlay(): void {
     if (!this.spriteOverlay) {
       return;
@@ -1034,13 +1094,13 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     const category = this.isBoss() ? 'bossSprites' : this.isMiniboss() ? 'minibossSprites' : 'enemySprites';
     this.spriteOverlayActive = shouldUseVisualAsset(this.scene, category, slot);
     const presentation = getUprightEnemySpritePresentation(this.archetype.id);
-    const preserveRoleCues = presentation?.preserveRoleCues === true;
-    // The Rectangle remains the collision body; retain special-enemy warning strokes above the art.
+    // Only drawing changes; the original Rectangle and Arcade body remain authoritative.
     this.isFilled = !this.spriteOverlayActive;
-    this.isStroked = !this.spriteOverlayActive || preserveRoleCues || this.eventMarkerColor !== null || this.bossOwned;
+    this.isStroked = !this.spriteOverlayActive || (!this.hasActiveSpecialSprite() && (this.eventMarkerColor !== null || this.bossOwned));
     for (const visual of this.roleVisuals) {
-      visual.object.setVisible((!this.spriteOverlayActive || preserveRoleCues) && this.visible && this.active);
+      visual.object.setVisible(!this.spriteOverlayActive && this.visible && this.active);
     }
+    this.syncSpriteStatusLabel();
     if (!this.spriteOverlayActive) {
       this.spriteOverlay.setVisible(false);
       return;
@@ -1062,7 +1122,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
       .setAngle(presentation ? 0 : this.angle - 90)
       .setFlipX(Boolean(presentation?.flipsWithMovement) && this.spriteFacesLeft)
       .setDisplaySize(displaySize * this.scaleX, displaySize * this.scaleY)
-      .setDepth(this.depth + (preserveRoleCues ? -0.1 : 0.35))
+      .setDepth(this.depth + 0.35)
       .setAlpha(this.alpha)
       .setVisible(this.visible && this.active);
     if (this.fillColor === 0xffffff) {
