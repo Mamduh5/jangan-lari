@@ -90,6 +90,7 @@ import {
   type BossStateDefinition,
 } from '../config/bossBalance';
 import { BUFF_SHRINE_EVENT, MAP_EVENT_ENCOUNTER_BUFFER_MS, REWARD_TARGET_ENEMY_BALANCE } from '../config/mapEventBalance';
+import { ARENA_ENVIRONMENT_DEPTH, buildArenaEnvironmentLayout } from '../config/arenaEnvironmentLayout';
 import { resolveEnemyProjectileVisualDiameter } from '../config/projectileVisualBalance';
 import {
   WAVE_FORMATION_COOLDOWN_MS,
@@ -1812,6 +1813,7 @@ export class RunScene extends Phaser.Scene {
 
   private drawArena(): void {
     const graphics = this.add.graphics();
+    graphics.setDepth(ARENA_ENVIRONMENT_DEPTH.floor);
 
     graphics.fillStyle(0x0b1020, 1);
     graphics.fillRect(
@@ -1863,6 +1865,30 @@ export class RunScene extends Phaser.Scene {
 
     const arenaCenter = this.add.circle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 90, 0x1d4ed8, 0.16);
     arenaCenter.setStrokeStyle(4, 0x93c5fd, 0.5);
+    arenaCenter.setDepth(ARENA_ENVIRONMENT_DEPTH.centerMarker);
+
+    this.drawArenaEnvironment();
+  }
+
+  // Decorative only: static images with no physics bodies, all at negative depth
+  // beneath gameplay. Each asset falls back silently (skipped) when unapproved or missing.
+  private drawArenaEnvironment(): void {
+    for (const placement of buildArenaEnvironmentLayout(WORLD_WIDTH, WORLD_HEIGHT)) {
+      if (!shouldUseVisualAsset(this, placement.category, placement.key)) {
+        continue;
+      }
+
+      const decoration = this.add.image(placement.x, placement.y, placement.key);
+      decoration
+        .setDisplaySize(placement.displaySize, placement.displaySize)
+        .setRotation(placement.rotation)
+        .setFlipX(placement.flipX)
+        .setAlpha(placement.alpha)
+        .setDepth(placement.depth);
+      if (placement.tint !== undefined) {
+        decoration.setTint(placement.tint);
+      }
+    }
   }
 
   private syncStagePhase(): void {

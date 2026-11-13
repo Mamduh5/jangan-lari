@@ -110,8 +110,15 @@ export function getVisualAssetRuntimeCategoryForSlot(
   return getVisualAssetRuntimeCategoryForKind(slot.kind, slot);
 }
 
-// Reviewed individually; broad sprite categories stay disabled.
+// Reviewed individually; broad sprite and environment categories stay disabled.
 const REVIEWED_SPRITE_CATEGORIES: Readonly<Record<string, VisualAssetRuntimeCategory>> = {
+  // R3F decorative arena environment (render-only, no physics bodies).
+  'tile-ground-blob': 'tiles',
+  'tile-boundary-pebble': 'tiles',
+  'prop-soft-bush': 'mapProps',
+  'prop-wobbly-rock': 'mapProps',
+  'prop-risk-altar': 'mapProps',
+  'prop-tiny-shrine': 'mapProps',
   'skin-runner': 'heroSkins',
   'skin-vanguard': 'heroSkins',
   'skin-shade': 'heroSkins',
