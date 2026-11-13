@@ -36,18 +36,25 @@ export const ARENA_ENVIRONMENT_DEPTH = {
   props: -25,
 } as const;
 
-/** Radius around the arena center kept free of in-bounds decoration. */
-export const ARENA_CENTER_CLEAR_RADIUS = 480;
-/** In-bounds props live only in this band measured from the arena wall. */
-export const ARENA_PROP_EDGE_BAND = { min: 80, max: 260 } as const;
+/**
+ * Radius around the player spawn (arena center) kept free of decoration so the
+ * hero is never visually tangled with a prop at run start.
+ */
+export const ARENA_SPAWN_CLEAR_RADIUS = 220;
+/** @deprecated R3F name kept for compatibility; equals the spawn clear radius. */
+export const ARENA_CENTER_CLEAR_RADIUS = ARENA_SPAWN_CLEAR_RADIUS;
+/** In-bounds props keep at least this distance from the arena wall. */
+export const ARENA_PROP_WALL_MARGIN = 80;
+/** Minimum spacing between in-bounds rocks/bushes for combat readability. */
+export const ARENA_PROP_MIN_SPACING = 240;
 
-const GROUND_BLOB_COUNT = 12;
+const GROUND_BLOB_COUNT = 16;
 const GROUND_BLOB_EDGE_INSET = 140;
-const GROUND_BLOB_MIN_SPACING = 380;
+const GROUND_BLOB_MIN_SPACING = 340;
+const GROUND_BLOB_ALPHA = 0.22;
 const BOUNDARY_PEBBLE_SPACING = 320;
 const BOUNDARY_PEBBLE_OUTSET = 30;
 
-const IN_BOUNDS_PROP_ALPHA = 0.55;
 const OUTER_PROP_ALPHA = 0.8;
 
 function createSeededRandom(seed: number): () => number {
@@ -74,7 +81,7 @@ function buildGroundBlobs(width: number, height: number): ArenaDecorationPlaceme
     const rotation = (random() - 0.5) * 0.6;
     const flipX = random() > 0.5;
 
-    if (Math.hypot(x - centerX, y - centerY) < ARENA_CENTER_CLEAR_RADIUS) {
+    if (Math.hypot(x - centerX, y - centerY) < ARENA_SPAWN_CLEAR_RADIUS) {
       continue;
     }
 
@@ -89,7 +96,7 @@ function buildGroundBlobs(width: number, height: number): ArenaDecorationPlaceme
       y: Math.round(y),
       displaySize: Math.round(size),
       rotation,
-      alpha: 0.12,
+      alpha: GROUND_BLOB_ALPHA,
       depth: ARENA_ENVIRONMENT_DEPTH.ground,
       flipX,
       tint: 0x93a4bd,
@@ -142,21 +149,45 @@ function toProp([key, x, y, size, flipX]: PropSpec, alpha: number): ArenaDecorat
 }
 
 function buildInBoundsProps(width: number, height: number): ArenaDecorationPlacement[] {
-  // Sparse, hand-placed rocks/bushes hugging the arena wall; center stays open.
-  const specs: PropSpec[] = [
-    ['prop-soft-bush', width * 0.08, 150, 64, false],
-    ['prop-wobbly-rock', width * 0.29, 120, 56, true],
-    ['prop-soft-bush', width * 0.73, 140, 60, true],
-    ['prop-wobbly-rock', width - 200, 240, 60, false],
-    ['prop-wobbly-rock', 130, height * 0.37, 52, false],
-    ['prop-soft-bush', width - 120, height * 0.6, 62, true],
-    ['prop-soft-bush', 200, height - 150, 66, false],
-    ['prop-wobbly-rock', width * 0.36, height - 120, 54, true],
-    ['prop-soft-bush', width * 0.64, height - 130, 58, false],
-    ['prop-wobbly-rock', width - 230, height - 200, 60, true],
+  const cx = width / 2;
+  const cy = height / 2;
+  type InBoundsSpec = [key: string, x: number, y: number, size: number, flipX: boolean, alpha: number];
+
+  // Starting view cluster: offsets from the player spawn (arena center) so 8
+  // rocks/bushes are on screen the moment a run begins. Irregular offsets avoid
+  // grid/line repetition; the spawn clear radius stays open.
+  const startingView: InBoundsSpec[] = [
+    ['prop-soft-bush', cx - 560, cy - 250, 78, false, 0.82],
+    ['prop-wobbly-rock', cx - 330, cy + 190, 70, true, 0.8],
+    ['prop-soft-bush', cx - 190, cy - 230, 72, true, 0.78],
+    ['prop-wobbly-rock', cx + 260, cy - 210, 74, false, 0.82],
+    ['prop-soft-bush', cx + 420, cy + 170, 80, true, 0.8],
+    ['prop-wobbly-rock', cx + 650, cy - 60, 68, true, 0.78],
+    ['prop-wobbly-rock', cx - 660, cy + 90, 72, false, 0.8],
+    ['prop-soft-bush', cx + 130, cy + 250, 76, false, 0.82],
   ];
 
-  return specs.map((spec) => toProp(spec, IN_BOUNDS_PROP_ALPHA));
+  // Wider arena scatter, hand-placed across all regions (not only the walls).
+  const scatter: InBoundsSpec[] = [
+    ['prop-soft-bush', width * 0.1, height * 0.12, 80, false, 0.78],
+    ['prop-wobbly-rock', width * 0.24, height * 0.22, 70, true, 0.78],
+    ['prop-soft-bush', width * 0.42, height * 0.15, 76, true, 0.8],
+    ['prop-wobbly-rock', width * 0.62, height * 0.1, 72, false, 0.78],
+    ['prop-soft-bush', width * 0.81, height * 0.19, 82, false, 0.8],
+    ['prop-wobbly-rock', width * 0.92, height * 0.08, 66, true, 0.78],
+    ['prop-wobbly-rock', width * 0.075, height * 0.45, 74, false, 0.8],
+    ['prop-soft-bush', width * 0.16, height * 0.68, 78, true, 0.78],
+    ['prop-soft-bush', width * 0.86, height * 0.43, 80, false, 0.8],
+    ['prop-wobbly-rock', width * 0.94, height * 0.63, 70, true, 0.78],
+    ['prop-wobbly-rock', width * 0.12, height * 0.89, 72, true, 0.8],
+    ['prop-soft-bush', width * 0.33, height * 0.83, 80, false, 0.78],
+    ['prop-wobbly-rock', width * 0.49, height * 0.91, 68, false, 0.8],
+    ['prop-soft-bush', width * 0.68, height * 0.8, 78, true, 0.8],
+    ['prop-wobbly-rock', width * 0.85, height * 0.89, 74, false, 0.78],
+  ];
+
+  return [...startingView, ...scatter].map(([key, x, y, size, flipX, alpha]) =>
+    toProp([key, x, y, size, flipX], alpha));
 }
 
 function buildOuterProps(width: number, height: number): ArenaDecorationPlacement[] {

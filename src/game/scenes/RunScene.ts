@@ -91,6 +91,7 @@ import {
 } from '../config/bossBalance';
 import { BUFF_SHRINE_EVENT, MAP_EVENT_ENCOUNTER_BUFFER_MS, REWARD_TARGET_ENEMY_BALANCE } from '../config/mapEventBalance';
 import { ARENA_ENVIRONMENT_DEPTH, buildArenaEnvironmentLayout } from '../config/arenaEnvironmentLayout';
+import { renderArenaEnvironment } from '../utils/arenaEnvironmentRenderer';
 import { resolveEnemyProjectileVisualDiameter } from '../config/projectileVisualBalance';
 import {
   WAVE_FORMATION_COOLDOWN_MS,
@@ -1873,22 +1874,7 @@ export class RunScene extends Phaser.Scene {
   // Decorative only: static images with no physics bodies, all at negative depth
   // beneath gameplay. Each asset falls back silently (skipped) when unapproved or missing.
   private drawArenaEnvironment(): void {
-    for (const placement of buildArenaEnvironmentLayout(WORLD_WIDTH, WORLD_HEIGHT)) {
-      if (!shouldUseVisualAsset(this, placement.category, placement.key)) {
-        continue;
-      }
-
-      const decoration = this.add.image(placement.x, placement.y, placement.key);
-      decoration
-        .setDisplaySize(placement.displaySize, placement.displaySize)
-        .setRotation(placement.rotation)
-        .setFlipX(placement.flipX)
-        .setAlpha(placement.alpha)
-        .setDepth(placement.depth);
-      if (placement.tint !== undefined) {
-        decoration.setTint(placement.tint);
-      }
-    }
+    renderArenaEnvironment(this, buildArenaEnvironmentLayout(WORLD_WIDTH, WORLD_HEIGHT));
   }
 
   private syncStagePhase(): void {
