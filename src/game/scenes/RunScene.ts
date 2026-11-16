@@ -93,9 +93,12 @@ import { BUFF_SHRINE_EVENT, MAP_EVENT_ENCOUNTER_BUFFER_MS, REWARD_TARGET_ENEMY_B
 import { renderWorldMap } from '../world/worldMapRenderer';
 import {
   isReachableSpawn,
-  resolveWalkable,
+  moveAlongWorldMap,
+  projectVelocityAgainstNormals,
   snapToWalkable,
+  steerVelocityAroundObstacles,
   WALK_RADIUS_LARGE,
+  type Point,
 } from '../world/worldMap';
 import { resolveEnemyProjectileVisualDiameter } from '../config/projectileVisualBalance';
 import {
@@ -681,6 +684,14 @@ export class RunScene extends Phaser.Scene {
       return;
     }
 
+    let playerContactNormals: Point[] = [];
+    let enemyContactNormals: Map<Enemy, Point[]> | null = null;
+    if (!this.isChoosingTankClass && !this.isLevelingUp) {
+      const committed = this.commitWorldPhysicsSteps();
+      playerContactNormals = committed.playerContactNormals;
+      enemyContactNormals = committed.enemyContactNormals;
+    }
+
     if (this.tankClassChoiceStartQueued && !this.isLevelingUp && !this.isChoosingTankClass) {
       this.tankClassChoiceStartQueued = false;
       this.beginTankClassChoice();
@@ -725,9 +736,10 @@ export class RunScene extends Phaser.Scene {
     this.dismissControlHintIfNeeded(movementInput);
     this.player.setFacingDirection(new Phaser.Math.Vector2(movementInput.facing.x, movementInput.facing.y));
     this.player.move(new Phaser.Math.Vector2(movementInput.movement.x, movementInput.movement.y), false);
-    this.keepOnWorldMap(this.player, false);
+    this.applyPlayerSurfaceSlide(playerContactNormals);
+    this.player.updateVisualState(this.time.now);
     this.updateNeutralShapes();
-    this.updateEnemies();
+    this.updateEnemies(enemyContactNormals);
     this.syncBossPhaseState();
     this.updateBossStateDirector();
     this.updateBossSummons();
@@ -3138,7 +3150,7 @@ export class RunScene extends Phaser.Scene {
     return ENEMY_SPAWN_PLAYER_SAFE_RADIUS;
   }
 
-  private updateEnemies(): void {
+  private updateEnemies(enemyContactNormals: Map<Enemy, Point[]> | null): void {
     if (!this.enemies?.active) {
       return;
     }
@@ -3150,67 +3162,132 @@ export class RunScene extends Phaser.Scene {
       if (attackSignal) {
         this.handleEnemyAttackSignal(enemy, attackSignal);
       }
-      this.keepOnWorldMap(enemy, true);
+      this.steerEnemyVelocity(enemy, enemyContactNormals?.get(enemy) ?? []);
       enemy.updatePresentation(this.time.now);
     }
   }
 
+  private getEntityCollisionRadius(entity: Phaser.GameObjects.Rectangle): number {
+    const body = entity.body as Phaser.Physics.Arcade.Body | null;
+    if (!body) {
+      return 12;
+    }
+    // Use unscaled sourceWidth so cosmetic hit-squash/breathing scale never alters physical clearance.
+    const baseWidth = body.sourceWidth > 0 ? body.sourceWidth : body.width;
+    return Math.max(8, baseWidth * 0.5);
+  }
+
+  private commitWorldPhysicsSteps(): {
+    playerContactNormals: Point[];
+    enemyContactNormals: Map<Enemy, Point[]>;
+  } {
+    const playerContactNormals = this.player?.active ? this.commitEntityWorldStep(this.player) : [];
+    const enemyContactNormals = new Map<Enemy, Point[]>();
+    if (this.enemies?.active) {
+      for (const enemy of this.enemies.getChildren() as Enemy[]) {
+        if (enemy.active) {
+          const normals = this.commitEntityWorldStep(enemy);
+          if (normals.length > 0) {
+            enemyContactNormals.set(enemy, normals);
+          }
+        }
+      }
+    }
+    return { playerContactNormals, enemyContactNormals };
+  }
+
   /**
-   * Keeps an entity on the irregular world map: pushes it out of the void and
-   * out of solid rocks, then removes the velocity component that would drive it
-   * back into them next frame so it slides along edges instead of sticking.
-   * Enemies additionally keep their speed and pick the side that faces the player.
+   * Resolves the frame's Arcade Physics displacement along the continuous world
+   * map (`moveAlongWorldMap`) and keeps the GameObject and Arcade Body synced
+   * so `World.postUpdate()` does not replay raw uncorrected motion.
    */
-  private keepOnWorldMap(entity: Phaser.GameObjects.Rectangle, steerAroundObstacles: boolean): void {
+  private commitEntityWorldStep(entity: Phaser.GameObjects.Rectangle): Point[] {
     const body = entity.body as Phaser.Physics.Arcade.Body | null;
     if (!body || !entity.active) {
-      return;
+      return [];
     }
 
-    const radius = Math.max(8, body.halfWidth);
-    const current = resolveWalkable(entity.x, entity.y, radius);
-    if (current.blocked) {
-      entity.setPosition(current.x, current.y);
+    const startX = entity.x;
+    const startY = entity.y;
+    const rawDx = body.position.x - body.prevFrame.x;
+    const rawDy = body.position.y - body.prevFrame.y;
+    const targetX = startX + rawDx;
+    const targetY = startY + rawDy;
+    const radius = this.getEntityCollisionRadius(entity);
+
+    const moved = moveAlongWorldMap(startX, startY, targetX, targetY, radius);
+    const corrX = moved.x - targetX;
+    const corrY = moved.y - targetY;
+
+    if (moved.x !== startX || moved.y !== startY) {
+      entity.setPosition(moved.x, moved.y);
+    }
+    if (corrX !== 0 || corrY !== 0 || rawDx !== 0 || rawDy !== 0) {
+      body.position.x += corrX;
+      body.position.y += corrY;
+      body.prev.copy(body.position);
+      body.prevFrame.copy(body.position);
+      body.updateCenter();
+    }
+
+    return moved.contactNormals;
+  }
+
+  private applyPlayerSurfaceSlide(contactNormals: ReadonlyArray<Point>): void {
+    const body = this.player?.body as Phaser.Physics.Arcade.Body | null;
+    if (!body || !this.player.active) {
+      return;
     }
 
     const vx = body.velocity.x;
     const vy = body.velocity.y;
-    if (vx === 0 && vy === 0) {
+    const speed = Math.hypot(vx, vy);
+    if (speed < 1e-3) {
       return;
     }
 
-    const ahead = resolveWalkable(current.x + vx * 0.06, current.y + vy * 0.06, radius);
-    if (!ahead.blocked) {
-      return;
-    }
-
-    const intoSurface = vx * ahead.normalX + vy * ahead.normalY;
-    if (intoSurface >= 0) {
-      return;
-    }
-
-    let slideX = vx - intoSurface * ahead.normalX;
-    let slideY = vy - intoSurface * ahead.normalY;
-
-    if (steerAroundObstacles) {
-      const speed = Math.hypot(vx, vy);
-      let slideSpeed = Math.hypot(slideX, slideY);
-      if (slideSpeed < speed * 0.35) {
-        // Head-on against a rock/edge: go around on the side that faces the player.
-        const tangentX = -ahead.normalY;
-        const tangentY = ahead.normalX;
-        const towardPlayer = (this.player.x - entity.x) * tangentX + (this.player.y - entity.y) * tangentY;
-        const sign = towardPlayer >= 0 ? 1 : -1;
-        slideX = tangentX * sign;
-        slideY = tangentY * sign;
-        slideSpeed = 1;
+    let normals = contactNormals;
+    if (normals.length === 0) {
+      const probe = moveAlongWorldMap(
+        this.player.x,
+        this.player.y,
+        this.player.x + (vx / speed) * 1.5,
+        this.player.y + (vy / speed) * 1.5,
+        this.getEntityCollisionRadius(this.player),
+        { allowSlide: false },
+      );
+      if (!probe.blocked) {
+        return;
       }
-      const scale = speed / slideSpeed;
-      slideX *= scale;
-      slideY *= scale;
+      normals = probe.contactNormals;
     }
 
-    body.setVelocity(slideX, slideY);
+    const projected = projectVelocityAgainstNormals(vx, vy, normals);
+    body.setVelocity(projected.x, projected.y);
+  }
+
+  private steerEnemyVelocity(enemy: Enemy, contactNormals: ReadonlyArray<Point>): void {
+    const body = enemy.body as Phaser.Physics.Arcade.Body | null;
+    if (!body || !enemy.active) {
+      return;
+    }
+
+    const steered = steerVelocityAroundObstacles({
+      x: enemy.x,
+      y: enemy.y,
+      vx: body.velocity.x,
+      vy: body.velocity.y,
+      radius: this.getEntityCollisionRadius(enemy),
+      targetX: this.player.x,
+      targetY: this.player.y,
+      nowMs: this.time.now,
+      state: enemy.getObstacleSteeringState(),
+      committedDash: enemy.isCommittedDash(this.time.now),
+      contactNormals,
+    });
+    if (steered.vx !== body.velocity.x || steered.vy !== body.velocity.y) {
+      body.setVelocity(steered.vx, steered.vy);
+    }
   }
 
   private updateShockwaveAttacks(deltaMs: number): void {
@@ -3594,16 +3671,23 @@ export class RunScene extends Phaser.Scene {
         continue;
       }
 
-      const knocked = resolveWalkable(
+      const knocked = moveAlongWorldMap(
+        enemy.x,
+        enemy.y,
         Phaser.Math.Clamp(enemy.x + direction.x * pushDistance, 36, WORLD_WIDTH - 36),
         Phaser.Math.Clamp(enemy.y + direction.y * pushDistance, 36, WORLD_HEIGHT - 36),
-        Math.max(8, enemy.body.halfWidth),
+        this.getEntityCollisionRadius(enemy),
       );
       const nextX = knocked.x;
       const nextY = knocked.y;
       enemy.body.reset(nextX, nextY);
       enemy.setPosition(nextX, nextY);
-      enemy.body.setVelocity(direction.x * enemy.getMoveSpeed() * 1.4, direction.y * enemy.getMoveSpeed() * 1.4);
+      const driftVx = direction.x * enemy.getMoveSpeed() * 1.4;
+      const driftVy = direction.y * enemy.getMoveSpeed() * 1.4;
+      const safeDrift = knocked.contactNormals.length > 0
+        ? projectVelocityAgainstNormals(driftVx, driftVy, knocked.contactNormals)
+        : { x: driftVx, y: driftVy };
+      enemy.body.setVelocity(safeDrift.x, safeDrift.y);
     }
   }
 

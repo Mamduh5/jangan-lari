@@ -27,6 +27,7 @@ import {
 import { getEnemySpriteAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 
 import { getUprightEnemySpritePresentation } from '../data/enemySpritePresentation';
+import type { ObstacleSteeringState } from '../world/worldMap';
 
 export type EnemyBehaviorState =
   | 'chasing'
@@ -131,6 +132,7 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
   private spriteOverlayActive = false;
   private spriteFacesLeft = false;
   private spriteStatusLabel: Phaser.GameObjects.Text | null = null;
+  private obstacleSteering: ObstacleSteeringState = { detourSign: 0, detourUntilMs: 0 };
 
   constructor(scene: Phaser.Scene, x: number, y: number, archetype: EnemyArchetype) {
     super(scene, x, y, archetype.size, archetype.size, archetype.color);
@@ -264,6 +266,14 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
   getBehaviorState(): EnemyBehaviorState {
     return this.behaviorState;
+  }
+
+  isCommittedDash(currentTime: number): boolean {
+    return this.isLineStrikeMoving || this.behaviorState === 'dashing' || currentTime < this.dashUntil;
+  }
+
+  getObstacleSteeringState(): ObstacleSteeringState {
+    return this.obstacleSteering;
   }
 
   isPriorityThreat(): boolean {

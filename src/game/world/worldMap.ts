@@ -1,15 +1,20 @@
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/worldBalance';
 
 /**
- * R3F-D data-driven "weird world" map.
+ * R3F-D / R3F-E data-driven "weird world" map.
  *
  * The Phaser/physics world stays a rectangle (WORLD_WIDTH x WORLD_HEIGHT), but
  * the *playable* area is an irregular blob island defined by `WORLD_OUTLINE`.
- * Everything outside the outline is void; entities are kept inside it with
- * `resolveWalkable`. Large rocks are solid circles, everything else is decoration.
+ * Everything outside the outline is void, and large rocks (`SOLID_ROCKS`) are
+ * solid circles.
  *
- * This module is pure (no Phaser) so geometry, collision and spawn safety are
- * unit-testable.
+ * Runtime movement uses continuous swept-circle collision (`moveAlongWorldMap`)
+ * with local surface sliding so entities never tunnel through obstacles and
+ * never teleport toward the world center or across rocks. Spawn/debug helpers
+ * (`snapToWalkable`) remain strictly separate from runtime movement.
+ *
+ * This module is pure (no Phaser) so geometry, collision, steering and spawn
+ * safety are unit-testable.
  */
 
 export interface Point {
@@ -47,8 +52,12 @@ export const OUTLINE_SEMI_AXIS = { x: 2300, y: 1620 } as const;
 /** Extra distance (beyond an entity's radius) kept between entities and the outline. */
 export const OUTLINE_EDGE_INSET = 34;
 
-/** Collision radius of a rock sprite as a fraction of its display size. */
-export const ROCK_COLLISION_RADIUS_RATIO = 0.33;
+/**
+ * Collision radius of a rock sprite as a fraction of its display size.
+ * Sized to match `prop-wobbly-rock.png`'s opaque boulder silhouette (~0.36-0.44
+ * radial extent, ~0.39 average) while keeping cluster corridors >= 168px wide.
+ */
+export const ROCK_COLLISION_RADIUS_RATIO = 0.38;
 
 /** Radius of the open central combat clearing (visual and rock-free). */
 export const CENTRAL_CLEARING_RADIUS = 380;
@@ -179,7 +188,7 @@ export const SOLID_ROCKS: ReadonlyArray<SolidCircle> = ROCK_CLUSTERS.flatMap((cl
 );
 
 // ---------------------------------------------------------------------------
-// Geometry
+// Geometry & Local Depenetration (No World-Center Teleport)
 // ---------------------------------------------------------------------------
 
 interface OutlineProbe {
@@ -190,7 +199,7 @@ interface OutlineProbe {
 }
 
 // Largest circle around the center that is certainly inside the outline; lets
-// resolveWalkable skip the outline test for the vast majority of positions.
+// collision checks skip the outline test when strictly inside this disk.
 const INNER_SAFE_RADIUS = (() => {
   let min = Number.POSITIVE_INFINITY;
   for (const point of WORLD_OUTLINE) {
@@ -231,111 +240,25 @@ function probeOutline(x: number, y: number): OutlineProbe {
   return { inside, distance: Math.sqrt(best), nearestX, nearestY };
 }
 
+function getOutlineInwardNormal(x: number, y: number, probe: OutlineProbe): Point {
+  let nx: number;
+  let ny: number;
+  if (probe.distance < 1e-6) {
+    nx = WORLD_CENTER.x - x;
+    ny = WORLD_CENTER.y - y;
+  } else if (probe.inside) {
+    nx = x - probe.nearestX;
+    ny = y - probe.nearestY;
+  } else {
+    nx = probe.nearestX - x;
+    ny = probe.nearestY - y;
+  }
+  const length = Math.hypot(nx, ny) || 1;
+  return { x: nx / length, y: ny / length };
+}
+
 export function isInsideWorldOutline(x: number, y: number): boolean {
   return probeOutline(x, y).inside;
-}
-
-export interface WalkResolution {
-  x: number;
-  y: number;
-  /** True when the input position had to be moved. */
-  blocked: boolean;
-  /** Unit normal of the last surface that pushed the entity back (0,0 if not blocked). */
-  normalX: number;
-  normalY: number;
-}
-
-/**
- * Pushes a circle of `radius` at (x, y) out of the void and out of solid rocks.
- * Deterministic and cheap; used each frame for the player and enemies, and to
- * validate spawn points.
- */
-export function resolveWalkable(x: number, y: number, radius: number): WalkResolution {
-  let px = x;
-  let py = y;
-  let blocked = false;
-  let normalX = 0;
-  let normalY = 0;
-  let settled = false;
-  const outlineNeed = radius + OUTLINE_EDGE_INSET;
-
-  for (let pass = 0; pass < 8; pass += 1) {
-    let moved = false;
-
-    if (Math.hypot(px - WORLD_CENTER.x, py - WORLD_CENTER.y) > INNER_SAFE_RADIUS - outlineNeed) {
-      const probe = probeOutline(px, py);
-      const signed = probe.inside ? probe.distance : -probe.distance;
-      if (signed < outlineNeed) {
-        let nx: number;
-        let ny: number;
-        if (probe.distance < 1e-6) {
-          nx = WORLD_CENTER.x - px;
-          ny = WORLD_CENTER.y - py;
-        } else if (probe.inside) {
-          nx = px - probe.nearestX;
-          ny = py - probe.nearestY;
-        } else {
-          nx = probe.nearestX - px;
-          ny = probe.nearestY - py;
-        }
-        const length = Math.hypot(nx, ny) || 1;
-        nx /= length;
-        ny /= length;
-        px = probe.nearestX + nx * outlineNeed;
-        py = probe.nearestY + ny * outlineNeed;
-        normalX = nx;
-        normalY = ny;
-        blocked = true;
-        moved = true;
-      }
-    }
-
-    for (const rock of SOLID_ROCKS) {
-      const dx = px - rock.x;
-      const dy = py - rock.y;
-      const minDistance = rock.radius + radius;
-      const distSq = dx * dx + dy * dy;
-      if (distSq >= minDistance * minDistance) {
-        continue;
-      }
-
-      const distance = Math.sqrt(distSq);
-      const nx = distance < 1e-4 ? 1 : dx / distance;
-      const ny = distance < 1e-4 ? 0 : dy / distance;
-      px = rock.x + nx * minDistance;
-      py = rock.y + ny * minDistance;
-      normalX = nx;
-      normalY = ny;
-      blocked = true;
-      moved = true;
-    }
-
-    if (!moved) {
-      settled = true;
-      break;
-    }
-  }
-
-  if (blocked && !settled) {
-    // Cornered between several surfaces (e.g. deep in a bay): walk the point back
-    // along the ray to the open center until it is clear.
-    let low = 0;
-    let high = 1;
-    for (let iteration = 0; iteration < 14; iteration += 1) {
-      const mid = (low + high) / 2;
-      const tx = WORLD_CENTER.x + (px - WORLD_CENTER.x) * mid;
-      const ty = WORLD_CENTER.y + (py - WORLD_CENTER.y) * mid;
-      if (isClearAt(tx, ty, radius)) {
-        low = mid;
-      } else {
-        high = mid;
-      }
-    }
-    px = WORLD_CENTER.x + (px - WORLD_CENTER.x) * low;
-    py = WORLD_CENTER.y + (py - WORLD_CENTER.y) * low;
-  }
-
-  return { x: px, y: py, blocked, normalX, normalY };
 }
 
 function isClearAt(x: number, y: number, radius: number): boolean {
@@ -357,12 +280,723 @@ function isClearAt(x: number, y: number, radius: number): boolean {
   return true;
 }
 
+function intersectTwoCircles(
+  ax: number,
+  ay: number,
+  ar: number,
+  bx: number,
+  by: number,
+  br: number,
+): Point[] {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 1e-6 || dist > ar + br || dist < Math.abs(ar - br)) {
+    return [];
+  }
+  const a = (ar * ar - br * br + dist * dist) / (2 * dist);
+  const hSq = Math.max(0, ar * ar - a * a);
+  const h = Math.sqrt(hSq);
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const mx = ax + a * ux;
+  const my = ay + a * uy;
+  if (h < 1e-6) {
+    return [{ x: mx, y: my }];
+  }
+  return [
+    { x: mx + h * -uy, y: my + h * ux },
+    { x: mx - h * -uy, y: my - h * ux },
+  ];
+}
+
+export interface WalkResolution {
+  x: number;
+  y: number;
+  /** True when the input position had to be moved. */
+  blocked: boolean;
+  /** Unit normal of the last surface that pushed the entity back (0,0 if not blocked). */
+  normalX: number;
+  normalY: number;
+}
+
+/**
+ * Locally resolves overlaps against the outline and solid rocks without ever
+ * teleporting toward `WORLD_CENTER` or jumping to a distant obstacle.
+ * If alternating pushes hit a seam between two overlapping cluster rocks,
+ * exact two-circle intersection finds the closest exterior notch point.
+ */
+export function resolveWalkable(x: number, y: number, radius: number): WalkResolution {
+  let px = x;
+  let py = y;
+  let blocked = false;
+  let normalX = 0;
+  let normalY = 0;
+  let settled = false;
+  const outlineNeed = radius + OUTLINE_EDGE_INSET;
+
+  for (let pass = 0; pass < 12; pass += 1) {
+    let moved = false;
+
+    if (Math.hypot(px - WORLD_CENTER.x, py - WORLD_CENTER.y) > INNER_SAFE_RADIUS - outlineNeed) {
+      const probe = probeOutline(px, py);
+      const signed = probe.inside ? probe.distance : -probe.distance;
+      if (signed < outlineNeed) {
+        const normal = getOutlineInwardNormal(px, py, probe);
+        px = probe.nearestX + normal.x * (outlineNeed + 0.02);
+        py = probe.nearestY + normal.y * (outlineNeed + 0.02);
+        normalX = normal.x;
+        normalY = normal.y;
+        blocked = true;
+        moved = true;
+      }
+    }
+
+    for (const rock of SOLID_ROCKS) {
+      const dx = px - rock.x;
+      const dy = py - rock.y;
+      const minDistance = rock.radius + radius;
+      const distSq = dx * dx + dy * dy;
+      if (distSq >= minDistance * minDistance) {
+        continue;
+      }
+
+      const distance = Math.sqrt(distSq);
+      const nx = distance < 1e-4 ? 1 : dx / distance;
+      const ny = distance < 1e-4 ? 0 : dy / distance;
+      px = rock.x + nx * (minDistance + 0.02);
+      py = rock.y + ny * (minDistance + 0.02);
+      normalX = nx;
+      normalY = ny;
+      blocked = true;
+      moved = true;
+    }
+
+    if (!moved) {
+      settled = true;
+      break;
+    }
+  }
+
+  if (blocked && !settled) {
+    // Alternating push oscillated in a cluster seam between overlapping rocks:
+    // solve the exact exterior intersection of those overlapping circles locally.
+    const nearbyRocks = SOLID_ROCKS.filter(
+      (rock) => Math.hypot(px - rock.x, py - rock.y) <= rock.radius + radius + 12,
+    );
+    let bestPoint: Point | null = null;
+    let bestDistSq = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < nearbyRocks.length; i += 1) {
+      for (let j = i + 1; j < nearbyRocks.length; j += 1) {
+        const a = nearbyRocks[i];
+        const b = nearbyRocks[j];
+        const candidates = intersectTwoCircles(
+          a.x,
+          a.y,
+          a.radius + radius + 0.05,
+          b.x,
+          b.y,
+          b.radius + radius + 0.05,
+        );
+        for (const candidate of candidates) {
+          if (!isClearAt(candidate.x, candidate.y, radius)) {
+            continue;
+          }
+          const distSq = (candidate.x - x) * (candidate.x - x) + (candidate.y - y) * (candidate.y - y);
+          if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            bestPoint = candidate;
+          }
+        }
+      }
+    }
+
+    if (bestPoint) {
+      px = bestPoint.x;
+      py = bestPoint.y;
+      settled = true;
+    }
+  }
+
+  if (blocked && !settled) {
+    // Strictly local concentric search around the position (never WORLD_CENTER).
+    const maxSearchRadius = 320;
+    outer: for (let searchR = 8; searchR <= maxSearchRadius; searchR += 8) {
+      let bestPoint: Point | null = null;
+      let bestDistSq = Number.POSITIVE_INFINITY;
+      for (let step = 0; step < 24; step += 1) {
+        const angle = (step / 24) * Math.PI * 2;
+        const cx = x + Math.cos(angle) * searchR;
+        const cy = y + Math.sin(angle) * searchR;
+        if (!isClearAt(cx, cy, radius)) {
+          continue;
+        }
+        const distSq = (cx - px) * (cx - px) + (cy - py) * (cy - py);
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq;
+          bestPoint = { x: cx, y: cy };
+        }
+      }
+      if (bestPoint) {
+        px = bestPoint.x;
+        py = bestPoint.y;
+        break outer;
+      }
+    }
+  }
+
+  if (blocked && normalX === 0 && normalY === 0) {
+    const len = Math.hypot(px - x, py - y);
+    if (len > 1e-6) {
+      normalX = (px - x) / len;
+      normalY = (py - y) / len;
+    }
+  }
+
+  return { x: px, y: py, blocked, normalX, normalY };
+}
+
 export function isWalkable(x: number, y: number, radius: number): boolean {
-  return !resolveWalkable(x, y, radius).blocked;
+  return isClearAt(x, y, radius);
 }
 
 // ---------------------------------------------------------------------------
-// Reachability grid + spawn snapping
+// Continuous Swept-Circle Movement & Surface Sliding
+// ---------------------------------------------------------------------------
+
+const MAX_SWEEP_CHUNK_DISTANCE = 20;
+const MAX_SWEEP_CHUNKS = 40;
+const MAX_SLIDE_ITERATIONS = 4;
+const CONTACT_SKIN_EPSILON = 0.01;
+const OUTLINE_SWEEP_STEP = 8;
+
+export interface MoveAlongWorldOptions {
+  /** Allow tangential sliding when hitting an obstacle (default true). */
+  allowSlide?: boolean;
+}
+
+export interface MoveAlongWorldResult {
+  x: number;
+  y: number;
+  blocked: boolean;
+  /** Unit normal of the last surface hit during movement, or (0,0) if unblocked. */
+  normalX: number;
+  normalY: number;
+  /** Distinct inward surface normals encountered while moving. */
+  contactNormals: Point[];
+  /** True when remaining velocity was completely halted against surfaces. */
+  stopped: boolean;
+}
+
+interface SweepHit {
+  t: number;
+  nx: number;
+  ny: number;
+}
+
+function findOutlineHitAlongSegment(
+  px: number,
+  py: number,
+  vx: number,
+  vy: number,
+  outlineNeed: number,
+  segLen: number,
+): SweepHit | null {
+  const safeCheckRadius = INNER_SAFE_RADIUS - outlineNeed - 1;
+  if (
+    Math.hypot(px - WORLD_CENTER.x, py - WORLD_CENTER.y) < safeCheckRadius &&
+    Math.hypot(px + vx - WORLD_CENTER.x, py + vy - WORLD_CENTER.y) < safeCheckRadius
+  ) {
+    return null;
+  }
+
+  const probe0 = probeOutline(px, py);
+  const signed0 = probe0.inside ? probe0.distance : -probe0.distance;
+  if (signed0 <= outlineNeed + 0.02) {
+    const n0 = getOutlineInwardNormal(px, py, probe0);
+    if (vx * n0.x + vy * n0.y < -1e-6 * segLen) {
+      return { t: 0, nx: n0.x, ny: n0.y };
+    }
+  }
+
+  const steps = Math.max(1, Math.ceil(segLen / OUTLINE_SWEEP_STEP));
+  let prevT = 0;
+
+  for (let step = 1; step <= steps; step += 1) {
+    const t = step / steps;
+    const qx = px + vx * t;
+    const qy = py + vy * t;
+    const probe = probeOutline(qx, qy);
+    const signed = probe.inside ? probe.distance : -probe.distance;
+    if (signed < outlineNeed) {
+      let lo = prevT;
+      let hi = t;
+      for (let iter = 0; iter < 12; iter += 1) {
+        const mid = (lo + hi) * 0.5;
+        const mx = px + vx * mid;
+        const my = py + vy * mid;
+        const midProbe = probeOutline(mx, my);
+        const midSigned = midProbe.inside ? midProbe.distance : -midProbe.distance;
+        if (midSigned >= outlineNeed) {
+          lo = mid;
+        } else {
+          hi = mid;
+        }
+      }
+      const contactProbe = probeOutline(px + vx * hi, py + vy * hi);
+      const normal = getOutlineInwardNormal(px + vx * hi, py + vy * hi, contactProbe);
+      if (vx * normal.x + vy * normal.y < 0) {
+        return { t: lo, nx: normal.x, ny: normal.y };
+      }
+    }
+    prevT = t;
+  }
+
+  return null;
+}
+
+function findEarliestObstacleHit(px: number, py: number, vx: number, vy: number, radius: number): SweepHit | null {
+  const segLenSq = vx * vx + vy * vy;
+  if (segLenSq < 1e-12) {
+    return null;
+  }
+  const segLen = Math.sqrt(segLenSq);
+
+  let bestT = Number.POSITIVE_INFINITY;
+  let bestNx = 0;
+  let bestNy = 0;
+
+  for (const rock of SOLID_ROCKS) {
+    const minDistance = rock.radius + radius;
+    const dx = px - rock.x;
+    const dy = py - rock.y;
+    const distSq = dx * dx + dy * dy;
+    const dist = Math.sqrt(distSq);
+    const b = dx * vx + dy * vy;
+
+    // Only collide if moving inward into the rock (ignore strictly tangential/outward rounding noise).
+    if (b >= -1e-6 * dist * segLen) {
+      continue;
+    }
+
+    const c = distSq - minDistance * minDistance;
+    if (c <= 0) {
+      const nx = dist < 1e-4 ? -vx / segLen : dx / dist;
+      const ny = dist < 1e-4 ? -vy / segLen : dy / dist;
+      bestT = 0;
+      bestNx = nx;
+      bestNy = ny;
+      break;
+    }
+
+    const disc = b * b - segLenSq * c;
+    if (disc < 0) {
+      continue;
+    }
+
+    const t = c / (-b + Math.sqrt(disc));
+    if (t >= 0 && t <= 1 && t < bestT) {
+      const hx = px + t * vx;
+      const hy = py + t * vy;
+      const hLen = Math.hypot(hx - rock.x, hy - rock.y) || 1;
+      bestT = t;
+      bestNx = (hx - rock.x) / hLen;
+      bestNy = (hy - rock.y) / hLen;
+    }
+  }
+
+  const outlineHit = findOutlineHitAlongSegment(px, py, vx, vy, radius + OUTLINE_EDGE_INSET, segLen);
+  if (outlineHit && outlineHit.t < bestT) {
+    bestT = outlineHit.t;
+    bestNx = outlineHit.nx;
+    bestNy = outlineHit.ny;
+  }
+
+  if (bestT > 1) {
+    return null;
+  }
+
+  return { t: bestT, nx: bestNx, ny: bestNy };
+}
+
+function addUniqueNormal(normals: Point[], nx: number, ny: number): void {
+  for (const existing of normals) {
+    if (existing.x * nx + existing.y * ny > 0.9999) {
+      return;
+    }
+  }
+  normals.push({ x: nx, y: ny });
+}
+
+export function projectVelocityAgainstNormals(
+  vx: number,
+  vy: number,
+  normals: ReadonlyArray<Point>,
+): Point {
+  if (normals.length === 0) {
+    return { x: vx, y: vy };
+  }
+
+  if (normals.length === 1) {
+    const n = normals[0];
+    const dot = vx * n.x + vy * n.y;
+    if (dot >= 0) {
+      return { x: vx, y: vy };
+    }
+    return { x: vx - dot * n.x, y: vy - dot * n.y };
+  }
+
+  let bestX = 0;
+  let bestY = 0;
+  let bestProgress = 0;
+
+  for (const n of normals) {
+    const dot = vx * n.x + vy * n.y;
+    const candX = dot < 0 ? vx - dot * n.x : vx;
+    const candY = dot < 0 ? vy - dot * n.y : vy;
+
+    let valid = true;
+    for (const other of normals) {
+      if (candX * other.x + candY * other.y < -1e-5 * (Math.hypot(candX, candY) + 1)) {
+        valid = false;
+        break;
+      }
+    }
+    if (!valid) {
+      continue;
+    }
+
+    const progress = candX * vx + candY * vy;
+    if (progress > bestProgress) {
+      bestProgress = progress;
+      bestX = candX;
+      bestY = candY;
+    }
+  }
+
+  return { x: bestX, y: bestY };
+}
+
+function sweepSingleChunk(
+  startX: number,
+  startY: number,
+  dx: number,
+  dy: number,
+  radius: number,
+  allowSlide: boolean,
+): MoveAlongWorldResult {
+  let px = startX;
+  let py = startY;
+  let remX = dx;
+  let remY = dy;
+  const origLen = Math.hypot(dx, dy);
+  let blocked = false;
+  let stopped = false;
+  let lastNx = 0;
+  let lastNy = 0;
+  const activeNormals: Point[] = [];
+
+  for (let iter = 0; iter < MAX_SLIDE_ITERATIONS; iter += 1) {
+    const remLen = Math.hypot(remX, remY);
+    if (remLen < 1e-6) {
+      break;
+    }
+
+    const hit = findEarliestObstacleHit(px, py, remX, remY, radius);
+    if (!hit) {
+      px += remX;
+      py += remY;
+      remX = 0;
+      remY = 0;
+      break;
+    }
+
+    blocked = true;
+    lastNx = hit.nx;
+    lastNy = hit.ny;
+    addUniqueNormal(activeNormals, hit.nx, hit.ny);
+
+    const advanceDist = Math.max(0, hit.t * remLen - CONTACT_SKIN_EPSILON);
+    const advanceT = advanceDist / remLen;
+    if (advanceDist > 0.005) {
+      px += remX * advanceT;
+      py += remY * advanceT;
+      const leftover = Math.max(0, 1 - advanceT);
+      remX *= leftover;
+      remY *= leftover;
+    }
+
+    if (!allowSlide) {
+      remX = 0;
+      remY = 0;
+      stopped = true;
+      break;
+    }
+
+    const curRemLen = Math.hypot(remX, remY);
+    const budgetScale = origLen > 1e-6 ? curRemLen / origLen : 0;
+    const baseVx = dx * budgetScale;
+    const baseVy = dy * budgetScale;
+    const projected = projectVelocityAgainstNormals(baseVx, baseVy, activeNormals);
+    remX = projected.x;
+    remY = projected.y;
+
+    if (Math.hypot(remX, remY) < 1e-5) {
+      remX = 0;
+      remY = 0;
+      stopped = true;
+      break;
+    }
+  }
+
+  return {
+    x: px,
+    y: py,
+    blocked,
+    normalX: lastNx,
+    normalY: lastNy,
+    contactNormals: activeNormals,
+    stopped,
+  };
+}
+
+/**
+ * Continuous collision-aware movement from `(startX, startY)` toward
+ * `(targetX, targetY)` for a circle of `radius`.
+ *
+ * Guarantees:
+ * - Never tunnels through rocks or across the irregular island outline, regardless
+ *   of step magnitude.
+ * - Never teleports toward `WORLD_CENTER` or across an obstacle.
+ * - Displacement never exceeds `hypot(targetX - startX, targetY - startY)` when
+ *   starting from a walkable point.
+ */
+export function moveAlongWorldMap(
+  startX: number,
+  startY: number,
+  targetX: number,
+  targetY: number,
+  radius: number,
+  options?: MoveAlongWorldOptions,
+): MoveAlongWorldResult {
+  const allowSlide = options?.allowSlide ?? true;
+  let curX = startX;
+  let curY = startY;
+  let preBlocked = false;
+  let preNx = 0;
+  let preNy = 0;
+
+  if (!isClearAt(curX, curY, radius)) {
+    const local = resolveWalkable(curX, curY, radius);
+    curX = local.x;
+    curY = local.y;
+    preBlocked = local.blocked;
+    preNx = local.normalX;
+    preNy = local.normalY;
+  }
+
+  const totalDx = targetX - startX;
+  const totalDy = targetY - startY;
+  const totalDist = Math.hypot(totalDx, totalDy);
+  if (totalDist < 1e-6) {
+    return {
+      x: curX,
+      y: curY,
+      blocked: preBlocked,
+      normalX: preNx,
+      normalY: preNy,
+      contactNormals: preBlocked && (preNx !== 0 || preNy !== 0) ? [{ x: preNx, y: preNy }] : [],
+      stopped: preBlocked,
+    };
+  }
+
+  // Sweeping the chunk vector from the current position ensures curved boulder
+  // sliding without losing analytic zero-tunneling even on arbitrarily large moves.
+  const chunks = Math.min(MAX_SWEEP_CHUNKS, Math.max(1, Math.ceil(totalDist / MAX_SWEEP_CHUNK_DISTANCE)));
+  const stepDx = totalDx / chunks;
+  const stepDy = totalDy / chunks;
+
+  let anyBlocked = preBlocked;
+  let lastNx = preNx;
+  let lastNy = preNy;
+  let lastStopped = false;
+  const allNormals: Point[] = [];
+  if (preBlocked && (preNx !== 0 || preNy !== 0)) {
+    addUniqueNormal(allNormals, preNx, preNy);
+  }
+
+  for (let chunk = 0; chunk < chunks; chunk += 1) {
+    const prevX = curX;
+    const prevY = curY;
+    const res = sweepSingleChunk(curX, curY, stepDx, stepDy, radius, allowSlide);
+    curX = res.x;
+    curY = res.y;
+    if (res.blocked) {
+      anyBlocked = true;
+      lastNx = res.normalX;
+      lastNy = res.normalY;
+      for (const n of res.contactNormals) {
+        addUniqueNormal(allNormals, n.x, n.y);
+      }
+    }
+    lastStopped = res.stopped;
+    if (res.stopped && Math.hypot(curX - prevX, curY - prevY) < 1e-6 && chunk > 0) {
+      break;
+    }
+  }
+
+  return {
+    x: curX,
+    y: curY,
+    blocked: anyBlocked,
+    normalX: lastNx,
+    normalY: lastNy,
+    contactNormals: allNormals,
+    stopped: lastStopped,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Enemy Obstacle Steering (Consistent Winding, Zero Oscillation)
+// ---------------------------------------------------------------------------
+
+export interface ObstacleSteeringState {
+  /** +1 = CCW winding around obstacle, -1 = CW winding, 0 = none. */
+  detourSign: -1 | 0 | 1;
+  /** Timestamp (ms) until which the committed winding stays active. */
+  detourUntilMs: number;
+}
+
+export interface SteerVelocityInput {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  targetX: number;
+  targetY: number;
+  nowMs: number;
+  state: ObstacleSteeringState;
+  committedDash?: boolean;
+  contactNormals?: ReadonlyArray<Point>;
+}
+
+export interface SteerVelocityResult {
+  vx: number;
+  vy: number;
+}
+
+const DETOUR_MEMORY_MS = 480;
+
+export function steerVelocityAroundObstacles(input: SteerVelocityInput): SteerVelocityResult {
+  const { x, y, vx, vy, radius, targetX, targetY, nowMs, state, committedDash, contactNormals } = input;
+  const speed = Math.hypot(vx, vy);
+  if (speed < 1e-3) {
+    return { vx, vy };
+  }
+
+  if (committedDash) {
+    // Committed charges/line-strikes preserve their telegraphed axis: slide along
+    // contact surfaces without redirecting perpendicular around rocks.
+    const normals: Point[] = [];
+    if (contactNormals) {
+      for (const n of contactNormals) {
+        if (vx * n.x + vy * n.y < 0) {
+          addUniqueNormal(normals, n.x, n.y);
+        }
+      }
+    }
+    if (normals.length === 0) {
+      return { vx, vy };
+    }
+    const projected = projectVelocityAgainstNormals(vx, vy, normals);
+    return { vx: projected.x, vy: projected.y };
+  }
+
+  const dirX = vx / speed;
+  const dirY = vy / speed;
+  const probeDist = Math.max(18, Math.min(48, speed * 0.15));
+  const probe = moveAlongWorldMap(x, y, x + dirX * probeDist, y + dirY * probeDist, radius, { allowSlide: false });
+
+  const blockingNormals: Point[] = [];
+  if (contactNormals) {
+    for (const n of contactNormals) {
+      if (dirX * n.x + dirY * n.y < -1e-3) {
+        addUniqueNormal(blockingNormals, n.x, n.y);
+      }
+    }
+  }
+  if (probe.blocked && (probe.normalX !== 0 || probe.normalY !== 0)) {
+    addUniqueNormal(blockingNormals, probe.normalX, probe.normalY);
+  }
+
+  if (blockingNormals.length === 0) {
+    if (nowMs >= state.detourUntilMs) {
+      state.detourSign = 0;
+    }
+    return { vx, vy };
+  }
+
+  // Pick a consistent CW (-1) or CCW (+1) tangent winding so multi-rock clusters
+  // never cause left/right oscillation in notches.
+  let sign: -1 | 1;
+  if (state.detourSign !== 0 && nowMs < state.detourUntilMs) {
+    sign = state.detourSign;
+  } else {
+    const primary = blockingNormals[0];
+    const ccw = { x: -primary.y, y: primary.x };
+    const cw = { x: primary.y, y: -primary.x };
+    const toTargetDx = targetX - x;
+    const toTargetDy = targetY - y;
+    const toTargetLen = Math.hypot(toTargetDx, toTargetDy) || 1;
+    const toTx = toTargetDx / toTargetLen;
+    const toTy = toTargetDy / toTargetLen;
+
+    const ccwProbe = moveAlongWorldMap(x, y, x + ccw.x * 56, y + ccw.y * 56, radius, { allowSlide: false });
+    const cwProbe = moveAlongWorldMap(x, y, x + cw.x * 56, y + cw.y * 56, radius, { allowSlide: false });
+
+    const ccwScore =
+      (ccw.x * dirX + ccw.y * dirY) +
+      0.5 * (ccw.x * toTx + ccw.y * toTy) +
+      (ccwProbe.blocked ? -1.2 : 0.6);
+    const cwScore =
+      (cw.x * dirX + cw.y * dirY) +
+      0.5 * (cw.x * toTx + cw.y * toTy) +
+      (cwProbe.blocked ? -1.2 : 0.6);
+
+    sign = ccwScore >= cwScore ? 1 : -1;
+    state.detourSign = sign;
+  }
+  state.detourUntilMs = nowMs + DETOUR_MEMORY_MS;
+
+  // Evaluate the winding tangent on the blocking normal (and if in a notch where
+  // that tangent points into a second blocking normal, follow the second normal's
+  // same-handed tangent around the exterior of the cluster).
+  let tangentX = sign === 1 ? -blockingNormals[0].y : blockingNormals[0].y;
+  let tangentY = sign === 1 ? blockingNormals[0].x : -blockingNormals[0].x;
+
+  if (blockingNormals.length > 1) {
+    for (const candidateNormal of blockingNormals) {
+      const tx = sign === 1 ? -candidateNormal.y : candidateNormal.y;
+      const ty = sign === 1 ? candidateNormal.x : -candidateNormal.x;
+      const clearsAll = blockingNormals.every((other) => tx * other.x + ty * other.y >= -1e-3);
+      if (clearsAll) {
+        tangentX = tx;
+        tangentY = ty;
+        break;
+      }
+    }
+  }
+
+  return {
+    vx: tangentX * speed,
+    vy: tangentY * speed,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Reachability grid + spawn snapping (Spawn/Debug only, NEVER normal movement)
 // ---------------------------------------------------------------------------
 
 export const WALK_GRID_CELL = 48;
@@ -455,8 +1089,8 @@ export function isReachableSpawn(x: number, y: number): boolean {
 
 /**
  * Returns the closest valid, reachable position to (x, y) for a circle of
- * `radius`. Used by every spawn path so nothing appears in rocks, in the void,
- * or in a pocket the player cannot reach.
+ * `radius`. Used only by spawn and explicit debug placement paths — never for
+ * normal runtime movement.
  */
 export function snapToWalkable(x: number, y: number, radius: number): Point {
   const gridRadius = radius > WALK_RADIUS_STANDARD ? WALK_RADIUS_LARGE : WALK_RADIUS_STANDARD;
