@@ -2,8 +2,8 @@
 export const GAME_WIDTH = 1600;
 export const GAME_HEIGHT = 720;
 
-export const WORLD_WIDTH = 3200;
-export const WORLD_HEIGHT = 2200;
+export const WORLD_WIDTH = 5200;
+export const WORLD_HEIGHT = 3700;
 export const CAMERA_OVERSCROLL_PADDING_X = GAME_WIDTH / 2;
 export const CAMERA_OVERSCROLL_PADDING_Y = GAME_HEIGHT / 2;
 

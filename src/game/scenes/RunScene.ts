@@ -90,8 +90,13 @@ import {
   type BossStateDefinition,
 } from '../config/bossBalance';
 import { BUFF_SHRINE_EVENT, MAP_EVENT_ENCOUNTER_BUFFER_MS, REWARD_TARGET_ENEMY_BALANCE } from '../config/mapEventBalance';
-import { ARENA_ENVIRONMENT_DEPTH, buildArenaEnvironmentLayout } from '../config/arenaEnvironmentLayout';
-import { renderArenaEnvironment } from '../utils/arenaEnvironmentRenderer';
+import { renderWorldMap } from '../world/worldMapRenderer';
+import {
+  isReachableSpawn,
+  resolveWalkable,
+  snapToWalkable,
+  WALK_RADIUS_LARGE,
+} from '../world/worldMap';
 import { resolveEnemyProjectileVisualDiameter } from '../config/projectileVisualBalance';
 import {
   WAVE_FORMATION_COOLDOWN_MS,
@@ -549,10 +554,10 @@ export class RunScene extends Phaser.Scene {
 
     const selectedHero = HEROES[this.saveData.selectedHero];
 
-    this.cameras.main.setBackgroundColor('#111827');
+    this.cameras.main.setBackgroundColor('#2a2838');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    this.drawArena();
+    renderWorldMap(this);
 
     this.player = new Player(this, WORLD_WIDTH / 2, WORLD_HEIGHT / 2, selectedHero);
     this.player.applyTankClassVisualIdentity(this.currentTankClass.visual);
@@ -720,6 +725,7 @@ export class RunScene extends Phaser.Scene {
     this.dismissControlHintIfNeeded(movementInput);
     this.player.setFacingDirection(new Phaser.Math.Vector2(movementInput.facing.x, movementInput.facing.y));
     this.player.move(new Phaser.Math.Vector2(movementInput.movement.x, movementInput.movement.y), false);
+    this.keepOnWorldMap(this.player, false);
     this.updateNeutralShapes();
     this.updateEnemies();
     this.syncBossPhaseState();
@@ -1358,8 +1364,13 @@ export class RunScene extends Phaser.Scene {
 
     const halfWidth = this.player.body.halfWidth ?? this.player.body.width / 2;
     const halfHeight = this.player.body.halfHeight ?? this.player.body.height / 2;
-    const nextX = Phaser.Math.Clamp(x, halfWidth, WORLD_WIDTH - halfWidth);
-    const nextY = Phaser.Math.Clamp(y, halfHeight, WORLD_HEIGHT - halfHeight);
+    const snapped = snapToWalkable(
+      Phaser.Math.Clamp(x, halfWidth, WORLD_WIDTH - halfWidth),
+      Phaser.Math.Clamp(y, halfHeight, WORLD_HEIGHT - halfHeight),
+      Math.max(halfWidth, halfHeight),
+    );
+    const nextX = snapped.x;
+    const nextY = snapped.y;
     this.player.body.reset(nextX, nextY);
     this.player.setPosition(nextX, nextY);
     this.player.updateVisualState(this.time.now);
@@ -1463,9 +1474,12 @@ export class RunScene extends Phaser.Scene {
     }
 
     const archetype = ENEMY_ARCHETYPES[archetypeId] ?? ENEMY_ARCHETYPES.scuttler;
-    const x = Phaser.Math.Clamp(this.player.x + offsetX, 48, WORLD_WIDTH - 48);
-    const y = Phaser.Math.Clamp(this.player.y + offsetY, 48, WORLD_HEIGHT - 48);
-    this.spawnEnemyFromArchetype(archetype, new Phaser.Math.Vector2(x, y));
+    const nearPoint = snapToWalkable(
+      Phaser.Math.Clamp(this.player.x + offsetX, 48, WORLD_WIDTH - 48),
+      Phaser.Math.Clamp(this.player.y + offsetY, 48, WORLD_HEIGHT - 48),
+      this.getArchetypeSpawnRadius(archetype),
+    );
+    this.spawnEnemyFromArchetype(archetype, new Phaser.Math.Vector2(nearPoint.x, nearPoint.y));
     this.publishHudState();
     return true;
   }
@@ -1810,71 +1824,6 @@ export class RunScene extends Phaser.Scene {
     if (hero.fireCooldownReductionMs !== 0) {
       this.applyWeaponCooldownReduction(hero.fireCooldownReductionMs);
     }
-  }
-
-  private drawArena(): void {
-    const graphics = this.add.graphics();
-    graphics.setDepth(ARENA_ENVIRONMENT_DEPTH.floor);
-
-    graphics.fillStyle(0x0b1020, 1);
-    graphics.fillRect(
-      -CAMERA_OVERSCROLL_PADDING_X,
-      -CAMERA_OVERSCROLL_PADDING_Y,
-      WORLD_WIDTH + CAMERA_OVERSCROLL_PADDING_X * 2,
-      WORLD_HEIGHT + CAMERA_OVERSCROLL_PADDING_Y * 2,
-    );
-
-    graphics.fillStyle(0x111827, 1);
-    graphics.fillRect(
-      -CAMERA_OVERSCROLL_PADDING_X,
-      -CAMERA_OVERSCROLL_PADDING_Y,
-      WORLD_WIDTH + CAMERA_OVERSCROLL_PADDING_X * 2,
-      CAMERA_OVERSCROLL_PADDING_Y,
-    );
-    graphics.fillRect(
-      -CAMERA_OVERSCROLL_PADDING_X,
-      WORLD_HEIGHT,
-      WORLD_WIDTH + CAMERA_OVERSCROLL_PADDING_X * 2,
-      CAMERA_OVERSCROLL_PADDING_Y,
-    );
-    graphics.fillRect(-CAMERA_OVERSCROLL_PADDING_X, 0, CAMERA_OVERSCROLL_PADDING_X, WORLD_HEIGHT);
-    graphics.fillRect(WORLD_WIDTH, 0, CAMERA_OVERSCROLL_PADDING_X, WORLD_HEIGHT);
-
-    graphics.fillStyle(0x152238, 1);
-    graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-
-    graphics.fillStyle(0x0f172a, 0.65);
-    for (let x = 0; x < WORLD_WIDTH; x += 160) {
-      for (let y = 0; y < WORLD_HEIGHT; y += 160) {
-        if ((x + y) % 320 === 0) {
-          graphics.fillRect(x, y, 160, 160);
-        }
-      }
-    }
-
-    graphics.lineStyle(2, 0x243247, 0.7);
-    for (let x = 0; x <= WORLD_WIDTH; x += 80) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-
-    for (let y = 0; y <= WORLD_HEIGHT; y += 80) {
-      graphics.lineBetween(0, y, WORLD_WIDTH, y);
-    }
-
-    graphics.lineStyle(6, 0x475569, 1);
-    graphics.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-
-    const arenaCenter = this.add.circle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 90, 0x1d4ed8, 0.16);
-    arenaCenter.setStrokeStyle(4, 0x93c5fd, 0.5);
-    arenaCenter.setDepth(ARENA_ENVIRONMENT_DEPTH.centerMarker);
-
-    this.drawArenaEnvironment();
-  }
-
-  // Decorative only: static images with no physics bodies, all at negative depth
-  // beneath gameplay. Each asset falls back silently (skipped) when unapproved or missing.
-  private drawArenaEnvironment(): void {
-    renderArenaEnvironment(this, buildArenaEnvironmentLayout(WORLD_WIDTH, WORLD_HEIGHT));
   }
 
   private syncStagePhase(): void {
@@ -2393,7 +2342,8 @@ export class RunScene extends Phaser.Scene {
       nextY = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * safeRadius, 48, WORLD_HEIGHT - 48);
     }
 
-    return new Phaser.Math.Vector2(nextX, nextY);
+    const walkable = snapToWalkable(nextX, nextY, 40);
+    return new Phaser.Math.Vector2(walkable.x, walkable.y);
   }
 
   private getFormationRoleBundle(type: FormationType, fallback: EnemyArchetype[]): EnemyArchetype[] {
@@ -2425,7 +2375,12 @@ export class RunScene extends Phaser.Scene {
     }
   }
 
-  private spawnEnemyFromArchetype(archetype: EnemyArchetype, spawnPoint: Phaser.Math.Vector2): Enemy {
+  private spawnEnemyFromArchetype(archetype: EnemyArchetype, requestedPoint: Phaser.Math.Vector2): Enemy {
+    // Catch-all for every spawn path (waves, formations, summons, shrine pressure,
+    // miniboss, boss): never place an enemy in the void, inside a rock, or in a
+    // pocket the player cannot reach.
+    const safePoint = snapToWalkable(requestedPoint.x, requestedPoint.y, this.getArchetypeSpawnRadius(archetype));
+    const spawnPoint = new Phaser.Math.Vector2(safePoint.x, safePoint.y);
     const scaledArchetype = applyEnemyScaling(archetype, this.runElapsedMs);
     const enemy = new Enemy(this, spawnPoint.x, spawnPoint.y, scaledArchetype);
     this.enemies.add(enemy);
@@ -2434,6 +2389,10 @@ export class RunScene extends Phaser.Scene {
       enemy.setBossPhase(this.bossPhase);
     }
     return enemy;
+  }
+
+  private getArchetypeSpawnRadius(archetype: EnemyArchetype): number {
+    return Math.max(16, archetype.size - 6) / 2 > 40 ? WALK_RADIUS_LARGE : 40;
   }
 
   private updateBossSummons(): void {
@@ -2570,13 +2529,16 @@ export class RunScene extends Phaser.Scene {
       const x = Phaser.Math.Between(NEUTRAL_SHAPE_SPAWN_PADDING, WORLD_WIDTH - NEUTRAL_SHAPE_SPAWN_PADDING);
       const y = Phaser.Math.Between(NEUTRAL_SHAPE_SPAWN_PADDING, WORLD_HEIGHT - NEUTRAL_SHAPE_SPAWN_PADDING);
 
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) >= NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS) {
+      if (
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) >= NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS &&
+        isReachableSpawn(x, y)
+      ) {
         return new Phaser.Math.Vector2(x, y);
       }
     }
 
     const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    return new Phaser.Math.Vector2(
+    const fallback = snapToWalkable(
       Phaser.Math.Clamp(
         this.player.x + Math.cos(angle) * NEUTRAL_SHAPE_PLAYER_SAFE_RADIUS,
         NEUTRAL_SHAPE_SPAWN_PADDING,
@@ -2587,7 +2549,9 @@ export class RunScene extends Phaser.Scene {
         NEUTRAL_SHAPE_SPAWN_PADDING,
         WORLD_HEIGHT - NEUTRAL_SHAPE_SPAWN_PADDING,
       ),
+      40,
     );
+    return new Phaser.Math.Vector2(fallback.x, fallback.y);
   }
 
   private presentEncounterSpawn(archetype: EnemyArchetype, spawnPoint: Phaser.Math.Vector2): void {
@@ -2884,16 +2848,21 @@ export class RunScene extends Phaser.Scene {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       const x = Phaser.Math.Between(edge, WORLD_WIDTH - edge);
       const y = Phaser.Math.Between(edge, WORLD_HEIGHT - edge);
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) >= BUFF_SHRINE_EVENT.safeDistanceFromPlayer) {
+      if (
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) >= BUFF_SHRINE_EVENT.safeDistanceFromPlayer &&
+        isReachableSpawn(x, y)
+      ) {
         return new Phaser.Math.Vector2(x, y);
       }
     }
 
     const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-    return new Phaser.Math.Vector2(
+    const fallback = snapToWalkable(
       Phaser.Math.Clamp(this.player.x + Math.cos(angle) * BUFF_SHRINE_EVENT.safeDistanceFromPlayer, edge, WORLD_WIDTH - edge),
       Phaser.Math.Clamp(this.player.y + Math.sin(angle) * BUFF_SHRINE_EVENT.safeDistanceFromPlayer, edge, WORLD_HEIGHT - edge),
+      WALK_RADIUS_LARGE,
     );
+    return new Phaser.Math.Vector2(fallback.x, fallback.y);
   }
 
   private createPowerCoreMapEventIcon(x: number, y: number): Phaser.GameObjects.Image | undefined {
@@ -3123,21 +3092,30 @@ export class RunScene extends Phaser.Scene {
       createCandidate: () => {
         const side = Phaser.Math.Between(0, 3);
         const offset = Phaser.Math.Between(-260, 260);
+        let candidate: { x: number; y: number };
 
         switch (side) {
           case 0:
-            return { x: this.player.x + offset, y: this.player.y - distance };
+            candidate = { x: this.player.x + offset, y: this.player.y - distance };
+            break;
           case 1:
-            return { x: this.player.x + distance, y: this.player.y + offset };
+            candidate = { x: this.player.x + distance, y: this.player.y + offset };
+            break;
           case 2:
-            return { x: this.player.x + offset, y: this.player.y + distance };
+            candidate = { x: this.player.x + offset, y: this.player.y + distance };
+            break;
           default:
-            return { x: this.player.x - distance, y: this.player.y + offset };
+            candidate = { x: this.player.x - distance, y: this.player.y + offset };
+            break;
         }
+
+        // The island is irregular: slide candidates off the void/rocks onto reachable ground.
+        return snapToWalkable(candidate.x, candidate.y, 40);
       },
     });
 
-    return new Phaser.Math.Vector2(spawnPoint.x, spawnPoint.y);
+    const walkable = snapToWalkable(spawnPoint.x, spawnPoint.y, 40);
+    return new Phaser.Math.Vector2(walkable.x, walkable.y);
   }
 
   private getActiveEnemyCount(): number {
@@ -3172,8 +3150,67 @@ export class RunScene extends Phaser.Scene {
       if (attackSignal) {
         this.handleEnemyAttackSignal(enemy, attackSignal);
       }
+      this.keepOnWorldMap(enemy, true);
       enemy.updatePresentation(this.time.now);
     }
+  }
+
+  /**
+   * Keeps an entity on the irregular world map: pushes it out of the void and
+   * out of solid rocks, then removes the velocity component that would drive it
+   * back into them next frame so it slides along edges instead of sticking.
+   * Enemies additionally keep their speed and pick the side that faces the player.
+   */
+  private keepOnWorldMap(entity: Phaser.GameObjects.Rectangle, steerAroundObstacles: boolean): void {
+    const body = entity.body as Phaser.Physics.Arcade.Body | null;
+    if (!body || !entity.active) {
+      return;
+    }
+
+    const radius = Math.max(8, body.halfWidth);
+    const current = resolveWalkable(entity.x, entity.y, radius);
+    if (current.blocked) {
+      entity.setPosition(current.x, current.y);
+    }
+
+    const vx = body.velocity.x;
+    const vy = body.velocity.y;
+    if (vx === 0 && vy === 0) {
+      return;
+    }
+
+    const ahead = resolveWalkable(current.x + vx * 0.06, current.y + vy * 0.06, radius);
+    if (!ahead.blocked) {
+      return;
+    }
+
+    const intoSurface = vx * ahead.normalX + vy * ahead.normalY;
+    if (intoSurface >= 0) {
+      return;
+    }
+
+    let slideX = vx - intoSurface * ahead.normalX;
+    let slideY = vy - intoSurface * ahead.normalY;
+
+    if (steerAroundObstacles) {
+      const speed = Math.hypot(vx, vy);
+      let slideSpeed = Math.hypot(slideX, slideY);
+      if (slideSpeed < speed * 0.35) {
+        // Head-on against a rock/edge: go around on the side that faces the player.
+        const tangentX = -ahead.normalY;
+        const tangentY = ahead.normalX;
+        const towardPlayer = (this.player.x - entity.x) * tangentX + (this.player.y - entity.y) * tangentY;
+        const sign = towardPlayer >= 0 ? 1 : -1;
+        slideX = tangentX * sign;
+        slideY = tangentY * sign;
+        slideSpeed = 1;
+      }
+      const scale = speed / slideSpeed;
+      slideX *= scale;
+      slideY *= scale;
+    }
+
+    body.setVelocity(slideX, slideY);
   }
 
   private updateShockwaveAttacks(deltaMs: number): void {
@@ -3402,10 +3439,12 @@ export class RunScene extends Phaser.Scene {
       : Phaser.Math.FloatBetween(0, Math.PI * 2);
     const distance = Phaser.Math.Between(90, 190);
 
-    return new Phaser.Math.Vector2(
+    const zoneCenter = snapToWalkable(
       Phaser.Math.Clamp(this.player.x + Math.cos(angle) * distance, 74, WORLD_WIDTH - 74),
       Phaser.Math.Clamp(this.player.y + Math.sin(angle) * distance, 74, WORLD_HEIGHT - 74),
+      40,
     );
+    return new Phaser.Math.Vector2(zoneCenter.x, zoneCenter.y);
   }
 
   private createDangerZone(x: number, y: number): DangerZone {
@@ -3555,8 +3594,13 @@ export class RunScene extends Phaser.Scene {
         continue;
       }
 
-      const nextX = Phaser.Math.Clamp(enemy.x + direction.x * pushDistance, 36, WORLD_WIDTH - 36);
-      const nextY = Phaser.Math.Clamp(enemy.y + direction.y * pushDistance, 36, WORLD_HEIGHT - 36);
+      const knocked = resolveWalkable(
+        Phaser.Math.Clamp(enemy.x + direction.x * pushDistance, 36, WORLD_WIDTH - 36),
+        Phaser.Math.Clamp(enemy.y + direction.y * pushDistance, 36, WORLD_HEIGHT - 36),
+        Math.max(8, enemy.body.halfWidth),
+      );
+      const nextX = knocked.x;
+      const nextY = knocked.y;
       enemy.body.reset(nextX, nextY);
       enemy.setPosition(nextX, nextY);
       enemy.body.setVelocity(direction.x * enemy.getMoveSpeed() * 1.4, direction.y * enemy.getMoveSpeed() * 1.4);
