@@ -41,6 +41,17 @@ import {
   VELOCITY_PROJECTILE_SPEED_BONUS,
   VITALITY_REGEN_PER_SECOND,
 } from '../config/playerBalance';
+import {
+  DOODLE_COLORS,
+  DOODLE_FONTS,
+  DOODLE_HEX,
+  drawDoodleCard,
+  drawDoodleCircle,
+  drawDoodleClockGlyph,
+  drawDoodleShieldGlyph,
+  drawDoodleStrokeRect,
+  formatCoreShieldLabel,
+} from '../ui/doodleTheme';
 import { RunScene } from './RunScene';
 
 type ControlJoystickChannel = {
@@ -56,30 +67,51 @@ type ControlJoystickState = {
 };
 
 export class UIScene extends Phaser.Scene {
+  private topLeftHudCard!: Phaser.GameObjects.Graphics;
+  private hpBarBorder!: Phaser.GameObjects.Graphics;
+  private xpBarBorder!: Phaser.GameObjects.Graphics;
+  private hpFallbackText: Phaser.GameObjects.Text | null = null;
+  private xpFallbackText: Phaser.GameObjects.Text | null = null;
+  private statusPillGraphics!: Phaser.GameObjects.Graphics;
+  private statusPillStateKey = '';
   private heroText!: Phaser.GameObjects.Text;
   private hpValueText!: Phaser.GameObjects.Text;
   private hpBarFill!: Phaser.GameObjects.Rectangle;
   private levelValueText!: Phaser.GameObjects.Text;
   private classStatusText!: Phaser.GameObjects.Text;
   private statSummaryText!: Phaser.GameObjects.Text;
+  private timerPillGraphics!: Phaser.GameObjects.Graphics;
+  private timerPillKind: '' | 'normal' | 'boss' = '';
   private timerText!: Phaser.GameObjects.Text;
   private timerSubtitleText!: Phaser.GameObjects.Text;
+  private coreShieldGraphics!: Phaser.GameObjects.Graphics;
+  private coreShieldText!: Phaser.GameObjects.Text;
+  private topRightHudCard!: Phaser.GameObjects.Graphics;
   private scoreText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
   private goldIconImage: Phaser.GameObjects.Image | null = null;
   private hpIconImage: Phaser.GameObjects.Image | null = null;
   private xpIconImage: Phaser.GameObjects.Image | null = null;
   private killsText!: Phaser.GameObjects.Text;
+  private alertPillGraphics!: Phaser.GameObjects.Graphics;
+  private alertPillStateKey = '';
   private alertText!: Phaser.GameObjects.Text;
+  private rewardPillGraphics!: Phaser.GameObjects.Graphics;
+  private rewardPillStateKey = '';
   private rewardText!: Phaser.GameObjects.Text;
   private instructionText!: Phaser.GameObjects.Text;
+  private returnHintGraphics!: Phaser.GameObjects.Graphics;
   private returnHintText!: Phaser.GameObjects.Text;
   private orientationHintContainer!: Phaser.GameObjects.Container;
   private orientationHintText!: Phaser.GameObjects.Text;
+  private eventPillGraphics!: Phaser.GameObjects.Graphics;
   private eventPanel!: Phaser.GameObjects.Rectangle;
   private eventTitleText!: Phaser.GameObjects.Text;
   private eventBodyText!: Phaser.GameObjects.Text;
   private eventTimerText!: Phaser.GameObjects.Text;
+  private weaponGearTagGraphics!: Phaser.GameObjects.Graphics;
+  private weaponGearTagText!: Phaser.GameObjects.Text;
+  private weaponSlotBackings: Phaser.GameObjects.Graphics[] = [];
   private weaponIconFrames: Phaser.GameObjects.Rectangle[] = [];
   private weaponIconTexts: Phaser.GameObjects.Text[] = [];
   private weaponIconImages: Array<Phaser.GameObjects.Image | null> = [];
@@ -125,6 +157,9 @@ export class UIScene extends Phaser.Scene {
   private controlGuideSubLabels: Phaser.GameObjects.Text[] = [];
   private controlHintContainer!: Phaser.GameObjects.Container;
   private controlGuideToggleButton!: Phaser.GameObjects.Text;
+  private controlHintPanelGraphics!: Phaser.GameObjects.Graphics;
+  private pauseButtonGraphics!: Phaser.GameObjects.Graphics;
+  private pauseButtonHovered = false;
   private pauseButton!: Phaser.GameObjects.Text;
   private pauseIconImage: Phaser.GameObjects.Image | null = null;
   private pauseMenuContainer!: Phaser.GameObjects.Container;
@@ -132,15 +167,23 @@ export class UIScene extends Phaser.Scene {
   private pauseMenuButtons: Phaser.GameObjects.Text[] = [];
   private pauseMenuButtonIcons: Partial<Record<'close' | 'retry', Phaser.GameObjects.Image>> = {};
   private activeAbilityButton!: Phaser.GameObjects.Container;
+  private activeAbilityButtonGraphics!: Phaser.GameObjects.Graphics;
   private activeAbilityButtonBase!: Phaser.GameObjects.Arc;
   private activeAbilityButtonLabel!: Phaser.GameObjects.Text;
   private activeAbilityButtonHitArea!: Phaser.GameObjects.Arc;
+  private activeAbilityVisualStateKey = '';
+  private activeAbilityHovered = false;
   private readonly activeAbilityButtonRadius = 32;
   private readonly activeAbilityButtonHitRadius = 44;
+  private readonly hpBarMaxWidth = 310;
+  private readonly xpBarMaxWidth = 310;
   private readonly weaponSlotStartX = 82;
   private readonly weaponSlotY = 124;
   private readonly weaponSlotSpacing = 34;
   private readonly weaponSlotSize = 24;
+  private readonly pauseButtonX = GAME_WIDTH - 44;
+  private readonly pauseButtonY = 39;
+  private readonly pauseButtonSize = 46;
 
   private readonly handleSelectUpgradeOne = (): void => {
     this.selectUpgrade(0);
@@ -161,6 +204,16 @@ export class UIScene extends Phaser.Scene {
   create(): void {
     const viewWidth = GAME_WIDTH;
     const viewHeight = GAME_HEIGHT;
+    this.hpFallbackText = null;
+    this.xpFallbackText = null;
+    this.statusPillStateKey = '';
+    this.timerPillKind = '';
+    this.alertPillStateKey = '';
+    this.rewardPillStateKey = '';
+    this.pauseButtonHovered = false;
+    this.activeAbilityVisualStateKey = '';
+    this.activeAbilityHovered = false;
+    this.weaponSlotBackings = [];
     this.weaponIconFrames = [];
     this.weaponIconTexts = [];
     this.weaponIconImages = [];
@@ -183,114 +236,245 @@ export class UIScene extends Phaser.Scene {
     this.pauseMenuButtonIcons = {};
     this.controlGuideMode = this.readControlGuideMode();
 
+    // ── Top-left doodle player card (HP, XP, level, hero/class) ───────────
+    const hpBarCenterX = 211;
+    const hpBarY = 53;
+    const hpBarOuterW = 314;
+    const hpBarOuterH = 18;
+    const xpBarY = 78;
+    const xpBarOuterH = 11;
+
+    this.topLeftHudCard = this.add.graphics().setScrollFactor(0).setDepth(4);
+    drawDoodleCard(this.topLeftHudCard, {
+      cx: 199,
+      cy: 53,
+      width: 374,
+      height: 86,
+      cornerRadius: 14,
+      seed: 101,
+      fillColor: DOODLE_COLORS.paper,
+      strokeWidth: 2.5,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.28,
+    });
+    // Gold level pill backing
+    drawDoodleCard(this.topLeftHudCard, {
+      cx: 340,
+      cy: 26,
+      width: 68,
+      height: 22,
+      cornerRadius: 9,
+      seed: 102,
+      fillColor: DOODLE_COLORS.gold,
+      strokeWidth: 2,
+      shadowOffsetX: 1,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.22,
+    });
+    // HP & XP bar warm troughs
+    drawDoodleCard(this.topLeftHudCard, {
+      cx: hpBarCenterX,
+      cy: hpBarY,
+      width: hpBarOuterW,
+      height: hpBarOuterH,
+      cornerRadius: 7,
+      seed: 103,
+      jitter: 0.85,
+      fillColor: DOODLE_COLORS.paperWarm,
+      strokeWidth: 0,
+      shadowAlpha: 0,
+    });
+    drawDoodleCard(this.topLeftHudCard, {
+      cx: hpBarCenterX,
+      cy: xpBarY,
+      width: hpBarOuterW,
+      height: xpBarOuterH,
+      cornerRadius: 5,
+      seed: 104,
+      jitter: 0.75,
+      fillColor: DOODLE_COLORS.paperWarm,
+      strokeWidth: 0,
+      shadowAlpha: 0,
+    });
+
     this.heroText = this.add
-      .text(30, 22, '--', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(24, 26, '--', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '16px',
-        color: '#dbeafe',
-        wordWrap: { width: 282 },
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        wordWrap: { width: 274 },
       })
-      .setScrollFactor(0);
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(8);
 
-    const hpBarFrame = this.add.rectangle(30, 54, 280, 16, 0x0f172a, 0.48).setOrigin(0, 0.5);
-    hpBarFrame.setStrokeStyle(1, 0x6b8bae, 0.52);
-    hpBarFrame.setScrollFactor(0);
-
-    this.hpBarFill = this.add.rectangle(30, 54, 0, 10, 0xf87171, 0.96).setOrigin(0, 0.5);
-    this.hpBarFill.setScrollFactor(0);
+    this.hpBarFill = this.add.rectangle(56, hpBarY, 0, 14, DOODLE_COLORS.hp, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(6);
+    this.hpBarBorder = this.add.graphics().setScrollFactor(0).setDepth(7);
+    drawDoodleStrokeRect(this.hpBarBorder, {
+      cx: hpBarCenterX,
+      cy: hpBarY,
+      width: hpBarOuterW,
+      height: hpBarOuterH,
+      cornerRadius: 7,
+      seed: 103,
+      jitter: 0.85,
+      strokeWidth: 2.2,
+    });
 
     this.hpValueText = this.add
-      .text(170, 54, 'HP --/--', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(hpBarCenterX, hpBarY, 'HP --/--', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '13px',
-        color: '#fff7ed',
-        stroke: '#000000',
-        strokeThickness: 2,
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        stroke: DOODLE_HEX.paper,
+        strokeThickness: 1.5,
       })
       .setOrigin(0.5)
-      .setScrollFactor(0);
-    this.hpIconImage = this.createHudIconImage('hp', 18, 54, 16, 0.88);
+      .setScrollFactor(0)
+      .setDepth(8);
+    this.hpIconImage = this.createHudIconImage('hp', 34, hpBarY, 20, 1);
+    this.hpIconImage?.setDepth(8);
+    if (!this.hpIconImage) {
+      this.hpFallbackText = this.add
+        .text(34, hpBarY, 'HP', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '10px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.hp,
+          stroke: DOODLE_HEX.ink,
+          strokeThickness: 2,
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(8);
+    }
 
     this.levelValueText = this.add
-      .text(318, 68, 'LV 1', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(340, 26, 'LV 1', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '13px',
-        color: '#bfdbfe',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
+      .setOrigin(0.5)
       .setScrollFactor(0)
+      .setDepth(8)
       .setVisible(true);
 
+    this.statusPillGraphics = this.add.graphics().setScrollFactor(0).setDepth(4).setVisible(false);
+
     this.classStatusText = this.add
-      .text(30, 86, 'Class Basic', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#7cb8d8',
+      .text(218, this.weaponSlotY, 'Class Basic', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
+      .setOrigin(0, 0.5)
       .setScrollFactor(0)
+      .setDepth(8)
       .setVisible(false);
 
     this.statSummaryText = this.add
-      .text(30, 86, 'DMG0 RLD0 SPD0 REG0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(218, this.weaponSlotY, 'DMG0 RLD0 SPD0 REG0', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '12px',
-        color: '#fef08a',
-        wordWrap: { width: 268 },
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        wordWrap: { width: 220 },
       })
+      .setOrigin(0, 0.5)
       .setScrollFactor(0)
+      .setDepth(8)
       .setVisible(false);
 
+    // ── Top-center stage timer pill, Core Shield pill, and alert stack ────
+    this.timerPillGraphics = this.add.graphics().setScrollFactor(0).setDepth(4);
     this.timerText = this.add
-      .text(viewWidth / 2, 20, '00:00', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '24px',
-        color: '#e0f2fe',
+      .text(viewWidth / 2 + 10, 28, '00:00', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '21px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0);
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(8);
+    this.refreshTimerPill('preBoss');
+
+    this.coreShieldGraphics = this.add.graphics().setScrollFactor(0).setDepth(4).setVisible(false);
+    drawDoodleCard(this.coreShieldGraphics, {
+      cx: 506,
+      cy: 28,
+      width: 178,
+      height: 34,
+      cornerRadius: 11,
+      seed: 120,
+      fillColor: DOODLE_COLORS.paper,
+      strokeWidth: 2.5,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.26,
+    });
+    drawDoodleShieldGlyph(this.coreShieldGraphics, 434, 28, 7, DOODLE_COLORS.xp, DOODLE_COLORS.ink);
+    this.coreShieldText = this.add
+      .text(448, 28, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+      })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(8)
+      .setVisible(false);
 
     this.timerSubtitleText = this.add
       .text(viewWidth / 2, 78, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '13px',
-        color: '#4e7190',
+        color: DOODLE_HEX.inkMuted,
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setVisible(false);
 
+    this.alertPillGraphics = this.add.graphics().setScrollFactor(0).setDepth(4).setVisible(false);
     this.alertText = this.add
-      .text(viewWidth / 2, 58, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#dbeafe',
-        stroke: '#000000',
-        strokeThickness: 3,
+      .text(viewWidth / 2, 64, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0.5)
       .setScrollFactor(0)
+      .setDepth(8)
       .setVisible(false);
 
+    this.rewardPillGraphics = this.add.graphics().setScrollFactor(0).setDepth(4).setVisible(false);
     this.rewardText = this.add
-      .text(viewWidth / 2, 88, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#fef3c7',
-        stroke: '#000000',
-        strokeThickness: 3,
+      .text(viewWidth / 2, 92, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
         wordWrap: { width: 640 },
         align: 'center',
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0.5)
       .setScrollFactor(0)
+      .setDepth(8)
       .setVisible(false);
 
     this.instructionText = this.add
-      .text(viewWidth / 2, 156, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(viewWidth / 2, 166, '', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '13px',
-        color: '#cbd5e1',
-        stroke: '#000000',
-        strokeThickness: 3,
+        color: DOODLE_HEX.ink,
         wordWrap: { width: 760 },
         align: 'center',
       })
@@ -299,132 +483,248 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.eventPanel = this.add.rectangle(0, 0, 0, 0, 0x000000, 0).setScrollFactor(0).setVisible(false);
+    this.eventPillGraphics = this.add.graphics().setScrollFactor(0).setDepth(4).setVisible(false);
+    drawDoodleCard(this.eventPillGraphics, {
+      cx: viewWidth / 2,
+      cy: 135,
+      width: 472,
+      height: 48,
+      cornerRadius: 12,
+      seed: 130,
+      fillColor: DOODLE_COLORS.paper,
+      strokeWidth: 2.2,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.25,
+    });
 
     this.eventTitleText = this.add
-      .text(viewWidth / 2, 118, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#fde68a',
-        stroke: '#000000',
-        strokeThickness: 3,
+      .text(viewWidth / 2, 123, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0.5)
       .setScrollFactor(0)
+      .setDepth(8)
       .setVisible(false);
 
     this.eventBodyText = this.add
-      .text(viewWidth / 2, 140, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(viewWidth / 2, 143, '', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '12px',
-        color: '#e2e8f0',
-        stroke: '#000000',
-        strokeThickness: 3,
-        wordWrap: { width: 480 },
+        color: DOODLE_HEX.inkMuted,
+        wordWrap: { width: 440 },
         align: 'center',
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(0.5)
       .setScrollFactor(0)
+      .setDepth(8)
       .setVisible(false);
 
     this.eventTimerText = this.add
-      .text(0, 0, '', { fontFamily: 'Trebuchet MS, sans-serif', fontSize: '1px', color: '#000000' })
+      .text(0, 0, '', { fontFamily: DOODLE_FONTS.body, fontSize: '1px', color: '#000000' })
       .setScrollFactor(0)
       .setVisible(false);
 
+    // ── Top-right Run Gold & Kills doodle sticker ─────────────────────────
+    this.topRightHudCard = this.add.graphics().setScrollFactor(0).setDepth(4);
+    drawDoodleCard(this.topRightHudCard, {
+      cx: 1437,
+      cy: 39,
+      width: 158,
+      height: 58,
+      cornerRadius: 12,
+      seed: 140,
+      fillColor: DOODLE_COLORS.paper,
+      strokeWidth: 2.5,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.28,
+    });
+
     this.scoreText = this.add
       .text(viewWidth - 30, 22, 'Score 0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '17px',
-        color: '#fef08a',
+        color: DOODLE_HEX.ink,
       })
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setVisible(false);
 
     this.goldText = this.add
-      .text(viewWidth - 30, 22, 'Run Gold 0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(1502, 26, 'Run Gold 0', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '14px',
-        color: '#fde68a',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
-      .setOrigin(1, 0)
-      .setScrollFactor(0);
-    this.goldIconImage = this.createHudIconImage('gold', viewWidth - 122, 31, 18, 0.9);
+      .setOrigin(1, 0.5)
+      .setScrollFactor(0)
+      .setDepth(8);
+    this.goldIconImage = this.createHudIconImage('gold', 1396, 26, 19, 1);
+    this.goldIconImage?.setDepth(8);
 
     this.killsText = this.add
-      .text(viewWidth - 30, 46, 'Kills 0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#94a3b8',
+      .text(1502, 50, 'Kills 0', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
       })
-      .setOrigin(1, 0)
-      .setScrollFactor(0);
+      .setOrigin(1, 0.5)
+      .setScrollFactor(0)
+      .setDepth(8);
 
     this.weaponSummaryText = this.add
       .text(30, viewHeight - 74, 'Weapon Slot --', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '12px',
-        color: '#93c5fd',
+        color: DOODLE_HEX.ink,
       })
       .setScrollFactor(0)
       .setVisible(false);
 
+    // ── Weapon row beneath top-left card (preserves x=82, y=124, 24x24) ───
+    this.weaponGearTagGraphics = this.add.graphics().setScrollFactor(0).setDepth(4);
+    drawDoodleCard(this.weaponGearTagGraphics, {
+      cx: 39,
+      cy: this.weaponSlotY,
+      width: 52,
+      height: 22,
+      cornerRadius: 7,
+      seed: 199,
+      jitter: 0.85,
+      fillColor: DOODLE_COLORS.paperWarm,
+      strokeWidth: 2,
+      shadowOffsetX: 1,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.24,
+    });
+    this.weaponGearTagText = this.add
+      .text(39, this.weaponSlotY, 'ARMS', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '10px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(8);
+
     for (let index = 0; index < 4; index += 1) {
+      const slotX = this.weaponSlotStartX + index * this.weaponSlotSpacing;
+      const backing = this.add.graphics().setScrollFactor(0).setDepth(4).setVisible(false);
+      drawDoodleCard(backing, {
+        cx: slotX,
+        cy: this.weaponSlotY,
+        width: 28,
+        height: 28,
+        cornerRadius: 7,
+        seed: 200 + index,
+        jitter: 0.8,
+        fillColor: DOODLE_COLORS.paper,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.24,
+      });
+
       const frame = this.add
-        .rectangle(
-          this.weaponSlotStartX + index * this.weaponSlotSpacing,
-          this.weaponSlotY,
-          this.weaponSlotSize,
-          this.weaponSlotSize,
-          0x172033,
-          0.18,
-        )
+        .rectangle(slotX, this.weaponSlotY, this.weaponSlotSize, this.weaponSlotSize, DOODLE_COLORS.paperWarm, 0.98)
         .setOrigin(0.5)
         .setScrollFactor(0)
+        .setDepth(5)
         .setVisible(false);
-      frame.setStrokeStyle(1, 0x334155, 0.42);
+      frame.setStrokeStyle(1.5, DOODLE_COLORS.ink, 1);
 
       const icon = this.add
-        .text(this.weaponSlotStartX + index * this.weaponSlotSpacing, this.weaponSlotY, '--', {
-          fontFamily: 'Trebuchet MS, sans-serif',
+        .text(slotX, this.weaponSlotY, '--', {
+          fontFamily: DOODLE_FONTS.body,
           fontSize: '10px',
-          color: '#eff6ff',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
         })
         .setOrigin(0.5)
         .setScrollFactor(0)
+        .setDepth(7)
         .setVisible(false);
 
+      this.weaponSlotBackings.push(backing);
       this.weaponIconFrames.push(frame);
       this.weaponIconTexts.push(icon);
       this.weaponIconImages.push(null);
     }
 
-    const xpBarFrame = this.add.rectangle(30, 76, 280, 8, 0x172554, 0.42).setOrigin(0, 0.5);
-    xpBarFrame.setStrokeStyle(1, 0x60a5fa, 0.5);
-    xpBarFrame.setScrollFactor(0);
-
-    this.xpBarFill = this.add.rectangle(30, 76, 0, 5, 0x38bdf8, 0.96).setOrigin(0, 0.5);
-    this.xpBarFill.setScrollFactor(0);
-    this.xpIconImage = this.createHudIconImage('xp', 18, 76, 14, 0.82);
+    this.xpBarFill = this.add.rectangle(56, xpBarY, 0, 7, DOODLE_COLORS.xp, 1).setOrigin(0, 0.5).setScrollFactor(0).setDepth(6);
+    this.xpBarBorder = this.add.graphics().setScrollFactor(0).setDepth(7);
+    drawDoodleStrokeRect(this.xpBarBorder, {
+      cx: hpBarCenterX,
+      cy: xpBarY,
+      width: hpBarOuterW,
+      height: xpBarOuterH,
+      cornerRadius: 5,
+      seed: 104,
+      jitter: 0.75,
+      strokeWidth: 2,
+    });
+    this.xpIconImage = this.createHudIconImage('xp', 34, xpBarY, 17, 1);
+    this.xpIconImage?.setDepth(8);
+    if (!this.xpIconImage) {
+      this.xpFallbackText = this.add
+        .text(34, xpBarY, 'XP', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '9px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.xp,
+          stroke: DOODLE_HEX.ink,
+          strokeThickness: 2,
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(8);
+    }
 
     this.xpBarLabel = this.add
       .text(0, 0, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '1px',
-        color: '#bfdbfe',
+        color: DOODLE_HEX.ink,
       })
       .setScrollFactor(0)
       .setVisible(false);
 
+    this.returnHintGraphics = this.add.graphics().setScrollFactor(0).setDepth(4);
+    drawDoodleCard(this.returnHintGraphics, {
+      cx: viewWidth - 78,
+      cy: viewHeight - 36,
+      width: 108,
+      height: 28,
+      cornerRadius: 8,
+      seed: 150,
+      jitter: 0.9,
+      fillColor: DOODLE_COLORS.paper,
+      fillAlpha: 0.92,
+      strokeWidth: 2,
+      shadowOffsetX: 1,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.22,
+    });
     this.returnHintText = this.add
-      .text(viewWidth - 30, viewHeight - 28, 'ESC: Pause', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
-        color: '#cbd5e1',
+      .text(viewWidth - 78, viewHeight - 36, 'ESC: Pause', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
-      .setOrigin(1, 1)
-      .setScrollFactor(0);
-    this.returnHintText.setVisible(!this.shouldUseMobileCopy());
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(8);
+    const showDesktopHint = !this.shouldUseMobileCopy();
+    this.returnHintText.setVisible(showDesktopHint);
+    this.returnHintGraphics.setVisible(showDesktopHint);
 
     this.endContainer = this.createEndOverlay();
     this.levelUpContainer = this.createLevelUpOverlay();
@@ -491,6 +791,8 @@ export class UIScene extends Phaser.Scene {
     const activeAbilityCooldownMs = Number(this.registry.get('run.activeAbilityCooldownMs') ?? 0);
     const activeAbilityCooldownTotalMs = Number(this.registry.get('run.activeAbilityCooldownTotalMs') ?? 1);
     const activeAbilityLabel = String(this.registry.get('run.activeAbilityLabel') ?? 'Pulse');
+    const mapBuffType = String(this.registry.get('run.mapBuffType') ?? '');
+    const mapBuffRemainingMs = Number(this.registry.get('run.mapBuffRemainingMs') ?? 0);
     const tankStatLevels = (this.registry.get('run.tankStatLevels') ?? {
       bulletDamage: 0,
       reload: 0,
@@ -504,18 +806,21 @@ export class UIScene extends Phaser.Scene {
 
     this.setTextIfChanged(this.heroText, `${heroName || '--'} • ${classTitle}`);
     this.setTextIfChanged(this.hpValueText, `HP ${currentHp}/${maxHp}`);
-    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * 280, 0, 280);
+    this.hpBarFill.width = Phaser.Math.Clamp((currentHp / Math.max(1, maxHp)) * this.hpBarMaxWidth, 0, this.hpBarMaxWidth);
     this.setTextIfChanged(this.levelValueText, levelLabel);
     this.setTextIfChanged(this.classStatusText, `Class ${classTitle}${classChoiceActive ? ' - Choose now' : ''}`);
-    this.classStatusText.setColor(classChoiceActive ? '#fef08a' : '#bae6fd');
+    this.classStatusText.setColor(DOODLE_HEX.ink);
     this.classStatusText.setVisible(classChoiceActive);
     this.setTextIfChanged(this.statSummaryText, `${statSummary}${statPoints > 0 ? `  +${statPoints}` : ''}`);
-    this.statSummaryText.setColor(statPoints > 0 ? '#fef08a' : '#94a3b8');
+    this.statSummaryText.setColor(DOODLE_HEX.ink);
     this.statSummaryText.setVisible(statPoints > 0 && !levelUpActive && !classChoiceActive && !endActive);
+    this.refreshStatusSummaryPill();
     this.setTextIfChanged(
       this.timerText,
       this.formatStageTimer(stagePhase, elapsedMs, bossSpawnTimeMs || targetMs, bossHp, bossMaxHp, bossPhase),
     );
+    this.refreshTimerPill(stagePhase);
+    this.refreshCoreShieldPill(mapBuffType, mapBuffRemainingMs, levelUpActive, classChoiceActive, endActive);
     const timerHint = this.getTimerSubtitleHint(stagePhase);
     this.setTextIfChanged(this.timerSubtitleText, timerHint);
     this.timerSubtitleText.setVisible(Boolean(timerHint) && !alertMessage && !levelUpActive && !classChoiceActive && !endActive);
@@ -524,7 +829,7 @@ export class UIScene extends Phaser.Scene {
     this.setTextIfChanged(this.scoreText, '');
     this.setTextIfChanged(this.weaponSummaryText, this.formatWeaponSummary(weaponNames, classTitle));
     this.setTextIfChanged(this.xpBarLabel, '');
-    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * 280, 0, 280);
+    this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * this.xpBarMaxWidth, 0, this.xpBarMaxWidth);
     this.refreshHudIconLayout();
     this.refreshWeaponIcons(weaponNames);
     this.refreshAlert(alertKind, alertMessage);
@@ -576,6 +881,8 @@ export class UIScene extends Phaser.Scene {
     kills: string;
     score: string;
     timer: string;
+    coreShieldVisible: boolean;
+    coreShieldText: string;
     statPanelVisible: boolean;
     levelUpVisible: boolean;
     levelUpChoiceCount: number;
@@ -622,6 +929,8 @@ export class UIScene extends Phaser.Scene {
       kills: this.killsText.text,
       score: this.scoreText.text,
       timer: this.timerText.text,
+      coreShieldVisible: this.coreShieldText.visible,
+      coreShieldText: this.coreShieldText.visible ? this.coreShieldText.text : '',
       statPanelVisible: this.statAllocationContainer.visible,
       levelUpVisible: this.levelUpContainer.visible,
       levelUpChoiceCount: Number(this.registry.get('run.levelUpChoiceCount') ?? 0),
@@ -1073,34 +1382,40 @@ export class UIScene extends Phaser.Scene {
 
   private createControlGuideVisuals(): Phaser.GameObjects.Container {
     const zoneConfigs = [
-      { x: 290, y: 552, color: 0x38bdf8, label: 'MOVE', subLabel: 'LEFT SIDE' },
-      { x: 1310, y: 552, color: 0xfacc15, label: 'AIM', subLabel: 'RIGHT SIDE' },
+      { x: 290, y: 552, knobColor: DOODLE_COLORS.xp, label: 'MOVE', subLabel: 'LEFT SIDE' },
+      { x: 1310, y: 552, knobColor: DOODLE_COLORS.gold, label: 'AIM', subLabel: 'RIGHT SIDE' },
     ];
     const children: Phaser.GameObjects.GameObject[] = [];
 
     for (const config of zoneConfigs) {
-      const zone = this.add.circle(config.x, config.y, 92, config.color, 0.08);
-      zone.setStrokeStyle(3, config.color, 0.3);
+      const zone = this.add.circle(config.x, config.y, 92, DOODLE_COLORS.paper, 0.1);
+      zone.setStrokeStyle(2.5, DOODLE_COLORS.ink, 0.36);
       zone.setScrollFactor(0);
 
-      const knob = this.add.circle(config.x, config.y, 28, config.color, 0.24);
-      knob.setStrokeStyle(2, 0xf8fafc, 0.58);
+      const knob = this.add.circle(config.x, config.y, 28, config.knobColor, 0.36);
+      knob.setStrokeStyle(2, DOODLE_COLORS.ink, 0.55);
       knob.setScrollFactor(0);
 
       const label = this.add
         .text(config.x, config.y - 124, config.label, {
-          fontFamily: 'Trebuchet MS, sans-serif',
+          fontFamily: DOODLE_FONTS.body,
           fontSize: '19px',
-          color: '#f8fafc',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.paper,
+          stroke: DOODLE_HEX.ink,
+          strokeThickness: 3,
         })
         .setOrigin(0.5)
         .setScrollFactor(0);
 
       const subLabel = this.add
         .text(config.x, config.y - 101, config.subLabel, {
-          fontFamily: 'Trebuchet MS, sans-serif',
+          fontFamily: DOODLE_FONTS.body,
           fontSize: '11px',
-          color: '#cbd5e1',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.paperWarm,
+          stroke: DOODLE_HEX.ink,
+          strokeThickness: 2,
         })
         .setOrigin(0.5)
         .setScrollFactor(0);
@@ -1121,22 +1436,35 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createControlHintOverlay(): Phaser.GameObjects.Container {
-    const panel = this.add.rectangle(GAME_WIDTH / 2, 516, 456, 72, 0x08111f, 0.88);
-    panel.setStrokeStyle(1, 0x60a5fa, 0.7);
-    panel.setScrollFactor(0);
+    this.controlHintPanelGraphics = this.add.graphics().setScrollFactor(0);
+    drawDoodleCard(this.controlHintPanelGraphics, {
+      cx: GAME_WIDTH / 2,
+      cy: 516,
+      width: 456,
+      height: 74,
+      cornerRadius: 12,
+      seed: 160,
+      fillColor: DOODLE_COLORS.paper,
+      fillAlpha: 0.94,
+      strokeWidth: 2.5,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.25,
+    });
 
     const hintText = this.add
       .text(GAME_WIDTH / 2, 516, 'Left side: move\nRight side: aim\nWeapons fire automatically', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '15px',
-        color: '#e0f2fe',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
         align: 'center',
         lineSpacing: 3,
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    const container = this.add.container(0, 0, [panel, hintText]);
+    const container = this.add.container(0, 0, [this.controlHintPanelGraphics, hintText]);
     container.setDepth(66);
     container.setScrollFactor(0);
     container.setVisible(false);
@@ -1201,27 +1529,63 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createPauseButton(): Phaser.GameObjects.Text {
+    this.pauseButtonGraphics = this.add.graphics().setScrollFactor(0).setDepth(80);
+    this.drawPauseButtonGraphics();
+
+    this.pauseIconImage = this.createHudIconImage('pause', this.pauseButtonX, this.pauseButtonY, 26, 1);
+    this.pauseIconImage?.setDepth(81);
+    const hasPauseTexture = this.pauseIconImage !== null;
+
     const button = this.add
-      .text(GAME_WIDTH - 64, 126, 'II', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(this.pauseButtonX, this.pauseButtonY, hasPauseTexture ? '' : 'II', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '18px',
-        color: '#e0f2fe',
-        backgroundColor: '#111827',
-        padding: { left: 16, right: 16, top: 8, bottom: 8 },
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        fixedWidth: this.pauseButtonSize,
+        fixedHeight: this.pauseButtonSize,
+        align: 'center',
+        padding: hasPauseTexture ? undefined : { left: 0, right: 0, top: 12, bottom: 0 },
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
 
     button.on('pointerdown', () => this.openPauseMenu());
-    button.on('pointerover', () => button.setStyle({ color: '#ffffff', backgroundColor: '#1f2937' }));
-    button.on('pointerout', () => button.setStyle({ color: '#e0f2fe', backgroundColor: '#111827' }));
+    button.on('pointerover', () => {
+      this.pauseButtonHovered = true;
+      this.drawPauseButtonGraphics();
+    });
+    button.on('pointerout', () => {
+      this.pauseButtonHovered = false;
+      this.drawPauseButtonGraphics();
+    });
     button.setData('assetIconReady', this.canRenderUiButtonIcon('close') || this.canRenderHudIcon('pause'));
     button.setDepth(82);
-    this.pauseIconImage = this.createHudIconImage('pause', button.x, button.y, 22, 0.34);
-    this.pauseIconImage?.setDepth(81);
 
     return button;
+  }
+
+  private drawPauseButtonGraphics(): void {
+    if (!this.pauseButtonGraphics) {
+      return;
+    }
+
+    drawDoodleCard(this.pauseButtonGraphics, {
+      cx: this.pauseButtonX,
+      cy: this.pauseButtonY,
+      width: this.pauseButtonSize,
+      height: this.pauseButtonSize,
+      cornerRadius: 11,
+      seed: 170,
+      jitter: 1.05,
+      fillColor: this.pauseButtonHovered ? DOODLE_COLORS.paperHover : DOODLE_COLORS.paper,
+      strokeWidth: this.pauseButtonHovered ? 3 : 2.5,
+      shadowOffsetX: 2,
+      shadowOffsetY: this.pauseButtonHovered ? 4 : 3,
+      shadowAlpha: 0.28,
+      clear: true,
+    });
   }
 
   private createActiveAbilityButton(): Phaser.GameObjects.Container {
@@ -1230,38 +1594,67 @@ export class UIScene extends Phaser.Scene {
     this.activeAbilityButtonHitArea = this.add.circle(0, 0, this.activeAbilityButtonHitRadius, 0x000000, 0.001);
     this.activeAbilityButtonHitArea.setInteractive({ useHandCursor: true });
 
-    this.activeAbilityButtonBase = this.add.circle(0, 0, this.activeAbilityButtonRadius, 0x123044, 0.88);
-    this.activeAbilityButtonBase.setStrokeStyle(3, 0x7dd3fc, 0.9);
-
-    const innerRing = this.add.circle(0, 0, this.activeAbilityButtonRadius - 7, 0x38bdf8, 0.1);
-    innerRing.setStrokeStyle(1, 0xe0f2fe, 0.28);
+    this.activeAbilityButtonGraphics = this.add.graphics();
+    this.activeAbilityButtonBase = this.add.circle(0, 0, this.activeAbilityButtonRadius - 7, DOODLE_COLORS.xp, 0.3);
+    this.activeAbilityButtonBase.setStrokeStyle(1.5, DOODLE_COLORS.ink, 0.35);
 
     this.activeAbilityButtonLabel = this.add
       .text(0, 0, 'P', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '20px',
-        color: '#e0f2fe',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+      })
+      .setOrigin(0.5);
+
+    const pulseTagGraphics = this.add.graphics();
+    drawDoodleCard(pulseTagGraphics, {
+      cx: 0,
+      cy: 33,
+      width: 48,
+      height: 16,
+      cornerRadius: 6,
+      seed: 181,
+      jitter: 0.65,
+      fillColor: DOODLE_COLORS.paper,
+      strokeWidth: 1.8,
+      shadowOffsetX: 1,
+      shadowOffsetY: 1,
+      shadowAlpha: 0.22,
+    });
+    const pulseTagText = this.add
+      .text(0, 33, 'PULSE', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '9px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
       .setOrigin(0.5);
 
     this.activeAbilityButtonHitArea.on('pointerdown', () => this.activateBreakoutPulse());
     this.activeAbilityButtonHitArea.on('pointerover', () => {
-      this.activeAbilityButtonBase.setFillStyle(0x1e3a5f, 0.96);
-      this.activeAbilityButtonBase.setStrokeStyle(3, 0xffffff, 0.95);
-      this.activeAbilityButtonLabel.setColor('#ffffff');
+      this.activeAbilityHovered = true;
+      this.refreshActiveAbilityButtonStyle();
     });
-    this.activeAbilityButtonHitArea.on('pointerout', () => this.refreshActiveAbilityButtonStyle());
+    this.activeAbilityButtonHitArea.on('pointerout', () => {
+      this.activeAbilityHovered = false;
+      this.refreshActiveAbilityButtonStyle();
+    });
 
     const container = this.add.container(x, y, [
       this.activeAbilityButtonHitArea,
+      this.activeAbilityButtonGraphics,
       this.activeAbilityButtonBase,
-      innerRing,
       this.activeAbilityButtonLabel,
+      pulseTagGraphics,
+      pulseTagText,
     ]);
     container.setData('assetIconReady', this.canRenderSkillIcon('breakout-pulse'));
     container.setData('statusIconReady', this.canRenderBuffStatusIcon('shield-pulse'));
+    container.setData('ready', true);
     container.setDepth(82);
     container.setScrollFactor(0);
+    this.refreshActiveAbilityButtonStyle(container);
 
     return container;
   }
@@ -1386,12 +1779,14 @@ export class UIScene extends Phaser.Scene {
     const pauseButtonVisible = this.scene.isActive('RunScene') && !modalOverlayActive;
 
     this.pauseButton.setVisible(pauseButtonVisible);
+    this.pauseButtonGraphics?.setVisible(pauseButtonVisible);
     this.pauseIconImage?.setVisible(pauseButtonVisible);
     if (pauseButtonVisible) {
       if (!this.pauseButton.input?.enabled) {
         this.pauseButton.setInteractive({ useHandCursor: true });
       }
     } else {
+      this.pauseButtonHovered = false;
       this.pauseButton.disableInteractive();
     }
 
@@ -1444,16 +1839,41 @@ export class UIScene extends Phaser.Scene {
     this.refreshActiveAbilityButtonStyle();
   }
 
-  private refreshActiveAbilityButtonStyle(): void {
-    if (!this.activeAbilityButton) {
+  private refreshActiveAbilityButtonStyle(targetContainer: Phaser.GameObjects.Container = this.activeAbilityButton): void {
+    if (!targetContainer) {
       return;
     }
 
-    const ready = Boolean(this.activeAbilityButton.getData('ready'));
-    const cooldownRatio = Number(this.activeAbilityButton.getData('cooldownRatio') ?? 0);
-    this.activeAbilityButtonBase.setFillStyle(ready ? 0x123044 : cooldownRatio > 0.5 ? 0x111827 : 0x172033, ready ? 0.92 : 0.78);
-    this.activeAbilityButtonBase.setStrokeStyle(ready ? 3 : 2, ready ? 0x7dd3fc : 0x475569, ready ? 0.9 : 0.78);
-    this.activeAbilityButtonLabel.setColor(ready ? '#e0f2fe' : '#94a3b8');
+    const ready = Boolean(targetContainer.getData('ready'));
+    const visualKey = `${ready ? '1' : '0'}:${this.activeAbilityHovered ? '1' : '0'}`;
+    if (this.activeAbilityVisualStateKey !== visualKey) {
+      this.activeAbilityVisualStateKey = visualKey;
+      drawDoodleCircle(this.activeAbilityButtonGraphics, {
+        cx: 0,
+        cy: 0,
+        radius: this.activeAbilityButtonRadius,
+        seed: 180,
+        jitter: 1.05,
+        fillColor: !ready
+          ? DOODLE_COLORS.paperDisabled
+          : this.activeAbilityHovered
+            ? DOODLE_COLORS.paperHover
+            : DOODLE_COLORS.paper,
+        strokeColor: ready ? DOODLE_COLORS.ink : DOODLE_COLORS.inkMuted,
+        strokeWidth: this.activeAbilityHovered && ready ? 3.5 : 3,
+        shadowOffsetX: 2,
+        shadowOffsetY: this.activeAbilityHovered && ready ? 4 : 3,
+        shadowAlpha: ready ? 0.3 : 0.18,
+        clear: true,
+      });
+    }
+
+    this.activeAbilityButtonBase.setFillStyle(
+      ready ? DOODLE_COLORS.xp : DOODLE_COLORS.paperDisabled,
+      ready ? (this.activeAbilityHovered ? 0.44 : 0.3) : 0.35,
+    );
+    this.activeAbilityButtonBase.setStrokeStyle(1.5, ready ? DOODLE_COLORS.ink : DOODLE_COLORS.inkMuted, ready ? 0.38 : 0.3);
+    this.activeAbilityButtonLabel.setColor(ready ? DOODLE_HEX.ink : DOODLE_HEX.inkMuted);
   }
 
   private openPauseMenu(): void {
@@ -1531,16 +1951,20 @@ export class UIScene extends Phaser.Scene {
   private applyControlGuidePresentation(): void {
     const presentation =
       this.controlGuideMode === 'visible'
-        ? { fillAlpha: 0.16, strokeAlpha: 0.72, knobAlpha: 0.54, labelAlpha: 0.9, subLabelAlpha: 0.72 }
-        : { fillAlpha: 0.05, strokeAlpha: 0.26, knobAlpha: 0.26, labelAlpha: 0.44, subLabelAlpha: 0.34 };
+        ? { fillAlpha: 0.22, strokeAlpha: 0.78, knobAlpha: 0.68, labelAlpha: 0.95, subLabelAlpha: 0.8 }
+        : { fillAlpha: 0.08, strokeAlpha: 0.34, knobAlpha: 0.32, labelAlpha: 0.48, subLabelAlpha: 0.38 };
 
     for (let index = 0; index < this.controlGuideZones.length; index += 1) {
       const zone = this.controlGuideZones[index];
-      const color = index === 0 ? 0x38bdf8 : 0xfacc15;
-      zone.setFillStyle(color, presentation.fillAlpha);
-      zone.setStrokeStyle(this.controlGuideMode === 'visible' ? 3 : 2, color, presentation.strokeAlpha);
-      this.controlGuideKnobs[index].setFillStyle(color, presentation.knobAlpha);
-      this.controlGuideKnobs[index].setStrokeStyle(this.controlGuideMode === 'visible' ? 2 : 1, 0xf8fafc, presentation.strokeAlpha);
+      const knobColor = index === 0 ? DOODLE_COLORS.xp : DOODLE_COLORS.gold;
+      zone.setFillStyle(DOODLE_COLORS.paper, presentation.fillAlpha);
+      zone.setStrokeStyle(this.controlGuideMode === 'visible' ? 3 : 2, DOODLE_COLORS.ink, presentation.strokeAlpha);
+      this.controlGuideKnobs[index].setFillStyle(knobColor, presentation.knobAlpha);
+      this.controlGuideKnobs[index].setStrokeStyle(
+        this.controlGuideMode === 'visible' ? 2.5 : 1.5,
+        DOODLE_COLORS.ink,
+        presentation.strokeAlpha,
+      );
       this.controlGuideLabels[index].setAlpha(presentation.labelAlpha);
       this.controlGuideSubLabels[index].setAlpha(presentation.subLabelAlpha);
     }
@@ -1658,6 +2082,7 @@ export class UIScene extends Phaser.Scene {
   private refreshMobileCopyState(): void {
     const mobileCopy = this.shouldUseMobileCopy();
     this.returnHintText.setVisible(!mobileCopy);
+    this.returnHintGraphics?.setVisible(!mobileCopy);
     this.setTextIfChanged(this.endHelpText, mobileCopy ? 'Tap to continue' : 'Enter or Space continues');
   }
 
@@ -1970,6 +2395,7 @@ export class UIScene extends Phaser.Scene {
 
   private refreshWeaponIcons(weaponNames: string[]): void {
     for (let index = 0; index < this.weaponIconTexts.length; index += 1) {
+      const backing = this.weaponSlotBackings[index];
       const frame = this.weaponIconFrames[index];
       const label = this.weaponIconTexts[index];
       let image = this.weaponIconImages[index];
@@ -1977,18 +2403,22 @@ export class UIScene extends Phaser.Scene {
       const definition = weaponName ? findWeaponDefinitionByName(weaponName) : undefined;
 
       if (!definition) {
-        frame.setFillStyle(0x172033, 0.98);
-        frame.setStrokeStyle(1, 0x334155, 0.92);
+        backing?.setVisible(false);
+        frame.setFillStyle(DOODLE_COLORS.paperWarm, 0.95);
+        frame.setStrokeStyle(1.5, DOODLE_COLORS.ink, 0.9);
         frame.setVisible(false);
         label.setVisible(false);
         image?.setVisible(false);
         continue;
       }
 
-      frame.setFillStyle(definition.projectileColor, 0.16);
-      frame.setStrokeStyle(1, definition.projectileStrokeColor, 0.72);
+      const isArcBolt = definition.id === 'arc-bolt';
+      backing?.setVisible(true);
+      frame.setFillStyle(isArcBolt ? DOODLE_COLORS.weaponWellDark : DOODLE_COLORS.weaponWellLight, 0.98);
+      frame.setStrokeStyle(1.5, DOODLE_COLORS.ink, 1);
       frame.setVisible(true);
       this.setTextIfChanged(label, definition.shortLabel);
+      label.setColor(isArcBolt ? DOODLE_HEX.paper : DOODLE_HEX.ink);
       label.setVisible(true);
       const iconSlot = getWeaponIconAssetSlot(definition.id);
       if (shouldUseVisualAsset(this, 'weaponHudIcons', iconSlot)) {
@@ -1996,6 +2426,7 @@ export class UIScene extends Phaser.Scene {
           image = this.add
             .image(this.weaponSlotStartX + index * this.weaponSlotSpacing, this.weaponSlotY, iconSlot.key)
             .setDisplaySize(20, 20)
+            .setDepth(7)
             .setScrollFactor(0)
             .setVisible(false);
           this.weaponIconImages[index] = image;
@@ -2012,6 +2443,8 @@ export class UIScene extends Phaser.Scene {
   private refreshHudIconLayout(): void {
     this.hpIconImage?.setVisible(true);
     this.xpIconImage?.setVisible(true);
+    this.hpFallbackText?.setVisible(!this.hpIconImage);
+    this.xpFallbackText?.setVisible(!this.xpIconImage);
 
     if (!this.goldIconImage) {
       return;
@@ -2022,30 +2455,201 @@ export class UIScene extends Phaser.Scene {
     this.goldIconImage.setVisible(this.goldText.visible);
   }
 
+  private refreshTimerPill(stagePhase: string): void {
+    const nextKind: 'normal' | 'boss' = stagePhase === 'boss' ? 'boss' : 'normal';
+    if (this.timerPillKind === nextKind) {
+      return;
+    }
+
+    this.timerPillKind = nextKind;
+    const centerX = GAME_WIDTH / 2;
+    const centerY = 28;
+    if (nextKind === 'boss') {
+      drawDoodleCard(this.timerPillGraphics, {
+        cx: centerX,
+        cy: centerY,
+        width: 346,
+        height: 38,
+        cornerRadius: 12,
+        seed: 111,
+        fillColor: DOODLE_COLORS.paperDanger,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.5,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.28,
+        clear: true,
+      });
+      drawDoodleStrokeRect(this.timerPillGraphics, {
+        cx: centerX,
+        cy: centerY,
+        width: 336,
+        height: 30,
+        cornerRadius: 9,
+        seed: 112,
+        jitter: 0.5,
+        strokeColor: DOODLE_COLORS.danger,
+        strokeAlpha: 0.6,
+        strokeWidth: 1.5,
+      });
+      this.timerText.setPosition(centerX, centerY);
+      return;
+    }
+
+    drawDoodleCard(this.timerPillGraphics, {
+      cx: centerX,
+      cy: centerY,
+      width: 224,
+      height: 38,
+      cornerRadius: 12,
+      seed: 110,
+      fillColor: DOODLE_COLORS.paper,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2.5,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.28,
+      clear: true,
+    });
+    drawDoodleClockGlyph(this.timerPillGraphics, centerX - 82, centerY, 8, DOODLE_COLORS.ink);
+    this.timerText.setPosition(centerX + 12, centerY);
+  }
+
+  private refreshCoreShieldPill(
+    mapBuffType: string,
+    mapBuffRemainingMs: number,
+    levelUpActive: boolean,
+    classChoiceActive: boolean,
+    endActive: boolean,
+  ): void {
+    const label =
+      !levelUpActive && !classChoiceActive && !endActive
+        ? formatCoreShieldLabel(mapBuffType, mapBuffRemainingMs)
+        : null;
+
+    if (!label) {
+      this.coreShieldGraphics.setVisible(false);
+      this.coreShieldText.setVisible(false);
+      return;
+    }
+
+    this.setTextIfChanged(this.coreShieldText, label);
+    this.coreShieldGraphics.setVisible(true);
+    this.coreShieldText.setVisible(true);
+  }
+
+  private refreshStatusSummaryPill(): void {
+    const activeText = this.classStatusText.visible
+      ? this.classStatusText
+      : this.statSummaryText.visible
+        ? this.statSummaryText
+        : null;
+
+    if (!activeText) {
+      this.statusPillGraphics.setVisible(false);
+      return;
+    }
+
+    const modeKey = activeText === this.classStatusText ? 'class' : 'stat';
+    const nextKey = `${modeKey}:${activeText.text}`;
+    if (this.statusPillStateKey !== nextKey) {
+      this.statusPillStateKey = nextKey;
+      const width = Math.max(156, Math.ceil(activeText.width + 26));
+      const height = Math.max(24, Math.ceil(activeText.height + 10));
+      drawDoodleCard(this.statusPillGraphics, {
+        cx: activeText.x - 13 + width / 2,
+        cy: activeText.y,
+        width,
+        height,
+        cornerRadius: 8,
+        seed: 125,
+        jitter: 0.85,
+        fillColor: DOODLE_COLORS.paperGold,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.24,
+        clear: true,
+      });
+    }
+
+    this.statusPillGraphics.setVisible(true);
+  }
+
   private refreshAlert(kind: string, message: string): void {
     if (!message) {
       this.alertText.setVisible(false);
+      this.alertPillGraphics.setVisible(false);
       return;
     }
 
     const palette = this.getAlertPalette(kind);
-    this.setTextIfChanged(this.alertText, message.toUpperCase());
+    const upper = message.toUpperCase();
+    this.setTextIfChanged(this.alertText, upper);
     if (this.alertText.style.color !== palette.textColor) {
       this.alertText.setColor(palette.textColor);
     }
+
+    const nextKey = `${kind}:${upper}`;
+    if (this.alertPillStateKey !== nextKey) {
+      this.alertPillStateKey = nextKey;
+      const pillWidth = Math.max(150, Math.ceil(this.alertText.width + 28));
+      drawDoodleCard(this.alertPillGraphics, {
+        cx: GAME_WIDTH / 2,
+        cy: 64,
+        width: pillWidth,
+        height: 24,
+        cornerRadius: 9,
+        seed: 132,
+        jitter: 0.85,
+        fillColor: palette.pillColor,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.24,
+        clear: true,
+      });
+    }
+
+    this.alertPillGraphics.setVisible(true);
     this.alertText.setVisible(true);
   }
 
   private refreshRewardToast(message: string, color: string): void {
     if (!message) {
       this.rewardText.setVisible(false);
+      this.rewardPillGraphics.setVisible(false);
       return;
     }
 
     this.setTextIfChanged(this.rewardText, message);
-    if (this.rewardText.style.color !== color) {
-      this.rewardText.setColor(color);
+    if (this.rewardText.style.color !== DOODLE_HEX.ink) {
+      this.rewardText.setColor(DOODLE_HEX.ink);
     }
+
+    const nextKey = `${color}:${message}`;
+    if (this.rewardPillStateKey !== nextKey) {
+      this.rewardPillStateKey = nextKey;
+      const pillWidth = Math.max(190, Math.ceil(this.rewardText.width + 28));
+      const pillHeight = Math.max(24, Math.ceil(this.rewardText.height + 10));
+      drawDoodleCard(this.rewardPillGraphics, {
+        cx: GAME_WIDTH / 2,
+        cy: 92,
+        width: pillWidth,
+        height: pillHeight,
+        cornerRadius: 9,
+        seed: 134,
+        jitter: 0.85,
+        fillColor: DOODLE_COLORS.paperGold,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.24,
+        clear: true,
+      });
+    }
+
+    this.rewardPillGraphics.setVisible(true);
     this.rewardText.setVisible(true);
   }
 
@@ -2079,6 +2683,7 @@ export class UIScene extends Phaser.Scene {
   ): void {
     const visible = active && !levelUpActive && !endActive;
     this.eventPanel.setVisible(false);
+    this.eventPillGraphics.setVisible(visible);
     this.eventTitleText.setVisible(visible);
     this.eventBodyText.setVisible(visible);
     this.eventTimerText.setVisible(false);
@@ -2100,22 +2705,22 @@ export class UIScene extends Phaser.Scene {
     this.orientationHintContainer.setVisible(shouldShow);
   }
 
-  private getAlertPalette(kind: string): { textColor: string; backgroundColor: string } {
+  private getAlertPalette(kind: string): { textColor: string; backgroundColor: string; pillColor: number } {
     switch (kind) {
       case 'hero':
-        return { textColor: '#f5d0fe', backgroundColor: '#3b0764' };
+        return { textColor: DOODLE_HEX.ink, backgroundColor: '#3b0764', pillColor: DOODLE_COLORS.paperPurple };
       case 'elite':
-        return { textColor: '#e9d5ff', backgroundColor: '#4c1d95' };
+        return { textColor: DOODLE_HEX.ink, backgroundColor: '#4c1d95', pillColor: DOODLE_COLORS.paperPurple };
       case 'miniboss':
-        return { textColor: '#fbcfe8', backgroundColor: '#831843' };
+        return { textColor: DOODLE_HEX.ink, backgroundColor: '#831843', pillColor: DOODLE_COLORS.paperPink };
       case 'boss':
-        return { textColor: '#fecaca', backgroundColor: '#7f1d1d' };
+        return { textColor: DOODLE_HEX.ink, backgroundColor: '#7f1d1d', pillColor: DOODLE_COLORS.paperDanger };
       case 'victory':
-        return { textColor: '#fef08a', backgroundColor: '#713f12' };
+        return { textColor: DOODLE_HEX.ink, backgroundColor: '#713f12', pillColor: DOODLE_COLORS.paperGold };
       case 'defeat':
-        return { textColor: '#fecaca', backgroundColor: '#7f1d1d' };
+        return { textColor: DOODLE_HEX.ink, backgroundColor: '#7f1d1d', pillColor: DOODLE_COLORS.paperDanger };
       default:
-        return { textColor: '#dbeafe', backgroundColor: '#1e3a8a' };
+        return { textColor: DOODLE_HEX.ink, backgroundColor: '#1e3a8a', pillColor: DOODLE_COLORS.paperSky };
     }
   }
 
@@ -2310,6 +2915,7 @@ export class UIScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-ONE', this.handleSelectUpgradeOne, this);
     this.input.keyboard?.off('keydown-TWO', this.handleSelectUpgradeTwo, this);
     this.input.keyboard?.off('keydown-THREE', this.handleSelectUpgradeThree, this);
+    this.weaponSlotBackings = [];
     this.weaponIconFrames = [];
     this.weaponIconTexts = [];
     this.weaponIconImages = [];
@@ -2329,6 +2935,13 @@ export class UIScene extends Phaser.Scene {
     this.goldIconImage = null;
     this.hpIconImage = null;
     this.xpIconImage = null;
+    this.hpFallbackText = null;
+    this.xpFallbackText = null;
     this.pauseIconImage = null;
+    this.statusPillStateKey = '';
+    this.timerPillKind = '';
+    this.alertPillStateKey = '';
+    this.rewardPillStateKey = '';
+    this.activeAbilityVisualStateKey = '';
   }
 }
