@@ -5,7 +5,13 @@ import { ENEMY_ARCHETYPES } from '../data/enemies';
 import { HERO_LIST, type HeroDefinition } from '../data/heroes';
 import type { UiButtonAssetId } from '../data/assetSlots';
 import { WEAPON_DEFINITIONS } from '../data/weapons';
-import { getHeroIconAssetSlot, getUiButtonAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
+import {
+  getHeroIconAssetSlot,
+  getUiButtonAssetSlot,
+  getUiIconAssetSlot,
+  getWeaponIconAssetSlot,
+  shouldUseVisualAsset,
+} from '../utils/assetResolver';
 import {
   CONTROL_GUIDE_MODES,
   loadGameSave,
@@ -15,15 +21,57 @@ import {
   type LocalLeaderboardEntry,
 } from '../save/saveData';
 import { isHeroUnlocked, selectHero, unlockHero } from '../save/saveHeroes';
+import {
+  DOODLE_COLORS,
+  DOODLE_FONTS,
+  DOODLE_HEX,
+  DOODLE_OVERLAY_COLORS,
+  drawDoodleCard,
+  drawDoodleCircle,
+  drawDoodleStar,
+} from '../ui/doodleTheme';
+import {
+  drawHeroFallbackMascot,
+  drawHeroPortraitMedallion,
+  drawJanganLariHeaderLogo,
+  drawMenuBottomActionButtonChrome,
+  drawMenuIslandBackdrop,
+  drawMenuTopPillChrome,
+  getHeroThemePalette,
+} from '../ui/menuCodexArtwork';
 
 type CodexSection = 'runner' | 'weapon' | 'threats';
 
 export class MenuScene extends Phaser.Scene {
   private saveData!: GameSaveData;
+  private menuBackdropGraphics!: Phaser.GameObjects.Graphics;
+  private topGuidePillGraphics!: Phaser.GameObjects.Graphics;
+  private topGuideVisualKey = '';
+  private topGoldIconImage: Phaser.GameObjects.Image | null = null;
+  private featuredHeroChromeGraphics!: Phaser.GameObjects.Graphics;
+  private featuredHeroVisualKey = '';
+  private featuredHeroWeaponIconImage: Phaser.GameObjects.Image | null = null;
+  private statusBannerGraphics!: Phaser.GameObjects.Graphics;
+  private bottomButtonGraphics: Record<'start' | 'upgrades' | 'codex' | 'lastRun', Phaser.GameObjects.Graphics | null> = {
+    start: null,
+    upgrades: null,
+    codex: null,
+    lastRun: null,
+  };
+  private bottomButtonHover: Record<'start' | 'upgrades' | 'codex', boolean> = {
+    start: false,
+    upgrades: false,
+    codex: false,
+  };
   private goldText!: Phaser.GameObjects.Text;
   private bestScoreText!: Phaser.GameObjects.Text;
   private statusText!: Phaser.GameObjects.Text;
   private heroActionButtons: Phaser.GameObjects.Text[] = [];
+  private heroActionButtonGraphics: Phaser.GameObjects.Graphics[] = [];
+  private heroCardGraphics: Phaser.GameObjects.Graphics[] = [];
+  private heroCardVisualKeys: string[] = [];
+  private heroButtonVisualKeys: string[] = [];
+  private heroButtonHovered: boolean[] = [];
   private heroInfoTexts: Phaser.GameObjects.Text[] = [];
   private heroPanels: Phaser.GameObjects.Rectangle[] = [];
   private startButton!: Phaser.GameObjects.Text;
@@ -45,9 +93,11 @@ export class MenuScene extends Phaser.Scene {
   private codexWeaponContainer!: Phaser.GameObjects.Container;
   private codexThreatContainer!: Phaser.GameObjects.Container;
   private focusedHeroId: HeroDefinition['id'] = 'runner';
+  private focusedHeroStatusText!: Phaser.GameObjects.Text;
   private focusedHeroDetailName!: Phaser.GameObjects.Text;
   private focusedHeroDetailDesc!: Phaser.GameObjects.Text;
   private focusedHeroDetailWeapon!: Phaser.GameObjects.Text;
+  private focusedHeroDetailPassiveTitle!: Phaser.GameObjects.Text;
   private focusedHeroDetailPassive!: Phaser.GameObjects.Text;
   private focusedHeroPreviewContainer: Phaser.GameObjects.Container | null = null;
   private lastRunText!: Phaser.GameObjects.Text;
@@ -67,6 +117,11 @@ export class MenuScene extends Phaser.Scene {
   create(): void {
     this.saveData = loadGameSave();
     this.heroActionButtons = [];
+    this.heroActionButtonGraphics = [];
+    this.heroCardGraphics = [];
+    this.heroCardVisualKeys = [];
+    this.heroButtonVisualKeys = [];
+    this.heroButtonHovered = [];
     this.heroInfoTexts = [];
     this.heroPanels = [];
     this.codexSectionFrames = [];
@@ -76,227 +131,318 @@ export class MenuScene extends Phaser.Scene {
     this.focusedHeroPreviewContainer = null;
     this.startButtonIcon = null;
     this.codexCloseButtonIcon = null;
+    this.topGoldIconImage = null;
+    this.featuredHeroWeaponIconImage = null;
+    this.topGuideVisualKey = '';
+    this.featuredHeroVisualKey = '';
+    this.bottomButtonHover = { start: false, upgrades: false, codex: false };
 
-    this.cameras.main.setBackgroundColor('#0b1020');
+    this.cameras.main.setBackgroundColor('#21183c');
 
-    // ── Top bar ───────────────────────────────────────────────────────────
-    this.add.rectangle(GAME_WIDTH / 2, 22, GAME_WIDTH, 44, 0x0a0f1e, 0.97).setStrokeStyle(1, 0x1e3a5f, 0.6);
+    // ── Atmospheric twilight meadow backdrop + main cream hero stage ──────
+    this.menuBackdropGraphics = this.add.graphics().setDepth(0);
+    drawMenuIslandBackdrop(this.menuBackdropGraphics, GAME_WIDTH, GAME_HEIGHT);
+    drawJanganLariHeaderLogo(this.menuBackdropGraphics, 272, 74);
+
+    // Main cream hero workbench frame
+    drawDoodleCard(this.menuBackdropGraphics, {
+      cx: 806,
+      cy: 373,
+      width: 1178,
+      height: 432,
+      cornerRadius: 24,
+      seed: 101,
+      jitter: 1.7,
+      fillColor: DOODLE_COLORS.paperWarm,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 3.4,
+      shadowOffsetX: 6,
+      shadowOffsetY: 7,
+      shadowAlpha: 0.45,
+    });
+    drawDoodleCard(this.menuBackdropGraphics, {
+      cx: 800,
+      cy: 368,
+      width: 1170,
+      height: 424,
+      cornerRadius: 22,
+      seed: 105,
+      jitter: 1.5,
+      fillColor: DOODLE_COLORS.paper,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 3.2,
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+      shadowAlpha: 0,
+    });
+    this.menuBackdropGraphics.lineStyle(2, DOODLE_COLORS.paperWarm, 0.95);
+    this.menuBackdropGraphics.lineBetween(668, 186, 668, 554);
+
+    // Logo typography
+    this.add
+      .text(272, 74, 'Jangan Lari', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '50px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+      })
+      .setOrigin(0.5)
+      .setDepth(2);
 
     this.add
-      .text(18, 22, 'MENU TARGET', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '11px',
-        color: '#3b536a',
-        letterSpacing: 2.2,
+      .text(272, 128, "SHAPE SURVIVAL • DON'T STOP!", {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '12.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 0.9,
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5)
+      .setDepth(2);
 
+    // ── Top-right GOLD, BEST, and Guide pills ─────────────────────────────
+    const goldSlot = getUiIconAssetSlot('gold');
+    const hasGoldTexture = shouldUseVisualAsset(this, 'uiIcons', goldSlot);
+    drawMenuTopPillChrome(this.menuBackdropGraphics, 1072, 66, 186, 46, DOODLE_COLORS.paper, 'gold', 211, hasGoldTexture);
+    if (hasGoldTexture) {
+      this.topGoldIconImage = this.add.image(1003, 66, goldSlot.key).setDisplaySize(22, 22).setDepth(2);
+    }
     this.goldText = this.add
-      .text(GAME_WIDTH - 378, 22, `GOLD  ${this.saveData.totalGold}`, {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#fde68a',
-        backgroundColor: '#172036',
-        padding: { left: 12, right: 12, top: 5, bottom: 5 },
+      .text(1092, 66, `GOLD ${this.saveData.totalGold}`, {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '17px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
-      .setOrigin(0.5, 0.5);
+      .setOrigin(0.5)
+      .setDepth(2);
 
+    drawMenuTopPillChrome(this.menuBackdropGraphics, 1274, 66, 192, 46, DOODLE_COLORS.paper, 'best', 221, false);
     this.bestScoreText = this.add
-      .text(GAME_WIDTH - 218, 22, `BEST  ${this.saveData.bestScore}`, {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#fef08a',
-        backgroundColor: '#172036',
-        padding: { left: 12, right: 12, top: 5, bottom: 5 },
+      .text(1294, 66, `BEST ${this.saveData.bestScore}`, {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '17px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
-      .setOrigin(0.5, 0.5);
+      .setOrigin(0.5)
+      .setDepth(2);
 
+    this.topGuidePillGraphics = this.add.graphics().setDepth(1);
     this.guideButton = this.add
-      .text(GAME_WIDTH - 72, 22, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#dbeafe',
-        backgroundColor: '#172036',
-        padding: { left: 10, right: 10, top: 5, bottom: 5 },
+      .text(1476, 66, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        fixedWidth: 186,
+        fixedHeight: 46,
+        padding: { left: 26, top: 13 },
       })
-      .setOrigin(0.5, 0.5)
+      .setOrigin(0.5)
+      .setDepth(2)
       .setInteractive({ useHandCursor: true });
     this.guideButton.on('pointerdown', () => this.cycleControlGuideMode());
-    this.guideButton.on('pointerover', () => {
-      this.guideButton.setStyle({ color: '#ffffff', backgroundColor: '#1e3a5f' });
-    });
-    this.guideButton.on('pointerout', () => this.refreshGuideButton());
+    this.guideButton.on('pointerover', () => this.refreshGuideButton(true));
+    this.guideButton.on('pointerout', () => this.refreshGuideButton(false));
     this.refreshGuideButton();
 
-    // ── Left panel – SELECTED LOADOUT ─────────────────────────────────────
-    this.add.rectangle(188, 341, 376, 594, 0x0e1728, 0.97).setStrokeStyle(1, 0x253a55, 0.78);
+    // ── Left Featured Hero Inspector (x: 232..656) ────────────────────────
+    this.featuredHeroChromeGraphics = this.add.graphics().setDepth(2);
 
-    this.add
-      .text(18, 64, 'SELECTED LOADOUT', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '11px',
-        color: '#3b536a',
-        letterSpacing: 2,
+    this.focusedHeroStatusText = this.add
+      .text(588, 190, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '11.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 0.8,
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5)
+      .setDepth(3);
 
     this.focusedHeroDetailName = this.add
-      .text(18, 120, '', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '44px',
-        color: '#f8fafc',
+      .text(446, 356, '', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '26px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 1.2,
       })
-      .setOrigin(0, 0.5);
-
-    this.focusedHeroDetailDesc = this.add
-      .text(18, 168, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#6b8da8',
-        wordWrap: { width: 344 },
-        lineSpacing: 3,
-      })
-      .setOrigin(0, 0.5);
-
-    this.add.circle(188, 308, 76, 0x111f33, 0.5).setStrokeStyle(1, 0x1e3a5f, 0.44);
+      .setOrigin(0.5)
+      .setDepth(3);
 
     this.add
-      .text(18, 428, 'STARTER WEAPON', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '10px',
-        color: '#3b536a',
-        letterSpacing: 1.8,
+      .text(342, 410, 'STARTER WEAPON', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+        letterSpacing: 0.7,
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5)
+      .setDepth(3);
 
     this.focusedHeroDetailWeapon = this.add
-      .text(18, 450, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#bfdbfe',
+      .text(556, 410, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5)
+      .setDepth(3);
 
     this.add
-      .text(18, 482, 'PASSIVE', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '10px',
-        color: '#3b536a',
-        letterSpacing: 1.8,
+      .text(342, 450, 'PASSIVE', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+        letterSpacing: 0.7,
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5)
+      .setDepth(3);
+
+    this.focusedHeroDetailPassiveTitle = this.add
+      .text(546, 450, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+      })
+      .setOrigin(0.5)
+      .setDepth(3);
 
     this.focusedHeroDetailPassive = this.add
-      .text(18, 530, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#8ea6c1',
-        wordWrap: { width: 344 },
-        lineSpacing: 4,
-      })
-      .setOrigin(0, 0.5);
-
-    this.add
-      .text(18, 618, 'Short actionable copy only. Codex holds deeper notes.', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '11px',
-        color: '#2e4459',
-      })
-      .setOrigin(0, 0.5);
-
-    // ── Right panel – CHOOSE HERO ──────────────────────────────────────────
-    this.add.rectangle(988, 341, 1224, 594, 0x0d1726, 0.95).setStrokeStyle(1, 0x1e3a5f, 0.5);
-
-    this.add
-      .text(402, 70, 'CHOOSE HERO', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '11px',
-        color: '#3b536a',
-        letterSpacing: 2,
-      })
-      .setOrigin(0, 0.5);
-
-    this.add
-      .text(402, 114, 'Tap a hero. Start fast.', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '34px',
-        color: '#f8fafc',
-      })
-      .setOrigin(0, 0.5);
-
-    this.add
-      .text(402, 150, 'Pick below, then hit Start Run. Open Codex for deeper briefings.', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(446, 498, '', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '14px',
-        color: '#6b8da8',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        wordWrap: { width: 396 },
+        lineSpacing: 3,
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5)
+      .setDepth(3);
 
-    const cardW = 574;
-    const cardH = 118;
-    const cardGap = 14;
-    const gridTop = 174;
-    const col0cx = 402 + cardW / 2;
-    const col1cx = col0cx + cardW + cardGap;
+    this.focusedHeroDetailDesc = this.add
+      .text(446, 542, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '13px',
+        color: DOODLE_HEX.inkMuted,
+        align: 'center',
+        wordWrap: { width: 396 },
+        lineSpacing: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(3);
+
+    const featuredWeaponPreload = (
+      ['arc-bolt', 'ember-lance', 'twin-fangs', 'bloom-cannon'] as const
+    )
+      .map((id) => getWeaponIconAssetSlot(id))
+      .find((slot) => shouldUseVisualAsset(this, 'weaponHudIcons', slot));
+    if (featuredWeaponPreload) {
+      this.featuredHeroWeaponIconImage = this.add
+        .image(464, 410, featuredWeaponPreload.key)
+        .setDisplaySize(20, 20)
+        .setDepth(3)
+        .setVisible(false);
+    }
+
+    // ── Right 2x2 Hero Selection Grid (x: 686..1360) ──────────────────────
+    const cardW = 324;
+    const cardH = 182;
+    const colGap = 24;
+    const rowGap = 22;
+    const col0cx = 686 + cardW / 2;
+    const col1cx = col0cx + cardW + colGap;
+    const row0cy = 181 + cardH / 2;
+    const row1cy = row0cy + cardH + rowGap;
 
     for (let index = 0; index < HERO_LIST.length; index += 1) {
       const hero = HERO_LIST[index];
       const col = index % 2;
       const row = Math.floor(index / 2);
       const cx = col === 0 ? col0cx : col1cx;
-      const cy = gridTop + row * (cardH + cardGap) + cardH / 2;
+      const cy = row === 0 ? row0cy : row1cy;
 
-      const panel = this.add.rectangle(cx, cy, cardW, cardH, 0x182233, 0.98).setOrigin(0.5);
-      panel.setStrokeStyle(2, 0x334155, 1);
-      panel.setInteractive({ useHandCursor: true });
+      const cardGfx = this.add.graphics().setDepth(2);
+      const btnGfx = this.add.graphics().setDepth(3);
+
+      // Transparent interactive hit region matching card area cleanly
+      const panel = this.add
+        .rectangle(cx, cy, cardW, cardH, DOODLE_COLORS.paper, 0)
+        .setOrigin(0.5)
+        .setDepth(2)
+        .setInteractive({ useHandCursor: true });
       panel.on('pointerover', () => this.setFocusedHero(hero.id));
       panel.on('pointerdown', () => this.setFocusedHero(hero.id));
 
-      this.createHeroPreview(hero, cx - 238, cy);
+      this.createCardHeroPreview(hero, cx - 98, cy - 8, cardGfx);
 
       this.add
-        .text(cx - 200, cy - 24, hero.name, {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '22px',
-          color: '#f8fafc',
+        .text(cx + 46, cy - 46, hero.name.toUpperCase(), {
+          fontFamily: DOODLE_FONTS.display,
+          fontSize: '21px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
+          letterSpacing: 0.8,
         })
-        .setOrigin(0, 0.5);
+        .setOrigin(0.5)
+        .setDepth(4);
 
       const infoText = this.add
-        .text(cx - 200, cy + 4, '', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '13px',
-          color: '#6b8da8',
-          wordWrap: { width: 268 },
+        .text(cx + 46, cy - 6, '', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '13.5px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.inkMuted,
+          align: 'center',
+          wordWrap: { width: 196 },
           lineSpacing: 3,
         })
-        .setOrigin(0, 0);
+        .setOrigin(0.5)
+        .setDepth(4);
 
-      this.add
-        .text(cx - 200, cy + 38, 'tap to focus', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '10px',
-          color: '#2e4459',
+      const actionButton = this.add
+        .text(cx + 46, cy + 46, '', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '14.5px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
+          align: 'center',
+          fixedWidth: 184,
+          fixedHeight: 40,
+          padding: { top: 10 },
         })
-        .setOrigin(0, 0.5);
+        .setOrigin(0.5)
+        .setDepth(4)
+        .setInteractive({ useHandCursor: true });
 
-      const actionButton = this.createMenuButton(cx + 218, cy, '', () => this.handleHeroAction(hero));
-      actionButton.setFontSize('15px');
-      actionButton.setPadding(12, 7, 12, 7);
-      actionButton.on('pointerover', () => this.setFocusedHero(hero.id));
-
+      this.heroCardVisualKeys.push('');
+      this.heroButtonVisualKeys.push('');
+      this.heroButtonHovered.push(false);
+      this.heroCardGraphics.push(cardGfx);
+      this.heroActionButtonGraphics.push(btnGfx);
       this.heroPanels.push(panel);
       this.heroInfoTexts.push(infoText);
       this.heroActionButtons.push(actionButton);
-    }
 
-    this.lastRunText = this.add
-      .text(402, 498, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#3b536a',
-      })
-      .setOrigin(0, 0.5);
+      actionButton.on('pointerover', () => {
+        this.heroButtonHovered[index] = true;
+        this.setFocusedHero(hero.id);
+        this.renderSingleHeroCard(index);
+      });
+      actionButton.on('pointerout', () => {
+        this.heroButtonHovered[index] = false;
+        this.renderSingleHeroCard(index);
+      });
+      actionButton.on('pointerdown', () => this.handleHeroAction(hero));
+    }
 
     const codexBackdrop = this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.9)
@@ -548,48 +694,118 @@ export class MenuScene extends Phaser.Scene {
     this.codexOverlay.setDepth(30);
     this.codexOverlay.setVisible(false);
 
-    // ── Bottom action bar ─────────────────────────────────────────────────
-    this.add.rectangle(GAME_WIDTH / 2, 679, GAME_WIDTH, 82, 0x0a0f1e, 0.97).setStrokeStyle(1, 0x1e3a5f, 0.6);
+    // ── Bottom action strip (CODEX, UPGRADES, dominant START RUN, Last Run) ─
+    const codexGfx = this.add.graphics().setDepth(2);
+    const metaGfx = this.add.graphics().setDepth(2);
+    const startGfx = this.add.graphics().setDepth(2);
+    const lastRunGfx = this.add.graphics().setDepth(2);
+    this.bottomButtonGraphics = { codex: codexGfx, upgrades: metaGfx, start: startGfx, lastRun: lastRunGfx };
 
-    this.startButton = this.add
-      .text(210, 679, 'START RUN', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '26px',
-        color: '#111827',
-        backgroundColor: '#fde68a',
-        padding: { left: 28, right: 28, top: 12, bottom: 12 },
+    this.codexButton = this.add
+      .text(278, 646, 'CODEX', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '20px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        fixedWidth: 184,
+        fixedHeight: 54,
+        padding: { left: 26, top: 15 },
       })
       .setOrigin(0.5)
+      .setDepth(3)
+      .setInteractive({ useHandCursor: true });
+    this.codexButton.on('pointerover', () => {
+      this.bottomButtonHover.codex = true;
+      drawMenuBottomActionButtonChrome(codexGfx, 278, 646, 184, 54, 'codex', true);
+    });
+    this.codexButton.on('pointerout', () => {
+      this.bottomButtonHover.codex = false;
+      drawMenuBottomActionButtonChrome(codexGfx, 278, 646, 184, 54, 'codex', false);
+    });
+    this.codexButton.on('pointerdown', () => this.openCodex());
+
+    this.metaButton = this.add
+      .text(490, 646, 'UPGRADES', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '20px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        fixedWidth: 204,
+        fixedHeight: 54,
+        padding: { left: 28, top: 15 },
+      })
+      .setOrigin(0.5)
+      .setDepth(3)
+      .setInteractive({ useHandCursor: true });
+    this.metaButton.on('pointerover', () => {
+      this.bottomButtonHover.upgrades = true;
+      drawMenuBottomActionButtonChrome(metaGfx, 490, 646, 204, 54, 'upgrades', true);
+    });
+    this.metaButton.on('pointerout', () => {
+      this.bottomButtonHover.upgrades = false;
+      drawMenuBottomActionButtonChrome(metaGfx, 490, 646, 204, 54, 'upgrades', false);
+    });
+    this.metaButton.on('pointerdown', () => this.openMeta());
+
+    this.startButtonIcon = this.createUiButtonIcon('play', 676, 646, 28);
+    if (this.startButtonIcon) {
+      this.startButtonIcon.setAlpha(1).setDepth(4);
+    }
+
+    this.startButton = this.add
+      .text(800, 646, 'START RUN', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '29px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        fixedWidth: 344,
+        fixedHeight: 72,
+        padding: { left: 32, top: 19 },
+      })
+      .setOrigin(0.5)
+      .setDepth(3)
       .setInteractive({ useHandCursor: true });
     this.startButton.on('pointerover', () => {
-      this.startButton.setStyle({ color: '#000000', backgroundColor: '#fef3c7' });
+      this.bottomButtonHover.start = true;
+      drawMenuBottomActionButtonChrome(startGfx, 800, 646, 344, 72, 'start', true, Boolean(this.startButtonIcon));
     });
     this.startButton.on('pointerout', () => {
-      this.startButton.setStyle({ color: '#111827', backgroundColor: '#fde68a' });
+      this.bottomButtonHover.start = false;
+      drawMenuBottomActionButtonChrome(startGfx, 800, 646, 344, 72, 'start', false, Boolean(this.startButtonIcon));
     });
     this.startButton.on('pointerdown', () => this.startRun());
-    this.startButtonIcon = this.createUiButtonIcon(
-      'play',
-      this.startButton.x - this.startButton.displayWidth / 2 + 14,
-      this.startButton.y,
-      24,
-    );
 
-    this.metaButton = this.createMenuButton(454, 679, 'UPGRADES', () => this.openMeta());
-    this.metaButton.setFontSize('20px');
-    this.metaButton.setPadding(18, 10, 18, 10);
+    drawMenuBottomActionButtonChrome(codexGfx, 278, 646, 184, 54, 'codex', false);
+    drawMenuBottomActionButtonChrome(metaGfx, 490, 646, 204, 54, 'upgrades', false);
+    drawMenuBottomActionButtonChrome(startGfx, 800, 646, 344, 72, 'start', false, Boolean(this.startButtonIcon));
+    drawMenuBottomActionButtonChrome(lastRunGfx, 1236, 646, 434, 50, 'lastRun', false);
 
-    this.codexButton = this.createMenuButton(600, 679, 'CODEX', () => this.openCodex());
-    this.codexButton.setFontSize('20px');
-    this.codexButton.setPadding(18, 10, 18, 10);
-
-    this.statusText = this.add
-      .text(724, 679, 'Status/toast appears here only after a real action.', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#2e4459',
+    this.lastRunText = this.add
+      .text(1254, 646, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '14.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        wordWrap: { width: 372 },
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5)
+      .setDepth(3);
+
+    this.statusBannerGraphics = this.add.graphics().setDepth(4).setVisible(false);
+    this.statusText = this.add
+      .text(800, 701, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+      })
+      .setOrigin(0.5)
+      .setDepth(5)
+      .setVisible(false);
 
     this.input.keyboard?.on('keydown-ENTER', this.handleStartShortcut, this);
     this.input.keyboard?.on('keydown-SPACE', this.handleStartShortcut, this);
@@ -690,19 +906,21 @@ export class MenuScene extends Phaser.Scene {
       }
 
       this.saveData = nextSave;
-      this.statusText.setText(`${hero.name} selected for the next run.`);
+      this.focusedHeroId = hero.id;
+      this.setStatusMessage(`${hero.name} selected for the next run.`);
       this.refreshHeroView();
       return;
     }
 
     const nextSave = unlockHero(this.saveData, hero);
     if (!nextSave) {
-      this.statusText.setText(`Need ${hero.unlockCost ?? 0} gold to unlock ${hero.name}.`);
+      this.setStatusMessage(`Need ${hero.unlockCost ?? 0} gold to unlock ${hero.name}.`);
       return;
     }
 
     this.saveData = nextSave;
-    this.statusText.setText(`${hero.name} unlocked and selected.`);
+    this.focusedHeroId = hero.id;
+    this.setStatusMessage(`${hero.name} unlocked and selected.`);
     this.refreshHeroView();
   }
 
@@ -710,16 +928,65 @@ export class MenuScene extends Phaser.Scene {
     const currentIndex = CONTROL_GUIDE_MODES.indexOf(this.saveData.controlGuideMode);
     const nextMode = CONTROL_GUIDE_MODES[(currentIndex + 1) % CONTROL_GUIDE_MODES.length];
     this.saveData = updateControlGuideMode(this.saveData, nextMode);
-    this.statusText.setText(`Control guide: ${this.getControlGuideModeLabel(nextMode)}.`);
-    this.refreshGuideButton();
+    this.setStatusMessage(`Control guide: ${this.getControlGuideModeLabel(nextMode)}.`);
+    this.refreshGuideButton(false);
   }
 
-  private refreshGuideButton(): void {
-    this.guideButton.setText(`Guide ${this.getControlGuideModeLabel(this.saveData.controlGuideMode)}`);
-    this.guideButton.setStyle({
-      color: this.saveData.controlGuideMode === 'hidden' ? '#94a3b8' : '#dbeafe',
-      backgroundColor: this.saveData.controlGuideMode === 'visible' ? '#1e3a5f' : '#172036',
+  private setStatusMessage(message: string): void {
+    this.statusText.setText(message);
+    if (!message) {
+      this.statusText.setVisible(false);
+      this.statusBannerGraphics?.setVisible(false);
+      return;
+    }
+
+    const bannerW = Math.min(540, Math.max(260, message.length * 8.5 + 36));
+    this.statusBannerGraphics.clear();
+    drawDoodleCard(this.statusBannerGraphics, {
+      cx: GAME_WIDTH / 2,
+      cy: 701,
+      width: bannerW,
+      height: 28,
+      cornerRadius: 10,
+      seed: 981,
+      jitter: 0.6,
+      fillColor: DOODLE_COLORS.paperGold,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2,
+      shadowOffsetX: 2,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.3,
     });
+    this.statusBannerGraphics.setVisible(true);
+    this.statusText.setVisible(true);
+  }
+
+  private refreshGuideButton(hovered = false): void {
+    const mode = this.saveData.controlGuideMode;
+    this.guideButton.setText(`Guide ${this.getControlGuideModeLabel(mode)}`);
+    this.guideButton.setColor(mode === 'hidden' ? DOODLE_HEX.inkMuted : DOODLE_HEX.ink);
+
+    const key = `${mode}:${hovered ? 1 : 0}`;
+    if (this.topGuideVisualKey === key || !this.topGuidePillGraphics) {
+      return;
+    }
+    this.topGuideVisualKey = key;
+
+    const fillColor =
+      mode === 'visible'
+        ? hovered
+          ? 0xdcfce7
+          : DOODLE_OVERLAY_COLORS.supportBadge
+        : mode === 'hidden'
+          ? hovered
+            ? DOODLE_COLORS.paperWarm
+            : DOODLE_COLORS.paperDisabled
+          : hovered
+            ? DOODLE_COLORS.paperHover
+            : DOODLE_COLORS.paperPurple;
+
+    this.topGuidePillGraphics.clear();
+    drawMenuTopPillChrome(this.topGuidePillGraphics, 1476, 66, 186, 46, fillColor, 'guide', 231, false);
   }
 
   private getControlGuideModeLabel(mode: ControlGuideMode): string {
@@ -734,41 +1001,142 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
-  private refreshHeroView(): void {
-    this.goldText.setText(`GOLD  ${this.saveData.totalGold}`);
-    this.bestScoreText.setText(`BEST  ${this.saveData.bestScore}`);
+  private getHeroGridCenter(index: number): { cx: number; cy: number } {
+    const cardW = 324;
+    const cardH = 182;
+    const col = index % 2;
+    const row = Math.floor(index / 2);
+    return {
+      cx: (col === 0 ? 686 : 686 + cardW + 24) + cardW / 2,
+      cy: (row === 0 ? 181 : 181 + cardH + 22) + cardH / 2,
+    };
+  }
 
-    for (let index = 0; index < HERO_LIST.length; index += 1) {
-      const hero = HERO_LIST[index];
-      const unlocked = isHeroUnlocked(this.saveData, hero.id);
-      const selected = this.saveData.selectedHero === hero.id;
-      const button = this.heroActionButtons[index];
-      const infoText = this.heroInfoTexts[index];
-      const panel = this.heroPanels[index];
+  private renderSingleHeroCard(index: number): void {
+    const hero = HERO_LIST[index];
+    if (!hero) {
+      return;
+    }
 
-      infoText.setText(this.buildHeroSummary(hero, unlocked, selected));
-      const focused = hero.id === this.focusedHeroId;
-      panel.setStrokeStyle(
-        selected ? 3 : focused ? 2 : 2,
-        selected ? 0xfde68a : focused ? 0x93c5fd : hero.appearance.strokeColor,
-        selected ? 1 : focused ? 0.95 : 0.8,
-      );
-      panel.setFillStyle(selected ? 0x1b2a3e : focused ? 0x18253a : 0x182233, 0.98);
+    const unlocked = isHeroUnlocked(this.saveData, hero.id);
+    const selected = this.saveData.selectedHero === hero.id;
+    const focused = hero.id === this.focusedHeroId;
+    const hovered = Boolean(this.heroButtonHovered[index]);
+    const affordable = unlocked || this.saveData.totalGold >= (hero.unlockCost ?? 0);
+    const hasHeroIcon = shouldUseVisualAsset(this, 'heroMenuIcons', getHeroIconAssetSlot(hero.id));
+
+    const button = this.heroActionButtons[index];
+    const infoText = this.heroInfoTexts[index];
+    const cardGfx = this.heroCardGraphics[index];
+    const btnGfx = this.heroActionButtonGraphics[index];
+    const { cx, cy } = this.getHeroGridCenter(index);
+
+    infoText.setText(this.buildHeroSummary(hero, unlocked, selected));
+
+    if (selected) {
+      button.setText('SELECTED');
+    } else if (unlocked) {
+      button.setText('SELECT');
+    } else {
+      button.setText(`UNLOCK ${hero.unlockCost ?? 0}g`);
+    }
+
+    const cardKey = `${hero.id}:${selected ? 1 : 0}:${focused ? 1 : 0}:${unlocked ? 1 : 0}:${hasHeroIcon ? 1 : 0}`;
+    if (cardGfx && this.heroCardVisualKeys[index] !== cardKey) {
+      this.heroCardVisualKeys[index] = cardKey;
+      cardGfx.clear();
+
+      const palette = getHeroThemePalette(hero.id);
+      if (selected || focused) {
+        drawDoodleCard(cardGfx, {
+          cx,
+          cy,
+          width: 334,
+          height: 192,
+          cornerRadius: 20,
+          seed: 310 + index * 17,
+          jitter: 1.4,
+          fillColor: selected ? DOODLE_COLORS.gold : DOODLE_COLORS.xp,
+          strokeColor: DOODLE_COLORS.ink,
+          strokeWidth: 2.8,
+          shadowOffsetX: 3,
+          shadowOffsetY: 4,
+          shadowAlpha: 0.35,
+        });
+      }
+
+      drawDoodleCard(cardGfx, {
+        cx,
+        cy,
+        width: 324,
+        height: 182,
+        cornerRadius: 18,
+        seed: 330 + index * 19,
+        jitter: 1.2,
+        fillColor: selected ? DOODLE_COLORS.paperHover : focused ? palette.cardTint : unlocked ? DOODLE_COLORS.paper : DOODLE_COLORS.paperWarm,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: selected ? 3.2 : 2.6,
+        shadowOffsetX: selected || focused ? 0 : 2,
+        shadowOffsetY: selected || focused ? 0 : 3,
+        shadowAlpha: selected || focused ? 0 : 0.28,
+      });
+
+      drawHeroPortraitMedallion(cardGfx, hero.id, cx - 98, cy - 8, 40, false);
+      if (!hasHeroIcon) {
+        drawHeroFallbackMascot(cardGfx, hero.id, cx - 98, cy - 8, 40);
+      }
 
       if (selected) {
-        button.setText('Selected');
-        button.setStyle({ color: '#111827', backgroundColor: '#fde68a' });
-        continue;
+        cardGfx.lineStyle(2.6, DOODLE_COLORS.gold, 1);
+        cardGfx.lineBetween(cx + 150, cy + 36, cx + 162, cy + 30);
+        cardGfx.lineBetween(cx + 152, cy + 48, cx + 166, cy + 48);
+        cardGfx.lineBetween(cx + 150, cy + 60, cx + 162, cy + 66);
       }
+    }
 
-      if (unlocked) {
-        button.setText('Select');
-        button.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
-        continue;
-      }
+    const btnKey = `${selected ? 's' : unlocked ? 'u' : affordable ? 'a' : 'l'}:${hovered ? 1 : 0}`;
+    if (btnGfx && this.heroButtonVisualKeys[index] !== btnKey) {
+      this.heroButtonVisualKeys[index] = btnKey;
+      btnGfx.clear();
 
-      button.setText(`Unlock ${hero.unlockCost ?? 0}g`);
-      button.setStyle({ color: '#bfdbfe', backgroundColor: '#1e3a5f' });
+      const btnFill = selected
+        ? DOODLE_COLORS.mint
+        : unlocked
+          ? hovered
+            ? DOODLE_COLORS.gold
+            : DOODLE_COLORS.paperGold
+          : affordable
+            ? hovered
+              ? DOODLE_COLORS.gold
+              : 0xfde68a
+            : hovered
+              ? DOODLE_COLORS.paperWarm
+              : DOODLE_COLORS.paperPurple;
+
+      drawDoodleCard(btnGfx, {
+        cx: cx + 46,
+        cy: cy + 46,
+        width: 184,
+        height: 40,
+        cornerRadius: 13,
+        seed: 370 + index * 23,
+        jitter: 0.9,
+        fillColor: btnFill,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: hovered && !selected ? 3 : 2.4,
+        shadowOffsetX: 2,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.3,
+      });
+    }
+  }
+
+  private refreshHeroView(): void {
+    this.goldText.setText(`GOLD ${this.saveData.totalGold}`);
+    this.bestScoreText.setText(`BEST ${this.saveData.bestScore}`);
+
+    for (let index = 0; index < HERO_LIST.length; index += 1) {
+      this.renderSingleHeroCard(index);
     }
 
     this.refreshCodexView();
@@ -779,105 +1147,223 @@ export class MenuScene extends Phaser.Scene {
   private refreshFocusedHeroDetail(): void {
     const hero = HERO_LIST.find((h) => h.id === this.focusedHeroId) ?? HERO_LIST[0];
     const weapon = WEAPON_DEFINITIONS[hero.startingWeaponId];
+    const unlocked = isHeroUnlocked(this.saveData, hero.id);
+    const selected = this.saveData.selectedHero === hero.id;
+    const colonIndex = hero.passiveLabel.indexOf(':');
+    const passiveTitle = (colonIndex >= 0 ? hero.passiveLabel.slice(0, colonIndex) : hero.passiveLabel).trim();
 
-    this.focusedHeroDetailName.setText(hero.name);
+    this.focusedHeroDetailName.setText(hero.name.toUpperCase());
     this.focusedHeroDetailDesc.setText(hero.description);
-    this.focusedHeroDetailWeapon.setText(weapon.name);
+    this.focusedHeroDetailWeapon.setText(weapon.name.toUpperCase());
+    this.focusedHeroDetailPassiveTitle.setText(passiveTitle.toUpperCase());
     this.focusedHeroDetailPassive.setText(hero.passiveLabel);
+    this.focusedHeroStatusText.setText(
+      selected ? 'ACTIVE HERO' : unlocked ? 'UNLOCKED' : `LOCKED · ${hero.unlockCost ?? 0}g`,
+    );
+
+    const iconSlot = getHeroIconAssetSlot(hero.id);
+    const hasHeroIcon = shouldUseVisualAsset(this, 'heroMenuIcons', iconSlot);
+    const weaponSlot = getWeaponIconAssetSlot(weapon.id);
+    const hasWeaponIcon = Boolean(
+      this.featuredHeroWeaponIconImage && shouldUseVisualAsset(this, 'weaponHudIcons', weaponSlot),
+    );
+    if (hasWeaponIcon && this.featuredHeroWeaponIconImage) {
+      this.featuredHeroWeaponIconImage.setTexture(weaponSlot.key).setPosition(464, 410).setVisible(true);
+    } else {
+      this.featuredHeroWeaponIconImage?.setVisible(false);
+    }
+
+    const detailKey = `${hero.id}:${selected ? 1 : 0}:${unlocked ? 1 : 0}:${hasHeroIcon ? 1 : 0}:${hasWeaponIcon ? 1 : 0}`;
+    if (this.featuredHeroVisualKey !== detailKey && this.featuredHeroChromeGraphics) {
+      this.featuredHeroVisualKey = detailKey;
+      const g = this.featuredHeroChromeGraphics;
+      const palette = getHeroThemePalette(hero.id);
+      g.clear();
+
+      // Portrait medallion + comic rays
+      drawHeroPortraitMedallion(g, hero.id, 446, 264, 62, true);
+      if (!hasHeroIcon) {
+        drawHeroFallbackMascot(g, hero.id, 446, 264, 62);
+      }
+
+      // Status pill top-right of showcase
+      drawDoodleCard(g, {
+        cx: 588,
+        cy: 190,
+        width: 132,
+        height: 28,
+        cornerRadius: 10,
+        seed: 411,
+        jitter: 0.7,
+        fillColor: selected ? DOODLE_COLORS.mint : unlocked ? DOODLE_COLORS.paperGold : DOODLE_COLORS.paperPurple,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 2,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.25,
+      });
+
+      // Tinted hero name banner ribbon + mini doodle crown
+      drawDoodleCard(g, {
+        cx: 446,
+        cy: 356,
+        width: 266,
+        height: 44,
+        cornerRadius: 14,
+        seed: 421,
+        jitter: 1.0,
+        fillColor: palette.ribbon,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.8,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.3,
+      });
+      const crownPts = [
+        { x: 312, y: 344 },
+        { x: 308, y: 328 },
+        { x: 319, y: 335 },
+        { x: 325, y: 322 },
+        { x: 333, y: 335 },
+        { x: 342, y: 327 },
+        { x: 338, y: 344 },
+      ];
+      g.fillStyle(DOODLE_COLORS.gold, 1);
+      g.fillPoints(crownPts, true, true);
+      g.lineStyle(2.2, DOODLE_COLORS.ink, 1);
+      g.strokePoints(crownPts, true, true);
+
+      // Loadout row 1: [ STARTER WEAPON ] [ icon + WEAPON ]
+      drawDoodleCard(g, {
+        cx: 342,
+        cy: 410,
+        width: 162,
+        height: 30,
+        cornerRadius: 10,
+        seed: 431,
+        jitter: 0.6,
+        fillColor: DOODLE_COLORS.paperWarm,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.2,
+      });
+      drawDoodleCard(g, {
+        cx: 544,
+        cy: 410,
+        width: 214,
+        height: 30,
+        cornerRadius: 10,
+        seed: 435,
+        jitter: 0.6,
+        fillColor: DOODLE_COLORS.paperGold,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.2,
+      });
+      if (hasWeaponIcon) {
+        drawDoodleCircle(g, {
+          cx: 464,
+          cy: 410,
+          radius: 12,
+          fillColor: weapon.id === 'arc-bolt' ? DOODLE_COLORS.weaponWellDark : DOODLE_COLORS.weaponWellLight,
+          strokeColor: DOODLE_COLORS.ink,
+          strokeWidth: 1.6,
+          seed: 437,
+          segments: 12,
+          jitter: 0.2,
+        });
+      }
+
+      // Loadout row 2: [ PASSIVE ] [ PASSIVE TITLE ]
+      drawDoodleCard(g, {
+        cx: 342,
+        cy: 450,
+        width: 162,
+        height: 30,
+        cornerRadius: 10,
+        seed: 441,
+        jitter: 0.6,
+        fillColor: DOODLE_COLORS.paperWarm,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.2,
+      });
+      drawDoodleCard(g, {
+        cx: 544,
+        cy: 450,
+        width: 214,
+        height: 30,
+        cornerRadius: 10,
+        seed: 445,
+        jitter: 0.6,
+        fillColor: DOODLE_COLORS.paperSky,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.2,
+      });
+    }
 
     if (this.focusedHeroPreviewContainer) {
       this.focusedHeroPreviewContainer.destroy();
       this.focusedHeroPreviewContainer = null;
     }
 
-    const px = 188;
-    const py = 308;
-    const size = Math.round(hero.appearance.size * 1.8);
-    const aura = this.add.circle(px, py, size * 0.88, hero.appearance.auraColor, 0.24);
-    aura.setBlendMode(Phaser.BlendModes.ADD);
-
-    const iconSlot = getHeroIconAssetSlot(hero.id);
-    if (shouldUseVisualAsset(this, 'heroMenuIcons', iconSlot)) {
-      const icon = this.add.image(px, py, iconSlot.key).setDisplaySize(size, size);
-      icon.setAngle(hero.appearance.angle);
-      this.focusedHeroPreviewContainer = this.add.container(0, 0, [aura, icon]);
-      return;
+    if (hasHeroIcon) {
+      const icon = this.add.image(446, 264, iconSlot.key).setDisplaySize(86, 86);
+      this.focusedHeroPreviewContainer = this.add.container(0, 0, [icon]).setDepth(3);
     }
-
-    const body = this.add.rectangle(px, py, size, size, hero.appearance.bodyColor);
-    body.setAngle(hero.appearance.angle);
-    body.setStrokeStyle(4, hero.appearance.strokeColor, 0.95);
-    let marker: Phaser.GameObjects.GameObject;
-    if (hero.appearance.markerShape === 'dot') {
-      marker = this.add.circle(px, py - size * 0.24, Math.max(6, size * 0.14), hero.appearance.markerColor, 0.95);
-    } else {
-      marker = this.add.rectangle(px, py - size * 0.24, size * 0.5, 8, hero.appearance.markerColor, 0.95);
-    }
-    this.focusedHeroPreviewContainer = this.add.container(0, 0, [aura, body, marker]);
   }
 
   private refreshLastRunText(): void {
     const lb: LocalLeaderboardEntry[] = this.saveData.localLeaderboard;
     if (!lb || lb.length === 0) {
-      this.lastRunText.setText('No runs yet — go fight.');
+      this.lastRunText.setText('Last Run: No runs yet — go fight.');
       return;
     }
     const e = lb[0];
     const totalSec = Math.floor((e.timeSurvivedMs ?? 0) / 1000);
     const timeStr = `${Math.floor(totalSec / 60)}:${(totalSec % 60).toString().padStart(2, '0')}`;
-    this.lastRunText.setText(`Best run  Score ${e.score}  ${e.classTitle}  LV ${e.level}  K ${e.kills}  ${timeStr}`);
+    this.lastRunText.setText(`Last Run: Score ${e.score} · LV ${e.level} (${e.classTitle}) · ${timeStr}`);
   }
 
   private buildHeroSummary(hero: HeroDefinition, unlocked: boolean, selected: boolean): string {
     const startingWeapon = WEAPON_DEFINITIONS[hero.startingWeaponId];
-    const traits: string[] = [`${startingWeapon.shortLabel} ${startingWeapon.name}`];
+    let trait = startingWeapon.name;
 
     if (hero.maxHealthBonus > 0) {
-      traits.push(`+${hero.maxHealthBonus} HP`);
+      trait = `+${hero.maxHealthBonus} HP`;
     } else if (hero.moveSpeedBonus > 0) {
-      traits.push(`+${hero.moveSpeedBonus} speed`);
+      trait = `+${hero.moveSpeedBonus} speed`;
     } else if (hero.pickupRangeBonus > 0) {
-      traits.push(`+${hero.pickupRangeBonus} pickup`);
+      trait = `+${hero.pickupRangeBonus} pickup`;
     } else if (hero.startingDamageBonus > 0) {
-      traits.push(`+${hero.startingDamageBonus} damage`);
+      trait = `+${hero.startingDamageBonus} damage`;
     } else if (hero.fireCooldownReductionMs > 0) {
-      traits.push(`-${hero.fireCooldownReductionMs} ms cooldown`);
+      trait = `-${hero.fireCooldownReductionMs} ms cooldown`;
     }
 
-    if (selected) {
-      traits.push('Ready');
-    } else if (!unlocked) {
-      traits.push(`Locked ${hero.unlockCost ?? 0}g`);
-    } else {
-      traits.push('Available');
-    }
-
-    return traits.join('\n');
+    const status = selected ? 'Active' : !unlocked ? `Locked (${hero.unlockCost ?? 0}g)` : 'Ready';
+    return `${startingWeapon.name}\n${trait} · ${status}`;
   }
 
-  private createHeroPreview(hero: HeroDefinition, x: number, y: number): void {
-    const { appearance } = hero;
-
-    const aura = this.add.circle(x, y, appearance.size * 0.92, appearance.auraColor, 0.18);
-    aura.setBlendMode(Phaser.BlendModes.ADD);
-
+  private createCardHeroPreview(
+    hero: HeroDefinition,
+    x: number,
+    y: number,
+    _cardGraphics: Phaser.GameObjects.Graphics,
+  ): void {
     const iconSlot = getHeroIconAssetSlot(hero.id);
     if (shouldUseVisualAsset(this, 'heroMenuIcons', iconSlot)) {
-      const icon = this.add.image(x, y, iconSlot.key).setDisplaySize(appearance.size * 1.25, appearance.size * 1.25);
-      icon.setAngle(appearance.angle);
-      return;
+      this.add.image(x, y, iconSlot.key).setDisplaySize(56, 56).setDepth(3);
     }
-
-    const body = this.add.rectangle(x, y, appearance.size, appearance.size, appearance.bodyColor);
-    body.setAngle(appearance.angle);
-    body.setStrokeStyle(3, appearance.strokeColor, 0.95);
-
-    if (appearance.markerShape === 'dot') {
-      this.add.circle(x, y - appearance.size * 0.24, Math.max(4, appearance.size * 0.14), appearance.markerColor, 0.95);
-      return;
-    }
-
-    this.add.rectangle(x, y - appearance.size * 0.24, appearance.size * 0.5, 7, appearance.markerColor, 0.95);
   }
 
   private createMenuButton(
@@ -1085,5 +1571,24 @@ export class MenuScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-SPACE', this.handleStartShortcut, this);
     this.input.keyboard?.off('keydown-M', this.handleMetaShortcut, this);
     this.input.keyboard?.off('keydown-ESC', this.handleEscapeShortcut, this);
+    this.heroActionButtons = [];
+    this.heroActionButtonGraphics = [];
+    this.heroCardGraphics = [];
+    this.heroCardVisualKeys = [];
+    this.heroButtonVisualKeys = [];
+    this.heroButtonHovered = [];
+    this.heroInfoTexts = [];
+    this.heroPanels = [];
+    this.codexSectionFrames = [];
+    this.codexSectionTexts = [];
+    this.codexThreatTitleTexts = [];
+    this.codexThreatBodyTexts = [];
+    this.topGoldIconImage = null;
+    this.featuredHeroWeaponIconImage = null;
+    this.startButtonIcon = null;
+    this.codexCloseButtonIcon = null;
+    this.topGuideVisualKey = '';
+    this.featuredHeroVisualKey = '';
+    this.bottomButtonGraphics = { start: null, upgrades: null, codex: null, lastRun: null };
   }
 }
