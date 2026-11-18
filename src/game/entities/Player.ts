@@ -12,8 +12,10 @@ import {
   PLAYER_XP_PER_LEVEL,
 } from '../config/constants';
 import type { HeroDefinition } from '../data/heroes';
+import { getHeroSpritePresentation, type HeroSpritePresentation } from '../data/heroSpritePresentation';
 import type { TankClassVisualIdentity } from '../data/tankClasses';
 import { resolveHpRegenTick } from '../systems/hpRegen';
+import { drawPlayerAimChevron, drawPlayerFootingBadge } from '../ui/entitySilhouetteRenderer';
 import { getHeroSkinAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 
 export class Player extends Phaser.GameObjects.Rectangle {
@@ -25,9 +27,12 @@ export class Player extends Phaser.GameObjects.Rectangle {
   private readonly turret: Phaser.GameObjects.Arc;
   private readonly heroMarker: Phaser.GameObjects.Shape;
   private skinOverlay: Phaser.GameObjects.Image | null = null;
+  private footingGraphics: Phaser.GameObjects.Graphics | null = null;
+  private aimChevronGraphics: Phaser.GameObjects.Graphics | null = null;
   private skinOverlayActive = false;
   private skinOverlayKey: string | null = null;
   private skinFacesLeft = false;
+  private readonly skinPresentation: HeroSpritePresentation;
   private readonly baseBarrelWidth: number;
   private readonly baseBarrelHeight: number;
   private readonly visualSize: number;
@@ -57,6 +62,7 @@ export class Player extends Phaser.GameObjects.Rectangle {
     const hullHeight = Math.round(appearance.size * 0.82);
     super(scene, x, y, hullWidth, hullHeight, appearance.bodyColor);
 
+    this.skinPresentation = getHeroSpritePresentation(hero.id);
     this.currentFillColor = appearance.bodyColor;
     this.currentBarrelColor = appearance.strokeColor;
     this.currentTurretColor = appearance.markerColor;
@@ -111,7 +117,8 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.heroMarker.setDepth(9);
 
     this.setStrokeStyle(3, appearance.strokeColor, 0.95);
-    this.setDepth(6);
+    // Keep player sprite layering above boss overlays (6.35) yet strictly below projectiles (7) and telegraphs (>=7.2).
+    this.setDepth(6.2);
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -354,6 +361,10 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.secondaryBarrel.destroy();
     this.turret.destroy();
     this.heroMarker.destroy();
+    this.footingGraphics?.destroy();
+    this.footingGraphics = null;
+    this.aimChevronGraphics?.destroy();
+    this.aimChevronGraphics = null;
     this.skinOverlay?.destroy();
     this.skinOverlay = null;
     this.skinOverlayActive = false;
@@ -405,7 +416,21 @@ export class Player extends Phaser.GameObjects.Rectangle {
 
     if (!this.skinOverlayActive) {
       this.skinOverlay?.setVisible(false);
+      this.footingGraphics?.setVisible(false);
+      this.aimChevronGraphics?.setVisible(false);
       return;
+    }
+
+    const presentation = this.skinPresentation ?? getHeroSpritePresentation(hero.id);
+    if (typeof this.scene.add.graphics === 'function') {
+      if (!this.footingGraphics) {
+        this.footingGraphics = this.scene.add.graphics().setDepth(this.depth - 0.05);
+        drawPlayerFootingBadge(this.footingGraphics, presentation);
+      }
+      if (!this.aimChevronGraphics) {
+        this.aimChevronGraphics = this.scene.add.graphics().setDepth(this.depth + 0.45);
+        drawPlayerAimChevron(this.aimChevronGraphics, presentation.accentColor);
+      }
     }
 
     this.skinOverlayKey = slot.key;
@@ -433,21 +458,47 @@ export class Player extends Phaser.GameObjects.Rectangle {
     this.secondaryBarrel.setVisible(showFallback && this.barrelCount === 2);
     this.turret.setVisible(showFallback);
     this.heroMarker.setVisible(showFallback);
+    this.aura.setVisible((!this.skinOverlayActive || !this.footingGraphics) && this.visible && this.active);
+
     if (!this.skinOverlayActive) {
       this.skinOverlay.setVisible(false);
+      this.footingGraphics?.setVisible(false);
+      this.aimChevronGraphics?.setVisible(false);
       return;
     }
 
+    const displaySize = this.skinPresentation?.displaySize ?? this.visualSize * 1.4;
+    const aliveAndVisible = this.visible && this.active;
     this.skinOverlay
       .setTexture(this.skinOverlayKey)
       .setPosition(this.x, this.y)
       // Decorative art stays upright; only mirror it toward the horizontal aim side.
       .setAngle(0)
       .setFlipX(this.skinFacesLeft)
-      .setDisplaySize(this.visualSize * 1.4 * this.scaleX, this.visualSize * 1.4 * this.scaleY)
+      .setDisplaySize(displaySize * this.scaleX, displaySize * this.scaleY)
       .setDepth(this.depth + 0.35)
       .setAlpha(this.alpha)
-      .setVisible(this.visible && this.active);
+      .setVisible(aliveAndVisible);
+
+    this.footingGraphics
+      ?.setPosition(this.x, this.y)
+      .setScale(this.scaleX, this.scaleY)
+      .setDepth(this.depth - 0.05)
+      .setAlpha(this.isAlive() ? this.alpha : 0.32)
+      .setVisible(aliveAndVisible);
+
+    const pointerOffset = displaySize * 0.52 + 4;
+    const facingAngleRad = Math.atan2(this.facingDirection.y, this.facingDirection.x);
+    this.aimChevronGraphics
+      ?.setPosition(
+        this.x + this.facingDirection.x * pointerOffset,
+        this.y + this.facingDirection.y * pointerOffset,
+      )
+      .setRotation(facingAngleRad)
+      .setDepth(this.depth + 0.45)
+      .setAlpha(this.alpha)
+      .setVisible(aliveAndVisible && this.isAlive());
+
     if (!this.isAlive()) {
       this.skinOverlay.setTint(0x64748b);
     } else if (this.fillColor === 0xf87171) {

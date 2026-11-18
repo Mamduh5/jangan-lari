@@ -115,7 +115,8 @@ describe('special enemy decorative overlays', () => {
     enemy.syncSpriteOverlay();
     expect(image.setTintFill).toHaveBeenLastCalledWith(0xffffff);
     expect(image.setAlpha).toHaveBeenLastCalledWith(0.2);
-    expect(image.setDisplaySize).toHaveBeenLastCalledWith(84, 112 * 0.9);
+    const behemothSize = getUprightEnemySpritePresentation('behemoth')!.displaySize;
+    expect(image.setDisplaySize).toHaveBeenLastCalledWith(behemothSize * 0.75, behemothSize * 0.9);
     enemy.fillColor = enemy.archetype.color;
     enemy.visible = false;
     enemy.syncSpriteOverlay();
@@ -239,5 +240,159 @@ describe('special sprite update and warning isolation', () => {
     enemy.refreshSpriteOverlay(scene);
     expect(enemy.isStroked).toBe(true);
     expect(scene.add.text).not.toHaveBeenCalled();
+  });
+});
+
+describe('R3H-B enemy silhouette readability and hierarchy', () => {
+  const allEnemies: EnemyArchetypeId[] = [
+    'scuttler',
+    'mauler',
+    'hexcaster',
+    'harrier',
+    'skimmer',
+    'crusher',
+    'bulwark',
+    'riftblade',
+    'overlord',
+    'dreadnought',
+    'behemoth',
+  ];
+
+  function createGraphicsStub() {
+    const stub = {
+      x: 0,
+      y: 0,
+      angle: 0,
+      scaleX: 1,
+      scaleY: 1,
+      depth: 0,
+      alpha: 1,
+      visible: true,
+      clear: vi.fn().mockReturnThis(),
+      fillStyle: vi.fn().mockReturnThis(),
+      fillEllipse: vi.fn().mockReturnThis(),
+      fillCircle: vi.fn().mockReturnThis(),
+      lineStyle: vi.fn().mockReturnThis(),
+      strokeCircle: vi.fn().mockReturnThis(),
+      beginPath: vi.fn().mockReturnThis(),
+      moveTo: vi.fn().mockReturnThis(),
+      lineTo: vi.fn().mockReturnThis(),
+      closePath: vi.fn().mockReturnThis(),
+      fillPath: vi.fn().mockReturnThis(),
+      strokePath: vi.fn().mockReturnThis(),
+      setPosition: vi.fn((x: number, y: number) => {
+        stub.x = x;
+        stub.y = y;
+        return stub;
+      }),
+      setAngle: vi.fn((angle: number) => {
+        stub.angle = angle;
+        return stub;
+      }),
+      setScale: vi.fn((sx: number, sy = sx) => {
+        stub.scaleX = sx;
+        stub.scaleY = sy;
+        return stub;
+      }),
+      setDepth: vi.fn((d: number) => {
+        stub.depth = d;
+        return stub;
+      }),
+      setAlpha: vi.fn((a: number) => {
+        stub.alpha = a;
+        return stub;
+      }),
+      setVisible: vi.fn((v: boolean) => {
+        stub.visible = v;
+        return stub;
+      }),
+      destroy: vi.fn(),
+    };
+    return stub;
+  }
+
+  test('preserves exact ENEMY_ARCHETYPES sizes and enforces readable mobile tier hierarchy', () => {
+    const expectedArchetypeSizes: Record<EnemyArchetypeId, number> = {
+      scuttler: 22,
+      skimmer: 36,
+      harrier: 34,
+      mauler: 30,
+      crusher: 34,
+      bulwark: 40,
+      hexcaster: 28,
+      overlord: 48,
+      riftblade: 42,
+      dreadnought: 58,
+      behemoth: 72,
+    };
+
+    for (const id of allEnemies) {
+      expect(ENEMY_ARCHETYPES[id].size).toBe(expectedArchetypeSizes[id]);
+      expect(getUprightEnemySpritePresentation(id)).not.toBeNull();
+    }
+
+    const sizeOf = (id: EnemyArchetypeId) => getUprightEnemySpritePresentation(id)!.displaySize;
+    expect(sizeOf('scuttler')).toBe(52);
+    expect(sizeOf('mauler')).toBe(54);
+    expect(sizeOf('hexcaster')).toBe(56);
+    expect(sizeOf('harrier')).toBe(58);
+    expect(sizeOf('skimmer')).toBe(60);
+    expect(sizeOf('crusher')).toBe(66);
+    expect(sizeOf('bulwark')).toBe(68);
+    expect(sizeOf('riftblade')).toBe(78);
+    expect(sizeOf('overlord')).toBe(88);
+    expect(sizeOf('dreadnought')).toBe(112);
+    expect(sizeOf('behemoth')).toBe(138);
+
+    // Clear visual progression: small < larger regulars < elites < miniboss < boss
+    expect(sizeOf('scuttler')).toBeLessThan(sizeOf('bulwark'));
+    expect(sizeOf('bulwark')).toBeLessThan(sizeOf('riftblade'));
+    expect(sizeOf('overlord')).toBeLessThan(sizeOf('dreadnought'));
+    expect(sizeOf('dreadnought')).toBeLessThan(sizeOf('behemoth'));
+  });
+
+  test.each(allEnemies)('%s builds cached silhouette graphics strictly below warnings/projectiles and cleans them up', (id) => {
+    const fixture = makeFixture(id, true);
+    const createdGraphics: ReturnType<typeof createGraphicsStub>[] = [];
+    (fixture.scene.add as unknown as { graphics: ReturnType<typeof vi.fn> }).graphics = vi.fn(() => {
+      const g = createGraphicsStub();
+      createdGraphics.push(g);
+      return g;
+    });
+
+    (fixture.enemy as unknown as { refreshSpriteOverlay: (s: unknown) => void }).refreshSpriteOverlay(fixture.scene);
+
+    // Every sprite builds back silhouette graphics; cropped/crowned enemies also keep front crest/caps
+    const expectsFront = id === 'crusher' || id === 'dreadnought' || id === 'overlord' || id === 'riftblade' || id === 'behemoth';
+    const [back, frontAttempt] = createdGraphics;
+    expect(back).toBeDefined();
+    expect(back.depth).toBeLessThan(fixture.enemy.depth);
+    expect(back.visible).toBe(true);
+
+    const presentation = getUprightEnemySpritePresentation(id)!;
+    expect(back.scaleX).toBeCloseTo((presentation.flipsWithMovement ? -1 : 1) * 1.1, 4);
+
+    if (expectsFront) {
+      expect(frontAttempt.destroy).not.toHaveBeenCalled();
+      expect(frontAttempt.depth).toBeLessThan(7);
+      expect(frontAttempt.visible).toBe(true);
+    } else {
+      expect(frontAttempt.destroy).toHaveBeenCalledOnce();
+    }
+
+    // Revoking texture hides both silhouette graphics cleanly alongside sprite
+    fixture.scene.textures.exists.mockReturnValue(false);
+    (fixture.enemy as unknown as { syncSpriteOverlay: () => void }).syncSpriteOverlay();
+    expect(back.visible).toBe(false);
+    if (expectsFront) {
+      expect(frontAttempt.visible).toBe(false);
+    }
+
+    // Destroy cleans up all created graphics
+    (fixture.enemy as unknown as { destroy: () => void }).destroy();
+    expect(back.destroy).toHaveBeenCalledOnce();
+    if (expectsFront) {
+      expect(frontAttempt.destroy).toHaveBeenCalledOnce();
+    }
   });
 });

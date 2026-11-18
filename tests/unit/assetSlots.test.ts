@@ -221,7 +221,7 @@ describe('reviewed character sprites', () => {
     expect(Object.keys(UPRIGHT_ENEMY_SPRITE_PRESENTATION).sort()).toEqual(
       ['behemoth', 'bulwark', 'crusher', 'dreadnought', 'harrier', 'hexcaster', 'mauler', 'overlord', 'riftblade', 'scuttler', 'skimmer'],
     );
-    expect(getUprightEnemySpritePresentation('scuttler')?.displaySize).toBe(36);
+    expect(getUprightEnemySpritePresentation('scuttler')?.displaySize).toBe(52);
     expect(isReviewedRuntimeSprite({ key: 'sprite-enemy-unapproved', kind: 'enemy-sprite' })).toBe(false);
     expect(isReviewedRuntimeSprite({ key: 'sprite-enemy-overlord', kind: 'enemy-icon' })).toBe(false);
   });
@@ -336,10 +336,10 @@ describe('pickup visual balance', () => {
 describe('special enemy presentation', () => {
   test('preserves a distinct common < elite < miniboss < boss size hierarchy', () => {
     const config = UPRIGHT_ENEMY_SPRITE_PRESENTATION;
-    expect(config.overlord).toEqual({ displaySize: 62, flipsWithMovement: false });
-    expect(config.riftblade).toEqual({ displaySize: 56, flipsWithMovement: true });
-    expect(config.dreadnought).toEqual({ displaySize: 84, flipsWithMovement: true });
-    expect(config.behemoth).toEqual({ displaySize: 112, flipsWithMovement: true });
+    expect(config.overlord).toEqual({ displaySize: 88, flipsWithMovement: false });
+    expect(config.riftblade).toEqual({ displaySize: 78, flipsWithMovement: true });
+    expect(config.dreadnought).toEqual({ displaySize: 112, flipsWithMovement: true });
+    expect(config.behemoth).toEqual({ displaySize: 138, flipsWithMovement: true });
     const largestCommon = Math.max(...['scuttler', 'skimmer', 'harrier', 'mauler', 'crusher', 'bulwark', 'hexcaster'].map((id) => getUprightEnemySpritePresentation(id as keyof typeof config)!.displaySize));
     expect(largestCommon).toBeLessThan(Math.min(config.overlord!.displaySize, config.riftblade!.displaySize));
     expect(Math.max(config.overlord!.displaySize, config.riftblade!.displaySize)).toBeLessThan(config.dreadnought!.displaySize);

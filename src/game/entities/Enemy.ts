@@ -27,6 +27,7 @@ import {
 import { getEnemySpriteAssetSlot, shouldUseVisualAsset } from '../utils/assetResolver';
 
 import { getUprightEnemySpritePresentation } from '../data/enemySpritePresentation';
+import { drawEnemySilhouetteBack, drawEnemySilhouetteFront } from '../ui/entitySilhouetteRenderer';
 import type { ObstacleSteeringState } from '../world/worldMap';
 
 export type EnemyBehaviorState =
@@ -129,6 +130,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     angleOffset: number;
   }> = [];
   private spriteOverlay: Phaser.GameObjects.Image | null = null;
+  private silhouetteBackGraphics: Phaser.GameObjects.Graphics | null = null;
+  private silhouetteFrontGraphics: Phaser.GameObjects.Graphics | null = null;
   private spriteOverlayActive = false;
   private spriteFacesLeft = false;
   private spriteStatusLabel: Phaser.GameObjects.Text | null = null;
@@ -974,6 +977,10 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     }
     this.spriteStatusLabel?.destroy();
     this.spriteStatusLabel = null;
+    this.silhouetteBackGraphics?.destroy();
+    this.silhouetteBackGraphics = null;
+    this.silhouetteFrontGraphics?.destroy();
+    this.silhouetteFrontGraphics = null;
     this.spriteOverlay?.destroy();
     this.spriteOverlay = null;
     this.spriteOverlayActive = false;
@@ -1048,7 +1055,26 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
 
     if (!this.spriteOverlayActive) {
       this.spriteOverlay?.setVisible(false);
+      this.silhouetteBackGraphics?.setVisible(false);
+      this.silhouetteFrontGraphics?.setVisible(false);
       return;
+    }
+
+    const presentation = getUprightEnemySpritePresentation(this.archetype.id);
+    const baseDisplaySize = presentation ? presentation.displaySize : this.archetype.size * 1.24;
+    if (typeof scene.add?.graphics === 'function') {
+      if (!this.silhouetteBackGraphics) {
+        this.silhouetteBackGraphics = scene.add.graphics().setDepth(this.depth - 0.1);
+        drawEnemySilhouetteBack(this.silhouetteBackGraphics, this.archetype.id, baseDisplaySize);
+      }
+      if (!this.silhouetteFrontGraphics) {
+        const front = scene.add.graphics().setDepth(this.depth + 0.4);
+        if (drawEnemySilhouetteFront(front, this.archetype.id, baseDisplaySize)) {
+          this.silhouetteFrontGraphics = front;
+        } else {
+          front.destroy();
+        }
+      }
     }
 
     this.spriteOverlay = scene.add.image(this.x, this.y, slot.key).setDepth(this.depth + 0.35);
@@ -1089,8 +1115,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.spriteStatusLabel
       .setText(statuses.join(' / '))
       .setColor(this.eventMarkerColor === null ? '#fff1d6' : `#${this.eventMarkerColor.toString(16).padStart(6, '0')}`)
-      .setPosition(this.x, this.y - size * Math.abs(this.scaleY) / 2 - 6)
-      .setDepth(this.depth + 0.45)
+      .setPosition(this.x, this.y - size * Math.abs(this.scaleY) / 2 - 8)
+      .setDepth(this.depth + 0.55)
       .setAlpha(this.alpha)
       .setVisible(true);
   }
@@ -1113,6 +1139,8 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
     this.syncSpriteStatusLabel();
     if (!this.spriteOverlayActive) {
       this.spriteOverlay.setVisible(false);
+      this.silhouetteBackGraphics?.setVisible(false);
+      this.silhouetteFrontGraphics?.setVisible(false);
       return;
     }
 
@@ -1125,16 +1153,36 @@ export class Enemy extends Phaser.GameObjects.Rectangle {
         this.spriteFacesLeft = false;
       }
     }
+    const flipped = Boolean(presentation?.flipsWithMovement) && this.spriteFacesLeft;
     const displaySize = presentation ? presentation.displaySize : this.archetype.size * 1.24;
+    const angle = presentation ? 0 : this.angle - 90;
+    const aliveAndVisible = this.visible && this.active;
     this.spriteOverlay
       .setTexture(slot.key)
       .setPosition(this.x, this.y)
-      .setAngle(presentation ? 0 : this.angle - 90)
-      .setFlipX(Boolean(presentation?.flipsWithMovement) && this.spriteFacesLeft)
+      .setAngle(angle)
+      .setFlipX(flipped)
       .setDisplaySize(displaySize * this.scaleX, displaySize * this.scaleY)
       .setDepth(this.depth + 0.35)
       .setAlpha(this.alpha)
-      .setVisible(this.visible && this.active);
+      .setVisible(aliveAndVisible);
+
+    const silhouetteScaleX = (flipped ? -1 : 1) * this.scaleX;
+    this.silhouetteBackGraphics
+      ?.setPosition(this.x, this.y)
+      .setAngle(angle)
+      .setScale(silhouetteScaleX, this.scaleY)
+      .setDepth(this.depth - 0.1)
+      .setAlpha(this.alpha)
+      .setVisible(aliveAndVisible);
+    this.silhouetteFrontGraphics
+      ?.setPosition(this.x, this.y)
+      .setAngle(angle)
+      .setScale(silhouetteScaleX, this.scaleY)
+      .setDepth(this.depth + 0.4)
+      .setAlpha(this.alpha)
+      .setVisible(aliveAndVisible);
+
     if (this.fillColor === 0xffffff) {
       this.spriteOverlay.setTintFill(0xffffff);
     } else {
