@@ -10,39 +10,28 @@ import {
 } from '../../src/game/save/saveData';
 
 vi.mock('phaser', () => {
-  class MockRectangle {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    fillColor = 0;
-    strokeColor = 0;
+  class MockGraphics {
+    depth = 0;
     scene: unknown = {};
-
-    constructor(x: number, y: number, w: number, h: number) {
-      this.x = x;
-      this.y = y;
-      this.width = w;
-      this.height = h;
-    }
-
-    setOrigin() { return this; }
-    setStrokeStyle(width: number, color: number) {
-      this.strokeColor = color;
-      return this;
-    }
-    setFillStyle(color: number) {
-      this.fillColor = color;
-      return this;
-    }
+    setInteractive = vi.fn().mockReturnThis();
+    setDepth(depth: number) { this.depth = depth; return this; }
+    clear() { return this; }
+    fillStyle() { return this; }
+    fillRect() { return this; }
+    fillPoints() { return this; }
+    lineStyle() { return this; }
+    strokePoints() { return this; }
+    lineBetween() { return this; }
   }
 
   class MockText {
     text: string;
     x: number;
     y: number;
-    width = 160;
-    displayWidth = 160;
+    width = 180;
+    displayWidth = 180;
+    visible = true;
+    depth = 0;
     style: Record<string, unknown>;
     scene: unknown = {};
     input: { enabled: boolean } | null = null;
@@ -56,6 +45,8 @@ vi.mock('phaser', () => {
     }
 
     setOrigin() { return this; }
+    setDepth(depth: number) { this.depth = depth; return this; }
+    setVisible(visible: boolean) { this.visible = visible; return this; }
     setText(next: string) { this.text = next; return this; }
     setColor(color: string) { this.style.color = color; return this; }
     setStyle(next: Record<string, unknown>) { this.style = { ...this.style, ...next }; return this; }
@@ -86,6 +77,8 @@ vi.mock('phaser', () => {
     x: number;
     y: number;
     textureKey: string;
+    depth = 0;
+    alpha = 1;
     scene: unknown = {};
     constructor(x: number, y: number, key: string) {
       this.x = x;
@@ -93,7 +86,8 @@ vi.mock('phaser', () => {
       this.textureKey = key;
     }
     setDisplaySize() { return this; }
-    setAlpha() { return this; }
+    setDepth(depth: number) { this.depth = depth; return this; }
+    setAlpha(alpha: number) { this.alpha = alpha; return this; }
   }
 
   class MockScene {
@@ -143,10 +137,10 @@ vi.mock('phaser', () => {
       },
     };
     add = {
-      rectangle: vi.fn((x: number, y: number, w: number, h: number) => {
-        const rect = new MockRectangle(x, y, w, h);
-        this.createdObjects.push(rect);
-        return rect;
+      graphics: vi.fn(() => {
+        const gfx = new MockGraphics();
+        this.createdObjects.push(gfx);
+        return gfx;
       }),
       text: vi.fn((x: number, y: number, text: string, style?: Record<string, unknown>) => {
         const txt = new MockText(x, y, text, style);
@@ -185,16 +179,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('MetaScene R3G-D3-A crash repair and regression protection', () => {
-  test('initializes all 5 upgrade rows and all 5 quest rows and reflects locked, affordable, unaffordable, and maxed states', () => {
+describe('MetaScene R3G-D3 doodle Meta Progression and crash protection', () => {
+  test('renders all 5 upgrades and 5 quests in doodle UI with distinct available, unaffordable, locked, maxed, and quest states', () => {
     const scene = createMetaFixture({
       totalGold: 22,
       selectedHero: 'runner',
       purchasedPermanentUpgrades: {
         'max-hp': 5, // maxed
         'move-speed': 0, // affordable (cost 20 <= 22)
-        'pickup-range': 1, // unaffordable (cost 18 + 16 = 34 > 22)
-        'starting-damage': 0, // locked
+        'pickup-range': 1, // unaffordable (cost 34 > 22)
+        'starting-damage': 0, // quest locked
         'hp-regen': 0, // unaffordable (cost 24 > 22)
       },
       unlockedPermanentUpgrades: ['max-hp', 'move-speed', 'pickup-range', 'hp-regen'],
@@ -211,33 +205,56 @@ describe('MetaScene R3G-D3-A crash repair and regression protection', () => {
     const internals = scene as unknown as {
       goldText: { text: string };
       headerText: { text: string };
-      upgradeFrames: unknown[];
+      upgradeTitles: Array<{ text: string }>;
+      upgradeDescs: Array<{ text: string }>;
+      upgradeStates: Array<{ text: string }>;
       upgradeButtons: Array<{ text: string; emit: (e: string) => void }>;
-      upgradeDetails: Array<{ text: string }>;
-      questFrames: unknown[];
-      questTexts: Array<{ text: string }>;
+      questTitles: Array<{ text: string }>;
+      questDescs: Array<{ text: string }>;
+      questRewards: Array<{ text: string }>;
+      questStamps: Array<{ text: string; visible: boolean }>;
+      questProgressTexts: Array<{ text: string }>;
     };
 
-    expect(internals.upgradeFrames).toHaveLength(PERMANENT_UPGRADES.length);
-    expect(internals.upgradeButtons).toHaveLength(PERMANENT_UPGRADES.length);
-    expect(internals.upgradeDetails).toHaveLength(PERMANENT_UPGRADES.length);
-    expect(internals.questFrames).toHaveLength(QUESTS.length);
-    expect(internals.questTexts).toHaveLength(QUESTS.length);
+    expect(internals.upgradeTitles.map((t) => t.text)).toEqual(PERMANENT_UPGRADES.map((u) => u.title));
+    expect(internals.upgradeDescs.map((d) => d.text)).toEqual(PERMANENT_UPGRADES.map((u) => u.description));
+    expect(internals.questTitles.map((q) => q.text)).toEqual(QUESTS.map((q) => q.title));
+    expect(internals.questDescs.map((q) => q.text)).toEqual(QUESTS.map((q) => q.description));
 
-    expect(internals.goldText.text).toBe('Gold 22');
+    expect(internals.goldText.text).toBe('GOLD 22');
     expect(internals.headerText.text).toBe(`Selected Hero: ${HEROES.runner.name}`);
 
-    expect(internals.upgradeButtons[0].text).toBe('Max');
-    expect(internals.upgradeDetails[0].text).toContain('Maxed');
-    expect(internals.upgradeButtons[1].text).toBe('Buy 20g');
-    expect(internals.upgradeDetails[1].text).toContain('Available');
-    expect(internals.upgradeButtons[2].text).toBe('Buy 34g');
-    expect(internals.upgradeDetails[2].text).toContain('Need More Gold');
-    expect(internals.upgradeButtons[3].text).toBe('Quest');
-    expect(internals.upgradeDetails[3].text).toContain('Quest Locked');
+    // Maxed
+    expect(internals.upgradeButtons[0].text.trim()).toBe('MAXED');
+    expect(internals.upgradeStates[0].text).toBe('LV 5/5 · MAXED');
+    // Affordable
+    expect(internals.upgradeButtons[1].text).toBe('BUY 20g');
+    expect(internals.upgradeStates[1].text).toBe('LV 0/5 · AVAILABLE');
+    // Unaffordable
+    expect(internals.upgradeButtons[2].text).toBe('NEED 34g');
+    expect(internals.upgradeStates[2].text).toBe('LV 1/5 · NEED GOLD');
+    // Quest locked
+    expect(internals.upgradeButtons[3].text.trim()).toBe('LOCKED');
+    expect(internals.upgradeStates[3].text).toBe('QUEST LOCKED');
 
-    expect(internals.questTexts[0].text).toContain('Complete');
-    expect(internals.questTexts[1].text).toContain('90s / 300s');
+    // Quests: completed vs active progress & accurate reward titles
+    expect(internals.questRewards[0].text).toBe('COMPLETE');
+    expect(internals.questStamps[0].visible).toBe(true);
+    expect(internals.questStamps[0].text).toBe('Earned: +80 gold');
+    expect(internals.questProgressTexts[0].text).toBe('100 / 100');
+
+    expect(internals.questRewards[1].text).toBe('+100 gold');
+    expect(internals.questStamps[1].visible).toBe(false);
+    expect(internals.questProgressTexts[1].text).toBe('90s / 300s');
+    expect(internals.questRewards[2].text).toBe('Unlock: Sharpened Core');
+    expect(internals.questRewards[4].text).toBe('Unlock: Vanguard');
+
+    // Decorative graphics never call setInteractive()
+    const createdGraphics = (scene.add.graphics as ReturnType<typeof vi.fn>).mock.results.map((r) => r.value);
+    expect(createdGraphics.length).toBeGreaterThan(0);
+    for (const gfx of createdGraphics) {
+      expect(gfx.setInteractive).not.toHaveBeenCalled();
+    }
   });
 
   test('supports repeated scene entry/shutdown, ESC and Back button navigation without duplicate listeners or stale destroyed refs', () => {
@@ -252,8 +269,9 @@ describe('MetaScene R3G-D3-A crash repair and regression protection', () => {
       expect(keyboard.listenerCount('keydown-ESC')).toBe(1);
       const internals = scene as unknown as {
         upgradeButtons: Array<{ emit: (e: string) => void }>;
-        backButton: { emit: (e: string) => void };
+        backButton: { text: string; emit: (e: string) => void };
       };
+      expect(internals.backButton.text).toBe('BACK TO MENU');
       const staleButton = internals.upgradeButtons[0];
 
       if (cycle % 2 === 0) {
@@ -264,14 +282,11 @@ describe('MetaScene R3G-D3-A crash repair and regression protection', () => {
       expect(scene.scene.start).toHaveBeenCalledTimes(cycle + 1);
       expect(scene.scene.start).toHaveBeenLastCalledWith('MenuScene');
 
-      // Double Back/ESC in same transition frame does not double-start MenuScene
       keyboard.emit('keydown-ESC');
       expect(scene.scene.start).toHaveBeenCalledTimes(cycle + 1);
 
       mockEvents.emitShutdown();
       expect(keyboard.listenerCount('keydown-ESC')).toBe(0);
-
-      // Late pointerout fired on destroyed object must not throw
       expect(() => staleButton.emit('pointerout')).not.toThrow();
 
       scene.create();
@@ -280,7 +295,6 @@ describe('MetaScene R3G-D3-A crash repair and regression protection', () => {
 
   test('handles purchase success, failure, persistence across re-entry, and legacy/corrupted save sanitization', () => {
     window.localStorage.clear();
-    // Inject legacy & corrupted save structure cleanly
     window.localStorage.setItem(
       'jangan-lari-save-v1',
       JSON.stringify({
@@ -298,26 +312,26 @@ describe('MetaScene R3G-D3-A crash repair and regression protection', () => {
     expect(sanitized.purchasedPermanentUpgrades['max-hp']).toBe(0);
     expect(sanitized.purchasedPermanentUpgrades['move-speed']).toBe(0);
 
-    // Purchase failure & success
     const scene = createMetaFixture({ totalGold: 25 });
     const internals = scene as unknown as {
-      upgradeButtons: Array<{ emit: (e: string) => void }>;
+      upgradeButtons: Array<{ text: string; emit: (e: string) => void }>;
       statusText: { text: string };
       goldText: { text: string };
     };
 
-    // Locked Sharpened Core -> rejected
+    // Locked Sharpened Core -> rejected with unlocking quest hint
     internals.upgradeButtons[3].emit('pointerdown');
-    expect(internals.statusText.text).toContain('locked behind a quest');
+    expect(internals.statusText.text).toContain('Power Spike');
 
     // Affordable Field Rations (25g) -> succeeds, persists across reload
     internals.upgradeButtons[0].emit('pointerdown');
-    expect(internals.goldText.text).toBe('Gold 0');
-    expect(internals.statusText.text).toContain('Field Rations purchased');
+    expect(internals.goldText.text).toBe('GOLD 0');
+    expect(internals.statusText.text).toContain('Field Rations upgraded to Rank 1/5');
     expect(loadGameSave().purchasedPermanentUpgrades['max-hp']).toBe(1);
+    expect(internals.upgradeButtons[0].text).toBe('NEED 45g');
 
     // Next rank costs 45g with 0g -> rejected gracefully
     internals.upgradeButtons[0].emit('pointerdown');
-    expect(internals.statusText.text).toContain('Not enough gold');
+    expect(internals.statusText.text).toContain('Need 45 gold');
   });
 });
