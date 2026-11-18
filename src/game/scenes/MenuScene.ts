@@ -95,23 +95,24 @@ export class MenuScene extends Phaser.Scene {
   private heroButtonHovered: boolean[] = [];
   private heroInfoTexts: Phaser.GameObjects.Text[] = [];
   private heroPanels: Phaser.GameObjects.Rectangle[] = [];
-  private startButton!: Phaser.GameObjects.Text;
+  private isSceneTransitioning = false;
+  private startButton: Phaser.GameObjects.Text | null = null;
   private startButtonIcon: Phaser.GameObjects.Image | null = null;
-  private metaButton!: Phaser.GameObjects.Text;
-  private codexButton!: Phaser.GameObjects.Text;
-  private guideButton!: Phaser.GameObjects.Text;
-  private codexCloseButton!: Phaser.GameObjects.Text;
+  private metaButton: Phaser.GameObjects.Text | null = null;
+  private codexButton: Phaser.GameObjects.Text | null = null;
+  private guideButton: Phaser.GameObjects.Text | null = null;
+  private codexCloseButton: Phaser.GameObjects.Text | null = null;
   private codexCloseButtonGraphics!: Phaser.GameObjects.Graphics;
   private codexCloseHovered = false;
   private codexCloseButtonIcon: Phaser.GameObjects.Image | null = null;
-  private codexBackdrop!: Phaser.GameObjects.Rectangle;
+  private codexBackdrop: Phaser.GameObjects.Rectangle | null = null;
   private codexJournalGraphics!: Phaser.GameObjects.Graphics;
   private codexHeaderGraphics!: Phaser.GameObjects.Graphics;
   private codexHeaderKey = '';
   private codexSectionTabGraphics: Phaser.GameObjects.Graphics[] = [];
   private codexSectionTabVisualKeys: string[] = [];
   private codexSectionHoveredIndex: number | null = null;
-  private codexOverlay!: Phaser.GameObjects.Container;
+  private codexOverlay: Phaser.GameObjects.Container | null = null;
   private codexOverlayVisible = false;
   private activeCodexSection: CodexSection = 'heroes';
   private codexViewMode: CodexViewMode = 'index';
@@ -186,6 +187,15 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     this.saveData = loadGameSave();
+    this.isSceneTransitioning = false;
+    this.codexOverlayVisible = false;
+    this.startButton = null;
+    this.metaButton = null;
+    this.codexButton = null;
+    this.guideButton = null;
+    this.codexCloseButton = null;
+    this.codexBackdrop = null;
+    this.codexOverlay = null;
     this.heroActionButtons = [];
     this.heroActionButtonGraphics = [];
     this.heroCardGraphics = [];
@@ -1046,7 +1056,6 @@ export class MenuScene extends Phaser.Scene {
     this.codexOverlay = this.add.container(0, 0, codexOverlayChildren);
     this.codexOverlay.setDepth(30);
     this.codexOverlay.setVisible(false);
-    this.setCodexControlsInteractive(false);
 
     // ── Bottom action strip (CODEX, UPGRADES, dominant START RUN, Last Run) ─
     const codexGfx = this.add.graphics().setDepth(2);
@@ -1169,9 +1178,14 @@ export class MenuScene extends Phaser.Scene {
 
     this.focusedHeroId = this.saveData.selectedHero;
     this.refreshHeroView();
+    this.setCodexControlsInteractive(false);
   }
 
   private startRun(): void {
+    if (this.isSceneTransitioning) {
+      return;
+    }
+    this.isSceneTransitioning = true;
     primeAudioContext();
 
     if (this.scene.isActive('UIScene')) {
@@ -1187,10 +1201,17 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private openMeta(): void {
+    if (this.isSceneTransitioning) {
+      return;
+    }
+    this.isSceneTransitioning = true;
     this.scene.start('MetaScene');
   }
 
   private openCodex(): void {
+    if (!this.codexOverlay || this.isSceneTransitioning) {
+      return;
+    }
     this.codexOverlayVisible = true;
     this.activeCodexSection = 'heroes';
     this.codexViewMode = 'index';
@@ -1221,46 +1242,72 @@ export class MenuScene extends Phaser.Scene {
     this.codexNextPageHovered = false;
     this.codexPrevEntryHovered = false;
     this.codexNextEntryHovered = false;
-    this.codexOverlay.setVisible(false);
+    this.codexOverlay?.setVisible(false);
     this.setCodexControlsInteractive(false);
+  }
+
+  private isInteractiveObjectLive(
+    obj: { scene?: unknown } | null | undefined,
+  ): obj is NonNullable<typeof obj> {
+    return Boolean(obj && (!('scene' in obj) || obj.scene));
+  }
+
+  private enableInteractiveControl(
+    obj:
+      | (Phaser.GameObjects.GameObject & { setInteractive: (config?: Phaser.Types.Input.InputConfiguration) => unknown })
+      | null
+      | undefined,
+    useHandCursor = true,
+  ): void {
+    if (this.isInteractiveObjectLive(obj)) {
+      obj.setInteractive(useHandCursor ? { useHandCursor: true } : undefined);
+    }
+  }
+
+  private disableInteractiveControl(
+    obj: (Phaser.GameObjects.GameObject & { disableInteractive: () => unknown }) | null | undefined,
+  ): void {
+    if (this.isInteractiveObjectLive(obj)) {
+      obj.disableInteractive();
+    }
   }
 
   private setCodexControlsInteractive(codexActive: boolean): void {
     if (codexActive) {
-      this.codexBackdrop?.setInteractive();
-      this.codexCloseButton?.setInteractive({ useHandCursor: true });
+      this.enableInteractiveControl(this.codexBackdrop, false);
+      this.enableInteractiveControl(this.codexCloseButton);
       for (const frame of this.codexSectionFrames) {
-        frame.setInteractive({ useHandCursor: true });
+        this.enableInteractiveControl(frame);
       }
-      this.startButton?.disableInteractive();
-      this.metaButton?.disableInteractive();
-      this.codexButton?.disableInteractive();
-      this.guideButton?.disableInteractive();
+      this.disableInteractiveControl(this.startButton);
+      this.disableInteractiveControl(this.metaButton);
+      this.disableInteractiveControl(this.codexButton);
+      this.disableInteractiveControl(this.guideButton);
       for (const panel of this.heroPanels) {
-        panel.disableInteractive();
+        this.disableInteractiveControl(panel);
       }
       for (const btn of this.heroActionButtons) {
-        btn.disableInteractive();
+        this.disableInteractiveControl(btn);
       }
       this.syncCodexSubviewInteractivity();
       return;
     }
 
-    this.codexBackdrop?.disableInteractive();
-    this.codexCloseButton?.disableInteractive();
+    this.disableInteractiveControl(this.codexBackdrop);
+    this.disableInteractiveControl(this.codexCloseButton);
     for (const frame of this.codexSectionFrames) {
-      frame.disableInteractive();
+      this.disableInteractiveControl(frame);
     }
     this.disableAllCodexSubviewControls();
-    this.startButton?.setInteractive({ useHandCursor: true });
-    this.metaButton?.setInteractive({ useHandCursor: true });
-    this.codexButton?.setInteractive({ useHandCursor: true });
-    this.guideButton?.setInteractive({ useHandCursor: true });
+    this.enableInteractiveControl(this.startButton);
+    this.enableInteractiveControl(this.metaButton);
+    this.enableInteractiveControl(this.codexButton);
+    this.enableInteractiveControl(this.guideButton);
     for (const panel of this.heroPanels) {
-      panel.setInteractive({ useHandCursor: true });
+      this.enableInteractiveControl(panel);
     }
     for (const btn of this.heroActionButtons) {
-      btn.setInteractive({ useHandCursor: true });
+      this.enableInteractiveControl(btn);
     }
   }
 
@@ -1277,19 +1324,19 @@ export class MenuScene extends Phaser.Scene {
       gameWidth: GAME_WIDTH,
       gameHeight: GAME_HEIGHT,
       controlGuideMode: this.saveData.controlGuideMode,
-      guideButtonText: this.guideButton.text,
-      startButton: { x: this.startButton.x, y: this.startButton.y },
+      guideButtonText: this.guideButton?.text ?? '',
+      startButton: { x: this.startButton?.x ?? 0, y: this.startButton?.y ?? 0 },
       startButtonIconVisible: Boolean(this.startButtonIcon?.visible),
-      guideButton: { x: this.guideButton.x, y: this.guideButton.y },
+      guideButton: { x: this.guideButton?.x ?? 0, y: this.guideButton?.y ?? 0 },
     };
   }
 
   private handleStartShortcut(): void {
-    if (this.codexOverlayVisible) {
+    if (this.codexOverlayVisible || this.isSceneTransitioning || !this.isInteractiveObjectLive(this.startButton)) {
       return;
     }
 
-    this.startButton.emit('pointerdown');
+    this.startButton!.emit('pointerdown');
   }
 
   private shouldUseMobileCopy(): boolean {
@@ -1299,11 +1346,11 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private handleMetaShortcut(): void {
-    if (this.codexOverlayVisible) {
+    if (this.codexOverlayVisible || this.isSceneTransitioning || !this.isInteractiveObjectLive(this.metaButton)) {
       return;
     }
 
-    this.metaButton.emit('pointerdown');
+    this.metaButton!.emit('pointerdown');
   }
 
   private handleEscapeShortcut(): void {
@@ -1379,8 +1426,8 @@ export class MenuScene extends Phaser.Scene {
 
   private refreshGuideButton(hovered = false): void {
     const mode = this.saveData.controlGuideMode;
-    this.guideButton.setText(`Guide ${this.getControlGuideModeLabel(mode)}`);
-    this.guideButton.setColor(mode === 'hidden' ? DOODLE_HEX.inkMuted : DOODLE_HEX.ink);
+    this.guideButton?.setText(`Guide ${this.getControlGuideModeLabel(mode)}`);
+    this.guideButton?.setColor(mode === 'hidden' ? DOODLE_HEX.inkMuted : DOODLE_HEX.ink);
 
     const key = `${mode}:${hovered ? 1 : 0}`;
     if (this.topGuideVisualKey === key || !this.topGuidePillGraphics) {
@@ -1855,13 +1902,13 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private disableAllCodexSubviewControls(): void {
-    this.codexBackToIndexButton?.disableInteractive();
-    this.codexPrevPageButton?.disableInteractive();
-    this.codexNextPageButton?.disableInteractive();
-    this.codexPrevEntryButton?.disableInteractive();
-    this.codexNextEntryButton?.disableInteractive();
+    this.disableInteractiveControl(this.codexBackToIndexButton);
+    this.disableInteractiveControl(this.codexPrevPageButton);
+    this.disableInteractiveControl(this.codexNextPageButton);
+    this.disableInteractiveControl(this.codexPrevEntryButton);
+    this.disableInteractiveControl(this.codexNextEntryButton);
     for (const hit of this.codexIndexTileHits) {
-      hit.disableInteractive();
+      this.disableInteractiveControl(hit);
     }
   }
 
@@ -1878,39 +1925,39 @@ export class MenuScene extends Phaser.Scene {
         this.codexPageByCategory[this.activeCodexSection],
         CODEX_PAGE_SIZE,
       );
-      this.codexBackToIndexButton?.disableInteractive();
-      this.codexPrevEntryButton?.disableInteractive();
-      this.codexNextEntryButton?.disableInteractive();
+      this.disableInteractiveControl(this.codexBackToIndexButton);
+      this.disableInteractiveControl(this.codexPrevEntryButton);
+      this.disableInteractiveControl(this.codexNextEntryButton);
 
       for (let i = 0; i < this.codexIndexTileHits.length; i += 1) {
         const hit = this.codexIndexTileHits[i];
         if (i < slice.items.length) {
-          hit.setInteractive({ useHandCursor: true });
+          this.enableInteractiveControl(hit);
         } else {
-          hit.disableInteractive();
+          this.disableInteractiveControl(hit);
         }
       }
       if (slice.pageIndex > 0) {
-        this.codexPrevPageButton?.setInteractive({ useHandCursor: true });
+        this.enableInteractiveControl(this.codexPrevPageButton);
       } else {
-        this.codexPrevPageButton?.disableInteractive();
+        this.disableInteractiveControl(this.codexPrevPageButton);
       }
       if (slice.pageIndex < slice.pageCount - 1) {
-        this.codexNextPageButton?.setInteractive({ useHandCursor: true });
+        this.enableInteractiveControl(this.codexNextPageButton);
       } else {
-        this.codexNextPageButton?.disableInteractive();
+        this.disableInteractiveControl(this.codexNextPageButton);
       }
       return;
     }
 
     for (const hit of this.codexIndexTileHits) {
-      hit.disableInteractive();
+      this.disableInteractiveControl(hit);
     }
-    this.codexPrevPageButton?.disableInteractive();
-    this.codexNextPageButton?.disableInteractive();
-    this.codexBackToIndexButton?.setInteractive({ useHandCursor: true });
-    this.codexPrevEntryButton?.setInteractive({ useHandCursor: true });
-    this.codexNextEntryButton?.setInteractive({ useHandCursor: true });
+    this.disableInteractiveControl(this.codexPrevPageButton);
+    this.disableInteractiveControl(this.codexNextPageButton);
+    this.enableInteractiveControl(this.codexBackToIndexButton);
+    this.enableInteractiveControl(this.codexPrevEntryButton);
+    this.enableInteractiveControl(this.codexNextEntryButton);
   }
 
   private refreshCodexView(): void {
@@ -2722,10 +2769,19 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private handleShutdown(): void {
-    this.input.keyboard?.off('keydown-ENTER', this.handleStartShortcut, this);
-    this.input.keyboard?.off('keydown-SPACE', this.handleStartShortcut, this);
-    this.input.keyboard?.off('keydown-M', this.handleMetaShortcut, this);
-    this.input.keyboard?.off('keydown-ESC', this.handleEscapeShortcut, this);
+    this.input?.keyboard?.off('keydown-ENTER', this.handleStartShortcut, this);
+    this.input?.keyboard?.off('keydown-SPACE', this.handleStartShortcut, this);
+    this.input?.keyboard?.off('keydown-M', this.handleMetaShortcut, this);
+    this.input?.keyboard?.off('keydown-ESC', this.handleEscapeShortcut, this);
+    this.isSceneTransitioning = false;
+    this.codexOverlayVisible = false;
+    this.startButton = null;
+    this.metaButton = null;
+    this.codexButton = null;
+    this.guideButton = null;
+    this.codexCloseButton = null;
+    this.codexBackdrop = null;
+    this.codexOverlay = null;
     this.heroActionButtons = [];
     this.heroActionButtonGraphics = [];
     this.heroCardGraphics = [];

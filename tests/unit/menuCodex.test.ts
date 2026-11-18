@@ -35,6 +35,7 @@ vi.mock('phaser', () => {
     visible = true;
     depth = 0;
     style: Record<string, unknown>;
+    scene: unknown = {};
     input: { enabled: boolean } | null = null;
     private listeners = new Map<string, Array<(...args: unknown[]) => void>>();
 
@@ -58,7 +59,11 @@ vi.mock('phaser', () => {
     setVisible(visible: boolean) { this.visible = visible; return this; }
     setText(next: string) { this.text = next; return this; }
     setColor(color: string) { this.style.color = color; return this; }
-    setInteractive() { this.input = { enabled: true }; return this; }
+    setInteractive() {
+      if (!this.scene) throw new TypeError("Cannot read properties of undefined (reading 'sys')");
+      this.input = { enabled: true };
+      return this;
+    }
     disableInteractive() { if (this.input) this.input.enabled = false; return this; }
     on(event: string, cb: (...args: unknown[]) => void) {
       const list = this.listeners.get(event) ?? [];
@@ -81,8 +86,10 @@ vi.mock('phaser', () => {
     height: number;
     visible = true;
     depth = 0;
+    scene: unknown = {};
     input: { enabled: boolean } | null = null;
     setInteractive = vi.fn(() => {
+      if (!this.scene) throw new TypeError("Cannot read properties of undefined (reading 'sys')");
       this.input = { enabled: true };
       return this;
     });
@@ -155,10 +162,29 @@ vi.mock('phaser', () => {
   }
 
   class MockScene {
+    createdObjects: Array<{ scene?: unknown }> = [];
     cameras = { main: { setBackgroundColor: vi.fn() } };
     textures = { exists: vi.fn(() => true) };
     scale = { displaySize: { width: 1600, height: 720 } };
-    events = { once: vi.fn(), off: vi.fn() };
+    private shutdownListeners: Array<{ cb: () => void; ctx: unknown }> = [];
+    events = {
+      once: vi.fn((event: string, cb: () => void, ctx?: unknown) => {
+        if (event === 'shutdown') {
+          this.shutdownListeners.push({ cb, ctx });
+        }
+      }),
+      off: vi.fn(),
+      emitShutdown: () => {
+        const list = [...this.shutdownListeners];
+        this.shutdownListeners = [];
+        for (const obj of this.createdObjects) {
+          obj.scene = undefined;
+        }
+        for (const entry of list) {
+          entry.cb.call(entry.ctx);
+        }
+      },
+    };
     scene = {
       isActive: vi.fn(() => false),
       stop: vi.fn(),
@@ -173,18 +199,33 @@ vi.mock('phaser', () => {
           list.push({ cb, ctx });
           this.keyboardListeners.set(event, list);
         }),
-        off: vi.fn(),
+        off: vi.fn((event: string, cb: () => void, ctx?: unknown) => {
+          const list = this.keyboardListeners.get(event) ?? [];
+          this.keyboardListeners.set(
+            event,
+            list.filter((entry) => entry.cb !== cb || entry.ctx !== ctx),
+          );
+        }),
         emit: (event: string) => {
-          for (const entry of this.keyboardListeners.get(event) ?? []) {
+          for (const entry of [...(this.keyboardListeners.get(event) ?? [])]) {
             entry.cb.call(entry.ctx);
           }
         },
+        listenerCount: (event: string) => (this.keyboardListeners.get(event) ?? []).length,
       },
     };
     add = {
       graphics: vi.fn(() => new MockGraphics()),
-      text: vi.fn((x: number, y: number, text: string, style?: Record<string, unknown>) => new MockText(x, y, text, style)),
-      rectangle: vi.fn((x: number, y: number, w: number, h: number) => new MockShape(x, y, w, h)),
+      text: vi.fn((x: number, y: number, text: string, style?: Record<string, unknown>) => {
+        const txt = new MockText(x, y, text, style);
+        this.createdObjects.push(txt);
+        return txt;
+      }),
+      rectangle: vi.fn((x: number, y: number, w: number, h: number) => {
+        const rect = new MockShape(x, y, w, h);
+        this.createdObjects.push(rect);
+        return rect;
+      }),
       image: vi.fn((x: number, y: number, key: string) => new MockImage(x, y, key)),
       container: vi.fn((x: number, y: number, children?: unknown[]) => new MockContainer(x, y, children)),
     };
@@ -585,5 +626,35 @@ describe('MenuScene R3G-D2B complete Field Codex library', () => {
     expect(internals.codexIndexTileImages.every((img) => img === null)).toBe(true);
     internals.codexIndexTileHits[0].emit('pointerdown');
     expect(internals.codexDetailSpecimenImage).toBeNull();
+  });
+
+  test('survives repeated Menu -> MetaScene shutdown -> MenuScene re-entry cycles without stale destroyed sys references', () => {
+    const scene = createMenuFixture();
+    const mockEvents = scene.events as unknown as { emitShutdown: () => void };
+    const keyboard = scene.input.keyboard as unknown as { listenerCount: (e: string) => number };
+
+    for (let cycle = 0; cycle < 10; cycle += 1) {
+      const internals = scene as unknown as {
+        metaButton: { emit: (e: string) => void };
+        startButton: { input: { enabled: boolean } | null; emit: (e: string) => void };
+        codexButton: { emit: (e: string) => void };
+        codexCloseButton: { emit: (e: string) => void };
+      };
+      internals.codexButton.emit('pointerdown');
+      internals.codexCloseButton.emit('pointerdown');
+      internals.metaButton.emit('pointerdown');
+      expect(scene.scene.start).toHaveBeenLastCalledWith('MetaScene');
+
+      mockEvents.emitShutdown();
+      expect(keyboard.listenerCount('keydown-M')).toBe(0);
+      expect(() => scene.create()).not.toThrow();
+    }
+
+    const finalInternals = scene as unknown as {
+      startButton: { input: { enabled: boolean } | null; emit: (e: string) => void };
+    };
+    expect(finalInternals.startButton.input?.enabled).toBe(true);
+    finalInternals.startButton.emit('pointerdown');
+    expect(scene.scene.start).toHaveBeenLastCalledWith('RunScene');
   });
 });

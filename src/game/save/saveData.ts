@@ -114,27 +114,27 @@ export function loadGameSave(): GameSaveData {
 
     const loaded: GameSaveData = {
       version: SAVE_VERSION,
-      totalGold: Math.max(0, Number(parsed.totalGold ?? fallback.totalGold)),
+      totalGold: sanitizeNonNegativeNumber(parsed.totalGold, fallback.totalGold),
       selectedHero: unlockedHeroes.includes(selectedHero) ? selectedHero : unlockedHeroes[0] ?? fallback.selectedHero,
       unlockedHeroes: unlockedHeroes.length > 0 ? unlockedHeroes : fallback.unlockedHeroes,
       unlockedPermanentUpgrades:
         mergedUnlockedPermanentUpgrades.length > 0 ? mergedUnlockedPermanentUpgrades : fallback.unlockedPermanentUpgrades,
       purchasedPermanentUpgrades: {
-        'max-hp': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['max-hp'] ?? 0)),
-        'move-speed': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['move-speed'] ?? 0)),
-        'pickup-range': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['pickup-range'] ?? 0)),
-        'starting-damage': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['starting-damage'] ?? 0)),
-        'hp-regen': Math.max(0, Number(parsed.purchasedPermanentUpgrades?.['hp-regen'] ?? 0)),
+        'max-hp': sanitizeNonNegativeInt(parsed.purchasedPermanentUpgrades?.['max-hp'], 0),
+        'move-speed': sanitizeNonNegativeInt(parsed.purchasedPermanentUpgrades?.['move-speed'], 0),
+        'pickup-range': sanitizeNonNegativeInt(parsed.purchasedPermanentUpgrades?.['pickup-range'], 0),
+        'starting-damage': sanitizeNonNegativeInt(parsed.purchasedPermanentUpgrades?.['starting-damage'], 0),
+        'hp-regen': sanitizeNonNegativeInt(parsed.purchasedPermanentUpgrades?.['hp-regen'], 0),
       },
       completedQuests,
       progressStats: {
-        totalKills: Math.max(0, Number(parsed.progressStats?.totalKills ?? 0)),
-        totalSurvivalMs: Math.max(0, Number(parsed.progressStats?.totalSurvivalMs ?? 0)),
-        maxLevelReached: Math.max(0, Number(parsed.progressStats?.maxLevelReached ?? 0)),
-        totalGoldCollected: Math.max(0, Number(parsed.progressStats?.totalGoldCollected ?? 0)),
-        eliteKills: Math.max(0, Number(parsed.progressStats?.eliteKills ?? 0)),
+        totalKills: sanitizeNonNegativeInt(parsed.progressStats?.totalKills, 0),
+        totalSurvivalMs: sanitizeNonNegativeInt(parsed.progressStats?.totalSurvivalMs, 0),
+        maxLevelReached: sanitizeNonNegativeInt(parsed.progressStats?.maxLevelReached, 0),
+        totalGoldCollected: sanitizeNonNegativeInt(parsed.progressStats?.totalGoldCollected, 0),
+        eliteKills: sanitizeNonNegativeInt(parsed.progressStats?.eliteKills, 0),
       },
-      bestScore: Math.max(0, Number(parsed.bestScore ?? 0)),
+      bestScore: sanitizeNonNegativeInt(parsed.bestScore, 0),
       localLeaderboard: sanitizeLocalLeaderboard(parsed.localLeaderboard),
       controlGuideMode: sanitizeControlGuideMode(parsed.controlGuideMode, fallback.controlGuideMode),
       controlHintDismissed: Boolean(parsed.controlHintDismissed ?? fallback.controlHintDismissed),
@@ -269,4 +269,14 @@ function isTankClassId(value: unknown): value is TankClassId {
 
 function sanitizeControlGuideMode(value: unknown, fallback: ControlGuideMode): ControlGuideMode {
   return CONTROL_GUIDE_MODES.includes(value as ControlGuideMode) ? (value as ControlGuideMode) : fallback;
+}
+
+function sanitizeNonNegativeNumber(value: unknown, fallback = 0): number {
+  const num = Number(value);
+  return Number.isFinite(num) ? Math.max(0, num) : fallback;
+}
+
+function sanitizeNonNegativeInt(value: unknown, fallback = 0): number {
+  const num = Number(value);
+  return Number.isFinite(num) ? Math.max(0, Math.floor(num)) : fallback;
 }

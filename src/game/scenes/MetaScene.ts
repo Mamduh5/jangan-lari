@@ -18,16 +18,22 @@ import {
 
 export class MetaScene extends Phaser.Scene {
   private saveData!: GameSaveData;
-  private goldText!: Phaser.GameObjects.Text;
-  private statusText!: Phaser.GameObjects.Text;
-  private headerText!: Phaser.GameObjects.Text;
+  private goldText: Phaser.GameObjects.Text | null = null;
+  private statusText: Phaser.GameObjects.Text | null = null;
+  private headerText: Phaser.GameObjects.Text | null = null;
   private upgradeFrames: Phaser.GameObjects.Rectangle[] = [];
   private upgradeButtons: Phaser.GameObjects.Text[] = [];
   private upgradeDetails: Phaser.GameObjects.Text[] = [];
   private questFrames: Phaser.GameObjects.Rectangle[] = [];
   private questTexts: Phaser.GameObjects.Text[] = [];
+  private backButton: Phaser.GameObjects.Text | null = null;
   private backButtonIcon: Phaser.GameObjects.Image | null = null;
+  private isExitingToMenu = false;
   private readonly handleExitToMenu = (): void => {
+    if (this.isExitingToMenu) {
+      return;
+    }
+    this.isExitingToMenu = true;
     this.scene.start('MenuScene');
   };
 
@@ -37,11 +43,16 @@ export class MetaScene extends Phaser.Scene {
 
   create(): void {
     this.saveData = loadGameSave();
+    this.isExitingToMenu = false;
+    this.goldText = null;
+    this.statusText = null;
+    this.headerText = null;
     this.upgradeFrames = [];
     this.upgradeButtons = [];
     this.upgradeDetails = [];
     this.questFrames = [];
     this.questTexts = [];
+    this.backButton = null;
     this.backButtonIcon = null;
     const centerX = GAME_WIDTH / 2;
 
@@ -187,6 +198,7 @@ export class MetaScene extends Phaser.Scene {
     backButton.on('pointerout', () => {
       backButton.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
     });
+    this.backButton = backButton;
     this.backButtonIcon = this.createCloseButtonIcon(
       backButton.x - backButton.displayWidth / 2 + 12,
       backButton.y,
@@ -198,6 +210,10 @@ export class MetaScene extends Phaser.Scene {
   }
 
   private handlePurchase(upgrade: PermanentUpgradeDefinition): void {
+    if (!this.statusText || ('scene' in this.statusText && !this.statusText.scene)) {
+      return;
+    }
+
     if (!isPermanentUpgradeUnlocked(this.saveData, upgrade.id)) {
       this.statusText.setText('That upgrade is still locked behind a quest reward.');
       return;
@@ -215,45 +231,70 @@ export class MetaScene extends Phaser.Scene {
     this.refreshView();
   }
 
+  private isObjectLive(obj: { scene?: unknown } | null | undefined): boolean {
+    return Boolean(obj && (!('scene' in obj) || obj.scene));
+  }
+
   private refreshView(): void {
+    if (!this.isObjectLive(this.goldText) || !this.isObjectLive(this.headerText)) {
+      return;
+    }
+
     this.saveData = loadGameSave();
-    this.goldText.setText(`Gold ${this.saveData.totalGold}`);
-    this.headerText.setText(`Selected Hero: ${HEROES[this.saveData.selectedHero].name}`);
+    this.goldText!.setText(`Gold ${this.saveData.totalGold}`);
+    const heroName = (HEROES[this.saveData.selectedHero] ?? HEROES.runner).name;
+    this.headerText!.setText(`Selected Hero: ${heroName}`);
 
     for (let index = 0; index < PERMANENT_UPGRADES.length; index += 1) {
       const upgrade = PERMANENT_UPGRADES[index];
-      const level = getPermanentUpgradeLevel(this.saveData, upgrade.id);
+      const frame = this.upgradeFrames[index];
+      const button = this.upgradeButtons[index];
+      const detail = this.upgradeDetails[index];
+      if (!this.isObjectLive(frame) || !this.isObjectLive(button) || !this.isObjectLive(detail)) {
+        continue;
+      }
+
+      const rawLevel = getPermanentUpgradeLevel(this.saveData, upgrade.id);
+      const level = Number.isFinite(rawLevel)
+        ? Math.max(0, Math.min(upgrade.maxLevel, Math.floor(rawLevel)))
+        : 0;
       const cost = getPermanentUpgradeCost(upgrade, level);
       const unlocked = isPermanentUpgradeUnlocked(this.saveData, upgrade.id);
       const canBuy = canPurchasePermanentUpgrade(this.saveData, upgrade);
       const maxed = level >= upgrade.maxLevel;
       const state = !unlocked ? 'Quest Locked' : maxed ? 'Maxed' : canBuy ? 'Available' : 'Need More Gold';
 
-      this.upgradeFrames[index].setFillStyle(!unlocked ? 0x172234 : maxed ? 0x1c3b2c : 0x172033, 0.98);
-      this.upgradeFrames[index].setStrokeStyle(1, !unlocked ? 0x334155 : maxed ? 0x4ade80 : 0x334155, 0.95);
-      this.upgradeButtons[index].setText(!unlocked ? 'Quest' : maxed ? 'Max' : `Buy ${cost}g`);
-      this.upgradeButtons[index].setStyle({
+      frame.setFillStyle(!unlocked ? 0x172234 : maxed ? 0x1c3b2c : 0x172033, 0.98);
+      frame.setStrokeStyle(1, !unlocked ? 0x334155 : maxed ? 0x4ade80 : 0x334155, 0.95);
+      button.setText(!unlocked ? 'Quest' : maxed ? 'Max' : `Buy ${cost}g`);
+      button.setStyle({
         color: !unlocked ? '#94a3b8' : maxed ? '#111827' : canBuy ? '#fef3c7' : '#cbd5e1',
         backgroundColor: !unlocked ? '#233044' : maxed ? '#86efac' : canBuy ? '#1f2937' : '#374151',
       });
       const levelBar = level > 0 ? '█'.repeat(level) + '░'.repeat(Math.max(0, upgrade.maxLevel - level)) : '░'.repeat(upgrade.maxLevel);
-      this.upgradeDetails[index].setText(
+      detail.setText(
         `LV ${level}/${upgrade.maxLevel}  ${levelBar}\n${upgrade.description}\n${state}`,
       );
     }
 
     for (let index = 0; index < QUESTS.length; index += 1) {
       const quest = QUESTS[index];
+      const frame = this.questFrames[index];
+      const questText = this.questTexts[index];
+      if (!this.isObjectLive(frame) || !this.isObjectLive(questText)) {
+        continue;
+      }
+
       const completed = this.saveData.completedQuests.includes(quest.id);
       const progress = this.getQuestProgress(quest.metric, quest.target);
       const rewardLabel = this.getQuestRewardLabel(quest);
 
-      this.questFrames[index].setFillStyle(completed ? 0x173126 : 0x172033, 0.98);
-      this.questFrames[index].setStrokeStyle(1, completed ? 0x4ade80 : 0x334155, completed ? 0.95 : 0.9);
-      this.questTexts[index].setText(
+      frame.setFillStyle(completed ? 0x173126 : 0x172033, 0.98);
+      frame.setStrokeStyle(1, completed ? 0x4ade80 : 0x334155, completed ? 0.95 : 0.9);
+      questText.setText(
         `${completed ? 'Complete' : 'Active'}  ${quest.title}\n${quest.description}\n${progress}  |  ${rewardLabel}`,
       );
-      this.questTexts[index].setColor(completed ? '#86efac' : '#cbd5e1');
+      questText.setColor(completed ? '#86efac' : '#cbd5e1');
     }
   }
 
@@ -267,7 +308,18 @@ export class MetaScene extends Phaser.Scene {
   }
 
   private handleShutdown(): void {
-    this.input.keyboard?.off('keydown-ESC', this.handleExitToMenu, this);
+    this.input?.keyboard?.off('keydown-ESC', this.handleExitToMenu, this);
+    this.isExitingToMenu = false;
+    this.upgradeFrames = [];
+    this.upgradeButtons = [];
+    this.upgradeDetails = [];
+    this.questFrames = [];
+    this.questTexts = [];
+    this.goldText = null;
+    this.statusText = null;
+    this.headerText = null;
+    this.backButton = null;
+    this.backButtonIcon = null;
   }
 
   private getQuestProgress(metric: string, target: number): string {
