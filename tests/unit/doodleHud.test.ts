@@ -967,4 +967,126 @@ describe('UIScene R3G-C2 stat allocation, pause menu, and run results', () => {
       restoreViewport();
     }
   });
+
+  test('consolidates top-center doodle alerts, reward toasts, and events without overlap, isolates modals, and resets cleanly on shutdown', () => {
+    const { ui, restoreViewport } = createUiFixture({ viewportWidth: 1280, viewportHeight: 720 });
+    try {
+      const internals = ui as unknown as {
+        timerText: { y: number };
+        alertPillGraphics: { visible: boolean; setInteractive: ReturnType<typeof vi.fn> };
+        alertText: { y: number; text: string; height: number; visible: boolean; input: { enabled: boolean } | null };
+        rewardPillGraphics: { visible: boolean; setInteractive: ReturnType<typeof vi.fn> };
+        rewardText: { y: number; text: string; height: number; visible: boolean; input: { enabled: boolean } | null };
+        eventPillGraphics: { visible: boolean; setInteractive: ReturnType<typeof vi.fn> };
+        eventTitleText: { y: number; text: string; height: number; visible: boolean };
+        eventBodyText: { y: number; text: string; visible: boolean };
+        timerSubtitleText: { visible: boolean };
+        alertPillStateKey: string;
+        rewardPillStateKey: string;
+        eventPillStateKey: string;
+      };
+
+      // 1. Standalone encounter alert stacks cleanly under the timer pill (timer bottom = 47)
+      ui.registry.set('run.alertKind', 'miniboss');
+      ui.registry.set('run.alertText', 'MINIBOSS · DREADNOUGHT');
+      ui.registry.set('run.rewardText', '');
+      ui.registry.set('run.eventActive', false);
+      ui.update();
+
+      expect(internals.alertPillGraphics.visible).toBe(true);
+      expect(internals.alertText.visible).toBe(true);
+      expect(internals.alertText.text).toBe('MINIBOSS · DREADNOUGHT');
+      const alertHalfH = Math.max(26, Math.ceil(internals.alertText.height + 10)) / 2;
+      expect(internals.alertText.y - alertHalfH).toBeGreaterThanOrEqual(54);
+      expect(internals.alertText.y).toBeGreaterThan(internals.timerText.y + 19);
+
+      // 2. Simultaneous alert + reward + active event stacks strictly downwards without overlap
+      ui.registry.set('run.alertKind', 'boss');
+      ui.registry.set('run.alertText', 'BOSS · BEHEMOTH');
+      ui.registry.set('run.rewardText', 'Stats maxed');
+      ui.registry.set('run.rewardColor', '#fde68a');
+      ui.registry.set('run.eventActive', true);
+      ui.registry.set('run.eventTitle', 'Challenge Wave');
+      ui.registry.set('run.eventText', 'Hold out for 12s');
+      ui.registry.set('run.eventRemainingMs', 12_000);
+      ui.update();
+
+      const snapActive = ui.getHudSnapshot();
+      expect(snapActive.rewardText).toBe('Stats maxed');
+      const alertBottom = internals.alertText.y + Math.max(26, Math.ceil(internals.alertText.height + 10)) / 2;
+      const rewardHalfH = Math.max(26, Math.ceil(internals.rewardText.height + 10)) / 2;
+      expect(internals.rewardText.y - rewardHalfH).toBeGreaterThan(alertBottom);
+      const rewardBottom = internals.rewardText.y + rewardHalfH;
+      expect(internals.eventTitleText.y - internals.eventTitleText.height / 2).toBeGreaterThan(rewardBottom);
+
+      // 3. Clearing alert pulls standalone reward toast up to the compact top notification slot
+      ui.registry.set('run.alertText', '');
+      ui.registry.set('run.eventActive', false);
+      ui.update();
+      const singleToastTop = internals.rewardText.y - rewardHalfH;
+      expect(singleToastTop).toBeGreaterThanOrEqual(54);
+      expect(singleToastTop).toBeLessThan(70);
+
+      // 4. All top-center notification visuals remain strictly non-interactive
+      expect(internals.alertPillGraphics.setInteractive).not.toHaveBeenCalled();
+      expect(internals.rewardPillGraphics.setInteractive).not.toHaveBeenCalled();
+      expect(internals.eventPillGraphics.setInteractive).not.toHaveBeenCalled();
+      expect(internals.alertText.input).toBeNull();
+      expect(internals.rewardText.input).toBeNull();
+
+      // 5. Modals (level-up BONUS PICK, class evolution, pause, end results, portrait hint) hide notifications
+      ui.registry.set('run.alertKind', 'elite');
+      ui.registry.set('run.alertText', 'ELITE · OVERLORD');
+      ui.registry.set('run.rewardText', 'Reward target secured: +18 gold | +24 XP');
+      ui.registry.set('run.eventActive', true);
+
+      for (const modalKey of [
+        'run.levelUpActive',
+        'run.classChoiceActive',
+        'run.pauseMenuActive',
+        'run.endActive',
+      ] as const) {
+        ui.registry.set(modalKey, true);
+        ui.update();
+        expect(internals.alertPillGraphics.visible).toBe(false);
+        expect(internals.alertText.visible).toBe(false);
+        expect(internals.rewardPillGraphics.visible).toBe(false);
+        expect(internals.rewardText.visible).toBe(false);
+        expect(internals.eventPillGraphics.visible).toBe(false);
+        expect(internals.eventTitleText.visible).toBe(false);
+        expect(internals.eventBodyText.visible).toBe(false);
+        expect(internals.timerSubtitleText.visible).toBe(false);
+        ui.registry.set(modalKey, false);
+      }
+
+      // Portrait orientation hint also suppresses notifications and exposes active reward in combat
+      Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true });
+      Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true });
+      ui.update();
+      expect(internals.alertPillGraphics.visible).toBe(false);
+      expect(internals.rewardPillGraphics.visible).toBe(false);
+      expect(internals.eventPillGraphics.visible).toBe(false);
+
+      // Restoring landscape desktop brings notifications cleanly back
+      Object.defineProperty(window, 'innerWidth', { value: 1280, configurable: true });
+      Object.defineProperty(window, 'innerHeight', { value: 720, configurable: true });
+      ui.update();
+      expect(internals.alertPillGraphics.visible).toBe(true);
+      expect(internals.rewardPillGraphics.visible).toBe(true);
+      expect(internals.eventPillGraphics.visible).toBe(true);
+
+      // 6. Shutdown clears cached notification state keys cleanly for scene re-entry
+      const shutdownCalls = (ui.events.once as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([eventName]) => eventName === 'shutdown',
+      );
+      expect(shutdownCalls.length).toBeGreaterThan(0);
+      const [, shutdownHandler, shutdownContext] = shutdownCalls[shutdownCalls.length - 1];
+      (shutdownHandler as () => void).call(shutdownContext);
+      expect(internals.alertPillStateKey).toBe('');
+      expect(internals.rewardPillStateKey).toBe('');
+      expect(internals.eventPillStateKey).toBe('');
+    } finally {
+      restoreViewport();
+    }
+  });
 });

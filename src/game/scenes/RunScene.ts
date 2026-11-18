@@ -105,7 +105,6 @@ import {
   WAVE_FORMATION_COOLDOWN_MS,
   WAVE_FORMATION_ENABLE_TIME_MS,
   WAVE_FORMATION_RETRY_MS,
-  WAVE_TEMPLATE_ALERT_COOLDOWN_MS,
   getWaveDirectorWindow,
 } from '../config/waveDirectorBalance';
 import { HEROES } from '../data/heroes';
@@ -407,7 +406,7 @@ export class RunScene extends Phaser.Scene {
   private activeAlertPriority = 0;
   private activeAlertKind = 'objective';
   private activeAlertUntil = 0;
-  private queuedRewardToast: { text: string; color: string } | null = null;
+  private queuedRewardToasts: Array<{ text: string; color: string }> = [];
   private takenUniqueUpgradeIds = new Set<UpgradeId>();
   private activeRunEvent: ActiveRunEvent | null = null;
   private challengeWaveEventConsumed = false;
@@ -423,7 +422,6 @@ export class RunScene extends Phaser.Scene {
   private controlHintVisible = false;
   private rewardTargetMarker?: Phaser.GameObjects.Arc;
   private rewardTargetLabel?: Phaser.GameObjects.Text;
-  private lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
   private statsMaxedToastShownForPoints = 0;
   private nextFormationAtMs = WAVE_FORMATION_ENABLE_TIME_MS;
   private lastFormationType: FormationType | '' = '';
@@ -498,7 +496,7 @@ export class RunScene extends Phaser.Scene {
     this.activeAlertPriority = 0;
     this.activeAlertKind = 'objective';
     this.activeAlertUntil = 0;
-    this.queuedRewardToast = null;
+    this.queuedRewardToasts = [];
     this.activeRunEvent = null;
     this.challengeWaveEventConsumed = false;
     this.rewardTargetEventConsumed = false;
@@ -514,7 +512,6 @@ export class RunScene extends Phaser.Scene {
     this.rewardTargetMarker = undefined;
     this.rewardTargetLabel?.destroy();
     this.rewardTargetLabel = undefined;
-    this.lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
     this.statsMaxedToastShownForPoints = 0;
     this.nextFormationAtMs = WAVE_FORMATION_ENABLE_TIME_MS;
     this.lastFormationType = '';
@@ -1743,7 +1740,6 @@ export class RunScene extends Phaser.Scene {
     this.player.extendInvulnerability(BREAKOUT_PULSE_INVULNERABILITY_MS, this.time.now);
     this.applyBreakoutPulseKnockback();
     this.createBreakoutPulseVisual();
-    this.setAlert('objective', 'Pulse readying', 800);
     this.publishHudState();
     return true;
   }
@@ -1876,10 +1872,10 @@ export class RunScene extends Phaser.Scene {
       this.presentEncounterSpawn(ENEMY_ARCHETYPES.behemoth, spawnPoint);
     } else {
       existingBoss.setBossPhase(this.bossPhase);
+      this.setAlert('boss', `BOSS · ${ENEMY_ARCHETYPES.behemoth.name.toUpperCase()}`, 1800, 6);
     }
 
     this.registry.set('run.instructions', 'Defeat the boss.');
-    this.setAlert('boss', 'Defeat boss', 1800);
     this.publishHudState();
   }
 
@@ -1958,8 +1954,7 @@ export class RunScene extends Phaser.Scene {
     this.beginBossStateSequence();
     boss.setBossPhase(result.phase);
     this.registry.set('run.instructions', 'Boss phase 2. Shockwaves and summons.');
-    this.setAlert('boss', 'Boss phase 2', 1800);
-    this.showEncounterBanner('BOSS PHASE 2', 'Shockwaves and summons', 0xfca5a5, 1600);
+    this.setAlert('boss', 'BOSS · PHASE 2', 1800, 6);
     this.cameras.main.shake(160, 0.0024);
     this.cameras.main.flash(160, 255, 120, 120, false);
     playCue('boss-arrival');
@@ -2131,9 +2126,6 @@ export class RunScene extends Phaser.Scene {
     }
 
     const waveResult = this.spawnDirector.nextWave(this.runElapsedMs);
-    const hasMajorEncounter = waveResult.wave.some(
-      (archetype) => archetype.isElite || archetype.isMiniboss || archetype.isBoss,
-    );
     for (const archetype of selectEnemyWaveWithinCap(waveResult.wave, this.getActiveEnemyCount())) {
       const spawnPoint = this.getSpawnPoint(
         archetype.isBoss ? BOSS_SPAWN_DISTANCE : NORMAL_ENEMY_SPAWN_DISTANCE,
@@ -2141,10 +2133,6 @@ export class RunScene extends Phaser.Scene {
       );
       this.spawnEnemyFromArchetype(archetype, spawnPoint);
       this.presentEncounterSpawn(archetype, spawnPoint);
-    }
-
-    if (!hasMajorEncounter) {
-      this.presentWaveTemplateHighlight(waveResult.templateLabel, waveResult.templateHighlight);
     }
   }
 
@@ -2210,7 +2198,6 @@ export class RunScene extends Phaser.Scene {
       angle: Phaser.Math.Angle.Between(this.player.x, this.player.y, entry.point.x, entry.point.y),
     }));
     this.nextFormationAtMs = this.runElapsedMs + WAVE_FORMATION_COOLDOWN_MS;
-    this.setAlert('objective', this.getFormationAlert(type), 900);
     return true;
   }
 
@@ -2373,18 +2360,6 @@ export class RunScene extends Phaser.Scene {
     const wrapped = Phaser.Math.Angle.Wrap(angle);
     const normalized = wrapped < 0 ? wrapped + Math.PI * 2 : wrapped;
     return Math.round((normalized / (Math.PI * 2)) * slotCount) % slotCount;
-  }
-
-  private getFormationAlert(type: FormationType): string {
-    switch (type) {
-      case 'ring-breakout':
-        return 'Breakout gap';
-      case 'pincer':
-        return 'Pincer wave';
-      case 'sweep-wall':
-      default:
-        return 'Sweep wall';
-    }
   }
 
   private spawnEnemyFromArchetype(archetype: EnemyArchetype, requestedPoint: Phaser.Math.Vector2): Enemy {
@@ -2569,43 +2544,26 @@ export class RunScene extends Phaser.Scene {
   private presentEncounterSpawn(archetype: EnemyArchetype, spawnPoint: Phaser.Math.Vector2): void {
     if (archetype.isBoss) {
       this.registry.set('run.instructions', 'Final boss active.');
-      this.setAlert('boss', 'Final boss', 1800);
+      this.setAlert('boss', `BOSS · ${archetype.name.toUpperCase()}`, 1800, 6);
       this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'BOSS', 0xfca5a5);
-      this.showEncounterBanner('FINAL BOSS', `${archetype.name} active`, 0xf87171, 1800);
       this.cameras.main.shake(160, 0.0023);
       this.cameras.main.flash(180, 255, 120, 120, false);
       playCue('boss-arrival');
     } else if (archetype.isMiniboss) {
       this.registry.set('run.instructions', 'Miniboss active.');
-      this.setAlert('miniboss', 'Miniboss', 1500);
+      this.setAlert('miniboss', `MINIBOSS · ${archetype.name.toUpperCase()}`, 1500, 4.5);
       this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'MINIBOSS', 0xfda4af);
-      this.showEncounterBanner('MINIBOSS', `${archetype.name} active`, 0xfda4af, 1500);
       this.cameras.main.shake(120, 0.0018);
       this.cameras.main.flash(120, 255, 180, 180, false);
       playCue('miniboss-arrival');
     } else if (archetype.isElite) {
       this.registry.set('run.instructions', 'Elite active.');
-      this.setAlert('elite', 'Elite', 1100);
+      this.setAlert('elite', `ELITE · ${archetype.name.toUpperCase()}`, 1400);
       this.showSpawnIndicator(spawnPoint.x, spawnPoint.y, 'ELITE', 0xe9d5ff);
-      this.showEncounterBanner('ELITE', `${archetype.name} active`, 0xe9d5ff, 1000);
       this.cameras.main.shake(90, 0.0012);
       this.cameras.main.flash(90, 190, 150, 255, false);
       playCue('elite-arrival');
     }
-  }
-
-  private presentWaveTemplateHighlight(templateLabel: string, highlight: boolean): void {
-    if (!highlight || !templateLabel || this.activeRunEvent) {
-      return;
-    }
-
-    const now = this.time.now;
-    if (now - this.lastWaveTemplateAlertAtMs < WAVE_TEMPLATE_ALERT_COOLDOWN_MS) {
-      return;
-    }
-
-    this.lastWaveTemplateAlertAtMs = now;
-    this.setAlert('objective', `${templateLabel} wave`, 1100);
   }
 
   private updateRunEventState(): void {
@@ -2758,7 +2716,6 @@ export class RunScene extends Phaser.Scene {
     this.challengeWaveEventConsumed = true;
     this.registry.set('run.instructions', 'Challenge wave active.');
     this.setAlert('objective', 'Challenge wave', 1300);
-    this.showEncounterBanner('CHALLENGE', 'Clear or outlast', 0xfbbf24, 1300);
     this.cameras.main.shake(100, 0.0015);
     this.cameras.main.flash(100, 255, 210, 120, false);
     playCue('elite-arrival');
@@ -2798,7 +2755,6 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.instructions', 'Reward target active.');
     this.setAlert('objective', 'Reward target', 1300);
     this.showSpawnIndicator(targetEnemy.x, targetEnemy.y, 'TARGET', 0xfbbf24);
-    this.showEncounterBanner('TARGET', 'Hunt it down', 0xfbbf24, 1300);
     this.cameras.main.flash(100, 255, 225, 140, false);
     playCue('elite-arrival');
     return true;
@@ -2949,10 +2905,10 @@ export class RunScene extends Phaser.Scene {
 
     if (activeEvent.type === 'challenge-wave') {
       this.challengeWaveSuccessCount += 1;
-      this.grantRunEventReward('Challenge reward', activeEvent.rewardGold, 0, activeEvent.rewardLevelUps);
+      this.grantRunEventReward(activeEvent.rewardGold, 0, activeEvent.rewardLevelUps);
     } else if (activeEvent.type === 'reward-target') {
       this.rewardTargetSuccessCount += 1;
-      this.grantRunEventReward('Reward target secured', activeEvent.rewardGold, activeEvent.rewardXp, 0);
+      this.grantRunEventReward(activeEvent.rewardGold, activeEvent.rewardXp, 0);
     } else {
       this.resolveBuffShrineSuccess(activeEvent);
       return;
@@ -3000,20 +2956,16 @@ export class RunScene extends Phaser.Scene {
     this.clearActiveRunEvent();
   }
 
-  private grantRunEventReward(title: string, rewardGold: number, rewardXp: number, rewardLevelUps: number): void {
-    const rewardMessages: string[] = [];
-
+  private grantRunEventReward(rewardGold: number, rewardXp: number, rewardLevelUps: number): void {
     if (rewardGold > 0) {
       this.goldEarned += rewardGold;
       this.showFloatingText(this.player.x, this.player.y - 70, `+${rewardGold} gold`, '#fcd34d', 16);
       this.createBurstCircle(this.player.x, this.player.y, 0xfbbf24, 12, 44, 220, 0.3);
-      rewardMessages.push(`+${rewardGold} gold`);
     }
 
     if (rewardXp > 0) {
       const levelsGained = this.player.gainExperience(rewardXp);
       this.showFloatingText(this.player.x, this.player.y - 92, `+${rewardXp} XP`, '#bfdbfe', 16);
-      rewardMessages.push(`+${rewardXp} XP`);
       if (levelsGained > 0) {
         this.handlePlayerLevelsGained(levelsGained);
       }
@@ -3022,14 +2974,11 @@ export class RunScene extends Phaser.Scene {
     if (rewardLevelUps > 0) {
       this.pendingLevelUps += rewardLevelUps;
       this.showFloatingText(this.player.x, this.player.y - 114, rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade', '#fef08a', 18);
-      rewardMessages.push(rewardLevelUps > 1 ? `+${rewardLevelUps} upgrades` : '+1 upgrade');
     }
 
     if (rewardLevelUps > 0 && !this.isLevelingUp) {
       this.queueLevelUpStart();
     }
-
-    this.showEncounterBanner(title.toUpperCase(), rewardMessages.join(' | '), 0xfbbf24, 1800);
   }
 
   private clearActiveRunEvent(): void {
@@ -4015,8 +3964,6 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.instructions', `${hero.name}: ${hero.passiveLabel}`);
     this.registry.set('run.heroName', hero.name);
     this.registry.set('run.heroPassive', hero.passiveLabel);
-    this.setAlert('hero', `${hero.name} ready`, 1300);
-    this.showEncounterBanner(hero.name, `${startingWeapon.name} online`, startingWeapon.projectileColor, 1300);
     this.showFloatingText(this.player.x, this.player.y - 78, `${startingWeapon.name} ready`, '#dbeafe', 18);
     playHeroIntroCue(hero, startingWeapon);
 
@@ -4668,7 +4615,6 @@ export class RunScene extends Phaser.Scene {
       this.resumeGameplaySystems('', overlayPointer);
     }
 
-    this.setAlert('objective', 'Back in', 900);
     this.publishHudState();
   }
 
@@ -5229,13 +5175,14 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.eventTitle', '');
     this.registry.set('run.eventText', '');
     this.registry.set('run.eventRemainingMs', 0);
+    this.queuedRewardToasts = [];
     this.setAlert(victory ? 'victory' : 'defeat', title);
     this.showRewardToast(victory ? `Victory payout: +${this.goldEarned} gold` : `Run payout: +${this.goldEarned} gold`, victory ? '#fde68a' : '#fca5a5');
     this.publishHudState();
   }
 
-  private setAlert(kind: string, text: string, durationMs = 0): void {
-    const priority = this.getAlertPriority(kind);
+  private setAlert(kind: string, text: string, durationMs = 0, priorityOverride?: number): void {
+    const priority = priorityOverride ?? this.getAlertPriority(kind);
     const now = this.time.now;
 
     if (now < this.activeAlertUntil && priority < this.activeAlertPriority) {
@@ -5274,7 +5221,10 @@ export class RunScene extends Phaser.Scene {
       this.time.now < this.activeAlertUntil &&
       this.getAlertPriority(this.activeAlertKind) >= this.getAlertPriority('miniboss')
     ) {
-      this.queuedRewardToast = { text, color };
+      const lastQueued = this.queuedRewardToasts[this.queuedRewardToasts.length - 1];
+      if (!lastQueued || lastQueued.text !== text || lastQueued.color !== color) {
+        this.queuedRewardToasts.push({ text, color });
+      }
       return;
     }
 
@@ -5288,17 +5238,32 @@ export class RunScene extends Phaser.Scene {
         return;
       }
 
+      if (
+        !this.isEnded &&
+        this.queuedRewardToasts.length > 0 &&
+        !(
+          this.time.now < this.activeAlertUntil &&
+          this.getAlertPriority(this.activeAlertKind) >= this.getAlertPriority('miniboss')
+        )
+      ) {
+        this.flushQueuedRewardToast();
+        return;
+      }
+
       this.registry.set('run.rewardText', '');
     });
   }
 
   private flushQueuedRewardToast(): void {
-    if (!this.queuedRewardToast) {
+    if (this.isEnded || this.queuedRewardToasts.length === 0) {
       return;
     }
 
-    const queuedToast = this.queuedRewardToast;
-    this.queuedRewardToast = null;
+    const queuedToast = this.queuedRewardToasts.shift();
+    if (!queuedToast) {
+      return;
+    }
+
     this.showRewardToast(queuedToast.text, queuedToast.color);
   }
 
@@ -5306,6 +5271,7 @@ export class RunScene extends Phaser.Scene {
     switch (kind) {
       case 'victory':
       case 'defeat':
+        return 7;
       case 'boss':
         return 5;
       case 'miniboss':
@@ -5334,62 +5300,6 @@ export class RunScene extends Phaser.Scene {
     });
 
     this.showFloatingText(x, y - 34, label, Phaser.Display.Color.IntegerToColor(color).rgba, 18);
-  }
-
-  private showEncounterBanner(title: string, subtitle: string, color: number, duration: number): void {
-    const mobileCopy = this.shouldUseMobileCopy();
-    const bannerY = mobileCopy ? 110 : 120;
-    const bannerWidth = mobileCopy ? 460 : 620;
-    const bannerHeight = mobileCopy ? 58 : 92;
-    const accentWidth = mobileCopy ? 390 : 560;
-    const titleSize = mobileCopy ? '22px' : '30px';
-    const subtitleSize = mobileCopy ? '13px' : '16px';
-    const subtitleWrapWidth = mobileCopy ? 390 : 540;
-    const holdDuration = mobileCopy ? Math.min(duration, 1000) : duration;
-    const backdrop = this.add.rectangle(GAME_WIDTH / 2, bannerY, bannerWidth, bannerHeight, 0x020617, 0.8).setDepth(30).setScrollFactor(0);
-    backdrop.setStrokeStyle(2, color, 0.95);
-    const accent = this.add.rectangle(GAME_WIDTH / 2, bannerY - bannerHeight / 2 + 6, accentWidth, 3, color, 0.9).setDepth(31).setScrollFactor(0);
-    const titleText = this.add
-      .text(GAME_WIDTH / 2, bannerY - (mobileCopy ? 7 : 10), title, {
-        fontFamily: 'Georgia, serif',
-        fontSize: titleSize,
-        color: '#f8fafc',
-      })
-      .setOrigin(0.5)
-      .setDepth(31)
-      .setScrollFactor(0);
-    const subtitleText = this.add
-      .text(GAME_WIDTH / 2, bannerY + (mobileCopy ? 15 : 22), subtitle, {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: subtitleSize,
-        color: '#dbeafe',
-        align: 'center',
-        wordWrap: { width: subtitleWrapWidth },
-      })
-      .setOrigin(0.5)
-      .setDepth(31)
-      .setScrollFactor(0);
-
-    for (const object of [backdrop, accent, titleText, subtitleText]) {
-      object.setAlpha(0);
-      object.y -= 18;
-    }
-
-    this.tweens.add({
-      targets: [backdrop, accent, titleText, subtitleText],
-      alpha: 1,
-      y: `+=18`,
-      duration: 180,
-      ease: 'Quad.Out',
-      hold: holdDuration,
-      yoyo: true,
-      onComplete: () => {
-        backdrop.destroy();
-        accent.destroy();
-        titleText.destroy();
-        subtitleText.destroy();
-      },
-    });
   }
 
   private createBurstCircle(
@@ -5533,8 +5443,7 @@ export class RunScene extends Phaser.Scene {
     this.activeAlertPriority = 0;
     this.activeAlertKind = 'objective';
     this.activeAlertUntil = 0;
-    this.lastWaveTemplateAlertAtMs = Number.NEGATIVE_INFINITY;
-    this.queuedRewardToast = null;
+    this.queuedRewardToasts = [];
     this.destroyRewardTargetMarker();
     this.activeRunEvent = null;
   }

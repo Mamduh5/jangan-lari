@@ -118,6 +118,7 @@ export class UIScene extends Phaser.Scene {
   private orientationHintContainer!: Phaser.GameObjects.Container;
   private orientationHintText!: Phaser.GameObjects.Text;
   private eventPillGraphics!: Phaser.GameObjects.Graphics;
+  private eventPillStateKey = '';
   private eventPanel!: Phaser.GameObjects.Rectangle;
   private eventTitleText!: Phaser.GameObjects.Text;
   private eventBodyText!: Phaser.GameObjects.Text;
@@ -522,7 +523,7 @@ export class UIScene extends Phaser.Scene {
 
     this.alertPillGraphics = this.add.graphics().setScrollFactor(0).setDepth(4).setVisible(false);
     this.alertText = this.add
-      .text(viewWidth / 2, 64, '', {
+      .text(viewWidth / 2, 68, '', {
         fontFamily: DOODLE_FONTS.body,
         fontSize: '13px',
         fontStyle: 'bold',
@@ -535,7 +536,7 @@ export class UIScene extends Phaser.Scene {
 
     this.rewardPillGraphics = this.add.graphics().setScrollFactor(0).setDepth(4).setVisible(false);
     this.rewardText = this.add
-      .text(viewWidth / 2, 92, '', {
+      .text(viewWidth / 2, 68, '', {
         fontFamily: DOODLE_FONTS.body,
         fontSize: '12px',
         fontStyle: 'bold',
@@ -564,7 +565,7 @@ export class UIScene extends Phaser.Scene {
     this.eventPillGraphics = this.add.graphics().setScrollFactor(0).setDepth(4).setVisible(false);
     drawDoodleCard(this.eventPillGraphics, {
       cx: viewWidth / 2,
-      cy: 135,
+      cy: 112,
       width: 472,
       height: 48,
       cornerRadius: 12,
@@ -577,7 +578,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     this.eventTitleText = this.add
-      .text(viewWidth / 2, 123, '', {
+      .text(viewWidth / 2, 100, '', {
         fontFamily: DOODLE_FONTS.body,
         fontSize: '13px',
         fontStyle: 'bold',
@@ -589,7 +590,7 @@ export class UIScene extends Phaser.Scene {
       .setVisible(false);
 
     this.eventBodyText = this.add
-      .text(viewWidth / 2, 143, '', {
+      .text(viewWidth / 2, 120, '', {
         fontFamily: DOODLE_FONTS.body,
         fontSize: '12px',
         color: DOODLE_HEX.inkMuted,
@@ -898,10 +899,23 @@ export class UIScene extends Phaser.Scene {
       this.formatStageTimer(stagePhase, elapsedMs, bossSpawnTimeMs || targetMs, bossHp, bossMaxHp, bossPhase),
     );
     this.refreshTimerPill(stagePhase);
-    this.refreshCoreShieldPill(mapBuffType, mapBuffRemainingMs, levelUpActive, classChoiceActive, endActive);
+    this.refreshOrientationHint();
+    const overlayBlockingNotifications =
+      levelUpActive ||
+      classChoiceActive ||
+      pauseMenuActive ||
+      endActive ||
+      this.orientationHintContainer.visible;
+    this.refreshCoreShieldPill(
+      mapBuffType,
+      mapBuffRemainingMs,
+      levelUpActive,
+      classChoiceActive,
+      endActive || pauseMenuActive || this.orientationHintContainer.visible,
+    );
     const timerHint = this.getTimerSubtitleHint(stagePhase);
     this.setTextIfChanged(this.timerSubtitleText, timerHint);
-    this.timerSubtitleText.setVisible(Boolean(timerHint) && !alertMessage && !levelUpActive && !classChoiceActive && !endActive);
+    this.timerSubtitleText.setVisible(Boolean(timerHint) && !alertMessage && !overlayBlockingNotifications);
     this.setTextIfChanged(this.goldText, `Run Gold ${runGold}`);
     this.setTextIfChanged(this.killsText, `Kills ${kills}`);
     this.setTextIfChanged(this.scoreText, '');
@@ -910,12 +924,23 @@ export class UIScene extends Phaser.Scene {
     this.xpBarFill.width = Phaser.Math.Clamp((xp / Math.max(1, xpNext)) * this.xpBarMaxWidth, 0, this.xpBarMaxWidth);
     this.refreshHudIconLayout();
     this.refreshWeaponIcons(weaponNames);
-    this.refreshAlert(alertKind, alertMessage);
-    this.refreshRewardToast(rewardMessage, rewardColor);
+    const alertBottomY = this.refreshAlert(alertKind, alertMessage, overlayBlockingNotifications);
+    const notificationBottomY = this.refreshRewardToast(
+      rewardMessage,
+      rewardColor,
+      alertBottomY,
+      overlayBlockingNotifications,
+    );
     this.refreshInstruction(instructionMessage, levelUpActive || classChoiceActive, endActive);
-    this.refreshEventHud(eventActive, eventTitle, eventText, eventRemainingMs, levelUpActive || classChoiceActive, endActive);
+    this.refreshEventHud(
+      eventActive,
+      eventTitle,
+      eventText,
+      eventRemainingMs,
+      notificationBottomY,
+      overlayBlockingNotifications,
+    );
     this.refreshStatAllocationPanel(statPoints, tankStatLevels, levelUpActive, classChoiceActive, endActive);
-    this.refreshOrientationHint();
     this.refreshPauseControls(pauseMenuActive, levelUpActive, classChoiceActive, endActive, level, classTitle, score, runGold, elapsedMs, stagePhase);
     this.refreshActiveAbilityButton(
       activeAbilityReady,
@@ -3316,11 +3341,11 @@ export class UIScene extends Phaser.Scene {
     this.statusPillGraphics.setVisible(true);
   }
 
-  private refreshAlert(kind: string, message: string): void {
-    if (!message) {
+  private refreshAlert(kind: string, message: string, hidden = false): number | null {
+    if (hidden || !message) {
       this.alertText.setVisible(false);
       this.alertPillGraphics.setVisible(false);
-      return;
+      return null;
     }
 
     const palette = this.getAlertPalette(kind);
@@ -3330,15 +3355,19 @@ export class UIScene extends Phaser.Scene {
       this.alertText.setColor(palette.textColor);
     }
 
-    const nextKey = `${kind}:${upper}`;
+    const pillHeight = Math.max(26, Math.ceil(this.alertText.height + 10));
+    const pillCy = 55 + pillHeight / 2;
+    this.alertText.setPosition(GAME_WIDTH / 2, pillCy);
+
+    const nextKey = `${kind}:${upper}:${pillHeight}`;
     if (this.alertPillStateKey !== nextKey) {
       this.alertPillStateKey = nextKey;
       const pillWidth = Math.max(150, Math.ceil(this.alertText.width + 28));
       drawDoodleCard(this.alertPillGraphics, {
         cx: GAME_WIDTH / 2,
-        cy: 64,
+        cy: pillCy,
         width: pillWidth,
-        height: 24,
+        height: pillHeight,
         cornerRadius: 9,
         seed: 132,
         jitter: 0.85,
@@ -3353,13 +3382,19 @@ export class UIScene extends Phaser.Scene {
 
     this.alertPillGraphics.setVisible(true);
     this.alertText.setVisible(true);
+    return pillCy + pillHeight / 2;
   }
 
-  private refreshRewardToast(message: string, color: string): void {
-    if (!message) {
+  private refreshRewardToast(
+    message: string,
+    color: string,
+    alertBottomY: number | null = null,
+    hidden = false,
+  ): number | null {
+    if (hidden || !message) {
       this.rewardText.setVisible(false);
       this.rewardPillGraphics.setVisible(false);
-      return;
+      return alertBottomY;
     }
 
     this.setTextIfChanged(this.rewardText, message);
@@ -3367,14 +3402,18 @@ export class UIScene extends Phaser.Scene {
       this.rewardText.setColor(DOODLE_HEX.ink);
     }
 
-    const nextKey = `${color}:${message}`;
+    const pillHeight = Math.max(26, Math.ceil(this.rewardText.height + 10));
+    const pillTop = alertBottomY !== null ? alertBottomY + 7 : 55;
+    const pillCy = pillTop + pillHeight / 2;
+    this.rewardText.setPosition(GAME_WIDTH / 2, pillCy);
+
+    const nextKey = `${pillCy}:${pillHeight}:${color}:${message}`;
     if (this.rewardPillStateKey !== nextKey) {
       this.rewardPillStateKey = nextKey;
       const pillWidth = Math.max(190, Math.ceil(this.rewardText.width + 28));
-      const pillHeight = Math.max(24, Math.ceil(this.rewardText.height + 10));
       drawDoodleCard(this.rewardPillGraphics, {
         cx: GAME_WIDTH / 2,
-        cy: 92,
+        cy: pillCy,
         width: pillWidth,
         height: pillHeight,
         cornerRadius: 9,
@@ -3391,6 +3430,7 @@ export class UIScene extends Phaser.Scene {
 
     this.rewardPillGraphics.setVisible(true);
     this.rewardText.setVisible(true);
+    return pillCy + pillHeight / 2;
   }
 
   private refreshInstruction(_message: string, _levelUpActive: boolean, _endActive: boolean): void {
@@ -3418,10 +3458,10 @@ export class UIScene extends Phaser.Scene {
     title: string,
     objective: string,
     remainingMs: number,
-    levelUpActive: boolean,
-    endActive: boolean,
+    notificationBottomY: number | null,
+    hidden: boolean,
   ): void {
-    const visible = active && !levelUpActive && !endActive;
+    const visible = active && !hidden;
     this.eventPanel.setVisible(false);
     this.eventPillGraphics.setVisible(visible);
     this.eventTitleText.setVisible(visible);
@@ -3435,6 +3475,39 @@ export class UIScene extends Phaser.Scene {
     const seconds = Math.max(0, Math.round(remainingMs / 1000));
     this.setTextIfChanged(this.eventTitleText, `${title.toUpperCase()} • ${seconds}s`);
     this.setTextIfChanged(this.eventBodyText, objective);
+
+    const pillWidth = Math.max(
+      380,
+      Math.min(540, Math.ceil(Math.max(this.eventTitleText.width, this.eventBodyText.width) + 44)),
+    );
+    const titleHeight = Math.max(15, Math.ceil(this.eventTitleText.height));
+    const bodyHeight = Math.max(14, Math.ceil(this.eventBodyText.height));
+    const pillHeight = Math.max(48, titleHeight + bodyHeight + 17);
+    const minTopY = notificationBottomY !== null ? Math.max(88, notificationBottomY + 7) : 88;
+    const pillCy = minTopY + pillHeight / 2;
+    const titleY = pillCy - pillHeight / 2 + 7 + titleHeight / 2;
+    const bodyY = titleY + titleHeight / 2 + 3 + bodyHeight / 2;
+    this.eventTitleText.setPosition(GAME_WIDTH / 2, titleY);
+    this.eventBodyText.setPosition(GAME_WIDTH / 2, bodyY);
+
+    const nextKey = `${pillCy}:${pillWidth}:${pillHeight}`;
+    if (this.eventPillStateKey !== nextKey) {
+      this.eventPillStateKey = nextKey;
+      drawDoodleCard(this.eventPillGraphics, {
+        cx: GAME_WIDTH / 2,
+        cy: pillCy,
+        width: pillWidth,
+        height: pillHeight,
+        cornerRadius: 12,
+        seed: 130,
+        fillColor: DOODLE_COLORS.paper,
+        strokeWidth: 2.2,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.25,
+        clear: true,
+      });
+    }
   }
 
   private refreshOrientationHint(): void {
@@ -4158,6 +4231,7 @@ export class UIScene extends Phaser.Scene {
     this.timerPillKind = '';
     this.alertPillStateKey = '';
     this.rewardPillStateKey = '';
+    this.eventPillStateKey = '';
     this.activeAbilityVisualStateKey = '';
   }
 }
