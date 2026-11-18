@@ -45,11 +45,17 @@ import {
   DOODLE_COLORS,
   DOODLE_FONTS,
   DOODLE_HEX,
+  DOODLE_OVERLAY_COLORS,
+  DOODLE_OVERLAY_HEX,
   drawDoodleCard,
   drawDoodleCircle,
   drawDoodleClockGlyph,
+  drawDoodleEvolutionArch,
   drawDoodleShieldGlyph,
+  drawDoodleStar,
   drawDoodleStrokeRect,
+  drawDoodleTankEmblem,
+  drawDoodleUpgradeGlyph,
   formatCoreShieldLabel,
 } from '../ui/doodleTheme';
 import { RunScene } from './RunScene';
@@ -126,13 +132,26 @@ export class UIScene extends Phaser.Scene {
   private endButton!: Phaser.GameObjects.Text;
   private endHelpText!: Phaser.GameObjects.Text;
   private levelUpContainer!: Phaser.GameObjects.Container;
+  private levelUpBackdrop!: Phaser.GameObjects.Rectangle;
+  private levelUpPanelGraphics!: Phaser.GameObjects.Graphics;
+  private levelUpTimerGraphics!: Phaser.GameObjects.Graphics;
   private levelUpHeadingText!: Phaser.GameObjects.Text;
   private levelUpSubheadingText!: Phaser.GameObjects.Text;
   private levelUpTimerText!: Phaser.GameObjects.Text;
+  private levelUpFooterText!: Phaser.GameObjects.Text;
   private levelUpCards: Phaser.GameObjects.Rectangle[] = [];
+  private levelUpCardGraphics: Phaser.GameObjects.Graphics[] = [];
+  private levelUpGlyphGraphics: Phaser.GameObjects.Graphics[] = [];
+  private levelUpCardImages: Array<Phaser.GameObjects.Image | null> = [];
   private levelUpButtons: Phaser.GameObjects.Text[] = [];
   private levelUpDescriptions: Phaser.GameObjects.Text[] = [];
   private levelUpBadges: Phaser.GameObjects.Text[] = [];
+  private levelUpCardActionHints: Phaser.GameObjects.Text[] = [];
+  private levelUpOverlayVisualKey = '';
+  private levelUpTimerVisualKey = '';
+  private levelUpCardVisualKeys: string[] = [];
+  private levelUpGlyphVisualKeys: string[] = [];
+  private levelUpHoveredIndex: number | null = null;
   private levelUpWeaponTagIcons: Array<{
     container: Phaser.GameObjects.Container;
     frame: Phaser.GameObjects.Rectangle;
@@ -140,10 +159,20 @@ export class UIScene extends Phaser.Scene {
     muzzle: Phaser.GameObjects.Arc;
   }> = [];
   private classChoiceContainer!: Phaser.GameObjects.Container;
+  private classChoiceBackdrop!: Phaser.GameObjects.Rectangle;
+  private classChoiceArchGraphics!: Phaser.GameObjects.Graphics;
+  private classChoiceHeadingText!: Phaser.GameObjects.Text;
+  private classChoiceSubheadingText!: Phaser.GameObjects.Text;
+  private classChoiceNoteText!: Phaser.GameObjects.Text;
   private classChoiceCards: Phaser.GameObjects.Rectangle[] = [];
+  private classChoiceCardGraphics: Phaser.GameObjects.Graphics[] = [];
+  private classChoiceEmblemGraphics: Phaser.GameObjects.Graphics[] = [];
   private classChoiceTitles: Phaser.GameObjects.Text[] = [];
   private classChoiceDescriptions: Phaser.GameObjects.Text[] = [];
   private classChoiceActionLabels: Phaser.GameObjects.Text[] = [];
+  private classChoiceCardVisualKeys: string[] = [];
+  private classChoiceEmblemVisualKeys: string[] = [];
+  private classChoiceHoveredIndex: number | null = null;
   private statAllocationContainer!: Phaser.GameObjects.Container;
   private statPointText!: Phaser.GameObjects.Text;
   private statHelpText!: Phaser.GameObjects.Text;
@@ -218,14 +247,28 @@ export class UIScene extends Phaser.Scene {
     this.weaponIconTexts = [];
     this.weaponIconImages = [];
     this.levelUpCards = [];
+    this.levelUpCardGraphics = [];
+    this.levelUpGlyphGraphics = [];
+    this.levelUpCardImages = [];
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
     this.levelUpBadges = [];
+    this.levelUpCardActionHints = [];
     this.levelUpWeaponTagIcons = [];
+    this.levelUpOverlayVisualKey = '';
+    this.levelUpTimerVisualKey = '';
+    this.levelUpCardVisualKeys = [];
+    this.levelUpGlyphVisualKeys = [];
+    this.levelUpHoveredIndex = null;
     this.classChoiceCards = [];
+    this.classChoiceCardGraphics = [];
+    this.classChoiceEmblemGraphics = [];
     this.classChoiceTitles = [];
     this.classChoiceDescriptions = [];
     this.classChoiceActionLabels = [];
+    this.classChoiceCardVisualKeys = [];
+    this.classChoiceEmblemVisualKeys = [];
+    this.classChoiceHoveredIndex = null;
     this.statButtons = {};
     this.statButtonLabels = {};
     this.controlGuideZones = [];
@@ -853,8 +896,16 @@ export class UIScene extends Phaser.Scene {
     this.refreshMobileCopyState();
 
     this.endContainer.setVisible(endActive);
-    this.levelUpContainer.setVisible(levelUpActive && levelUpChoices.length > 0 && !classChoiceActive && !endActive);
-    this.classChoiceContainer.setVisible(classChoiceActive && !endActive);
+    const levelUpVisible = levelUpActive && levelUpChoices.length > 0 && !classChoiceActive && !endActive;
+    const classChoiceVisible = classChoiceActive && !endActive;
+    this.levelUpContainer.setVisible(levelUpVisible);
+    this.classChoiceContainer.setVisible(classChoiceVisible);
+    if (!levelUpVisible) {
+      this.levelUpHoveredIndex = null;
+    }
+    if (!classChoiceVisible) {
+      this.classChoiceHoveredIndex = null;
+    }
 
     if (endActive) {
       this.refreshEndOverlay(kills, elapsedMs, finalScore, bestScore, newBestScore, localLeaderboard);
@@ -1105,92 +1156,152 @@ export class UIScene extends Phaser.Scene {
   private createLevelUpOverlay(): Phaser.GameObjects.Container {
     const viewWidth = GAME_WIDTH;
     const viewHeight = GAME_HEIGHT;
+    const centerX = viewWidth / 2;
+    const cardY = 408;
 
-    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0)
-    this.levelUpHeadingText = this.add
-      .text(viewWidth / 2, 218, 'BONUS PICK', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '24px',
-        color: '#bfdbfe',
-        letterSpacing: 2,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0);
-    this.levelUpSubheadingText = this.add
-      .text(viewWidth / 2, 154, 'Legacy bonus choice. Stat points are spent from the bottom bar after this pick.', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '17px',
-        color: '#d7e2ef',
-        align: 'center',
-        wordWrap: { width: 720 },
-      })
-      .setOrigin(0.5)
+    this.levelUpBackdrop = this.add
+      .rectangle(0, 0, viewWidth, viewHeight, 0x0b0a14, 0.62)
+      .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setAlpha(0);
-    this.levelUpTimerText = this.add
-      .text(viewWidth / 2, 262, '15.0', {
-        fontFamily: 'Georgia, serif',
+      .setInteractive();
+
+    this.levelUpPanelGraphics = this.add.graphics().setScrollFactor(0);
+    this.levelUpTimerGraphics = this.add.graphics().setScrollFactor(0);
+
+    this.levelUpHeadingText = this.add
+      .text(centerX, 178, 'BONUS PICK', {
+        fontFamily: DOODLE_FONTS.display,
         fontSize: '38px',
-        color: '#fef08a',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    const children: Phaser.GameObjects.GameObject[] = [backdrop, this.levelUpHeadingText, this.levelUpSubheadingText, this.levelUpTimerText];
+    this.levelUpSubheadingText = this.add
+      .text(centerX, 236, 'CHOOSE ONE UPGRADE', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+        letterSpacing: 1,
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    this.levelUpTimerText = this.add
+      .text(1266, 178, '15.0s', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '26px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    this.levelUpFooterText = this.add
+      .text(centerX, 598, 'PICK ONE TO CONTINUE', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 1,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    const children: Phaser.GameObjects.GameObject[] = [
+      this.levelUpBackdrop,
+      this.levelUpPanelGraphics,
+      this.levelUpTimerGraphics,
+      this.levelUpHeadingText,
+      this.levelUpSubheadingText,
+      this.levelUpTimerText,
+      this.levelUpFooterText,
+    ];
+
+    const fallbackWeaponKey = (
+      ['arc-bolt', 'twin-fangs', 'ember-lance', 'bloom-cannon', 'phase-disc', 'sunwheel', 'shatterbell'] as const
+    )
+      .map((weaponId) => getWeaponIconAssetSlot(weaponId))
+      .find((slot) => shouldUseVisualAsset(this, 'weaponHudIcons', slot))?.key;
 
     for (let index = 0; index < 3; index += 1) {
-      const cardY = viewHeight / 2 + 36;
-      const x = viewWidth / 2 + (index - 1) * 382;
-      const card = this.add.rectangle(x, cardY, 286, 166, 0x111827, 0.99).setOrigin(0.5).setScrollFactor(0);
-      card.setStrokeStyle(2, 0x334155, 1);
+      const slotX = centerX + (index - 1) * 388;
+
+      const cardGraphics = this.add.graphics().setScrollFactor(0);
+      const glyphGraphics = this.add.graphics().setScrollFactor(0);
+      const cardImage = fallbackWeaponKey
+        ? this.add.image(slotX - 114, cardY - 34, fallbackWeaponKey).setDisplaySize(36, 36).setScrollFactor(0).setVisible(false)
+        : null;
+
+      // Transparent interactive hitbox matching card dimensions so no legacy dark box shows beneath wobbly parchment
+      const card = this.add.rectangle(slotX, cardY, 336, 256, DOODLE_COLORS.paper, 0).setOrigin(0.5).setScrollFactor(0);
       card.setInteractive({ useHandCursor: true });
       card.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.selectUpgrade(index, pointer));
       card.on('pointerover', () => this.applyLevelUpCardHover(index, true));
       card.on('pointerout', () => this.applyLevelUpCardHover(index, false));
 
       const badge = this.add
-        .text(x - 106, cardY - 52, '--', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '14px',
-          color: '#eff6ff',
-          backgroundColor: '#334155',
-          padding: { left: 8, right: 8, top: 5, bottom: 5 },
+        .text(slotX - 90, cardY - 98, '--', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '12px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
+          letterSpacing: 0.8,
         })
-        .setOrigin(0, 0.5)
+        .setOrigin(0.5)
         .setScrollFactor(0);
 
-      const weaponTagFrame = this.add.rectangle(0, 0, 38, 24, 0x0f172a, 0.96);
-      weaponTagFrame.setStrokeStyle(1, 0xfacc15, 0.95);
-      const weaponTagBarrel = this.add.rectangle(-4, 0, 20, 5, 0xfacc15, 0.95);
+      const weaponTagFrame = this.add.rectangle(0, 0, 38, 24, DOODLE_COLORS.paperGold, 1);
+      weaponTagFrame.setStrokeStyle(2, DOODLE_COLORS.ink, 1);
+      const weaponTagBarrel = this.add.rectangle(-4, 0, 19, 5, DOODLE_COLORS.ink, 1);
       weaponTagBarrel.setOrigin(0.2, 0.5);
-      const weaponTagMuzzle = this.add.circle(11, 0, 4, 0xfef3c7, 0.96);
+      const weaponTagMuzzle = this.add.circle(11, 0, 4, DOODLE_COLORS.gold, 1);
       const weaponTag = this.add
-        .container(x + 100, cardY - 52, [weaponTagFrame, weaponTagBarrel, weaponTagMuzzle])
+        .container(slotX + 124, cardY - 98, [weaponTagFrame, weaponTagBarrel, weaponTagMuzzle])
         .setScrollFactor(0)
         .setVisible(false);
 
       const button = this.add
-        .text(x - 106, cardY - 24, '', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '24px',
-          color: '#f8fafc',
-          wordWrap: { width: 214 },
+        .text(slotX - 62, cardY - 34, '', {
+          fontFamily: DOODLE_FONTS.display,
+          fontSize: '19px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
+          wordWrap: { width: 196 },
         })
         .setOrigin(0, 0.5)
         .setScrollFactor(0);
 
       const description = this.add
-        .text(x - 106, cardY + 12, '', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '14px',
-          color: '#cbd5e1',
-          wordWrap: { width: 214 },
+        .text(slotX - 142, cardY + 8, '', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '15px',
+          color: DOODLE_HEX.ink,
+          wordWrap: { width: 284 },
           lineSpacing: 4,
         })
         .setOrigin(0, 0)
         .setScrollFactor(0);
 
+      const actionHint = this.add
+        .text(slotX, cardY + 104, 'TAP TO PICK', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '12px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.inkMuted,
+          letterSpacing: 0.8,
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0);
+
       this.levelUpCards.push(card);
+      this.levelUpCardGraphics.push(cardGraphics);
+      this.levelUpGlyphGraphics.push(glyphGraphics);
+      this.levelUpCardImages.push(cardImage);
       this.levelUpBadges.push(badge);
       this.levelUpWeaponTagIcons.push({
         container: weaponTag,
@@ -1200,8 +1311,18 @@ export class UIScene extends Phaser.Scene {
       });
       this.levelUpButtons.push(button);
       this.levelUpDescriptions.push(description);
-      children.push(card, badge, weaponTag, button, description);
+      this.levelUpCardActionHints.push(actionHint);
+      this.levelUpCardVisualKeys.push('');
+      this.levelUpGlyphVisualKeys.push('');
+
+      children.push(cardGraphics, glyphGraphics);
+      if (cardImage) {
+        children.push(cardImage);
+      }
+      children.push(card, badge, weaponTag, button, description, actionHint);
     }
+
+    this.drawLevelUpOverlayChrome('normal', false);
 
     const container = this.add.container(0, 0, children);
     container.setDepth(90);
@@ -1214,73 +1335,134 @@ export class UIScene extends Phaser.Scene {
   private createClassChoiceOverlay(): Phaser.GameObjects.Container {
     const viewWidth = GAME_WIDTH;
     const viewHeight = GAME_HEIGHT;
+    const centerX = viewWidth / 2;
+    const cardY = 424;
 
-    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0)
-    const heading = this.add
-      .text(viewWidth / 2, 138, 'EVOLUTION', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '25px',
-        color: '#bae6fd',
-        letterSpacing: 2,
+    this.classChoiceBackdrop = this.add
+      .rectangle(0, 0, viewWidth, viewHeight, 0x110a22, 0.72)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setInteractive();
+
+    this.classChoiceArchGraphics = this.add.graphics().setScrollFactor(0);
+    drawDoodleEvolutionArch(this.classChoiceArchGraphics, centerX, 368, 960, 594);
+    drawDoodleCard(this.classChoiceArchGraphics, {
+      cx: centerX,
+      cy: 239,
+      width: 320,
+      height: 28,
+      cornerRadius: 12,
+      seed: 881,
+      jitter: 0.7,
+      fillColor: DOODLE_COLORS.paperPurple,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2.2,
+      shadowOffsetX: 2,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.3,
+    });
+
+    this.classChoiceHeadingText = this.add
+      .text(centerX, 166, 'EVOLUTION', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '42px',
+        fontStyle: 'bold',
+        color: DOODLE_OVERLAY_HEX.evolutionTitle,
+        stroke: DOODLE_HEX.ink,
+        strokeThickness: 6,
+        letterSpacing: 3,
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
-    const subheading = this.add
-      .text(viewWidth / 2, 184, 'Choose a class branch', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '34px',
-        color: '#eff6ff',
+
+    this.classChoiceSubheadingText = this.add
+      .text(centerX, 208, 'CHOOSE YOUR CLASS', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '20px',
+        fontStyle: 'bold',
+        color: DOODLE_OVERLAY_HEX.evolutionSubtitle,
+        stroke: DOODLE_HEX.ink,
+        strokeThickness: 4,
+        letterSpacing: 1.5,
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    const children: Phaser.GameObjects.GameObject[] = [backdrop, heading, subheading];
+    this.classChoiceNoteText = this.add
+      .text(centerX, 239, 'LEVEL 4 · ONE-TIME CLASS CHOICE', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 0.8,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    const children: Phaser.GameObjects.GameObject[] = [
+      this.classChoiceBackdrop,
+      this.classChoiceArchGraphics,
+      this.classChoiceHeadingText,
+      this.classChoiceSubheadingText,
+      this.classChoiceNoteText,
+    ];
 
     for (let index = 0; index < 2; index += 1) {
-      const x = viewWidth / 2 - 190 + index * 380;
-      const card = this.add.rectangle(x, 378, 310, 170, 0x101827, 0.99).setScrollFactor(0);
-      card.setStrokeStyle(2, 0x38bdf8, 0.9);
+      const slotX = centerX - 190 + index * 380;
+      const cardGraphics = this.add.graphics().setScrollFactor(0);
+      const emblemGraphics = this.add.graphics().setScrollFactor(0);
+
+      // Transparent interactive hitbox matching featured class panel; E2E clicks at (610, 378) and (610, 438) both hit inside
+      const card = this.add.rectangle(slotX, cardY, 340, 312, DOODLE_COLORS.paper, 0).setOrigin(0.5).setScrollFactor(0);
       card.setInteractive({ useHandCursor: true });
       card.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.selectTankClass(index, pointer));
       card.on('pointerover', () => this.applyClassChoiceCardHover(index, true));
       card.on('pointerout', () => this.applyClassChoiceCardHover(index, false));
 
       const title = this.add
-        .text(x - 118, 326, '', {
-          fontFamily: 'Trebuchet MS, sans-serif',
+        .text(slotX, cardY + 20, '', {
+          fontFamily: DOODLE_FONTS.display,
           fontSize: '28px',
-          color: '#f8fafc',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
+          letterSpacing: 1.2,
         })
-        .setOrigin(0, 0.5)
+        .setOrigin(0.5)
         .setScrollFactor(0);
 
       const description = this.add
-        .text(x - 118, 362, '', {
-          fontFamily: 'Trebuchet MS, sans-serif',
+        .text(slotX, cardY + 64, '', {
+          fontFamily: DOODLE_FONTS.body,
           fontSize: '15px',
-          color: '#cbd5e1',
-          wordWrap: { width: 236 },
-          lineSpacing: 5,
+          color: DOODLE_HEX.inkMuted,
+          wordWrap: { width: 288 },
+          align: 'center',
+          lineSpacing: 4,
         })
-        .setOrigin(0, 0)
+        .setOrigin(0.5)
         .setScrollFactor(0);
 
       const action = this.add
-        .text(x, 438, 'TAP TO EVOLVE', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '13px',
-          color: '#fef08a',
-          backgroundColor: '#1e293b',
-          padding: { left: 10, right: 10, top: 5, bottom: 5 },
+        .text(slotX, cardY + 120, 'EVOLVE', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '18px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
+          letterSpacing: 1.2,
         })
         .setOrigin(0.5)
         .setScrollFactor(0);
 
       this.classChoiceCards.push(card);
+      this.classChoiceCardGraphics.push(cardGraphics);
+      this.classChoiceEmblemGraphics.push(emblemGraphics);
       this.classChoiceTitles.push(title);
       this.classChoiceDescriptions.push(description);
       this.classChoiceActionLabels.push(action);
-      children.push(card, title, description, action);
+      this.classChoiceCardVisualKeys.push('');
+      this.classChoiceEmblemVisualKeys.push('');
+
+      children.push(cardGraphics, emblemGraphics, card, title, description, action);
     }
 
     const container = this.add.container(0, 0, children);
@@ -2127,49 +2309,69 @@ export class UIScene extends Phaser.Scene {
     remainingMs: number,
     mode: 'normal' | 'breakthrough',
   ): void {
-    this.setTextIfChanged(this.levelUpHeadingText, mode === 'breakthrough' ? 'BREAKTHROUGH BONUS' : 'BONUS PICK');
+    const isBreakthrough = mode === 'breakthrough';
+    const isUrgent = remainingMs <= 3000;
+    this.drawLevelUpOverlayChrome(mode, isUrgent);
+
+    this.setTextIfChanged(this.levelUpHeadingText, isBreakthrough ? 'BREAKTHROUGH BONUS' : 'BONUS PICK');
+    this.levelUpHeadingText.setFontSize(isBreakthrough ? 32 : 38);
     this.setTextIfChanged(
       this.levelUpSubheadingText,
-      mode === 'breakthrough'
-        ? 'Pick a rare weapon bonus, then continue with stat/class progression.'
-        : 'Legacy bonus choice. Stat points are spent from the bottom bar after this pick.',
+      isBreakthrough ? 'CHOOSE ONE UPGRADE · RARE WEAPON BONUS' : 'CHOOSE ONE UPGRADE',
     );
-    this.levelUpHeadingText.setColor(mode === 'breakthrough' ? '#f9a8d4' : '#bfdbfe');
-    this.levelUpTimerText.setColor(mode === 'breakthrough' ? '#f9a8d4' : '#fef08a');
-    this.setTextIfChanged(this.levelUpTimerText, `${(remainingMs / 1000).toFixed(1)}`);
+    this.levelUpTimerText.setColor(isUrgent ? '#dc2626' : DOODLE_HEX.ink);
+    this.setTextIfChanged(this.levelUpTimerText, `${(Math.max(0, remainingMs) / 1000).toFixed(1)}s`);
+
+    const visibleChoices = choices.slice(0, this.levelUpButtons.length);
+    const slotPositions = this.getLevelUpSlotPositions(visibleChoices.length);
 
     for (let index = 0; index < this.levelUpButtons.length; index += 1) {
-      const choice = choices[index];
+      const choice = visibleChoices[index];
       const card = this.levelUpCards[index];
+      const cardGraphics = this.levelUpCardGraphics[index];
+      const glyphGraphics = this.levelUpGlyphGraphics[index];
+      const cardImage = this.levelUpCardImages[index];
       const badge = this.levelUpBadges[index];
       const weaponTag = this.levelUpWeaponTagIcons[index];
       const button = this.levelUpButtons[index];
       const description = this.levelUpDescriptions[index];
+      const actionHint = this.levelUpCardActionHints[index];
 
       if (!choice) {
-        card.setVisible(false);
+        card.setVisible(false).disableInteractive();
+        cardGraphics?.setVisible(false);
+        glyphGraphics?.setVisible(false);
+        cardImage?.setVisible(false);
         badge.setVisible(false);
         weaponTag?.container.setVisible(false);
         button.setVisible(false);
         description.setVisible(false);
+        actionHint?.setVisible(false);
+        this.levelUpCardVisualKeys[index] = '';
+        this.levelUpGlyphVisualKeys[index] = '';
         continue;
       }
 
+      const slotX = slotPositions[index] ?? GAME_WIDTH / 2;
       const presentation = this.getUpgradePresentation(choice);
-      card.setVisible(true);
+      const hovered = this.levelUpHoveredIndex === index;
+      card.setVisible(true).setInteractive({ useHandCursor: true });
+      cardGraphics?.setVisible(true);
       badge.setVisible(true);
       weaponTag?.container.setVisible(presentation.hasWeaponTag);
       button.setVisible(true);
       description.setVisible(true);
+      actionHint?.setVisible(true);
+
       card.setData('baseColor', presentation.cardColor);
       card.setData('rewardType', presentation.rewardType);
       card.setData('hasWeaponTag', presentation.hasWeaponTag);
       card.setData('assetIconReady', this.canRenderUpgradeChoiceIcon(choice));
-      badge.setBackgroundColor(presentation.badgeColor);
+
       this.setTextIfChanged(badge, presentation.badgeText);
       this.setTextIfChanged(button, presentation.title);
       this.setTextIfChanged(description, presentation.summary);
-      this.applyLevelUpCardHover(index, false);
+      this.renderLevelUpCard(index, choice, presentation, slotX, mode, hovered);
     }
   }
 
@@ -2216,31 +2418,47 @@ export class UIScene extends Phaser.Scene {
   }
 
   private refreshClassChoiceCards(choices: TankClassDefinition[]): void {
+    const centerX = GAME_WIDTH / 2;
+    const cardY = 424;
+
     for (let index = 0; index < this.classChoiceCards.length; index += 1) {
       const choice = choices[index];
       const card = this.classChoiceCards[index];
+      const cardGraphics = this.classChoiceCardGraphics[index];
+      const emblemGraphics = this.classChoiceEmblemGraphics[index];
       const title = this.classChoiceTitles[index];
       const description = this.classChoiceDescriptions[index];
       const action = this.classChoiceActionLabels[index];
 
       if (!choice) {
-        card.setVisible(false);
+        card.setVisible(false).disableInteractive();
+        cardGraphics?.setVisible(false);
+        emblemGraphics?.setVisible(false);
         title.setVisible(false);
         description.setVisible(false);
         action.setVisible(false);
+        this.classChoiceCardVisualKeys[index] = '';
+        this.classChoiceEmblemVisualKeys[index] = '';
         continue;
       }
 
-      card.setVisible(true);
-      title.setVisible(true);
-      description.setVisible(true);
-      action.setVisible(true);
+      const slotX = centerX - 190 + index * 380;
+      const hovered = this.classChoiceHoveredIndex === index;
+      card.setVisible(true).setInteractive({ useHandCursor: true }).setPosition(slotX, cardY);
+      cardGraphics?.setVisible(true);
+      emblemGraphics?.setVisible(true);
+      title.setVisible(true).setPosition(slotX, cardY + 20);
+      description.setVisible(true).setPosition(slotX, cardY + 64);
+      action.setVisible(true).setPosition(slotX, cardY + 120);
+
       card.setData('classId', choice.id);
+      card.setData('classTitle', choice.title);
       card.setData('baseColor', choice.id === 'twin' ? 0x0d2536 : 0x101b35);
       card.setData('assetIconReady', this.canRenderTankClassIcon(choice.id));
-      this.setTextIfChanged(title, choice.title);
+      this.setTextIfChanged(title, choice.title.toUpperCase());
       this.setTextIfChanged(description, choice.description);
-      this.applyClassChoiceCardHover(index, false);
+      this.setTextIfChanged(action, 'EVOLVE');
+      this.renderClassChoiceCard(index, choice, slotX, cardY, hovered);
     }
   }
 
@@ -2867,15 +3085,444 @@ export class UIScene extends Phaser.Scene {
     }
   }
 
+  private getLevelUpSlotPositions(count: number): number[] {
+    const centerX = GAME_WIDTH / 2;
+    if (count <= 1) {
+      return [centerX];
+    }
+    if (count === 2) {
+      return [centerX - 200, centerX + 200];
+    }
+    return [centerX - 388, centerX, centerX + 388];
+  }
+
+  private drawLevelUpOverlayChrome(mode: 'normal' | 'breakthrough', urgent: boolean): void {
+    const centerX = GAME_WIDTH / 2;
+    const isBreakthrough = mode === 'breakthrough';
+    const panelKey = mode;
+    if (this.levelUpOverlayVisualKey !== panelKey && this.levelUpPanelGraphics) {
+      this.levelUpOverlayVisualKey = panelKey;
+      this.levelUpPanelGraphics.clear();
+
+      drawDoodleCard(this.levelUpPanelGraphics, {
+        cx: centerX,
+        cy: 384,
+        width: 1180,
+        height: 528,
+        cornerRadius: 24,
+        seed: 701,
+        jitter: 1.8,
+        fillColor: isBreakthrough ? DOODLE_OVERLAY_COLORS.breakthroughRibbon : DOODLE_COLORS.paperGold,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 3.5,
+        shadowOffsetX: 6,
+        shadowOffsetY: 7,
+        shadowAlpha: 0.45,
+      });
+
+      drawDoodleCard(this.levelUpPanelGraphics, {
+        cx: centerX,
+        cy: 384,
+        width: 1152,
+        height: 500,
+        cornerRadius: 20,
+        seed: 702,
+        jitter: 1.4,
+        fillColor: DOODLE_COLORS.paper,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.8,
+        shadowOffsetX: 0,
+        shadowOffsetY: 0,
+        shadowAlpha: 0,
+      });
+
+      drawDoodleCard(this.levelUpPanelGraphics, {
+        cx: centerX,
+        cy: 178,
+        width: isBreakthrough ? 560 : 440,
+        height: 62,
+        cornerRadius: 16,
+        seed: 705,
+        jitter: 1.4,
+        fillColor: isBreakthrough ? DOODLE_OVERLAY_COLORS.breakthroughAccent : DOODLE_OVERLAY_COLORS.goldRibbon,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 3,
+        shadowOffsetX: 3,
+        shadowOffsetY: 4,
+        shadowAlpha: 0.35,
+      });
+
+      drawDoodleStar(this.levelUpPanelGraphics, 446, 178, 18, 8, 5, DOODLE_OVERLAY_COLORS.starFill, DOODLE_COLORS.ink, 2.2);
+      drawDoodleStar(
+        this.levelUpPanelGraphics,
+        410,
+        194,
+        10,
+        4.5,
+        5,
+        isBreakthrough ? DOODLE_OVERLAY_COLORS.starPink : DOODLE_OVERLAY_COLORS.goldRibbon,
+        DOODLE_COLORS.ink,
+        1.8,
+      );
+      drawDoodleStar(
+        this.levelUpPanelGraphics,
+        1120,
+        178,
+        15,
+        6.5,
+        5,
+        isBreakthrough ? DOODLE_OVERLAY_COLORS.starPink : DOODLE_OVERLAY_COLORS.starFill,
+        DOODLE_COLORS.ink,
+        2,
+      );
+
+      drawDoodleCard(this.levelUpPanelGraphics, {
+        cx: centerX,
+        cy: 598,
+        width: 320,
+        height: 36,
+        cornerRadius: 14,
+        seed: 709,
+        jitter: 0.9,
+        fillColor: isBreakthrough ? DOODLE_COLORS.paperPink : DOODLE_COLORS.paperWarm,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.5,
+        shadowOffsetX: 2,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.25,
+      });
+    }
+
+    const timerKey = `${mode}:${urgent ? '1' : '0'}`;
+    if (this.levelUpTimerVisualKey !== timerKey && this.levelUpTimerGraphics) {
+      this.levelUpTimerVisualKey = timerKey;
+      this.levelUpTimerGraphics.clear();
+      drawDoodleCard(this.levelUpTimerGraphics, {
+        cx: 1246,
+        cy: 178,
+        width: 156,
+        height: 52,
+        cornerRadius: 14,
+        seed: 713,
+        jitter: 1.0,
+        fillColor: urgent
+          ? DOODLE_COLORS.paperDanger
+          : isBreakthrough
+            ? DOODLE_COLORS.paperPink
+            : DOODLE_COLORS.paperGold,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 3,
+        shadowOffsetX: 3,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.3,
+      });
+      drawDoodleClockGlyph(
+        this.levelUpTimerGraphics,
+        1196,
+        178,
+        12,
+        urgent ? DOODLE_COLORS.danger : DOODLE_COLORS.ink,
+      );
+    }
+  }
+
+  private getLevelUpBadgePalette(
+    badgeText: string,
+  ): { badgeFill: number; stripFill: number; hoverStroke: number; accent: number } {
+    switch (badgeText) {
+      case 'WEAPON':
+        return {
+          badgeFill: DOODLE_OVERLAY_COLORS.weaponBadge,
+          stripFill: DOODLE_COLORS.paperGold,
+          hoverStroke: DOODLE_COLORS.gold,
+          accent: DOODLE_COLORS.gold,
+        };
+      case 'SIGNATURE':
+        return {
+          badgeFill: DOODLE_OVERLAY_COLORS.signatureBadge,
+          stripFill: DOODLE_COLORS.paperPink,
+          hoverStroke: DOODLE_OVERLAY_COLORS.breakthroughAccent,
+          accent: DOODLE_OVERLAY_COLORS.breakthroughAccent,
+        };
+      case 'BRANCH':
+        return {
+          badgeFill: DOODLE_OVERLAY_COLORS.branchBadge,
+          stripFill: DOODLE_COLORS.paperPurple,
+          hoverStroke: DOODLE_OVERLAY_COLORS.archGlow,
+          accent: DOODLE_OVERLAY_COLORS.archGlow,
+        };
+      default:
+        return {
+          badgeFill: DOODLE_OVERLAY_COLORS.supportBadge,
+          stripFill: DOODLE_COLORS.paperSky,
+          hoverStroke: DOODLE_COLORS.mint,
+          accent: DOODLE_COLORS.mint,
+        };
+    }
+  }
+
+  private renderLevelUpCard(
+    index: number,
+    choice: UpgradeDefinition,
+    presentation: ReturnType<UIScene['getUpgradePresentation']>,
+    slotX: number,
+    mode: 'normal' | 'breakthrough',
+    hovered: boolean,
+  ): void {
+    const cardY = 408;
+    const card = this.levelUpCards[index];
+    const cardGraphics = this.levelUpCardGraphics[index];
+    const glyphGraphics = this.levelUpGlyphGraphics[index];
+    const cardImage = this.levelUpCardImages[index];
+    const badge = this.levelUpBadges[index];
+    const weaponTag = this.levelUpWeaponTagIcons[index];
+    const button = this.levelUpButtons[index];
+    const description = this.levelUpDescriptions[index];
+    const actionHint = this.levelUpCardActionHints[index];
+
+    card.setPosition(slotX, cardY);
+    badge.setPosition(slotX - 90, cardY - 98);
+    weaponTag?.container.setPosition(slotX + 124, cardY - 98);
+    button.setPosition(slotX - 62, cardY - 34);
+    description.setPosition(slotX - 142, cardY + 8);
+    actionHint?.setPosition(slotX, cardY + 104);
+
+    const weapon = this.getWeaponUpgrade(choice.id);
+    const weaponSlot = weapon ? getWeaponIconAssetSlot(weapon.id) : null;
+    const canShowWeaponSprite = Boolean(cardImage && weaponSlot && shouldUseVisualAsset(this, 'weaponHudIcons', weaponSlot));
+    const palette = this.getLevelUpBadgePalette(presentation.badgeText);
+
+    if (canShowWeaponSprite && cardImage && weaponSlot) {
+      cardImage.setTexture(weaponSlot.key).setDisplaySize(36, 36).setPosition(slotX - 114, cardY - 34).setVisible(true);
+    } else {
+      cardImage?.setVisible(false);
+    }
+    card.setData('weaponUnlockIconReady', canShowWeaponSprite);
+
+    const wellFill =
+      canShowWeaponSprite && weapon?.id === 'arc-bolt'
+        ? DOODLE_COLORS.weaponWellDark
+        : canShowWeaponSprite
+          ? DOODLE_COLORS.weaponWellLight
+          : palette.stripFill;
+
+    const cardKey = `${mode}:${choice.id}:${slotX}:${canShowWeaponSprite ? 1 : 0}:${hovered ? 1 : 0}`;
+    if (this.levelUpCardVisualKeys[index] !== cardKey && cardGraphics) {
+      this.levelUpCardVisualKeys[index] = cardKey;
+      cardGraphics.clear();
+
+      drawDoodleCard(cardGraphics, {
+        cx: slotX,
+        cy: cardY,
+        width: 336,
+        height: 256,
+        cornerRadius: 18,
+        seed: 730 + index * 17,
+        jitter: 1.4,
+        fillColor: hovered ? DOODLE_COLORS.paperHover : DOODLE_COLORS.paper,
+        strokeColor: hovered ? palette.hoverStroke : DOODLE_COLORS.ink,
+        strokeWidth: hovered ? 4 : 3,
+        shadowOffsetX: hovered ? 5 : 4,
+        shadowOffsetY: hovered ? 6 : 5,
+        shadowAlpha: hovered ? 0.45 : 0.32,
+      });
+
+      // Badge pill behind SUPPORT / WEAPON / SIGNATURE / BRANCH label
+      drawDoodleCard(cardGraphics, {
+        cx: slotX - 90,
+        cy: cardY - 98,
+        width: 114,
+        height: 28,
+        cornerRadius: 10,
+        seed: 750 + index * 13,
+        jitter: 0.7,
+        fillColor: palette.badgeFill,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: presentation.badgeText === 'SIGNATURE' || presentation.badgeText === 'BRANCH' ? 2.5 : 2,
+        shadowOffsetX: 2,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.25,
+      });
+
+      // Prestigious sparkle accent on breakthrough/signature/branch badges
+      if (presentation.badgeText === 'SIGNATURE' || presentation.badgeText === 'BRANCH') {
+        drawDoodleStar(
+          cardGraphics,
+          slotX - 24,
+          cardY - 98,
+          8,
+          3.6,
+          4,
+          presentation.badgeText === 'SIGNATURE' ? DOODLE_OVERLAY_COLORS.starFill : DOODLE_OVERLAY_COLORS.archGlow,
+          DOODLE_COLORS.ink,
+          1.5,
+          0,
+        );
+      }
+
+      // Highlight strip behind card title
+      drawDoodleCard(cardGraphics, {
+        cx: slotX + 36,
+        cy: cardY - 34,
+        width: 216,
+        height: 52,
+        cornerRadius: 12,
+        seed: 770 + index * 11,
+        jitter: 0.9,
+        fillColor: palette.stripFill,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 2,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.2,
+      });
+
+      // Circular icon well (weapon PNG frame or procedural doodle glyph)
+      drawDoodleCircle(cardGraphics, {
+        cx: slotX - 114,
+        cy: cardY - 34,
+        radius: 28,
+        fillColor: wellFill,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.5,
+        seed: 790 + index * 19,
+        segments: 18,
+        jitter: 0.85,
+        shadowOffsetX: 2,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.22,
+      });
+    }
+
+    const glyphKey = canShowWeaponSprite ? '' : `${choice.id}:${slotX}`;
+    if (glyphGraphics) {
+      if (canShowWeaponSprite) {
+        if (this.levelUpGlyphVisualKeys[index] !== '') {
+          this.levelUpGlyphVisualKeys[index] = '';
+          glyphGraphics.clear();
+        }
+        glyphGraphics.setVisible(false);
+      } else {
+        glyphGraphics.setVisible(true);
+        if (this.levelUpGlyphVisualKeys[index] !== glyphKey) {
+          this.levelUpGlyphVisualKeys[index] = glyphKey;
+          glyphGraphics.clear();
+          const accent = weapon ? weapon.projectileColor : palette.accent;
+          drawDoodleUpgradeGlyph(
+            glyphGraphics,
+            presentation.rewardType,
+            choice.id,
+            slotX - 114,
+            cardY - 34,
+            accent,
+            choice.kind,
+          );
+        }
+      }
+    }
+  }
+
+  private renderClassChoiceCard(
+    index: number,
+    choice: TankClassDefinition,
+    slotX: number,
+    cardY: number,
+    hovered: boolean,
+  ): void {
+    const cardGraphics = this.classChoiceCardGraphics[index];
+    const emblemGraphics = this.classChoiceEmblemGraphics[index];
+    const isTwin = choice.id === 'twin';
+    const auraColor = isTwin ? DOODLE_OVERLAY_COLORS.twinAura : DOODLE_OVERLAY_COLORS.sniperAura;
+    const buttonColor = isTwin ? DOODLE_OVERLAY_COLORS.twinButton : DOODLE_OVERLAY_COLORS.sniperButton;
+    const wellColor = isTwin ? DOODLE_OVERLAY_COLORS.twinWell : DOODLE_OVERLAY_COLORS.sniperWell;
+
+    const cardKey = `${choice.id}:${slotX}:${hovered ? 1 : 0}`;
+    if (cardGraphics && this.classChoiceCardVisualKeys[index] !== cardKey) {
+      this.classChoiceCardVisualKeys[index] = cardKey;
+      cardGraphics.clear();
+
+      // Outer magical aura frame distinguishing Evolution from Upgrade cards
+      drawDoodleCard(cardGraphics, {
+        cx: slotX,
+        cy: cardY,
+        width: 340,
+        height: 312,
+        cornerRadius: 22,
+        seed: 910 + index * 17,
+        jitter: 1.5,
+        fillColor: hovered ? DOODLE_COLORS.gold : auraColor,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: hovered ? 4 : 3.2,
+        shadowOffsetX: hovered ? 6 : 5,
+        shadowOffsetY: hovered ? 7 : 6,
+        shadowAlpha: 0.48,
+      });
+
+      // Inner cream parchment surface
+      drawDoodleCard(cardGraphics, {
+        cx: slotX,
+        cy: cardY,
+        width: 320,
+        height: 292,
+        cornerRadius: 18,
+        seed: 930 + index * 19,
+        jitter: 1.1,
+        fillColor: hovered ? DOODLE_COLORS.paperHover : DOODLE_COLORS.paper,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.6,
+        shadowOffsetX: 0,
+        shadowOffsetY: 0,
+        shadowAlpha: 0,
+      });
+
+      // Prominent EVOLVE CTA pill
+      drawDoodleCard(cardGraphics, {
+        cx: slotX,
+        cy: cardY + 120,
+        width: 210,
+        height: 42,
+        cornerRadius: 14,
+        seed: 950 + index * 23,
+        jitter: 0.9,
+        fillColor: hovered ? DOODLE_COLORS.gold : buttonColor,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 3,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.35,
+      });
+    }
+
+    const emblemKey = `${choice.id}:${slotX}`;
+    if (emblemGraphics && this.classChoiceEmblemVisualKeys[index] !== emblemKey) {
+      this.classChoiceEmblemVisualKeys[index] = emblemKey;
+      emblemGraphics.clear();
+      drawDoodleTankEmblem(emblemGraphics, slotX, cardY - 64, choice.visual, wellColor, auraColor, 1);
+    }
+  }
+
   private applyLevelUpCardHover(index: number, hovered: boolean): void {
     const card = this.levelUpCards[index];
-    if (!card.visible) {
+    if (!card?.visible) {
       return;
     }
 
-    const baseColor = Number(card.getData('baseColor') ?? 0x111827);
-    card.setFillStyle(baseColor, hovered ? 1 : 0.99);
-    card.setStrokeStyle(2, hovered ? 0x93c5fd : 0x334155, 1);
+    if (hovered) {
+      this.levelUpHoveredIndex = index;
+    } else if (this.levelUpHoveredIndex === index) {
+      this.levelUpHoveredIndex = null;
+    }
+
+    const choices = (this.registry.get('run.levelUpChoices') ?? []) as UpgradeDefinition[];
+    const choice = choices[index];
+    if (!choice) {
+      return;
+    }
+
+    const mode = this.registry.get('run.levelUpMode') === 'breakthrough' ? 'breakthrough' : 'normal';
+    const slotPositions = this.getLevelUpSlotPositions(Math.min(this.levelUpCards.length, choices.length));
+    const slotX = slotPositions[index] ?? GAME_WIDTH / 2;
+    this.renderLevelUpCard(index, choice, this.getUpgradePresentation(choice), slotX, mode, hovered);
   }
 
   private applyStatButtonHover(statId: TankStatId, hovered: boolean): void {
@@ -2894,9 +3541,20 @@ export class UIScene extends Phaser.Scene {
       return;
     }
 
-    const baseColor = Number(card.getData('baseColor') ?? 0x101827);
-    card.setFillStyle(baseColor, hovered ? 1 : 0.99);
-    card.setStrokeStyle(2, hovered ? 0xfef08a : 0x38bdf8, hovered ? 1 : 0.9);
+    if (hovered) {
+      this.classChoiceHoveredIndex = index;
+    } else if (this.classChoiceHoveredIndex === index) {
+      this.classChoiceHoveredIndex = null;
+    }
+
+    const choices = (this.registry.get('run.classChoiceChoices') ?? []) as TankClassDefinition[];
+    const choice = choices[index];
+    if (!choice) {
+      return;
+    }
+
+    const slotX = GAME_WIDTH / 2 - 190 + index * 380;
+    this.renderClassChoiceCard(index, choice, slotX, 424, hovered);
   }
 
   private getTimerSubtitleHint(_stagePhase: string): string {
@@ -2920,14 +3578,28 @@ export class UIScene extends Phaser.Scene {
     this.weaponIconTexts = [];
     this.weaponIconImages = [];
     this.levelUpCards = [];
+    this.levelUpCardGraphics = [];
+    this.levelUpGlyphGraphics = [];
+    this.levelUpCardImages = [];
     this.levelUpButtons = [];
     this.levelUpDescriptions = [];
     this.levelUpBadges = [];
+    this.levelUpCardActionHints = [];
     this.levelUpWeaponTagIcons = [];
+    this.levelUpOverlayVisualKey = '';
+    this.levelUpTimerVisualKey = '';
+    this.levelUpCardVisualKeys = [];
+    this.levelUpGlyphVisualKeys = [];
+    this.levelUpHoveredIndex = null;
     this.classChoiceCards = [];
+    this.classChoiceCardGraphics = [];
+    this.classChoiceEmblemGraphics = [];
     this.classChoiceTitles = [];
     this.classChoiceDescriptions = [];
     this.classChoiceActionLabels = [];
+    this.classChoiceCardVisualKeys = [];
+    this.classChoiceEmblemVisualKeys = [];
+    this.classChoiceHoveredIndex = null;
     this.statButtons = {};
     this.statButtonLabels = {};
     this.pauseMenuButtons = [];

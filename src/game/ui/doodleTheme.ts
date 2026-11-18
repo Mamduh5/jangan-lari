@@ -344,3 +344,498 @@ export function formatCoreShieldLabel(mapBuffType: string, mapBuffRemainingMs: n
   const seconds = Math.max(1, Math.ceil(mapBuffRemainingMs / 1000));
   return `CORE SHIELD ${seconds}s`;
 }
+
+
+export const DOODLE_OVERLAY_COLORS = {
+  goldRibbon: 0xfde047,
+  breakthroughRibbon: 0xf9a8d4,
+  breakthroughAccent: 0xf472b6,
+  supportBadge: 0xd1fae5,
+  weaponBadge: 0xfde68a,
+  signatureBadge: 0xfbcfe8,
+  branchBadge: 0xe9d5ff,
+  archStone: 0x3b2a5e,
+  archStoneDark: 0x241840,
+  archGlow: 0xa855f7,
+  archRune: 0xd8b4fe,
+  twinAura: 0x2dd4bf,
+  twinButton: 0x5eead4,
+  twinWell: 0xccfbf1,
+  sniperAura: 0xc084fc,
+  sniperButton: 0xd8b4fe,
+  sniperWell: 0xf3e8ff,
+  starFill: 0xfacc15,
+  starPink: 0xf472b6,
+} as const;
+
+export const DOODLE_OVERLAY_HEX = {
+  supportBadge: '#d1fae5',
+  weaponBadge: '#fde68a',
+  signatureBadge: '#fbcfe8',
+  branchBadge: '#e9d5ff',
+  twinPill: '#5eead4',
+  sniperPill: '#d8b4fe',
+  evolutionTitle: '#fdf7e7',
+  evolutionSubtitle: '#e9d5ff',
+} as const;
+
+export type DoodleTankVisualSpec = {
+  hullColor: number;
+  turretColor: number;
+  barrelColor: number;
+  barrelCount: 1 | 2;
+  barrelLengthMultiplier: number;
+  barrelWidthMultiplier: number;
+};
+
+function rotateDoodlePoint(
+  dx: number,
+  dy: number,
+  cosA: number,
+  sinA: number,
+  cx: number,
+  cy: number,
+): DoodlePoint {
+  return {
+    x: cx + dx * cosA - dy * sinA,
+    y: cy + dx * sinA + dy * cosA,
+  };
+}
+
+function createRotatedBoxPoints(
+  localX: number,
+  localY: number,
+  width: number,
+  height: number,
+  angleRad: number,
+  cx: number,
+  cy: number,
+): DoodlePoint[] {
+  const cosA = Math.cos(angleRad);
+  const sinA = Math.sin(angleRad);
+  const hw = width / 2;
+  const hh = height / 2;
+  return [
+    rotateDoodlePoint(localX - hw, localY - hh, cosA, sinA, cx, cy),
+    rotateDoodlePoint(localX + hw, localY - hh, cosA, sinA, cx, cy),
+    rotateDoodlePoint(localX + hw, localY + hh, cosA, sinA, cx, cy),
+    rotateDoodlePoint(localX - hw, localY + hh, cosA, sinA, cx, cy),
+  ];
+}
+
+export function drawDoodleStar(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  outerRadius: number,
+  innerRadius: number,
+  pointsCount = 5,
+  fillColor: number = DOODLE_OVERLAY_COLORS.starFill,
+  strokeColor: number = DOODLE_COLORS.ink,
+  strokeWidth = 2,
+  rotationOffset = -Math.PI / 2,
+  fillAlpha = 1,
+): void {
+  const vertices: DoodlePoint[] = [];
+  const total = pointsCount * 2;
+  for (let i = 0; i < total; i += 1) {
+    const angle = rotationOffset + (i * Math.PI) / pointsCount;
+    const radius = i % 2 === 0 ? outerRadius : innerRadius;
+    vertices.push({
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius,
+    });
+  }
+
+  graphics.fillStyle(fillColor, fillAlpha);
+  graphics.fillPoints(vertices, true, true);
+  if (strokeWidth > 0) {
+    graphics.lineStyle(strokeWidth, strokeColor, 1);
+    graphics.strokePoints(vertices, true, true);
+  }
+}
+
+export function drawDoodleUpgradeGlyph(
+  graphics: Phaser.GameObjects.Graphics,
+  rewardType: string,
+  upgradeId: string,
+  cx: number,
+  cy: number,
+  accentColor: number,
+  kind?: string,
+): void {
+  const ink = DOODLE_COLORS.ink;
+
+  if (kind === 'signature') {
+    drawDoodleStar(graphics, cx, cy, 18, 8.5, 5, DOODLE_OVERLAY_COLORS.breakthroughAccent, ink, 2.2);
+    drawDoodleStar(graphics, cx + 14, cy - 13, 6.5, 2.5, 4, DOODLE_COLORS.gold, ink, 1.5, 0);
+    return;
+  }
+
+  if (kind === 'branch') {
+    graphics.lineStyle(4, ink, 1);
+    graphics.lineBetween(cx, cy + 16, cx, cy + 1);
+    graphics.lineBetween(cx, cy + 1, cx - 12, cy - 12);
+    graphics.lineBetween(cx, cy + 1, cx + 12, cy - 12);
+    graphics.lineStyle(2.2, accentColor, 1);
+    graphics.lineBetween(cx, cy + 15, cx, cy + 1);
+    graphics.lineBetween(cx, cy + 1, cx - 12, cy - 12);
+    graphics.lineBetween(cx, cy + 1, cx + 12, cy - 12);
+    drawDoodleStar(graphics, cx - 12, cy - 12, 7.5, 3.2, 4, DOODLE_OVERLAY_COLORS.branchBadge, ink, 1.8, 0);
+    drawDoodleStar(graphics, cx + 12, cy - 12, 7.5, 3.2, 4, DOODLE_COLORS.gold, ink, 1.8, 0);
+    return;
+  }
+
+  if (rewardType === 'weapon') {
+    const body = createRotatedBoxPoints(0, 0, 26, 11, -0.35, cx, cy);
+    graphics.fillStyle(accentColor, 1);
+    graphics.fillPoints(body, true, true);
+    graphics.lineStyle(2.2, ink, 1);
+    graphics.strokePoints(body, true, true);
+    drawDoodleStar(graphics, cx + 14, cy - 6, 8, 3.5, 4, DOODLE_COLORS.gold, ink, 1.6, 0.2);
+    return;
+  }
+
+  switch (upgradeId) {
+    case 'vitality': {
+      const heart: DoodlePoint[] = [
+        { x: cx, y: cy + 14 },
+        { x: cx - 15, y: cy },
+        { x: cx - 15, y: cy - 9 },
+        { x: cx - 8, y: cy - 14 },
+        { x: cx, y: cy - 7 },
+        { x: cx + 8, y: cy - 14 },
+        { x: cx + 15, y: cy - 9 },
+        { x: cx + 15, y: cy },
+      ];
+      graphics.fillStyle(DOODLE_COLORS.hp, 1);
+      graphics.fillPoints(heart, true, true);
+      graphics.lineStyle(2.2, ink, 1);
+      graphics.strokePoints(heart, true, true);
+      graphics.lineStyle(2.5, DOODLE_COLORS.paper, 1);
+      graphics.lineBetween(cx - 5, cy - 1, cx + 5, cy - 1);
+      graphics.lineBetween(cx, cy - 6, cx, cy + 4);
+      return;
+    }
+    case 'swiftness': {
+      graphics.lineStyle(4, ink, 1);
+      graphics.lineBetween(cx - 12, cy - 10, cx - 2, cy);
+      graphics.lineBetween(cx - 2, cy, cx - 12, cy + 10);
+      graphics.lineBetween(cx + 2, cy - 10, cx + 12, cy);
+      graphics.lineBetween(cx + 12, cy, cx + 2, cy + 10);
+      graphics.lineStyle(2, DOODLE_COLORS.xp, 1);
+      graphics.lineBetween(cx - 12, cy - 10, cx - 2, cy);
+      graphics.lineBetween(cx - 2, cy, cx - 12, cy + 10);
+      graphics.lineBetween(cx + 2, cy - 10, cx + 12, cy);
+      graphics.lineBetween(cx + 12, cy, cx + 2, cy + 10);
+      return;
+    }
+    case 'power': {
+      const arrow: DoodlePoint[] = [
+        { x: cx, y: cy - 16 },
+        { x: cx + 14, y: cy - 2 },
+        { x: cx + 6, y: cy - 2 },
+        { x: cx + 6, y: cy + 14 },
+        { x: cx - 6, y: cy + 14 },
+        { x: cx - 6, y: cy - 2 },
+        { x: cx - 14, y: cy - 2 },
+      ];
+      graphics.fillStyle(DOODLE_COLORS.gold, 1);
+      graphics.fillPoints(arrow, true, true);
+      graphics.lineStyle(2.2, ink, 1);
+      graphics.strokePoints(arrow, true, true);
+      return;
+    }
+    case 'rapid-fire': {
+      for (const offsetY of [-9, 0, 9]) {
+        const pill = createWobblyRectPoints(cx + (offsetY === 0 ? 4 : -2), cy + offsetY, 16, 6, 2.5, 41 + offsetY, 0.25, 6);
+        graphics.fillStyle(DOODLE_COLORS.mint, 1);
+        graphics.fillPoints(pill, true, true);
+        graphics.lineStyle(1.8, ink, 1);
+        graphics.strokePoints(pill, true, true);
+      }
+      return;
+    }
+    case 'velocity': {
+      const bolt: DoodlePoint[] = [
+        { x: cx + 5, y: cy - 16 },
+        { x: cx - 10, y: cy + 1 },
+        { x: cx - 1, y: cy + 1 },
+        { x: cx - 5, y: cy + 16 },
+        { x: cx + 11, y: cy - 2 },
+        { x: cx + 2, y: cy - 2 },
+      ];
+      graphics.fillStyle(DOODLE_COLORS.xp, 1);
+      graphics.fillPoints(bolt, true, true);
+      graphics.lineStyle(2.2, ink, 1);
+      graphics.strokePoints(bolt, true, true);
+      return;
+    }
+    case 'magnet': {
+      const horse: DoodlePoint[] = [
+        { x: cx - 12, y: cy - 13 },
+        { x: cx - 5, y: cy - 13 },
+        { x: cx - 5, y: cy + 2 },
+        { x: cx, y: cy + 7 },
+        { x: cx + 5, y: cy + 2 },
+        { x: cx + 5, y: cy - 13 },
+        { x: cx + 12, y: cy - 13 },
+        { x: cx + 12, y: cy + 5 },
+        { x: cx, y: cy + 15 },
+        { x: cx - 12, y: cy + 5 },
+      ];
+      graphics.fillStyle(DOODLE_COLORS.hp, 1);
+      graphics.fillPoints(horse, true, true);
+      graphics.lineStyle(2.2, ink, 1);
+      graphics.strokePoints(horse, true, true);
+      return;
+    }
+    case 'reach': {
+      drawDoodleCircle(graphics, {
+        cx,
+        cy,
+        radius: 15,
+        fillColor: DOODLE_COLORS.paperSky,
+        strokeColor: DOODLE_COLORS.xp,
+        strokeWidth: 2.4,
+        seed: 71,
+        segments: 16,
+        jitter: 0.4,
+      });
+      drawDoodleCircle(graphics, {
+        cx,
+        cy,
+        radius: 6.5,
+        fillColor: DOODLE_COLORS.gold,
+        strokeColor: ink,
+        strokeWidth: 2,
+        seed: 72,
+        segments: 12,
+        jitter: 0.3,
+      });
+      return;
+    }
+    default: {
+      drawDoodleStar(graphics, cx, cy, 15, 7, 5, DOODLE_COLORS.gold, ink, 2);
+    }
+  }
+}
+
+export function drawDoodleTankEmblem(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  visual: DoodleTankVisualSpec,
+  wellFillColor: number,
+  auraStrokeColor: number,
+  scale = 1,
+): void {
+  const ink = DOODLE_COLORS.ink;
+  const wellRadius = 56 * scale;
+
+  drawDoodleCircle(graphics, {
+    cx,
+    cy,
+    radius: wellRadius,
+    fillColor: wellFillColor,
+    strokeColor: ink,
+    strokeWidth: 3,
+    seed: visual.barrelCount === 2 ? 411 : 421,
+    segments: 22,
+    jitter: 1.1,
+    shadowOffsetX: 2,
+    shadowOffsetY: 3,
+    shadowAlpha: 0.22,
+  });
+
+  const innerRing = createWobblyCirclePoints(cx, cy, wellRadius - 6 * scale, 433, 20, 0.7);
+  graphics.lineStyle(2, auraStrokeColor, 0.85);
+  graphics.strokePoints(innerRing, true, true);
+
+  const angleRad = -0.18;
+  const tankOriginX =
+    cx - (visual.barrelCount === 1 && visual.barrelLengthMultiplier > 1.2 ? 16 : 10) * scale;
+  const tankOriginY = cy + 3 * scale;
+
+  // Ground doodle shadow beneath tank hull
+  const shadowPoly = createRotatedBoxPoints(-2 * scale, 10 * scale, 50 * scale, 22 * scale, angleRad, tankOriginX, tankOriginY);
+  graphics.fillStyle(DOODLE_COLORS.inkShadow, 0.16);
+  graphics.fillPoints(shadowPoly, true, true);
+
+  // Side treads / chassis hull based on TankClassVisualIdentity
+  const topTread = createRotatedBoxPoints(-2 * scale, -14 * scale, 40 * scale, 11 * scale, angleRad, tankOriginX, tankOriginY);
+  const botTread = createRotatedBoxPoints(-2 * scale, 14 * scale, 40 * scale, 11 * scale, angleRad, tankOriginX, tankOriginY);
+  for (const tread of [topTread, botTread]) {
+    graphics.fillStyle(visual.hullColor, 1);
+    graphics.fillPoints(tread, true, true);
+    graphics.lineStyle(2.5, ink, 1);
+    graphics.strokePoints(tread, true, true);
+  }
+
+  // Barrels rendered directly from barrelCount, barrelLengthMultiplier, barrelWidthMultiplier
+  const barrelLength = 30 * scale * visual.barrelLengthMultiplier;
+  const barrelWidth = Math.max(7, 11.5 * scale * visual.barrelWidthMultiplier);
+  const barrelStartX = 11 * scale;
+  const barrelCenterX = barrelStartX + barrelLength / 2;
+  const barrelOffsets = visual.barrelCount === 2 ? [-8 * scale, 8 * scale] : [0];
+
+  for (const offsetY of barrelOffsets) {
+    const barrelPts = createRotatedBoxPoints(
+      barrelCenterX,
+      offsetY,
+      barrelLength,
+      barrelWidth,
+      angleRad,
+      tankOriginX,
+      tankOriginY,
+    );
+    graphics.fillStyle(visual.barrelColor, 1);
+    graphics.fillPoints(barrelPts, true, true);
+    graphics.lineStyle(2.6, ink, 1);
+    graphics.strokePoints(barrelPts, true, true);
+
+    const muzzleTip = createRotatedBoxPoints(
+      barrelStartX + barrelLength - 2 * scale,
+      offsetY,
+      6 * scale,
+      barrelWidth + 2 * scale,
+      angleRad,
+      tankOriginX,
+      tankOriginY,
+    );
+    graphics.fillStyle(visual.turretColor, 1);
+    graphics.fillPoints(muzzleTip, true, true);
+    graphics.lineStyle(2.2, ink, 1);
+    graphics.strokePoints(muzzleTip, true, true);
+  }
+
+  // Main hexagonal / chunky tank hull & turret dome
+  const hullBody = createWobblyRectPoints(tankOriginX, tankOriginY, 38 * scale, 30 * scale, 9 * scale, 451, 0.9, 8);
+  graphics.fillStyle(visual.hullColor, 1);
+  graphics.fillPoints(hullBody, true, true);
+  graphics.lineStyle(2.8, ink, 1);
+  graphics.strokePoints(hullBody, true, true);
+
+  drawDoodleCircle(graphics, {
+    cx: tankOriginX,
+    cy: tankOriginY,
+    radius: 15.5 * scale,
+    fillColor: visual.turretColor,
+    strokeColor: ink,
+    strokeWidth: 2.6,
+    seed: 467,
+    segments: 16,
+    jitter: 0.65,
+  });
+
+  // Specular highlight dot on turret top-left
+  const glint = createWobblyCirclePoints(tankOriginX - 5 * scale, tankOriginY - 5 * scale, 4.2 * scale, 479, 10, 0.25);
+  graphics.fillStyle(DOODLE_COLORS.paperHover, 0.85);
+  graphics.fillPoints(glint, true, true);
+}
+
+export function drawDoodleEvolutionArch(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  width: number,
+  height: number,
+): void {
+  const ink = DOODLE_COLORS.ink;
+  const leftX = cx - width / 2;
+  const rightX = cx + width / 2;
+  const bottomY = cy + height / 2;
+  const pillarW = 74;
+  const shoulderY = cy - height / 2 + 170;
+
+  // Soft twilight portal aura behind archway opening
+  const portalAura = createWobblyRectPoints(cx, cy + 28, width - 96, height - 96, 170, 811, 2.2, 20);
+  graphics.fillStyle(0x2e1065, 0.44);
+  graphics.fillPoints(portalAura, true, true);
+  graphics.lineStyle(2, DOODLE_OVERLAY_COLORS.archGlow, 0.45);
+  graphics.strokePoints(portalAura, true, true);
+
+  const innerAura = createWobblyRectPoints(cx, cy + 36, width - 160, height - 148, 130, 823, 1.8, 22);
+  graphics.fillStyle(0x4c1d95, 0.3);
+  graphics.fillPoints(innerAura, true, true);
+
+  // Carved stone pillars (left & right blocks)
+  const blockCount = 4;
+  const blockH = (bottomY - shoulderY) / blockCount;
+  for (let i = 0; i < blockCount; i += 1) {
+    const by = shoulderY + blockH * i + blockH / 2;
+    for (const side of [-1, 1] as const) {
+      const bx = side < 0 ? leftX + pillarW / 2 : rightX - pillarW / 2;
+      drawDoodleCard(graphics, {
+        cx: bx,
+        cy: by,
+        width: pillarW - 4,
+        height: blockH - 4,
+        cornerRadius: 10,
+        seed: 830 + i * 7 + (side < 0 ? 1 : 2),
+        jitter: 1.3,
+        fillColor: i % 2 === 0 ? DOODLE_OVERLAY_COLORS.archStone : DOODLE_OVERLAY_COLORS.archStoneDark,
+        strokeColor: ink,
+        strokeWidth: 3,
+        shadowOffsetX: side < 0 ? -3 : 3,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.4,
+      });
+
+      // Glowing carved rune diamond on middle pillar stones
+      if (i === 1 || i === 2) {
+        drawDoodleStar(
+          graphics,
+          bx,
+          by,
+          10,
+          4.5,
+          4,
+          DOODLE_OVERLAY_COLORS.archRune,
+          ink,
+          1.6,
+          0,
+          0.9,
+        );
+      }
+    }
+  }
+
+  // Curved top stone arch stones (voussoirs)
+  const archSegments = 9;
+  const archRxOuter = width / 2;
+  const archRxInner = width / 2 - pillarW + 4;
+  const archRyOuter = shoulderY - (cy - height / 2);
+  const archRyInner = Math.max(40, archRyOuter - 64);
+
+  for (let i = 0; i < archSegments; i += 1) {
+    const a0 = Math.PI + (i / archSegments) * Math.PI;
+    const a1 = Math.PI + ((i + 1) / archSegments) * Math.PI;
+    const stone: DoodlePoint[] = [
+      { x: cx + Math.cos(a0) * archRxOuter, y: shoulderY + Math.sin(a0) * archRyOuter },
+      { x: cx + Math.cos(a1) * archRxOuter, y: shoulderY + Math.sin(a1) * archRyOuter },
+      { x: cx + Math.cos(a1) * archRxInner, y: shoulderY + Math.sin(a1) * archRyInner },
+      { x: cx + Math.cos(a0) * archRxInner, y: shoulderY + Math.sin(a0) * archRyInner },
+    ];
+    const isKeystone = i === Math.floor(archSegments / 2);
+    graphics.fillStyle(
+      isKeystone
+        ? 0x5b21b6
+        : i % 2 === 0
+          ? DOODLE_OVERLAY_COLORS.archStone
+          : DOODLE_OVERLAY_COLORS.archStoneDark,
+      1,
+    );
+    graphics.fillPoints(stone, true, true);
+    graphics.lineStyle(3, ink, 1);
+    graphics.strokePoints(stone, true, true);
+  }
+
+  // Subtle top keystone gem and side sparkles
+  const apexY = cy - height / 2 + 28;
+  drawDoodleStar(graphics, cx, apexY, 16, 7, 4, DOODLE_OVERLAY_COLORS.archGlow, ink, 2, 0);
+  drawDoodleStar(graphics, leftX + 26, shoulderY - 60, 10, 4, 4, DOODLE_OVERLAY_COLORS.twinAura, ink, 1.5, 0.25, 0.9);
+  drawDoodleStar(graphics, rightX - 26, shoulderY - 60, 10, 4, 4, DOODLE_OVERLAY_COLORS.sniperAura, ink, 1.5, 0.25, 0.9);
+  drawDoodleStar(graphics, leftX + 20, bottomY - 48, 8, 3.2, 4, DOODLE_OVERLAY_COLORS.archRune, ink, 1.4, 0, 0.8);
+  drawDoodleStar(graphics, rightX - 20, bottomY - 48, 8, 3.2, 4, DOODLE_OVERLAY_COLORS.archRune, ink, 1.4, 0, 0.8);
+}

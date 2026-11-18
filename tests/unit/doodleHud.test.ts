@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { VITALITY_REGEN_PER_SECOND } from '../../src/game/config/playerBalance';
+import { TANK_CLASS_DEFINITIONS } from '../../src/game/data/tankClasses';
+import { UPGRADE_POOL, type UpgradeDefinition } from '../../src/game/data/upgrades';
 import {
   DOODLE_COLORS,
   DOODLE_HEX,
+  DOODLE_OVERLAY_COLORS,
   createWobblyCirclePoints,
   createWobblyRectPoints,
   formatCoreShieldLabel,
@@ -195,6 +199,7 @@ vi.mock('phaser', () => {
     setDepth(depth: number) { this.depth = depth; return this; }
     setScrollFactor() { return this; }
     setVisible(visible: boolean) { this.visible = visible; return this; }
+    setPosition(x: number, y: number) { this.x = x; this.y = y; return this; }
     setData(key: string, value: unknown) { this.data.set(key, value); return this; }
     getData(key: string) { return this.data.get(key); }
   }
@@ -255,6 +260,8 @@ function createUiFixture(options: { texturesExist?: boolean; viewportWidth?: num
   const runSceneStub = {
     openManualPauseMenu: vi.fn(),
     activateBreakoutPulse: vi.fn(),
+    selectLevelUp: vi.fn(),
+    selectTankClass: vi.fn(),
     setControlGuideMode: vi.fn((mode: string) => {
       ui.registry.set('run.controlGuideMode', mode);
     }),
@@ -471,6 +478,230 @@ describe('UIScene R3G-B doodle combat HUD', () => {
       const guideZones = (ui as unknown as { controlGuideZones: Array<{ setInteractive: ReturnType<typeof vi.fn> }> }).controlGuideZones;
       for (const z of guideZones) {
         expect(z.setInteractive).not.toHaveBeenCalled();
+      }
+    } finally {
+      restoreViewport();
+    }
+  });
+});
+
+function pickUpgrade(id: UpgradeDefinition['id']): UpgradeDefinition {
+  const found = UPGRADE_POOL.find((entry) => entry.id === id);
+  if (!found) {
+    throw new Error(`Missing upgrade definition for test: ${id}`);
+  }
+  return found;
+}
+
+describe('UIScene R3G-C1 distinct level-up and class evolution overlays', () => {
+  test('renders BONUS PICK with real UPGRADE_POOL content, live countdown, dynamic card counts, and safe non-interactive cleanup', () => {
+    const { ui, runSceneStub, restoreViewport } = createUiFixture();
+    try {
+      const vitality = pickUpgrade('vitality');
+      const twinFangs = pickUpgrade('unlock-twin-fangs');
+      const rapidFire = pickUpgrade('rapid-fire');
+
+      ui.registry.set('run.levelUpActive', true);
+      ui.registry.set('run.levelUpMode', 'normal');
+      ui.registry.set('run.levelUpRemainingMs', 12_300);
+      ui.registry.set('run.levelUpChoices', [vitality, twinFangs, rapidFire]);
+      ui.registry.set('run.levelUpChoiceCount', 3);
+      ui.update();
+
+      const snap = ui.getHudSnapshot();
+      expect(snap.levelUpVisible).toBe(true);
+      expect(snap.levelUpChoiceCount).toBe(3);
+      expect(snap.classChoiceVisible).toBe(false);
+
+      const internals = ui as unknown as {
+        levelUpHeadingText: { text: string };
+        levelUpSubheadingText: { text: string; alpha: number };
+        levelUpTimerText: { text: string };
+        levelUpFooterText: { text: string };
+        levelUpCards: Array<{
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          visible: boolean;
+          input: { enabled: boolean } | null;
+          getData: (k: string) => unknown;
+          emit: (e: string, ...args: unknown[]) => void;
+        }>;
+        levelUpBadges: Array<{ text: string; visible: boolean }>;
+        levelUpButtons: Array<{ text: string; visible: boolean }>;
+        levelUpDescriptions: Array<{ text: string; visible: boolean }>;
+        levelUpCardImages: Array<{ visible: boolean; textureKey: string } | null>;
+        levelUpWeaponTagIcons: Array<{ container: { visible: boolean } }>;
+      };
+
+      expect(internals.levelUpHeadingText.text).toBe('BONUS PICK');
+      expect(internals.levelUpSubheadingText.text).toBe('CHOOSE ONE UPGRADE');
+      expect(internals.levelUpSubheadingText.alpha).toBe(1);
+      expect(internals.levelUpTimerText.text).toBe('12.3s');
+      expect(internals.levelUpFooterText.text).toBe('PICK ONE TO CONTINUE');
+
+      expect(internals.levelUpBadges.map((b) => b.text)).toEqual(['SUPPORT', 'WEAPON', 'SUPPORT']);
+      expect(internals.levelUpButtons.map((b) => b.text)).toEqual(['Vitality', 'Twin Fangs', 'Rapid Fire']);
+      expect(internals.levelUpDescriptions[0].text).toBe(`+${VITALITY_REGEN_PER_SECOND} HP/sec regen`);
+      expect(internals.levelUpCardImages[1]?.visible).toBe(true);
+      expect(internals.levelUpCardImages[1]?.textureKey).toBe('weapon-twin-fangs');
+      expect(internals.levelUpCardImages[0]?.visible).toBe(false);
+      expect(internals.levelUpWeaponTagIcons[1].container.visible).toBe(true);
+      expect(internals.levelUpWeaponTagIcons[0].container.visible).toBe(false);
+
+      // Card 0 encloses legacy overlay-input E2E click coordinate (258, 372)
+      const card0 = internals.levelUpCards[0];
+      expect(258).toBeGreaterThanOrEqual(card0.x - card0.width / 2);
+      expect(258).toBeLessThanOrEqual(card0.x + card0.width / 2);
+      expect(372).toBeGreaterThanOrEqual(card0.y - card0.height / 2);
+      expect(372).toBeLessThanOrEqual(card0.y + card0.height / 2);
+
+      // Click each card forwards index & pointer cleanly
+      const fakePointer = { id: 7 };
+      internals.levelUpCards[1].emit('pointerdown', fakePointer);
+      expect(runSceneStub.selectLevelUp).toHaveBeenCalledWith(1, fakePointer);
+
+      // Verify 2 choices hides slot 2 and disables input on it
+      ui.registry.set('run.levelUpChoices', [vitality, rapidFire]);
+      ui.registry.set('run.levelUpChoiceCount', 2);
+      ui.update();
+      expect(internals.levelUpCards[0].visible).toBe(true);
+      expect(internals.levelUpCards[1].visible).toBe(true);
+      expect(internals.levelUpCards[0].input?.enabled).toBe(true);
+      expect(internals.levelUpCards[1].input?.enabled).toBe(true);
+      expect(internals.levelUpCards[2].visible).toBe(false);
+      expect(internals.levelUpCards[2].input?.enabled).toBe(false);
+      expect(internals.levelUpCards[0].x).toBe(600);
+      expect(internals.levelUpCards[1].x).toBe(1000);
+
+      // Verify 1 choice centers card 0 and disables slots 1 & 2
+      ui.registry.set('run.levelUpChoices', [twinFangs]);
+      ui.registry.set('run.levelUpChoiceCount', 1);
+      ui.update();
+      expect(internals.levelUpCards[0].visible).toBe(true);
+      expect(internals.levelUpCards[0].x).toBe(800);
+      expect(internals.levelUpCards[1].visible).toBe(false);
+      expect(internals.levelUpCards[1].input?.enabled).toBe(false);
+      expect(internals.levelUpCards[2].visible).toBe(false);
+      expect(internals.levelUpCards[2].input?.enabled).toBe(false);
+    } finally {
+      restoreViewport();
+    }
+  });
+
+  test('distinguishes BREAKTHROUGH BONUS, SIGNATURE, BRANCH badges and safely falls back when weapon PNG is absent', () => {
+    const noTex = createUiFixture({ texturesExist: false });
+    try {
+      const emberUnlock = pickUpgrade('unlock-ember-lance');
+      const signature = UPGRADE_POOL.find((entry) => entry.kind === 'signature');
+      const branch = UPGRADE_POOL.find((entry) => entry.kind === 'branch');
+      expect(signature).toBeTruthy();
+      expect(branch).toBeTruthy();
+      if (!signature || !branch) return;
+
+      noTex.ui.registry.set('run.levelUpActive', true);
+      noTex.ui.registry.set('run.levelUpMode', 'breakthrough');
+      noTex.ui.registry.set('run.levelUpRemainingMs', 2400);
+      noTex.ui.registry.set('run.levelUpChoices', [emberUnlock, signature, branch]);
+      noTex.ui.registry.set('run.levelUpChoiceCount', 3);
+      noTex.ui.update();
+
+      const internals = noTex.ui as unknown as {
+        levelUpHeadingText: { text: string };
+        levelUpSubheadingText: { text: string };
+        levelUpTimerText: { text: string; style: { color: string } };
+        levelUpOverlayVisualKey: string;
+        levelUpBadges: Array<{ text: string }>;
+        levelUpCards: Array<{ getData: (k: string) => unknown }>;
+        levelUpCardImages: Array<unknown>;
+        levelUpGlyphGraphics: Array<{ visible: boolean }>;
+      };
+
+      expect(internals.levelUpHeadingText.text).toBe('BREAKTHROUGH BONUS');
+      expect(internals.levelUpSubheadingText.text).toBe('CHOOSE ONE UPGRADE · RARE WEAPON BONUS');
+      expect(internals.levelUpOverlayVisualKey).toBe('breakthrough');
+      expect(internals.levelUpTimerText.text).toBe('2.4s');
+      expect(internals.levelUpTimerText.style.color).toBe('#dc2626');
+      expect(internals.levelUpBadges.map((b) => b.text)).toEqual(['WEAPON', 'SIGNATURE', 'BRANCH']);
+      // Disabled PNG categories remain disabled & missing weapon textures fall back cleanly to procedural glyphs
+      expect(internals.levelUpCards[0].getData('assetIconReady')).toBe(false);
+      expect(internals.levelUpCards[0].getData('weaponUnlockIconReady')).toBe(false);
+      expect(internals.levelUpCards[1].getData('assetIconReady')).toBe(false);
+      expect(internals.levelUpCards[2].getData('assetIconReady')).toBe(false);
+      expect(internals.levelUpCardImages[0]).toBeNull();
+      expect(internals.levelUpGlyphGraphics[0].visible).toBe(true);
+    } finally {
+      noTex.restoreViewport();
+    }
+  });
+
+  test('renders dramatically distinct EVOLUTION screen with Twin and Sniper class definitions, zero timer, and clean click selection', () => {
+    const { ui, runSceneStub, restoreViewport } = createUiFixture({ viewportWidth: 844, viewportHeight: 390 });
+    try {
+      ui.registry.set('run.levelUpActive', false);
+      ui.registry.set('run.classChoiceActive', true);
+      ui.registry.set('run.classChoiceChoices', [TANK_CLASS_DEFINITIONS.twin, TANK_CLASS_DEFINITIONS.sniper]);
+      ui.update();
+
+      const snap = ui.getHudSnapshot();
+      expect(snap.classChoiceVisible).toBe(true);
+      expect(snap.levelUpVisible).toBe(false);
+
+      const internals = ui as unknown as {
+        classChoiceContainer: { children: unknown[] };
+        classChoiceHeadingText: { text: string };
+        classChoiceSubheadingText: { text: string };
+        classChoiceNoteText: { text: string };
+        classChoiceTitles: Array<{ text: string; visible: boolean }>;
+        classChoiceDescriptions: Array<{ text: string; visible: boolean }>;
+        classChoiceActionLabels: Array<{ text: string; visible: boolean }>;
+        classChoiceCards: Array<{
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          getData: (k: string) => unknown;
+          emit: (e: string, ...args: unknown[]) => void;
+        }>;
+        levelUpTimerText: unknown;
+      };
+
+      expect(internals.classChoiceHeadingText.text).toBe('EVOLUTION');
+      expect(internals.classChoiceSubheadingText.text).toBe('CHOOSE YOUR CLASS');
+      expect(internals.classChoiceNoteText.text).toBe('LEVEL 4 · ONE-TIME CLASS CHOICE');
+      expect(internals.classChoiceTitles.map((t) => t.text)).toEqual(['TWIN', 'SNIPER']);
+      expect(internals.classChoiceDescriptions.map((d) => d.text)).toEqual([
+        'Two-shot spread for close shape farming.',
+        'Longer, harder shots for precision pressure.',
+      ]);
+      expect(internals.classChoiceActionLabels.map((a) => a.text)).toEqual(['EVOLVE', 'EVOLVE']);
+      expect(internals.classChoiceCards[0].getData('assetIconReady')).toBe(false);
+      expect(internals.classChoiceCards[1].getData('assetIconReady')).toBe(false);
+
+      // Evolution overlay has no countdown timer inside it
+      expect(internals.classChoiceContainer.children).not.toContain(internals.levelUpTimerText);
+
+      // Card 0 preserves both legacy E2E click coordinates (610, 378) and (610, 438)
+      const twinCard = internals.classChoiceCards[0];
+      expect(610).toBeGreaterThanOrEqual(twinCard.x - twinCard.width / 2);
+      expect(610).toBeLessThanOrEqual(twinCard.x + twinCard.width / 2);
+      expect(378).toBeGreaterThanOrEqual(twinCard.y - twinCard.height / 2);
+      expect(438).toBeLessThanOrEqual(twinCard.y + twinCard.height / 2);
+
+      // Distinct visual tokens exist in overlay theme
+      expect(DOODLE_OVERLAY_COLORS.archStone).not.toBe(DOODLE_COLORS.paperGold);
+
+      const ptr = { id: 9 };
+      internals.classChoiceCards[0].emit('pointerdown', ptr);
+      internals.classChoiceCards[1].emit('pointerdown', ptr);
+      expect(runSceneStub.selectTankClass).toHaveBeenNthCalledWith(1, 'twin', ptr);
+      expect(runSceneStub.selectTankClass).toHaveBeenNthCalledWith(2, 'sniper', ptr);
+
+      // All decorative Graphics created for overlays never intercept pointer input
+      const createdGraphics = (ui.add.graphics as ReturnType<typeof vi.fn>).mock.results.map((r) => r.value);
+      for (const g of createdGraphics) {
+        expect(g.setInteractive).not.toHaveBeenCalled();
       }
     } finally {
       restoreViewport();
