@@ -719,3 +719,406 @@ export function drawMenuBottomActionButtonChrome(
     graphics.lineBetween(iconCx - 4, cy + 6, iconCx + 2, cy + 6);
   }
 }
+
+
+export type CodexTabId = 'runner' | 'weapon' | 'threats';
+export type CodexThreatKind = 'skimmer' | 'dreadnought' | 'behemoth';
+
+export function drawCodexJournalShell(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+): void {
+  const ink = DOODLE_COLORS.ink;
+  const bookW = 1144;
+  const bookH = 568;
+
+  // Hard tan kraft journal cover peeking underneath both pages
+  drawDoodleCard(graphics, {
+    cx,
+    cy: cy + 4,
+    width: bookW + 24,
+    height: bookH + 22,
+    cornerRadius: 24,
+    seed: 1501,
+    jitter: 1.7,
+    fillColor: 0xd9bc8c,
+    strokeColor: ink,
+    strokeWidth: 3.5,
+    shadowOffsetX: 6,
+    shadowOffsetY: 7,
+    shadowAlpha: 0.48,
+  });
+
+  // Left Archive Tab Page (x: 238..516)
+  drawDoodleCard(graphics, {
+    cx: 377,
+    cy,
+    width: 278,
+    height: bookH - 12,
+    cornerRadius: 18,
+    seed: 1511,
+    jitter: 1.4,
+    fillColor: DOODLE_COLORS.paperWarm,
+    strokeColor: ink,
+    strokeWidth: 3,
+    shadowOffsetX: 2,
+    shadowOffsetY: 2,
+    shadowAlpha: 0.25,
+  });
+
+  // Right Content Reading Page (x: 534..1362)
+  drawDoodleCard(graphics, {
+    cx: 948,
+    cy,
+    width: 828,
+    height: bookH - 12,
+    cornerRadius: 18,
+    seed: 1517,
+    jitter: 1.4,
+    fillColor: DOODLE_COLORS.paper,
+    strokeColor: ink,
+    strokeWidth: 3,
+    shadowOffsetX: 2,
+    shadowOffsetY: 2,
+    shadowAlpha: 0.25,
+  });
+
+  // Faint notebook horizontal lines on reading page
+  graphics.lineStyle(1.3, DOODLE_COLORS.paperWarm, 0.95);
+  for (let ly = 236; ly <= 604; ly += 42) {
+    graphics.lineBetween(562, ly, 1334, ly);
+  }
+
+  // Spiral binding rings connecting Left Page and Right Page
+  const spineX = 525;
+  const ringYs = [152, 234, 316, 398, 480, 562];
+  for (let i = 0; i < ringYs.length; i += 1) {
+    const ry = ringYs[i];
+    drawDoodleCircle(graphics, {
+      cx: spineX - 18,
+      cy: ry,
+      radius: 5.5,
+      fillColor: ink,
+      strokeColor: ink,
+      strokeWidth: 1,
+      seed: 1530 + i,
+      segments: 10,
+      jitter: 0.2,
+    });
+    drawDoodleCircle(graphics, {
+      cx: spineX + 18,
+      cy: ry,
+      radius: 5.5,
+      fillColor: ink,
+      strokeColor: ink,
+      strokeWidth: 1,
+      seed: 1540 + i,
+      segments: 10,
+      jitter: 0.2,
+    });
+    const loopPts = createWobblyRectPoints(spineX, ry, 42, 10, 4.5, 1550 + i * 7, 0.35, 8);
+    graphics.fillStyle(DOODLE_COLORS.gold, 1);
+    graphics.fillPoints(loopPts, true, true);
+    graphics.lineStyle(2.4, ink, 1);
+    graphics.strokePoints(loopPts, true, true);
+  }
+
+  // Top-left open book doodle icon next to "FIELD CODEX"
+  const bx = 280;
+  const by = 132;
+  const leftPg: DoodlePoint[] = [
+    { x: bx - 18, y: by - 11 },
+    { x: bx, y: by - 8 },
+    { x: bx, y: by + 12 },
+    { x: bx - 18, y: by + 9 },
+  ];
+  const rightPg: DoodlePoint[] = [
+    { x: bx, y: by - 8 },
+    { x: bx + 18, y: by - 11 },
+    { x: bx + 18, y: by + 9 },
+    { x: bx, y: by + 12 },
+  ];
+  graphics.fillStyle(DOODLE_COLORS.hp, 1);
+  graphics.fillPoints(
+    createWobblyRectPoints(bx, by + 2, 42, 26, 4, 1571, 0.35, 10),
+    true,
+    true,
+  );
+  graphics.lineStyle(2.2, ink, 1);
+  graphics.strokePoints(createWobblyRectPoints(bx, by + 2, 42, 26, 4, 1571, 0.35, 10), true, true);
+  for (const pg of [leftPg, rightPg]) {
+    graphics.fillStyle(DOODLE_COLORS.paperHover, 1);
+    graphics.fillPoints(pg, true, true);
+    graphics.lineStyle(2, ink, 1);
+    graphics.strokePoints(pg, true, true);
+  }
+
+  // Yellow burst ticks near FIELD CODEX title & top-right masking tape corner sticker
+  graphics.lineStyle(2.6, DOODLE_COLORS.gold, 1);
+  graphics.lineBetween(486, 122, 498, 114);
+  graphics.lineBetween(488, 134, 502, 134);
+  graphics.lineBetween(486, 146, 498, 152);
+
+  const tapeCenterX = 1326;
+  const tapeCenterY = 104;
+  const tapePts: DoodlePoint[] = [
+    { x: tapeCenterX - 28, y: tapeCenterY - 22 },
+    { x: tapeCenterX + 34, y: tapeCenterY + 12 },
+    { x: tapeCenterX + 24, y: tapeCenterY + 28 },
+    { x: tapeCenterX - 38, y: tapeCenterY - 6 },
+  ];
+  graphics.fillStyle(DOODLE_COLORS.paperGold, 0.92);
+  graphics.fillPoints(tapePts, true, true);
+  graphics.lineStyle(2, ink, 0.9);
+  graphics.strokePoints(tapePts, true, true);
+}
+
+export function drawCodexSectionTabChrome(
+  graphics: Phaser.GameObjects.Graphics,
+  sectionId: CodexTabId,
+  cx: number,
+  cy: number,
+  width: number,
+  height: number,
+  active: boolean,
+  hovered: boolean,
+): void {
+  const ink = DOODLE_COLORS.ink;
+  const offsetX = active ? 8 : hovered ? 3 : 0;
+  const drawCx = cx + offsetX;
+
+  const activeFill =
+    sectionId === 'runner'
+      ? 0xdbeafe
+      : sectionId === 'weapon'
+        ? DOODLE_COLORS.paperGold
+        : 0xfce7f3;
+  const fillColor = active ? activeFill : hovered ? DOODLE_COLORS.paperHover : DOODLE_COLORS.paper;
+
+  drawDoodleCard(graphics, {
+    cx: drawCx,
+    cy,
+    width,
+    height,
+    cornerRadius: 16,
+    seed: 1601 + sectionId.charCodeAt(0),
+    jitter: 1.0,
+    fillColor,
+    strokeColor: ink,
+    strokeWidth: active ? 3.2 : 2.3,
+    shadowOffsetX: active ? 4 : 2,
+    shadowOffsetY: active ? 4 : 2,
+    shadowAlpha: active ? 0.36 : 0.22,
+  });
+
+  // Left circular doodle glyph badge
+  const gx = drawCx - width / 2 + 34;
+  drawDoodleCircle(graphics, {
+    cx: gx,
+    cy,
+    radius: 21,
+    fillColor:
+      sectionId === 'runner'
+        ? 0xc7d2fe
+        : sectionId === 'weapon'
+          ? 0xfef08a
+          : 0xfbcfe8,
+    strokeColor: ink,
+    strokeWidth: 2.2,
+    seed: 1621 + sectionId.charCodeAt(0),
+    segments: 16,
+    jitter: 0.5,
+  });
+
+  if (sectionId === 'runner') {
+    // Mini runner mascot silhouette inside tab badge
+    drawDoodleCircle(graphics, {
+      cx: gx,
+      cy: cy + 1,
+      radius: 12,
+      fillColor: 0x818cf8,
+      strokeColor: ink,
+      strokeWidth: 1.8,
+      seed: 1631,
+      segments: 12,
+      jitter: 0.5,
+    });
+    drawDoodleCircle(graphics, {
+      cx: gx + 4,
+      cy: cy - 2,
+      radius: 2.5,
+      fillColor: DOODLE_COLORS.paperHover,
+      strokeColor: ink,
+      strokeWidth: 1.2,
+      seed: 1632,
+      segments: 8,
+      jitter: 0,
+    });
+  } else if (sectionId === 'weapon') {
+    // Mini lightning bolt emblem inside weapon tab badge
+    const bolt: DoodlePoint[] = [
+      { x: gx + 3, y: cy - 12 },
+      { x: gx - 8, y: cy + 1 },
+      { x: gx, y: cy + 1 },
+      { x: gx - 3, y: cy + 12 },
+      { x: gx + 9, y: cy - 2 },
+      { x: gx + 1, y: cy - 2 },
+    ];
+    graphics.fillStyle(DOODLE_COLORS.gold, 1);
+    graphics.fillPoints(bolt, true, true);
+    graphics.lineStyle(1.8, ink, 1);
+    graphics.strokePoints(bolt, true, true);
+  } else {
+    // Mini doodle skull emblem inside threats tab badge
+    drawDoodleCircle(graphics, {
+      cx: gx,
+      cy: cy - 1,
+      radius: 10.5,
+      fillColor: DOODLE_COLORS.paperHover,
+      strokeColor: ink,
+      strokeWidth: 1.9,
+      seed: 1641,
+      segments: 12,
+      jitter: 0.35,
+    });
+    drawDoodleCircle(graphics, { cx: gx - 4, cy: cy - 2, radius: 2.2, fillColor: ink, strokeColor: ink, strokeWidth: 1, seed: 1642, segments: 8, jitter: 0 });
+    drawDoodleCircle(graphics, { cx: gx + 4, cy: cy - 2, radius: 2.2, fillColor: ink, strokeColor: ink, strokeWidth: 1, seed: 1643, segments: 8, jitter: 0 });
+    graphics.lineStyle(1.8, ink, 1);
+    graphics.lineBetween(gx - 4, cy + 5, gx + 4, cy + 5);
+  }
+
+  if (active) {
+    drawDoodleCircle(graphics, {
+      cx: drawCx + width / 2 - 14,
+      cy,
+      radius: 4.5,
+      fillColor: DOODLE_COLORS.ink,
+      strokeColor: ink,
+      strokeWidth: 1,
+      seed: 1650,
+      segments: 8,
+      jitter: 0,
+    });
+  }
+}
+
+export function drawCodexThreatDoodle(
+  graphics: Phaser.GameObjects.Graphics,
+  threatKind: CodexThreatKind,
+  cx: number,
+  cy: number,
+  radius = 36,
+): void {
+  const ink = DOODLE_COLORS.ink;
+
+  // Well behind threat creature
+  drawDoodleCircle(graphics, {
+    cx,
+    cy,
+    radius: radius + 7,
+    fillColor:
+      threatKind === 'skimmer'
+        ? 0xffe4e6
+        : threatKind === 'dreadnought'
+          ? 0xf3e8ff
+          : 0xfef3c7,
+    strokeColor: ink,
+    strokeWidth: 2.6,
+    seed: 1701 + threatKind.charCodeAt(0),
+    segments: 18,
+    jitter: 0.9,
+    shadowOffsetX: 2,
+    shadowOffsetY: 3,
+    shadowAlpha: 0.25,
+  });
+
+  if (threatKind === 'skimmer') {
+    // Spiky bumpy coral-rose Skimmer shape matching concept art
+    const pts = createCloudStickerPoints(cx, cy + 1, radius * 1.45, radius * 1.25, 10, 5.5, 1711);
+    graphics.fillStyle(0xfb7185, 1);
+    graphics.fillPoints(pts, true, true);
+    graphics.lineStyle(2.6, ink, 1);
+    graphics.strokePoints(pts, true, true);
+
+    drawDoodleCircle(graphics, { cx: cx - 9, cy: cy - 3, radius: 4, fillColor: DOODLE_COLORS.paperHover, strokeColor: ink, strokeWidth: 1.5, seed: 1712, segments: 10, jitter: 0.1 });
+    drawDoodleCircle(graphics, { cx: cx + 9, cy: cy - 3, radius: 4, fillColor: DOODLE_COLORS.paperHover, strokeColor: ink, strokeWidth: 1.5, seed: 1713, segments: 10, jitter: 0.1 });
+    drawDoodleCircle(graphics, { cx: cx - 8, cy: cy - 3, radius: 1.8, fillColor: ink, strokeColor: ink, strokeWidth: 1, seed: 1714, segments: 8, jitter: 0 });
+    drawDoodleCircle(graphics, { cx: cx + 8, cy: cy - 3, radius: 1.8, fillColor: ink, strokeColor: ink, strokeWidth: 1, seed: 1715, segments: 8, jitter: 0 });
+    graphics.lineStyle(2.2, ink, 1);
+    graphics.lineBetween(cx - 5, cy + 8, cx + 5, cy + 8);
+    return;
+  }
+
+  if (threatKind === 'dreadnought') {
+    // Horned spiked purple Miniboss brute
+    const horns: DoodlePoint[][] = [
+      [{ x: cx - 20, y: cy - 8 }, { x: cx - 28, y: cy - 26 }, { x: cx - 8, y: cy - 16 }],
+      [{ x: cx + 20, y: cy - 8 }, { x: cx + 28, y: cy - 26 }, { x: cx + 8, y: cy - 16 }],
+      [{ x: cx - 6, y: cy - 18 }, { x: cx, y: cy - 31 }, { x: cx + 6, y: cy - 18 }],
+    ];
+    for (const h of horns) {
+      graphics.fillStyle(0xe9d5ff, 1);
+      graphics.fillPoints(h, true, true);
+      graphics.lineStyle(2.2, ink, 1);
+      graphics.strokePoints(h, true, true);
+    }
+
+    const bodyPts = createWobblyCirclePoints(cx, cy + 2, radius * 0.72, 1731, 16, 1.8);
+    graphics.fillStyle(0xa855f7, 1);
+    graphics.fillPoints(bodyPts, true, true);
+    graphics.lineStyle(2.8, ink, 1);
+    graphics.strokePoints(bodyPts, true, true);
+
+    // Glowing angry eyes & brow
+    drawDoodleCircle(graphics, { cx: cx - 9, cy: cy - 2, radius: 4, fillColor: DOODLE_COLORS.gold, strokeColor: ink, strokeWidth: 1.6, seed: 1732, segments: 8, jitter: 0 });
+    drawDoodleCircle(graphics, { cx: cx + 9, cy: cy - 2, radius: 4, fillColor: DOODLE_COLORS.gold, strokeColor: ink, strokeWidth: 1.6, seed: 1733, segments: 8, jitter: 0 });
+    graphics.lineStyle(2.4, ink, 1);
+    graphics.lineBetween(cx - 14, cy - 8, cx - 5, cy - 5);
+    graphics.lineBetween(cx + 14, cy - 8, cx + 5, cy - 5);
+    graphics.lineBetween(cx - 8, cy + 9, cx + 8, cy + 9);
+    return;
+  }
+
+  // Behemoth: towering armored cyclops purple Boss with heavy gauntlets
+  const leftArm = createWobblyRectPoints(cx - 26, cy + 8, 14, 24, 5, 1751, 0.7, 6);
+  const rightArm = createWobblyRectPoints(cx + 26, cy + 8, 14, 24, 5, 1752, 0.7, 6);
+  for (const arm of [leftArm, rightArm]) {
+    graphics.fillStyle(0x7c3aed, 1);
+    graphics.fillPoints(arm, true, true);
+    graphics.lineStyle(2.4, ink, 1);
+    graphics.strokePoints(arm, true, true);
+  }
+
+  const colossus = createWobblyRectPoints(cx, cy, radius * 1.18, radius * 1.32, 14, 1755, 1.4, 8);
+  graphics.fillStyle(0x9333ea, 1);
+  graphics.fillPoints(colossus, true, true);
+  graphics.lineStyle(3, ink, 1);
+  graphics.strokePoints(colossus, true, true);
+
+  // Crown ridge + giant glowing single cyclops eye
+  drawDoodleCircle(graphics, {
+    cx,
+    cy: cy - 6,
+    radius: 11,
+    fillColor: DOODLE_COLORS.paperHover,
+    strokeColor: ink,
+    strokeWidth: 2.2,
+    seed: 1758,
+    segments: 12,
+    jitter: 0.3,
+  });
+  drawDoodleCircle(graphics, {
+    cx,
+    cy: cy - 6,
+    radius: 5,
+    fillColor: DOODLE_COLORS.hp,
+    strokeColor: ink,
+    strokeWidth: 1.6,
+    seed: 1759,
+    segments: 10,
+    jitter: 0.1,
+  });
+  graphics.lineStyle(2.4, ink, 1);
+  graphics.lineBetween(cx - 10, cy + 12, cx + 10, cy + 12);
+}

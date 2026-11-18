@@ -28,9 +28,14 @@ import {
   DOODLE_OVERLAY_COLORS,
   drawDoodleCard,
   drawDoodleCircle,
+  drawDoodleCloseX,
   drawDoodleStar,
+  drawDoodleUpgradeGlyph,
 } from '../ui/doodleTheme';
 import {
+  drawCodexJournalShell,
+  drawCodexSectionTabChrome,
+  drawCodexThreatDoodle,
   drawHeroFallbackMascot,
   drawHeroPortraitMedallion,
   drawJanganLariHeaderLogo,
@@ -38,6 +43,7 @@ import {
   drawMenuIslandBackdrop,
   drawMenuTopPillChrome,
   getHeroThemePalette,
+  type CodexThreatKind,
 } from '../ui/menuCodexArtwork';
 
 type CodexSection = 'runner' | 'weapon' | 'threats';
@@ -80,7 +86,16 @@ export class MenuScene extends Phaser.Scene {
   private codexButton!: Phaser.GameObjects.Text;
   private guideButton!: Phaser.GameObjects.Text;
   private codexCloseButton!: Phaser.GameObjects.Text;
+  private codexCloseButtonGraphics!: Phaser.GameObjects.Graphics;
+  private codexCloseHovered = false;
   private codexCloseButtonIcon: Phaser.GameObjects.Image | null = null;
+  private codexBackdrop!: Phaser.GameObjects.Rectangle;
+  private codexJournalGraphics!: Phaser.GameObjects.Graphics;
+  private codexHeaderGraphics!: Phaser.GameObjects.Graphics;
+  private codexHeaderKey = '';
+  private codexSectionTabGraphics: Phaser.GameObjects.Graphics[] = [];
+  private codexSectionTabVisualKeys: string[] = [];
+  private codexSectionHoveredIndex: number | null = null;
   private codexOverlay!: Phaser.GameObjects.Container;
   private codexOverlayVisible = false;
   private activeCodexSection: CodexSection = 'runner';
@@ -90,8 +105,17 @@ export class MenuScene extends Phaser.Scene {
   private codexSectionTitle!: Phaser.GameObjects.Text;
   private codexSectionSubtitle!: Phaser.GameObjects.Text;
   private codexRunnerContainer!: Phaser.GameObjects.Container;
+  private codexRunnerGraphics!: Phaser.GameObjects.Graphics;
+  private codexRunnerVisualKey = '';
+  private codexRunnerPortraitImage: Phaser.GameObjects.Image | null = null;
+  private codexHeroNamePlate!: Phaser.GameObjects.Text;
   private codexWeaponContainer!: Phaser.GameObjects.Container;
+  private codexWeaponGraphics!: Phaser.GameObjects.Graphics;
+  private codexWeaponVisualKey = '';
+  private codexWeaponImage: Phaser.GameObjects.Image | null = null;
   private codexThreatContainer!: Phaser.GameObjects.Container;
+  private codexThreatGraphics: Phaser.GameObjects.Graphics[] = [];
+  private codexThreatRoleTexts: Phaser.GameObjects.Text[] = [];
   private focusedHeroId: HeroDefinition['id'] = 'runner';
   private focusedHeroStatusText!: Phaser.GameObjects.Text;
   private focusedHeroDetailName!: Phaser.GameObjects.Text;
@@ -126,6 +150,17 @@ export class MenuScene extends Phaser.Scene {
     this.heroPanels = [];
     this.codexSectionFrames = [];
     this.codexSectionTexts = [];
+    this.codexSectionTabGraphics = [];
+    this.codexSectionTabVisualKeys = [];
+    this.codexSectionHoveredIndex = null;
+    this.codexCloseHovered = false;
+    this.codexHeaderKey = '';
+    this.codexRunnerVisualKey = '';
+    this.codexWeaponVisualKey = '';
+    this.codexRunnerPortraitImage = null;
+    this.codexWeaponImage = null;
+    this.codexThreatGraphics = [];
+    this.codexThreatRoleTexts = [];
     this.codexThreatTitleTexts = [];
     this.codexThreatBodyTexts = [];
     this.focusedHeroPreviewContainer = null;
@@ -444,242 +479,371 @@ export class MenuScene extends Phaser.Scene {
       actionButton.on('pointerdown', () => this.handleHeroAction(hero));
     }
 
-    const codexBackdrop = this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x020617, 0.9)
-      .setInteractive({ useHandCursor: true });
-    codexBackdrop.on('pointerdown', () => this.closeCodex());
+    // ── Complete Illustrated Field Codex Overlay (depth 30) ─────────────────
+    this.codexBackdrop = this.add
+      .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x120d26, 0.82)
+      .setOrigin(0, 0);
 
-    const codexPanel = this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 1128, 632, 0x0b1220, 0.995)
-      .setStrokeStyle(2, 0x334155, 0.95);
-    const codexHeader = this.add.rectangle(GAME_WIDTH / 2, 98, 1128, 96, 0x0f172a, 0.98).setStrokeStyle(0, 0, 0);
-    const codexRail = this.add.rectangle(220, 410, 228, 504, 0x0e1728, 0.94).setStrokeStyle(0, 0, 0);
-    const codexDivider = this.add.rectangle(336, 410, 2, 504, 0x223247, 0.92);
-    const codexContentShade = this.add.rectangle(792, 410, 736, 504, 0x0d1626, 0.4).setStrokeStyle(0, 0, 0);
+    this.codexJournalGraphics = this.add.graphics();
+    drawCodexJournalShell(this.codexJournalGraphics, GAME_WIDTH / 2, GAME_HEIGHT / 2);
 
-    const codexEyebrow = this.add
-      .text(166, 66, 'FIELD ARCHIVE', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#93c5fd',
-        letterSpacing: 1.8,
+    const codexJournalTitle = this.add
+      .text(308, 132, 'FIELD CODEX', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '23px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 0.6,
       })
       .setOrigin(0, 0.5);
 
-    const codexTitle = this.add
-      .text(164, 98, 'Field Codex', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '36px',
-        color: '#f8fafc',
-      })
-      .setOrigin(0, 0.5);
-
-    const codexSubtitle = this.add
-      .text(164, 130, 'Archive briefings for the focused runner. Choose one track and read it cleanly.', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
-        color: '#94a3b8',
-      })
-      .setOrigin(0, 0.5);
-
-    const codexRailTitle = this.add
-      .text(152, 182, 'Sections', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#94a3b8',
-        letterSpacing: 1.2,
-      })
-      .setOrigin(0, 0.5);
     const codexSections: Array<{ id: CodexSection; label: string; note: string }> = [
-      { id: 'runner', label: 'Runner', note: 'Hero identity and passive' },
-      { id: 'weapon', label: 'Weapon', note: 'Starter loadout briefing' },
-      { id: 'threats', label: 'Threats', note: 'Known encounter notes' },
+      { id: 'runner', label: 'Runner', note: 'Focused hero' },
+      { id: 'weapon', label: 'Weapon', note: 'Starter loadout' },
+      { id: 'threats', label: 'Threats', note: 'Field log' },
     ];
     const codexCategoryObjects: Phaser.GameObjects.GameObject[] = [];
     for (let index = 0; index < codexSections.length; index += 1) {
       const section = codexSections[index];
-      const y = 246 + index * 92;
+      const tabY = 236 + index * 102;
+      const tabGfx = this.add.graphics();
+
       const frame = this.add
-        .rectangle(220, y, 168, 72, 0x132033, 0.78)
-        .setStrokeStyle(1, 0x223247, 0.86)
-        .setInteractive({ useHandCursor: true });
+        .rectangle(376, tabY, 218, 78, DOODLE_COLORS.paper, 0)
+        .setOrigin(0.5);
       const title = this.add
-        .text(164, y - 12, section.label, {
-          fontFamily: 'Trebuchet MS, sans-serif',
+        .text(342, tabY - 11, section.label, {
+          fontFamily: DOODLE_FONTS.display,
           fontSize: '20px',
-          color: '#e2e8f0',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
         })
-        .setOrigin(0, 0.5)
-        .setInteractive({ useHandCursor: true });
+        .setOrigin(0, 0.5);
       const note = this.add
-        .text(164, y + 14, section.note, {
-          fontFamily: 'Trebuchet MS, sans-serif',
+        .text(342, tabY + 14, section.note, {
+          fontFamily: DOODLE_FONTS.body,
           fontSize: '12px',
-          color: '#7c93ae',
-          wordWrap: { width: 112 },
+          fontStyle: 'bold',
+          color: DOODLE_HEX.inkMuted,
         })
-        .setOrigin(0, 0.5)
-        .setInteractive({ useHandCursor: true });
+        .setOrigin(0, 0.5);
 
       frame.on('pointerdown', () => this.setActiveCodexSection(section.id));
       frame.on('pointerover', () => {
-        if (this.activeCodexSection !== section.id) {
-          frame.setFillStyle(0x17283d, 0.9);
-        }
+        this.codexSectionHoveredIndex = index;
+        this.refreshCodexSectionNav();
       });
-      frame.on('pointerout', () => this.refreshCodexSectionNav());
-      title.on('pointerdown', () => this.setActiveCodexSection(section.id));
-      note.on('pointerdown', () => this.setActiveCodexSection(section.id));
+      frame.on('pointerout', () => {
+        if (this.codexSectionHoveredIndex === index) {
+          this.codexSectionHoveredIndex = null;
+        }
+        this.refreshCodexSectionNav();
+      });
 
+      this.codexSectionTabGraphics.push(tabGfx);
+      this.codexSectionTabVisualKeys.push('');
       this.codexSectionFrames.push(frame);
       this.codexSectionTexts.push(title);
-      codexCategoryObjects.push(frame, title, note);
+      codexCategoryObjects.push(tabGfx, frame, title, note);
     }
-    const codexRailHint = this.add
-      .text(152, 504, 'One focused entry at a time. This layout can grow into fuller archives later without turning into another popup.', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '13px',
-        color: '#7c93ae',
-        wordWrap: { width: 136 },
-        lineSpacing: 5,
+
+    this.codexCloseButtonGraphics = this.add.graphics();
+    this.codexCloseButton = this.add
+      .text(376, 576, 'BACK', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '19px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        fixedWidth: 188,
+        fixedHeight: 52,
+        padding: { left: 26, top: 14 },
       })
-      .setOrigin(0, 0);
+      .setOrigin(0.5);
+    this.codexCloseButton.on('pointerdown', () => this.closeCodex());
+    this.codexCloseButton.on('pointerover', () => {
+      this.codexCloseHovered = true;
+      this.renderCodexBackButton();
+    });
+    this.codexCloseButton.on('pointerout', () => {
+      this.codexCloseHovered = false;
+      this.renderCodexBackButton();
+    });
+    this.codexCloseButtonIcon = this.createUiButtonIcon('close', 306, 576, 20);
+    if (this.codexCloseButtonIcon) {
+      this.codexCloseButtonIcon.setAlpha(1);
+    }
+    this.renderCodexBackButton();
 
-    this.codexCloseButton = this.createMenuButton(1042, 96, 'Back', () => this.closeCodex());
-    this.codexCloseButton.setFontSize('20px');
-    this.codexCloseButton.setPadding(18, 10, 18, 10);
-    this.codexCloseButtonIcon = this.createUiButtonIcon(
-      'close',
-      this.codexCloseButton.x - this.codexCloseButton.displayWidth / 2 + 11,
-      this.codexCloseButton.y,
-      18,
-    );
-
+    this.codexHeaderGraphics = this.add.graphics();
     this.codexSectionEyebrow = this.add
-      .text(394, 186, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#93c5fd',
-        letterSpacing: 1.8,
+      .text(648, 134, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '11.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 1.0,
       })
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5);
     this.codexSectionTitle = this.add
-      .text(392, 226, '', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '36px',
-        color: '#f8fafc',
+      .text(566, 168, '', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '30px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
       .setOrigin(0, 0.5);
     this.codexSectionSubtitle = this.add
-      .text(394, 264, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
-        color: '#94a3b8',
-        wordWrap: { width: 620 },
+      .text(566, 196, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '13.5px',
+        color: DOODLE_HEX.inkMuted,
+        wordWrap: { width: 750 },
       })
       .setOrigin(0, 0.5);
 
-    const runnerAccent = this.add.rectangle(444, 362, 110, 110, 0x132033, 0.92).setStrokeStyle(1, 0x223247, 0.9);
+    // ── Codex Section 1: Runner (focused hero specimen + field brief) ───────
+    this.codexRunnerGraphics = this.add.graphics();
+    const preloadCodexHero = HERO_LIST.map((h) => getHeroIconAssetSlot(h.id)).find((slot) =>
+      shouldUseVisualAsset(this, 'heroMenuIcons', slot),
+    );
+    if (preloadCodexHero) {
+      this.codexRunnerPortraitImage = this.add.image(674, 358, preloadCodexHero.key).setDisplaySize(86, 86).setVisible(false);
+    }
     this.codexHeroBadge = this.add
-      .text(444, 362, '--', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '38px',
-        color: '#eff6ff',
-        backgroundColor: '#334155',
-        padding: { left: 24, right: 24, top: 20, bottom: 20 },
+      .text(602, 282, '--', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
       .setOrigin(0.5);
+    this.codexHeroNamePlate = this.add
+      .text(674, 466, '', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '19px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+      })
+      .setOrigin(0.5);
+    const runnerBriefLabel = this.add
+      .text(818, 268, 'HERO BRIEF', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '11.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+        letterSpacing: 1,
+      })
+      .setOrigin(0, 0.5);
     this.codexHeroBody = this.add
-      .text(536, 328, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(818, 286, '', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '16px',
-        color: '#cbd5e1',
-        wordWrap: { width: 438 },
+        color: DOODLE_HEX.ink,
+        wordWrap: { width: 484 },
+        lineSpacing: 5,
+      })
+      .setOrigin(0, 0);
+    const runnerSpecLabel = this.add
+      .text(818, 390, 'PASSIVE & OPENING LOADOUT', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '11.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+        letterSpacing: 1,
+      })
+      .setOrigin(0, 0.5);
+    this.codexHeroMeta = this.add
+      .text(818, 410, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '15px',
+        color: DOODLE_HEX.ink,
+        wordWrap: { width: 484 },
         lineSpacing: 6,
       })
       .setOrigin(0, 0);
-    this.codexHeroMeta = this.add
-      .text(536, 416, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#93c5fd',
-        wordWrap: { width: 438 },
-        lineSpacing: 5,
-      })
-      .setOrigin(0, 0);
-    this.codexRunnerContainer = this.add.container(0, 0, [runnerAccent, this.codexHeroBadge, this.codexHeroBody, this.codexHeroMeta]);
+    const runnerChildren: Phaser.GameObjects.GameObject[] = [this.codexRunnerGraphics];
+    if (this.codexRunnerPortraitImage) {
+      runnerChildren.push(this.codexRunnerPortraitImage);
+    }
+    runnerChildren.push(
+      this.codexHeroBadge,
+      this.codexHeroNamePlate,
+      runnerBriefLabel,
+      this.codexHeroBody,
+      runnerSpecLabel,
+      this.codexHeroMeta,
+    );
+    this.codexRunnerContainer = this.add.container(0, 0, runnerChildren);
 
-    const weaponAccent = this.add.rectangle(450, 350, 126, 126, 0x132033, 0.92).setStrokeStyle(1, 0x223247, 0.9);
+    // ── Codex Section 2: Weapon (focused hero's starting weapon telemetry) ─
+    this.codexWeaponGraphics = this.add.graphics();
+    const preloadCodexWeapon = (['arc-bolt', 'ember-lance', 'twin-fangs', 'bloom-cannon'] as const)
+      .map((id) => getWeaponIconAssetSlot(id))
+      .find((slot) => shouldUseVisualAsset(this, 'weaponHudIcons', slot));
+    if (preloadCodexWeapon) {
+      this.codexWeaponImage = this.add.image(674, 358, preloadCodexWeapon.key).setDisplaySize(74, 74).setVisible(false);
+    }
     this.codexWeaponBadge = this.add
-      .text(450, 350, '--', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '34px',
-        color: '#eff6ff',
-        backgroundColor: '#475569',
-        padding: { left: 22, right: 22, top: 18, bottom: 18 },
+      .text(674, 466, '--', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
       })
       .setOrigin(0.5);
+    const weaponOverviewLabel = this.add
+      .text(818, 268, 'STARTER WEAPON BRIEF', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '11.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+        letterSpacing: 1,
+      })
+      .setOrigin(0, 0.5);
     this.codexWeaponBody = this.add
-      .text(548, 314, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(818, 286, '', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '16px',
-        color: '#cbd5e1',
-        wordWrap: { width: 426 },
+        color: DOODLE_HEX.ink,
+        wordWrap: { width: 484 },
         lineSpacing: 5,
       })
       .setOrigin(0, 0);
+    const weaponStatsLabel = this.add
+      .text(818, 390, 'WEAPON TELEMETRY', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '11.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+        letterSpacing: 1,
+      })
+      .setOrigin(0, 0.5);
     this.codexWeaponStats = this.add
-      .text(548, 406, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '14px',
-        color: '#93c5fd',
-        wordWrap: { width: 426 },
-        lineSpacing: 5,
+      .text(818, 412, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '15.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        wordWrap: { width: 484 },
+        lineSpacing: 8,
       })
       .setOrigin(0, 0);
-    this.codexWeaponContainer = this.add.container(0, 0, [weaponAccent, this.codexWeaponBadge, this.codexWeaponBody, this.codexWeaponStats]);
+    const weaponChildren: Phaser.GameObjects.GameObject[] = [this.codexWeaponGraphics];
+    if (this.codexWeaponImage) {
+      weaponChildren.push(this.codexWeaponImage);
+    }
+    weaponChildren.push(
+      this.codexWeaponBadge,
+      weaponOverviewLabel,
+      this.codexWeaponBody,
+      weaponStatsLabel,
+      this.codexWeaponStats,
+    );
+    this.codexWeaponContainer = this.add.container(0, 0, weaponChildren);
 
+    // ── Codex Section 3: Threats (3 illustrated encounter field-entry cards)
     const codexThreatObjects: Phaser.GameObjects.GameObject[] = [];
+    const threatKinds: CodexThreatKind[] = ['skimmer', 'dreadnought', 'behemoth'];
+    const threatCardFills = [0xfff1f2, 0xf5f3ff, 0xfffbeb];
+    const threatPillFills = [0xfbcfe8, 0xe9d5ff, 0xfecaca];
+
     for (let index = 0; index < 3; index += 1) {
-      const threatFrame = this.add
-        .rectangle(720, 314 + index * 110, 628, 88, 0x122033, 0.8)
-        .setStrokeStyle(1, 0x223247, 0.86);
+      const cy = 286 + index * 128;
+      const cardGfx = this.add.graphics();
+      drawDoodleCard(cardGfx, {
+        cx: 948,
+        cy,
+        width: 758,
+        height: 114,
+        cornerRadius: 18,
+        seed: 1770 + index * 17,
+        jitter: 1.2,
+        fillColor: threatCardFills[index],
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.6,
+        shadowOffsetX: 3,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.28,
+      });
+      drawCodexThreatDoodle(cardGfx, threatKinds[index], 632, cy, 33);
+
+      // Colored threat name ribbon pill + non-color role badge pill
+      drawDoodleCard(cardGfx, {
+        cx: 806,
+        cy: cy - 24,
+        width: 188,
+        height: 30,
+        cornerRadius: 10,
+        seed: 1790 + index * 11,
+        jitter: 0.6,
+        fillColor: threatPillFills[index],
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.2,
+      });
+      drawDoodleCard(cardGfx, {
+        cx: 984,
+        cy: cy - 24,
+        width: 144,
+        height: 26,
+        cornerRadius: 9,
+        seed: 1810 + index * 13,
+        jitter: 0.5,
+        fillColor: DOODLE_COLORS.paper,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 1.8,
+        shadowOffsetX: 1,
+        shadowOffsetY: 1,
+        shadowAlpha: 0.16,
+      });
+
       const threatTitle = this.add
-        .text(438, 282 + index * 110, '', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '22px',
-          color: '#f8fafc',
+        .text(806, cy - 24, '', {
+          fontFamily: DOODLE_FONTS.display,
+          fontSize: '17px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
+          letterSpacing: 0.8,
         })
-        .setOrigin(0, 0.5);
+        .setOrigin(0.5);
+      const threatRole = this.add
+        .text(984, cy - 24, '', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '11.5px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.inkMuted,
+          letterSpacing: 0.6,
+        })
+        .setOrigin(0.5);
       const threatBody = this.add
-        .text(438, 306 + index * 110, '', {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '15px',
-          color: '#cbd5e1',
-          wordWrap: { width: 548 },
+        .text(712, cy + 2, '', {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '15.5px',
+          color: DOODLE_HEX.ink,
+          wordWrap: { width: 594 },
           lineSpacing: 4,
         })
         .setOrigin(0, 0);
+
+      this.codexThreatGraphics.push(cardGfx);
       this.codexThreatTitleTexts.push(threatTitle);
+      this.codexThreatRoleTexts.push(threatRole);
       this.codexThreatBodyTexts.push(threatBody);
-      codexThreatObjects.push(threatFrame, threatTitle, threatBody);
+      codexThreatObjects.push(cardGfx, threatTitle, threatRole, threatBody);
     }
     this.codexThreatContainer = this.add.container(0, 0, codexThreatObjects);
 
     const codexOverlayChildren: Phaser.GameObjects.GameObject[] = [
-      codexBackdrop,
-      codexPanel,
-      codexHeader,
-      codexRail,
-      codexDivider,
-      codexContentShade,
-      codexEyebrow,
-      codexTitle,
-      codexSubtitle,
-      codexRailTitle,
+      this.codexBackdrop,
+      this.codexJournalGraphics,
+      codexJournalTitle,
       ...codexCategoryObjects,
-      codexRailHint,
+      this.codexCloseButtonGraphics,
       this.codexCloseButton,
+      this.codexHeaderGraphics,
       this.codexSectionEyebrow,
       this.codexSectionTitle,
       this.codexSectionSubtitle,
@@ -693,6 +857,7 @@ export class MenuScene extends Phaser.Scene {
     this.codexOverlay = this.add.container(0, 0, codexOverlayChildren);
     this.codexOverlay.setDepth(30);
     this.codexOverlay.setVisible(false);
+    this.setCodexControlsInteractive(false);
 
     // ── Bottom action strip (CODEX, UPGRADES, dominant START RUN, Last Run) ─
     const codexGfx = this.add.graphics().setDepth(2);
@@ -839,13 +1004,54 @@ export class MenuScene extends Phaser.Scene {
   private openCodex(): void {
     this.codexOverlayVisible = true;
     this.activeCodexSection = 'runner';
+    this.setCodexControlsInteractive(true);
     this.refreshCodexView();
     this.codexOverlay.setVisible(true);
   }
 
   private closeCodex(): void {
     this.codexOverlayVisible = false;
+    this.codexSectionHoveredIndex = null;
+    this.codexCloseHovered = false;
     this.codexOverlay.setVisible(false);
+    this.setCodexControlsInteractive(false);
+  }
+
+  private setCodexControlsInteractive(codexActive: boolean): void {
+    if (codexActive) {
+      this.codexBackdrop?.setInteractive();
+      this.codexCloseButton?.setInteractive({ useHandCursor: true });
+      for (const frame of this.codexSectionFrames) {
+        frame.setInteractive({ useHandCursor: true });
+      }
+      this.startButton?.disableInteractive();
+      this.metaButton?.disableInteractive();
+      this.codexButton?.disableInteractive();
+      this.guideButton?.disableInteractive();
+      for (const panel of this.heroPanels) {
+        panel.disableInteractive();
+      }
+      for (const btn of this.heroActionButtons) {
+        btn.disableInteractive();
+      }
+      return;
+    }
+
+    this.codexBackdrop?.disableInteractive();
+    this.codexCloseButton?.disableInteractive();
+    for (const frame of this.codexSectionFrames) {
+      frame.disableInteractive();
+    }
+    this.startButton?.setInteractive({ useHandCursor: true });
+    this.metaButton?.setInteractive({ useHandCursor: true });
+    this.codexButton?.setInteractive({ useHandCursor: true });
+    this.guideButton?.setInteractive({ useHandCursor: true });
+    for (const panel of this.heroPanels) {
+      panel.setInteractive({ useHandCursor: true });
+    }
+    for (const btn of this.heroActionButtons) {
+      btn.setInteractive({ useHandCursor: true });
+    }
   }
 
   public getMenuSnapshot(): {
@@ -1366,43 +1572,6 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
-  private createMenuButton(
-    x: number,
-    y: number,
-    label: string,
-    onClick: () => void,
-  ): Phaser.GameObjects.Text {
-    const button = this.add
-      .text(x, y, label, {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '28px',
-        color: '#fef3c7',
-        backgroundColor: '#1f2937',
-        padding: { left: 24, right: 24, top: 12, bottom: 12 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-
-    button.on('pointerover', () => {
-      if (button.text === 'Selected') {
-        return;
-      }
-
-      button.setStyle({ color: '#ffffff', backgroundColor: '#374151' });
-    });
-
-    button.on('pointerout', () => {
-      button.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
-
-      if (this.heroActionButtons.includes(button)) {
-        this.refreshHeroView();
-      }
-    });
-
-    button.on('pointerdown', () => onClick());
-    return button;
-  }
-
   private createUiButtonIcon(
     buttonId: UiButtonAssetId,
     x: number,
@@ -1417,6 +1586,44 @@ export class MenuScene extends Phaser.Scene {
     return this.add.image(x, y, slot.key).setDisplaySize(size, size).setAlpha(0.78);
   }
 
+  private renderCodexBackButton(): void {
+    if (!this.codexCloseButtonGraphics) {
+      return;
+    }
+
+    const g = this.codexCloseButtonGraphics;
+    g.clear();
+    drawDoodleCard(g, {
+      cx: 376,
+      cy: 576,
+      width: 188,
+      height: 52,
+      cornerRadius: 15,
+      seed: 1681,
+      jitter: 0.9,
+      fillColor: this.codexCloseHovered ? DOODLE_COLORS.gold : DOODLE_COLORS.paperGold,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: this.codexCloseHovered ? 3.2 : 2.6,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.3,
+    });
+    drawDoodleCircle(g, {
+      cx: 306,
+      cy: 576,
+      radius: 15,
+      fillColor: DOODLE_COLORS.paperHover,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2,
+      seed: 1683,
+      segments: 14,
+      jitter: 0.35,
+    });
+    if (!this.codexCloseButtonIcon) {
+      drawDoodleCloseX(g, 306, 576, 5.5, DOODLE_COLORS.ink);
+    }
+  }
+
   private setFocusedHero(heroId: HeroDefinition['id']): void {
     if (this.focusedHeroId === heroId) {
       return;
@@ -1429,40 +1636,274 @@ export class MenuScene extends Phaser.Scene {
   private refreshCodexView(): void {
     const hero = HERO_LIST.find((entry) => entry.id === this.focusedHeroId) ?? HERO_LIST[0];
     const weapon = WEAPON_DEFINITIONS[hero.startingWeaponId];
+    const unlocked = isHeroUnlocked(this.saveData, hero.id);
+    const selected = this.saveData.selectedHero === hero.id;
     const threatEntries = [
       {
         enemy: ENEMY_ARCHETYPES.skimmer,
-        label: 'Scout Threat',
+        label: 'SCOUT THREAT',
         note: 'Strafes wide. Keep a clean lane before closing in.',
       },
       {
         enemy: ENEMY_ARCHETYPES.dreadnought,
-        label: 'Miniboss',
+        label: 'MINIBOSS',
         note: 'Telegraphs a line charge. Sidestep before release.',
       },
       {
         enemy: ENEMY_ARCHETYPES.behemoth,
-        label: 'Boss',
+        label: 'BOSS',
         note: 'Controls space with a shockwave ring near the end of the run.',
       },
     ];
 
     this.refreshCodexSectionNav();
+    this.renderCodexHeaderBar();
 
+    // Update Section 1: Focused Hero Page
+    const heroIconSlot = getHeroIconAssetSlot(hero.id);
+    const hasHeroIcon = Boolean(
+      this.codexRunnerPortraitImage && shouldUseVisualAsset(this, 'heroMenuIcons', heroIconSlot),
+    );
+    if (hasHeroIcon && this.codexRunnerPortraitImage) {
+      this.codexRunnerPortraitImage.setTexture(heroIconSlot.key).setVisible(true);
+    } else {
+      this.codexRunnerPortraitImage?.setVisible(false);
+    }
     this.codexHeroBadge.setText(this.getHeroBadgeLabel(hero));
-    this.codexHeroBadge.setBackgroundColor(`#${hero.appearance.auraColor.toString(16).padStart(6, '0')}`);
+    this.codexHeroNamePlate.setText(hero.name.toUpperCase());
     this.codexHeroBody.setText(hero.description);
-    this.codexHeroMeta.setText(`Passive  ${hero.passiveLabel}\nLoadout  ${this.getHeroLoadoutSummary(hero, weapon)}`);
-    this.codexWeaponBadge.setText(weapon.shortLabel);
-    this.codexWeaponBadge.setBackgroundColor(`#${weapon.projectileColor.toString(16).padStart(6, '0')}`);
-    this.codexWeaponBody.setText(`${weapon.name}\n\n${weapon.codexSummary}`);
-    this.codexWeaponStats.setText(this.getWeaponStatSummary(weapon));
+    const heroStatusNote = selected ? 'Active Runner' : unlocked ? 'Unlocked & Ready' : `Locked (${hero.unlockCost ?? 0}g)`;
+    this.codexHeroMeta.setText(
+      `Passive: ${hero.passiveLabel}\nLoadout: ${this.getHeroLoadoutSummary(hero, weapon)}\nStatus: ${heroStatusNote}`,
+    );
 
+    const runnerKey = `${hero.id}:${hasHeroIcon ? 1 : 0}`;
+    if (this.codexRunnerVisualKey !== runnerKey && this.codexRunnerGraphics) {
+      this.codexRunnerVisualKey = runnerKey;
+      const g = this.codexRunnerGraphics;
+      const palette = getHeroThemePalette(hero.id);
+      g.clear();
+
+      // Polaroid specimen frame + tape + corner monogram badge
+      drawDoodleCard(g, {
+        cx: 674,
+        cy: 414,
+        width: 204,
+        height: 316,
+        cornerRadius: 18,
+        seed: 1841,
+        jitter: 1.3,
+        fillColor: DOODLE_COLORS.paperHover,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.8,
+        shadowOffsetX: 3,
+        shadowOffsetY: 4,
+        shadowAlpha: 0.28,
+      });
+      drawDoodleCard(g, {
+        cx: 674,
+        cy: 256,
+        width: 66,
+        height: 20,
+        cornerRadius: 5,
+        seed: 1845,
+        jitter: 0.5,
+        fillColor: DOODLE_COLORS.paperGold,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 1,
+        shadowAlpha: 0.2,
+      });
+      drawHeroPortraitMedallion(g, hero.id, 674, 358, 60, true);
+      if (!hasHeroIcon) {
+        drawHeroFallbackMascot(g, hero.id, 674, 358, 60);
+      }
+      drawDoodleCard(g, {
+        cx: 602,
+        cy: 282,
+        width: 42,
+        height: 26,
+        cornerRadius: 8,
+        seed: 1849,
+        jitter: 0.4,
+        fillColor: palette.ribbon,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.2,
+      });
+      drawDoodleCard(g, {
+        cx: 674,
+        cy: 466,
+        width: 168,
+        height: 36,
+        cornerRadius: 11,
+        seed: 1853,
+        jitter: 0.7,
+        fillColor: palette.ribbon,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.4,
+        shadowOffsetX: 2,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.25,
+      });
+
+      // Right dossier boxes
+      drawDoodleCard(g, {
+        cx: 1062,
+        cy: 304,
+        width: 524,
+        height: 112,
+        cornerRadius: 16,
+        seed: 1861,
+        jitter: 1.1,
+        fillColor: DOODLE_COLORS.paperWarm,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.4,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.22,
+      });
+      drawDoodleCard(g, {
+        cx: 1062,
+        cy: 472,
+        width: 524,
+        height: 196,
+        cornerRadius: 16,
+        seed: 1867,
+        jitter: 1.1,
+        fillColor: DOODLE_COLORS.paperSky,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.4,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.22,
+      });
+    }
+
+    // Update Section 2: Weapon Page
+    const weaponIconSlot = getWeaponIconAssetSlot(weapon.id);
+    const hasWeaponIcon = Boolean(
+      this.codexWeaponImage && shouldUseVisualAsset(this, 'weaponHudIcons', weaponIconSlot),
+    );
+    if (hasWeaponIcon && this.codexWeaponImage) {
+      this.codexWeaponImage.setTexture(weaponIconSlot.key).setVisible(true);
+    } else {
+      this.codexWeaponImage?.setVisible(false);
+    }
+    this.codexWeaponBadge.setText(`${weapon.shortLabel} · ${weapon.name.toUpperCase()}`);
+    this.codexWeaponBody.setText(`${weapon.name} (${hero.name} Starter)\n\n${weapon.codexSummary}`);
+    this.codexWeaponStats.setText(this.getWeaponStatSummary(weapon).split('  |  ').join('\n'));
+
+    const weaponKey = `${weapon.id}:${hasWeaponIcon ? 1 : 0}`;
+    if (this.codexWeaponVisualKey !== weaponKey && this.codexWeaponGraphics) {
+      this.codexWeaponVisualKey = weaponKey;
+      const g = this.codexWeaponGraphics;
+      g.clear();
+
+      drawDoodleCard(g, {
+        cx: 674,
+        cy: 414,
+        width: 204,
+        height: 316,
+        cornerRadius: 18,
+        seed: 1901,
+        jitter: 1.3,
+        fillColor: DOODLE_COLORS.paperHover,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.8,
+        shadowOffsetX: 3,
+        shadowOffsetY: 4,
+        shadowAlpha: 0.28,
+      });
+      drawDoodleCard(g, {
+        cx: 674,
+        cy: 256,
+        width: 66,
+        height: 20,
+        cornerRadius: 5,
+        seed: 1905,
+        jitter: 0.5,
+        fillColor: DOODLE_COLORS.paperGold,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 1,
+        shadowAlpha: 0.2,
+      });
+      drawDoodleCircle(g, {
+        cx: 674,
+        cy: 358,
+        radius: 60,
+        fillColor: weapon.id === 'arc-bolt' ? DOODLE_COLORS.weaponWellDark : DOODLE_COLORS.weaponWellLight,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 3,
+        seed: 1911,
+        segments: 20,
+        jitter: 0.9,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.26,
+      });
+      if (!hasWeaponIcon) {
+        drawDoodleUpgradeGlyph(g, 'weapon', weapon.id, 674, 358, weapon.projectileColor);
+      }
+      drawDoodleCard(g, {
+        cx: 674,
+        cy: 466,
+        width: 176,
+        height: 36,
+        cornerRadius: 11,
+        seed: 1917,
+        jitter: 0.7,
+        fillColor: DOODLE_COLORS.paperGold,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.4,
+        shadowOffsetX: 2,
+        shadowOffsetY: 2,
+        shadowAlpha: 0.25,
+      });
+
+      drawDoodleCard(g, {
+        cx: 1062,
+        cy: 304,
+        width: 524,
+        height: 112,
+        cornerRadius: 16,
+        seed: 1923,
+        jitter: 1.1,
+        fillColor: DOODLE_COLORS.paperGold,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.4,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.22,
+      });
+      drawDoodleCard(g, {
+        cx: 1062,
+        cy: 472,
+        width: 524,
+        height: 196,
+        cornerRadius: 16,
+        seed: 1929,
+        jitter: 1.1,
+        fillColor: DOODLE_COLORS.paperWarm,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2.4,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: 0.22,
+      });
+    }
+
+    // Update Section 3: Threats (3 illustrated cards)
     for (let index = 0; index < this.codexThreatTitleTexts.length; index += 1) {
       const entry = threatEntries[index];
-      this.codexThreatTitleTexts[index].setText(`${entry.label}  ${entry.enemy.name}`);
+      this.codexThreatTitleTexts[index].setText(entry.enemy.name.toUpperCase());
+      this.codexThreatRoleTexts[index]?.setText(entry.label);
       this.codexThreatBodyTexts[index].setText(entry.note);
-      this.codexThreatTitleTexts[index].setColor(index === 0 ? '#bae6fd' : index === 1 ? '#fbcfe8' : '#fecaca');
     }
 
     this.codexRunnerContainer.setVisible(this.activeCodexSection === 'runner');
@@ -1474,24 +1915,59 @@ export class MenuScene extends Phaser.Scene {
         this.codexSectionEyebrow.setText('RUNNER ENTRY');
         this.codexSectionTitle.setText(hero.name);
         this.codexSectionSubtitle.setText(
-          'Read the focused hero brief, passive, and opening loadout without the rest of the archive competing for space.',
+          'Focused survivor field sheet, passive note, and starting loadout.',
         );
         break;
       case 'weapon':
         this.codexSectionEyebrow.setText('WEAPON ENTRY');
         this.codexSectionTitle.setText(weapon.name);
         this.codexSectionSubtitle.setText(
-          `Starter weapon record for ${hero.name}. Compact stats stay visible; the long explanation stays out of the menu.`,
+          `Starter armament entry for ${hero.name}. Exact computed telemetry below.`,
         );
         break;
       case 'threats':
         this.codexSectionEyebrow.setText('THREAT ARCHIVE');
         this.codexSectionTitle.setText('Field Threats');
         this.codexSectionSubtitle.setText(
-          'Known encounter entries tied to the current roster and run flow. Read them as archive notes, not loose menu tips.',
+          'Illustrated encounter notes for key enemies encountered during each run.',
         );
         break;
     }
+  }
+
+  private renderCodexHeaderBar(): void {
+    const key = this.activeCodexSection;
+    if (this.codexHeaderKey === key || !this.codexHeaderGraphics) {
+      return;
+    }
+    this.codexHeaderKey = key;
+
+    const g = this.codexHeaderGraphics;
+    g.clear();
+    const pillColor =
+      key === 'runner'
+        ? 0xdbeafe
+        : key === 'weapon'
+          ? DOODLE_COLORS.paperGold
+          : 0xfce7f3;
+
+    drawDoodleCard(g, {
+      cx: 648,
+      cy: 134,
+      width: 170,
+      height: 26,
+      cornerRadius: 9,
+      seed: 1691,
+      jitter: 0.5,
+      fillColor: pillColor,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2,
+      shadowOffsetX: 1,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.2,
+    });
+    g.lineStyle(2.4, DOODLE_COLORS.ink, 0.24);
+    g.lineBetween(562, 214, 1334, 214);
   }
 
   private setActiveCodexSection(section: CodexSection): void {
@@ -1507,10 +1983,23 @@ export class MenuScene extends Phaser.Scene {
     const sections: CodexSection[] = ['runner', 'weapon', 'threats'];
 
     for (let index = 0; index < sections.length; index += 1) {
-      const active = this.activeCodexSection === sections[index];
-      this.codexSectionFrames[index].setFillStyle(active ? 0x1d3553 : 0x132033, active ? 0.98 : 0.78);
-      this.codexSectionFrames[index].setStrokeStyle(1, active ? 0x60a5fa : 0x223247, active ? 1 : 0.86);
-      this.codexSectionTexts[index].setColor(active ? '#eff6ff' : '#e2e8f0');
+      const section = sections[index];
+      const active = this.activeCodexSection === section;
+      const hovered = this.codexSectionHoveredIndex === index;
+      const tabGfx = this.codexSectionTabGraphics[index];
+      const title = this.codexSectionTexts[index];
+      const tabY = 236 + index * 102;
+      const key = `${section}:${active ? 1 : 0}:${hovered ? 1 : 0}`;
+
+      if (tabGfx && this.codexSectionTabVisualKeys[index] !== key) {
+        this.codexSectionTabVisualKeys[index] = key;
+        tabGfx.clear();
+        drawCodexSectionTabChrome(tabGfx, section, 376, tabY, 218, 78, active, hovered);
+      }
+
+      if (title) {
+        title.setColor(DOODLE_HEX.ink);
+      }
     }
   }
 
@@ -1581,6 +2070,17 @@ export class MenuScene extends Phaser.Scene {
     this.heroPanels = [];
     this.codexSectionFrames = [];
     this.codexSectionTexts = [];
+    this.codexSectionTabGraphics = [];
+    this.codexSectionTabVisualKeys = [];
+    this.codexSectionHoveredIndex = null;
+    this.codexCloseHovered = false;
+    this.codexHeaderKey = '';
+    this.codexRunnerVisualKey = '';
+    this.codexWeaponVisualKey = '';
+    this.codexRunnerPortraitImage = null;
+    this.codexWeaponImage = null;
+    this.codexThreatGraphics = [];
+    this.codexThreatRoleTexts = [];
     this.codexThreatTitleTexts = [];
     this.codexThreatBodyTexts = [];
     this.topGoldIconImage = null;
