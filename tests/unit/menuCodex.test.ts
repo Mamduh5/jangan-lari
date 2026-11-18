@@ -348,8 +348,8 @@ describe('MenuScene R3G-D1 main menu and hero selection', () => {
   });
 });
 
-describe('MenuScene R3G-D2 full Field Codex rebuild', () => {
-  test('opens on focused hero, switches Runner/Weapon/Threats with real data, blocks shortcuts/menu input behind backdrop, and closes on Back or Escape', () => {
+describe('MenuScene R3G-D2B complete Field Codex library', () => {
+  test('browses all 4 heroes, 7 weapons, and 11 enemies via Category -> Library Index -> Entry Detail without mutating menu selection or save state', () => {
     const scene = createMenuFixture({
       save: {
         totalGold: 220,
@@ -364,44 +364,58 @@ describe('MenuScene R3G-D2 full Field Codex rebuild', () => {
       codexBackdrop: { setInteractive: ReturnType<typeof vi.fn>; input: { enabled: boolean } | null };
       codexOverlay: { visible: boolean };
       codexOverlayVisible: boolean;
+      activeCodexSection: string;
+      codexViewMode: string;
       codexSectionEyebrow: { text: string };
       codexSectionTitle: { text: string };
-      codexHeroNamePlate: { text: string };
-      codexHeroBody: { text: string };
-      codexHeroMeta: { text: string };
-      codexWeaponBody: { text: string };
-      codexWeaponStats: { text: string };
-      codexWeaponImage: { textureKey: string; visible: boolean } | null;
-      codexThreatTitleTexts: Array<{ text: string }>;
-      codexThreatRoleTexts: Array<{ text: string }>;
-      codexThreatBodyTexts: Array<{ text: string }>;
+      codexSectionTexts: Array<{ text: string }>;
       codexSectionFrames: Array<{ input: { enabled: boolean } | null; emit: (e: string) => void }>;
-      codexRunnerContainer: { visible: boolean };
-      codexWeaponContainer: { visible: boolean };
-      codexThreatContainer: { visible: boolean };
+      codexIndexContainer: { visible: boolean };
+      codexDetailContainer: { visible: boolean };
+      codexIndexTileHits: Array<{ visible: boolean; input: { enabled: boolean } | null; emit: (e: string) => void }>;
+      codexIndexTileTitleTexts: Array<{ text: string; visible: boolean }>;
+      codexIndexTileTagTexts: Array<{ text: string; visible: boolean }>;
+      codexPrevPageButton: { input: { enabled: boolean } | null; emit: (e: string) => void };
+      codexNextPageButton: { input: { enabled: boolean } | null; emit: (e: string) => void };
+      codexPageIndicatorText: { text: string };
+      codexBackToIndexButton: { visible: boolean; input: { enabled: boolean } | null; emit: (e: string) => void };
+      codexPrevEntryButton: { input: { enabled: boolean } | null; emit: (e: string) => void };
+      codexNextEntryButton: { input: { enabled: boolean } | null; emit: (e: string) => void };
+      codexEntryIndicatorText: { text: string };
+      codexDetailSpecimenName: { text: string };
+      codexDetailSpecimenTag: { text: string };
+      codexDetailSpecimenImage: { textureKey: string; visible: boolean } | null;
+      codexDetailCardLabels: Array<{ text: string; visible: boolean }>;
+      codexDetailCardBodies: Array<{ text: string; visible: boolean }>;
+      codexDetailUpgradePrimaryTitle: { text: string; visible: boolean };
+      codexDetailUpgradePrimaryBody: { text: string; visible: boolean };
+      codexDetailUpgradeSecondaryTitle: { text: string; visible: boolean };
+      codexDetailUpgradeSecondaryBody: { text: string; visible: boolean };
       startButton: { input: { enabled: boolean } | null };
       metaButton: { input: { enabled: boolean } | null };
       heroPanels: Array<{ input: { enabled: boolean } | null; emit: (e: string) => void }>;
+      focusedHeroId: string;
+      saveData: GameSaveData;
     };
     const keyboard = (scene.input as unknown as { keyboard: { emit: (e: string) => void } }).keyboard;
 
     expect(internals.codexOverlayVisible).toBe(false);
     expect(internals.codexOverlay.visible).toBe(false);
     expect(internals.startButton.input?.enabled).toBe(true);
+    expect(internals.codexSectionTexts.map((t) => t.text)).toEqual(['HEROES', 'WEAPONS', 'ENEMIES']);
 
-    // Focus Vanguard before opening Codex
+    // Focus Vanguard on menu (Runner remains saved selectedHero), then open Codex
     internals.heroPanels[1].emit('pointerdown');
     internals.codexButton.emit('pointerdown');
 
     expect(internals.codexOverlayVisible).toBe(true);
     expect(internals.codexOverlay.visible).toBe(true);
-    expect(internals.codexSectionEyebrow.text).toBe('RUNNER ENTRY');
-    expect(internals.codexHeroNamePlate.text).toBe('VANGUARD');
-    expect(internals.codexHeroBody.text).toBe(HEROES.vanguard.description);
-    expect(internals.codexHeroMeta.text).toContain(HEROES.vanguard.passiveLabel);
-    expect(internals.codexRunnerContainer.visible).toBe(true);
-    expect(internals.codexWeaponContainer.visible).toBe(false);
-    expect(internals.codexThreatContainer.visible).toBe(false);
+    expect(internals.codexViewMode).toBe('index');
+    expect(internals.codexIndexContainer.visible).toBe(true);
+    expect(internals.codexDetailContainer.visible).toBe(false);
+    expect(internals.codexBackToIndexButton.visible).toBe(false);
+    expect(Boolean(internals.codexBackToIndexButton.input?.enabled)).toBe(false);
+    expect(Boolean(internals.codexPrevEntryButton.input?.enabled)).toBe(false);
 
     // While Codex is open, backdrop blocks underlying menu controls and Enter/Space/M cannot trigger
     expect(internals.codexBackdrop.input?.enabled).toBe(true);
@@ -413,31 +427,120 @@ describe('MenuScene R3G-D2 full Field Codex rebuild', () => {
     keyboard.emit('keydown-M');
     expect(scene.scene.start).not.toHaveBeenCalled();
 
-    // Switch to Weapon tab -> Ember Lance stats & image for Vanguard
-    internals.codexSectionFrames[1].emit('pointerdown');
-    expect(internals.codexSectionEyebrow.text).toBe('WEAPON ENTRY');
-    expect(internals.codexSectionTitle.text).toBe('Ember Lance');
-    expect(internals.codexWeaponContainer.visible).toBe(true);
-    expect(internals.codexRunnerContainer.visible).toBe(false);
-    expect(internals.codexWeaponBody.text).toContain(WEAPON_DEFINITIONS['ember-lance'].codexSummary);
-    expect(internals.codexWeaponStats.text).toContain(`Damage ${WEAPON_DEFINITIONS['ember-lance'].damage}`);
-    expect(internals.codexWeaponStats.text).toContain(`Cadence ${WEAPON_DEFINITIONS['ember-lance'].fireCooldownMs} ms`);
-    expect(internals.codexWeaponImage?.textureKey).toBe('weapon-ember-lance');
-    expect(internals.codexWeaponImage?.visible).toBe(true);
+    // Heroes library shows all 4 heroes regardless of unlock state on Page 1 / 1
+    expect(internals.codexSectionTitle.text).toBe('Heroes (4)');
+    expect(internals.codexPageIndicatorText.text).toBe('Page 1 / 1');
+    expect(Boolean(internals.codexPrevPageButton.input?.enabled)).toBe(false);
+    expect(Boolean(internals.codexNextPageButton.input?.enabled)).toBe(false);
+    expect(internals.codexIndexTileTitleTexts.map((t) => t.text)).toEqual(HERO_LIST.map((h) => h.name));
 
-    // Switch to Threats tab -> real Skimmer, Dreadnought, Behemoth archetypes & notes
-    internals.codexSectionFrames[2].emit('pointerdown');
-    expect(internals.codexSectionEyebrow.text).toBe('THREAT ARCHIVE');
-    expect(internals.codexThreatContainer.visible).toBe(true);
-    expect(internals.codexThreatTitleTexts.map((t) => t.text)).toEqual([
-      ENEMY_ARCHETYPES.skimmer.name.toUpperCase(),
-      ENEMY_ARCHETYPES.dreadnought.name.toUpperCase(),
-      ENEMY_ARCHETYPES.behemoth.name.toUpperCase(),
+    // Open locked Verdant hero detail (tile index 3) -> readable passive/status, menu state unchanged
+    internals.codexIndexTileHits[3].emit('pointerdown');
+    expect(internals.codexViewMode).toBe('detail');
+    expect(internals.codexDetailContainer.visible).toBe(true);
+    expect(internals.codexIndexContainer.visible).toBe(false);
+    expect(internals.codexBackToIndexButton.visible).toBe(true);
+    expect(internals.codexBackToIndexButton.input?.enabled).toBe(true);
+    expect(Boolean(internals.codexIndexTileHits[0].input?.enabled)).toBe(false);
+    expect(internals.codexEntryIndicatorText.text).toBe('Entry 4 / 4');
+    expect(internals.codexDetailSpecimenName.text).toBe('VERDANT');
+    expect(internals.codexDetailCardBodies[1].text).toContain('Wider pickup range and sturdier support fire.');
+    expect(internals.codexDetailCardBodies[2].text).toContain('Bloom Cannon');
+    expect(internals.codexDetailCardBodies[2].text).toContain('Locked (210g to unlock)');
+    expect(internals.codexDetailSpecimenImage?.textureKey).toBe('hero-verdant');
+    expect(internals.codexDetailSpecimenImage?.visible).toBe(true);
+    // Viewing Verdant inside Codex must NEVER alter active run selection, gold, unlocks, or menu focus
+    expect(internals.saveData.selectedHero).toBe('runner');
+    expect(internals.saveData.totalGold).toBe(220);
+    expect(internals.focusedHeroId).toBe('vanguard');
+
+    // Step Next Entry wraps cleanly to Runner (Entry 1 / 4), then Back to Index
+    internals.codexNextEntryButton.emit('pointerdown');
+    expect(internals.codexEntryIndicatorText.text).toBe('Entry 1 / 4');
+    expect(internals.codexDetailSpecimenName.text).toBe('RUNNER');
+    internals.codexBackToIndexButton.emit('pointerdown');
+    expect(internals.codexViewMode).toBe('index');
+    expect(internals.codexIndexContainer.visible).toBe(true);
+
+    // Switch to WEAPONS (7) -> Page 1 (4) and Page 2 (3, 4th tile hidden/disabled)
+    internals.codexSectionFrames[1].emit('pointerdown');
+    expect(internals.codexSectionTitle.text).toBe('Weapons (7)');
+    expect(internals.codexPageIndicatorText.text).toBe('Page 1 / 2');
+    expect(internals.codexNextPageButton.input?.enabled).toBe(true);
+    expect(internals.codexIndexTileTitleTexts.map((t) => t.text)).toEqual([
+      'Arc Bolt',
+      'Twin Fangs',
+      'Ember Lance',
+      'Bloom Cannon',
     ]);
-    expect(internals.codexThreatRoleTexts.map((r) => r.text)).toEqual(['SCOUT THREAT', 'MINIBOSS', 'BOSS']);
-    expect(internals.codexThreatBodyTexts[0].text).toContain('Strafes wide');
-    expect(internals.codexThreatBodyTexts[1].text).toContain('Telegraphs a line charge');
-    expect(internals.codexThreatBodyTexts[2].text).toContain('shockwave ring');
+    // Open Arc Bolt detail -> exact stats + Signature (Volt Volley) + Branch (Lanebreaker)
+    internals.codexIndexTileHits[0].emit('pointerdown');
+    expect(internals.codexDetailSpecimenName.text).toBe('ARC BOLT');
+    expect(internals.codexDetailSpecimenImage?.textureKey).toBe('weapon-arc-bolt');
+    expect(internals.codexDetailCardBodies[1].text).toContain(`Damage: ${WEAPON_DEFINITIONS['arc-bolt'].damage}`);
+    expect(internals.codexDetailUpgradePrimaryTitle.visible).toBe(true);
+    expect(internals.codexDetailUpgradePrimaryTitle.text).toBe('Volt Volley');
+    expect(internals.codexDetailUpgradeSecondaryTitle.text).toContain('Lanebreaker');
+
+    // Open Ember Lance (has Signature, no Branch) via Next/Next -> honest fallback note
+    internals.codexNextEntryButton.emit('pointerdown');
+    internals.codexNextEntryButton.emit('pointerdown');
+    expect(internals.codexDetailSpecimenName.text).toBe('EMBER LANCE');
+    expect(internals.codexDetailUpgradePrimaryTitle.text).toBe('Sundering Tip');
+    expect(internals.codexDetailUpgradeSecondaryTitle.text).toBe('No branch upgrade in current pool');
+
+    // Back to Index, step to Weapons Page 2 -> 3 items (Phase Disc, Sunwheel, Shatterbell), 4th disabled
+    internals.codexBackToIndexButton.emit('pointerdown');
+    internals.codexNextPageButton.emit('pointerdown');
+    expect(internals.codexPageIndicatorText.text).toBe('Page 2 / 2');
+    expect(internals.codexIndexTileTitleTexts.slice(0, 3).map((t) => t.text)).toEqual([
+      'Phase Disc',
+      'Sunwheel',
+      'Shatterbell',
+    ]);
+    expect(internals.codexIndexTileHits[3].visible).toBe(false);
+    expect(Boolean(internals.codexIndexTileHits[3].input?.enabled)).toBe(false);
+
+    // Switch to ENEMIES (11) across 3 pages: 4 + 4 + 3 (ending at Overlord, Riftblade, Dreadnought, Behemoth)
+    internals.codexSectionFrames[2].emit('pointerdown');
+    expect(internals.codexSectionTitle.text).toBe('Enemies (11)');
+    expect(internals.codexPageIndicatorText.text).toBe('Page 1 / 3');
+    expect(internals.codexIndexTileTitleTexts.map((t) => t.text)).toEqual([
+      ENEMY_ARCHETYPES.scuttler.name,
+      ENEMY_ARCHETYPES.skimmer.name,
+      ENEMY_ARCHETYPES.harrier.name,
+      ENEMY_ARCHETYPES.mauler.name,
+    ]);
+    internals.codexNextPageButton.emit('pointerdown');
+    expect(internals.codexPageIndicatorText.text).toBe('Page 2 / 3');
+    expect(internals.codexIndexTileTitleTexts.map((t) => t.text)).toEqual([
+      ENEMY_ARCHETYPES.crusher.name,
+      ENEMY_ARCHETYPES.bulwark.name,
+      ENEMY_ARCHETYPES.hexcaster.name,
+      ENEMY_ARCHETYPES.overlord.name,
+    ]);
+    internals.codexNextPageButton.emit('pointerdown');
+    expect(internals.codexPageIndicatorText.text).toBe('Page 3 / 3');
+    expect(internals.codexIndexTileTitleTexts.slice(0, 3).map((t) => t.text)).toEqual([
+      ENEMY_ARCHETYPES.riftblade.name,
+      ENEMY_ARCHETYPES.dreadnought.name,
+      ENEMY_ARCHETYPES.behemoth.name,
+    ]);
+    expect(internals.codexIndexTileHits[3].visible).toBe(false);
+    expect(Boolean(internals.codexIndexTileHits[3].input?.enabled)).toBe(false);
+
+    // Open Dreadnought (index 1 on page 3) -> procedural specimen, exact stats & line-charge/volley note
+    internals.codexIndexTileHits[1].emit('pointerdown');
+    expect(internals.codexDetailSpecimenName.text).toBe('DREADNOUGHT');
+    expect(internals.codexDetailSpecimenImage?.visible).toBe(false);
+    expect(internals.codexDetailCardBodies[1].text).toContain(`Base HP: ${ENEMY_ARCHETYPES.dreadnought.maxHealth}`);
+    expect(internals.codexDetailCardBodies[2].text).toContain('line charges');
+
+    // Step Next Entry -> Behemoth (Entry 11 / 11)
+    internals.codexNextEntryButton.emit('pointerdown');
+    expect(internals.codexEntryIndicatorText.text).toBe('Entry 11 / 11');
+    expect(internals.codexDetailSpecimenName.text).toBe('BEHEMOTH');
+    expect(internals.codexDetailCardBodies[2].text).toContain('shockwave rings');
 
     // Escape closes Codex cleanly and restores main menu interactivity
     keyboard.emit('keydown-ESC');
@@ -445,12 +548,11 @@ describe('MenuScene R3G-D2 full Field Codex rebuild', () => {
     expect(internals.codexOverlay.visible).toBe(false);
     expect(internals.startButton.input?.enabled).toBe(true);
 
-    // Re-open, switch back via BACK button, focus Runner, check Runner/Arc Bolt update
-    internals.heroPanels[0].emit('pointerdown');
+    // Re-opening resets cleanly to Heroes index without touching saved selection, then BACK button closes Codex
     internals.codexButton.emit('pointerdown');
-    expect(internals.codexHeroNamePlate.text).toBe('RUNNER');
-    internals.codexSectionFrames[1].emit('pointerdown');
-    expect(internals.codexSectionTitle.text).toBe('Arc Bolt');
+    expect(internals.codexOverlayVisible).toBe(true);
+    expect(internals.activeCodexSection).toBe('heroes');
+    expect(internals.codexViewMode).toBe('index');
     internals.codexCloseButton.emit('pointerdown');
     expect(internals.codexOverlayVisible).toBe(false);
 
@@ -466,19 +568,22 @@ describe('MenuScene R3G-D2 full Field Codex rebuild', () => {
     const noTex = createMenuFixture({ texturesExist: false });
     const snap = noTex.getMenuSnapshot();
     expect(snap.startButtonIconVisible).toBe(false);
-    expect(snap.heroCount).toBeUndefined(); // getMenuSnapshot retains strict original fields cleanly
+    expect((snap as Record<string, unknown>).heroCount).toBeUndefined();
 
     const internals = noTex as unknown as {
       codexButton: { emit: (e: string) => void };
-      codexRunnerPortraitImage: unknown;
-      codexWeaponImage: unknown;
+      codexIndexTileImages: unknown[];
+      codexIndexTileHits: Array<{ emit: (e: string) => void }>;
+      codexDetailSpecimenImage: unknown;
       codexCloseButtonIcon: unknown;
       codexOverlayVisible: boolean;
     };
     internals.codexButton.emit('pointerdown');
     expect(internals.codexOverlayVisible).toBe(true);
-    expect(internals.codexRunnerPortraitImage).toBeNull();
-    expect(internals.codexWeaponImage).toBeNull();
+    expect(internals.codexDetailSpecimenImage).toBeNull();
     expect(internals.codexCloseButtonIcon).toBeNull();
+    expect(internals.codexIndexTileImages.every((img) => img === null)).toBe(true);
+    internals.codexIndexTileHits[0].emit('pointerdown');
+    expect(internals.codexDetailSpecimenImage).toBeNull();
   });
 });
