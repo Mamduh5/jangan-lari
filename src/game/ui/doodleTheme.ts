@@ -839,3 +839,252 @@ export function drawDoodleEvolutionArch(
   drawDoodleStar(graphics, leftX + 20, bottomY - 48, 8, 3.2, 4, DOODLE_OVERLAY_COLORS.archRune, ink, 1.4, 0, 0.8);
   drawDoodleStar(graphics, rightX - 20, bottomY - 48, 8, 3.2, 4, DOODLE_OVERLAY_COLORS.archRune, ink, 1.4, 0, 0.8);
 }
+
+
+export function drawDoodleRankPips(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  maxRank: number,
+  currentRank: number,
+  fillColor: number,
+  muted = false,
+): void {
+  const count = Math.max(1, maxRank);
+  const pipW = 18;
+  const pipH = 8;
+  const stepX = 22;
+  const startX = cx - ((count - 1) * stepX) / 2;
+
+  for (let i = 0; i < count; i += 1) {
+    const px = startX + i * stepX;
+    const isFilled = i < currentRank;
+    const points = createWobblyRectPoints(px, cy, pipW, pipH, 2.5, 601 + i * 11, 0.28, 6);
+    graphics.fillStyle(
+      isFilled ? fillColor : muted ? DOODLE_COLORS.paperDisabled : DOODLE_COLORS.paperWarm,
+      isFilled ? (muted ? 0.85 : 1) : 0.9,
+    );
+    graphics.fillPoints(points, true, true);
+    graphics.lineStyle(1.8, muted && !isFilled ? DOODLE_COLORS.inkMuted : DOODLE_COLORS.ink, 1);
+    graphics.strokePoints(points, true, true);
+  }
+}
+
+export function drawDoodlePlayTriangle(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  radius: number,
+  fillColor: number = DOODLE_COLORS.mint,
+  strokeColor: number = DOODLE_COLORS.ink,
+): void {
+  const pts: DoodlePoint[] = [
+    { x: cx - radius * 0.65, y: cy - radius * 0.85 },
+    { x: cx + radius * 0.9, y: cy },
+    { x: cx - radius * 0.65, y: cy + radius * 0.85 },
+  ];
+  graphics.fillStyle(fillColor, 1);
+  graphics.fillPoints(pts, true, true);
+  graphics.lineStyle(2.2, strokeColor, 1);
+  graphics.strokePoints(pts, true, true);
+}
+
+export function drawDoodleRetryLoop(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  radius: number,
+  strokeColor: number = DOODLE_COLORS.ink,
+): void {
+  const segments = 10;
+  graphics.lineStyle(2.4, strokeColor, 1);
+  for (let i = 0; i < segments; i += 1) {
+    const a0 = -Math.PI * 0.85 + (i / segments) * (Math.PI * 1.55);
+    const a1 = -Math.PI * 0.85 + ((i + 1) / segments) * (Math.PI * 1.55);
+    graphics.lineBetween(
+      cx + Math.cos(a0) * radius,
+      cy + Math.sin(a0) * radius,
+      cx + Math.cos(a1) * radius,
+      cy + Math.sin(a1) * radius,
+    );
+  }
+  const tipX = cx + Math.cos(-Math.PI * 0.85) * radius;
+  const tipY = cy + Math.sin(-Math.PI * 0.85) * radius;
+  graphics.lineBetween(tipX, tipY, tipX - 5, tipY + 1);
+  graphics.lineBetween(tipX, tipY, tipX + 2, tipY - 5);
+}
+
+export function drawDoodleCloseX(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  radius: number,
+  strokeColor: number = DOODLE_COLORS.ink,
+): void {
+  graphics.lineStyle(2.8, strokeColor, 1);
+  graphics.lineBetween(cx - radius, cy - radius, cx + radius, cy + radius);
+  graphics.lineBetween(cx + radius, cy - radius, cx - radius, cy + radius);
+}
+
+export function drawDoodleFieldNotebook(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  width: number,
+  height: number,
+): void {
+  const ink = DOODLE_COLORS.ink;
+
+  // Kraft cover backing peeking beneath the cream notebook sheet
+  drawDoodleCard(graphics, {
+    cx: cx + 5,
+    cy: cy + 6,
+    width: width + 16,
+    height: height + 14,
+    cornerRadius: 20,
+    seed: 1011,
+    jitter: 1.5,
+    fillColor: 0xd9bc8c,
+    strokeColor: ink,
+    strokeWidth: 3.2,
+    shadowOffsetX: 6,
+    shadowOffsetY: 7,
+    shadowAlpha: 0.45,
+  });
+
+  // Main cream field-notebook sheet
+  drawDoodleCard(graphics, {
+    cx,
+    cy,
+    width,
+    height,
+    cornerRadius: 16,
+    seed: 1017,
+    jitter: 1.3,
+    fillColor: DOODLE_COLORS.paper,
+    strokeColor: ink,
+    strokeWidth: 3.2,
+    shadowOffsetX: 2,
+    shadowOffsetY: 2,
+    shadowAlpha: 0.25,
+  });
+
+  // Faint ruled horizontal notebook lines across the sheet
+  const leftEdge = cx - width / 2 + 44;
+  const rightEdge = cx + width / 2 - 24;
+  const topLineY = cy - height / 2 + 54;
+  const lineStep = 34;
+  graphics.lineStyle(1.4, DOODLE_COLORS.paperWarm, 0.95);
+  for (let y = topLineY; y < cy + height / 2 - 24; y += lineStep) {
+    graphics.lineBetween(leftEdge, y, rightEdge, y);
+  }
+
+  // Left pink margin line
+  graphics.lineStyle(1.8, DOODLE_COLORS.hp, 0.28);
+  graphics.lineBetween(cx - width / 2 + 42, cy - height / 2 + 16, cx - width / 2 + 42, cy + height / 2 - 16);
+
+  // Spiral notebook wire rings on the left spine
+  const ringX = cx - width / 2 + 12;
+  const ringCount = 7;
+  const ringStartY = cy - height / 2 + 64;
+  const ringGap = (height - 128) / (ringCount - 1);
+  for (let i = 0; i < ringCount; i += 1) {
+    const ry = ringStartY + i * ringGap;
+    drawDoodleCircle(graphics, {
+      cx: ringX + 12,
+      cy: ry,
+      radius: 6,
+      fillColor: ink,
+      strokeColor: ink,
+      strokeWidth: 1,
+      seed: 1030 + i * 7,
+      segments: 10,
+      jitter: 0.25,
+    });
+    const wireLoop = createWobblyRectPoints(ringX - 2, ry, 24, 9, 4, 1050 + i * 9, 0.35, 8);
+    graphics.fillStyle(DOODLE_COLORS.paperHover, 1);
+    graphics.fillPoints(wireLoop, true, true);
+    graphics.lineStyle(2.4, ink, 1);
+    graphics.strokePoints(wireLoop, true, true);
+  }
+
+  // Small masking-tape sticker on the top-right corner
+  const tapePts = createRotatedBoxPoints(0, 0, 74, 22, 0.42, cx + width / 2 - 34, cy - height / 2 + 18);
+  graphics.fillStyle(DOODLE_COLORS.paperGold, 0.92);
+  graphics.fillPoints(tapePts, true, true);
+  graphics.lineStyle(2, ink, 0.85);
+  graphics.strokePoints(tapePts, true, true);
+}
+
+export function drawDoodleVictoryCrown(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  scale = 1,
+): void {
+  const ink = DOODLE_COLORS.ink;
+  const w = 18 * scale;
+  const h = 13 * scale;
+  const crown: DoodlePoint[] = [
+    { x: cx - w, y: cy + h * 0.7 },
+    { x: cx - w * 1.08, y: cy - h * 0.55 },
+    { x: cx - w * 0.4, y: cy + h * 0.05 },
+    { x: cx, y: cy - h },
+    { x: cx + w * 0.4, y: cy + h * 0.05 },
+    { x: cx + w * 1.08, y: cy - h * 0.55 },
+    { x: cx + w, y: cy + h * 0.7 },
+  ];
+  graphics.fillStyle(DOODLE_COLORS.gold, 1);
+  graphics.fillPoints(crown, true, true);
+  graphics.lineStyle(2.4, ink, 1);
+  graphics.strokePoints(crown, true, true);
+
+  drawDoodleCircle(graphics, {
+    cx,
+    cy: cy + h * 0.25,
+    radius: 4 * scale,
+    fillColor: DOODLE_COLORS.mint,
+    strokeColor: ink,
+    strokeWidth: 1.8,
+    seed: 1121,
+    segments: 10,
+    jitter: 0.2,
+  });
+}
+
+export function drawDoodleDefeatSticker(
+  graphics: Phaser.GameObjects.Graphics,
+  cx: number,
+  cy: number,
+  scale = 1,
+): void {
+  const ink = DOODLE_COLORS.ink;
+  const r = 15 * scale;
+  drawDoodleCircle(graphics, {
+    cx,
+    cy,
+    radius: r,
+    fillColor: 0xddd6fe,
+    strokeColor: ink,
+    strokeWidth: 2.2,
+    seed: 1151,
+    segments: 14,
+    jitter: 0.9,
+    shadowOffsetX: 2,
+    shadowOffsetY: 2,
+    shadowAlpha: 0.28,
+  });
+
+  // Mini tilted coral crack / X eyes on defeated blob sticker
+  const eyeOffX = 5 * scale;
+  const eyeY = cy - 2 * scale;
+  const eyeR = 2.6 * scale;
+  graphics.lineStyle(2, ink, 1);
+  graphics.lineBetween(cx - eyeOffX - eyeR, eyeY - eyeR, cx - eyeOffX + eyeR, eyeY + eyeR);
+  graphics.lineBetween(cx - eyeOffX + eyeR, eyeY - eyeR, cx - eyeOffX - eyeR, eyeY + eyeR);
+  graphics.lineBetween(cx + eyeOffX - eyeR, eyeY - eyeR, cx + eyeOffX + eyeR, eyeY + eyeR);
+  graphics.lineBetween(cx + eyeOffX + eyeR, eyeY - eyeR, cx + eyeOffX - eyeR, eyeY + eyeR);
+
+  graphics.lineStyle(2.2, DOODLE_COLORS.hp, 1);
+  graphics.lineBetween(cx - 5 * scale, cy + 6 * scale, cx + 5 * scale, cy + 4 * scale);
+}

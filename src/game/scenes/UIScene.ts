@@ -50,12 +50,19 @@ import {
   drawDoodleCard,
   drawDoodleCircle,
   drawDoodleClockGlyph,
+  drawDoodleCloseX,
+  drawDoodleDefeatSticker,
   drawDoodleEvolutionArch,
+  drawDoodleFieldNotebook,
+  drawDoodlePlayTriangle,
+  drawDoodleRankPips,
+  drawDoodleRetryLoop,
   drawDoodleShieldGlyph,
   drawDoodleStar,
   drawDoodleStrokeRect,
   drawDoodleTankEmblem,
   drawDoodleUpgradeGlyph,
+  drawDoodleVictoryCrown,
   formatCoreShieldLabel,
 } from '../ui/doodleTheme';
 import { RunScene } from './RunScene';
@@ -125,12 +132,18 @@ export class UIScene extends Phaser.Scene {
   private xpBarFill!: Phaser.GameObjects.Rectangle;
   private xpBarLabel!: Phaser.GameObjects.Text;
   private endContainer!: Phaser.GameObjects.Container;
+  private endBackdrop!: Phaser.GameObjects.Rectangle;
+  private endPanelGraphics!: Phaser.GameObjects.Graphics;
+  private endButtonGraphics!: Phaser.GameObjects.Graphics;
   private endTitleText!: Phaser.GameObjects.Text;
   private endSubtitleText!: Phaser.GameObjects.Text;
   private endStatsText!: Phaser.GameObjects.Text;
   private endLeaderboardText!: Phaser.GameObjects.Text;
   private endButton!: Phaser.GameObjects.Text;
   private endHelpText!: Phaser.GameObjects.Text;
+  private endVisualStateKey = '';
+  private endButtonVisualKey = '';
+  private endButtonHovered = false;
   private levelUpContainer!: Phaser.GameObjects.Container;
   private levelUpBackdrop!: Phaser.GameObjects.Rectangle;
   private levelUpPanelGraphics!: Phaser.GameObjects.Graphics;
@@ -174,10 +187,15 @@ export class UIScene extends Phaser.Scene {
   private classChoiceEmblemVisualKeys: string[] = [];
   private classChoiceHoveredIndex: number | null = null;
   private statAllocationContainer!: Phaser.GameObjects.Container;
+  private statPanelGraphics!: Phaser.GameObjects.Graphics;
   private statPointText!: Phaser.GameObjects.Text;
   private statHelpText!: Phaser.GameObjects.Text;
   private statButtons: Partial<Record<TankStatId, Phaser.GameObjects.Rectangle>> = {};
+  private statButtonGraphics: Partial<Record<TankStatId, Phaser.GameObjects.Graphics>> = {};
   private statButtonLabels: Partial<Record<TankStatId, Phaser.GameObjects.Text>> = {};
+  private statButtonVisualKeys: Partial<Record<TankStatId, string>> = {};
+  private statHoveredId: TankStatId | null = null;
+  private statPointPillKey = '';
   private controlGuideMode: ControlGuideMode = 'subtle';
   private controlGuideVisualContainer!: Phaser.GameObjects.Container;
   private controlGuideZones: Phaser.GameObjects.Arc[] = [];
@@ -192,8 +210,14 @@ export class UIScene extends Phaser.Scene {
   private pauseButton!: Phaser.GameObjects.Text;
   private pauseIconImage: Phaser.GameObjects.Image | null = null;
   private pauseMenuContainer!: Phaser.GameObjects.Container;
+  private pauseMenuBackdrop!: Phaser.GameObjects.Rectangle;
+  private pauseMenuPanelGraphics!: Phaser.GameObjects.Graphics;
   private pauseMenuSummaryText!: Phaser.GameObjects.Text;
   private pauseMenuButtons: Phaser.GameObjects.Text[] = [];
+  private pauseMenuButtonGraphics: Phaser.GameObjects.Graphics[] = [];
+  private pauseMenuButtonVisualKeys: string[] = [];
+  private pauseMenuHoveredIndex: number | null = null;
+  private pauseMenuPlayIcon: Phaser.GameObjects.Image | null = null;
   private pauseMenuButtonIcons: Partial<Record<'close' | 'retry', Phaser.GameObjects.Image>> = {};
   private activeAbilityButton!: Phaser.GameObjects.Container;
   private activeAbilityButtonGraphics!: Phaser.GameObjects.Graphics;
@@ -270,12 +294,23 @@ export class UIScene extends Phaser.Scene {
     this.classChoiceEmblemVisualKeys = [];
     this.classChoiceHoveredIndex = null;
     this.statButtons = {};
+    this.statButtonGraphics = {};
     this.statButtonLabels = {};
+    this.statButtonVisualKeys = {};
+    this.statHoveredId = null;
+    this.statPointPillKey = '';
+    this.endVisualStateKey = '';
+    this.endButtonVisualKey = '';
+    this.endButtonHovered = false;
     this.controlGuideZones = [];
     this.controlGuideKnobs = [];
     this.controlGuideLabels = [];
     this.controlGuideSubLabels = [];
     this.pauseMenuButtons = [];
+    this.pauseMenuButtonGraphics = [];
+    this.pauseMenuButtonVisualKeys = [];
+    this.pauseMenuHoveredIndex = null;
+    this.pauseMenuPlayIcon = null;
     this.pauseMenuButtonIcons = {};
     this.controlGuideMode = this.readControlGuideMode();
 
@@ -896,6 +931,14 @@ export class UIScene extends Phaser.Scene {
     this.refreshMobileCopyState();
 
     this.endContainer.setVisible(endActive);
+    if (endActive) {
+      this.endBackdrop.setInteractive();
+      this.endButton.setInteractive({ useHandCursor: true });
+    } else {
+      this.endButtonHovered = false;
+      this.endBackdrop.disableInteractive();
+      this.endButton.disableInteractive();
+    }
     const levelUpVisible = levelUpActive && levelUpChoices.length > 0 && !classChoiceActive && !endActive;
     const classChoiceVisible = classChoiceActive && !endActive;
     this.levelUpContainer.setVisible(levelUpVisible);
@@ -1061,34 +1104,44 @@ export class UIScene extends Phaser.Scene {
   private createEndOverlay(): Phaser.GameObjects.Container {
     const viewWidth = GAME_WIDTH;
     const viewHeight = GAME_HEIGHT;
+    const centerX = viewWidth / 2;
 
-    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0)
-    const panel = this.add.rectangle(viewWidth / 2, viewHeight / 2, 640, 500, 0x0f172a, 0.995).setScrollFactor(0);
-    panel.setStrokeStyle(2, 0x475569, 1);
+    this.endBackdrop = this.add
+      .rectangle(0, 0, viewWidth, viewHeight, 0x0b0a14, 0.7)
+      .setOrigin(0, 0)
+      .setScrollFactor(0);
+    this.endPanelGraphics = this.add.graphics().setScrollFactor(0);
+    this.endButtonGraphics = this.add.graphics().setScrollFactor(0);
 
     this.endTitleText = this.add
-      .text(viewWidth / 2, 150, 'Victory', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '46px',
-        color: '#f8fafc',
+      .text(centerX, 146, 'Victory', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '36px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 1.5,
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
 
     this.endSubtitleText = this.add
-      .text(viewWidth / 2, 196, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '18px',
-        color: '#cbd5e1',
+      .text(centerX, 198, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+        align: 'center',
+        wordWrap: { width: 740 },
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
 
     this.endStatsText = this.add
-      .text(viewWidth / 2, 266, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '19px',
-        color: '#bfdbfe',
+      .text(centerX, 274, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
         align: 'center',
         lineSpacing: 6,
       })
@@ -1096,49 +1149,58 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.endLeaderboardText = this.add
-      .text(viewWidth / 2, 348, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
-        color: '#dbeafe',
+      .text(centerX, 356, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '15px',
+        color: DOODLE_HEX.ink,
         align: 'center',
         lineSpacing: 5,
-        wordWrap: { width: 560 },
+        wordWrap: { width: 690 },
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
 
     this.endButton = this.add
-      .text(viewWidth / 2, 562, 'Return to Menu', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '24px',
-        color: '#fef3c7',
-        backgroundColor: '#1f2937',
-        padding: { left: 24, right: 24, top: 12, bottom: 12 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setInteractive({ useHandCursor: true });
-
-    this.endButton.on('pointerdown', () => this.returnToMenuIfEnded());
-    this.endButton.on('pointerover', () => {
-      this.endButton.setStyle({ color: '#ffffff', backgroundColor: '#374151' });
-    });
-    this.endButton.on('pointerout', () => {
-      this.endButton.setStyle({ color: '#fef3c7', backgroundColor: '#1f2937' });
-    });
-
-    this.endHelpText = this.add
-      .text(viewWidth / 2, 606, 'Enter or Space continues', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '15px',
-        color: '#93c5fd',
+      .text(centerX, 560, 'Return to Menu', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        fixedWidth: 320,
+        fixedHeight: 56,
+        padding: { top: 15, bottom: 10 },
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
 
+    this.endButton.on('pointerdown', () => this.returnToMenuIfEnded());
+    this.endButton.on('pointerover', () => {
+      this.endButtonHovered = true;
+      this.renderEndButtonChrome(Boolean(this.registry.get('run.victory')), true);
+    });
+    this.endButton.on('pointerout', () => {
+      this.endButtonHovered = false;
+      this.renderEndButtonChrome(Boolean(this.registry.get('run.victory')), false);
+    });
+
+    this.endHelpText = this.add
+      .text(centerX, 614, 'Enter or Space continues', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '14px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    this.drawEndOverlayChrome(true, false);
+    this.renderEndButtonChrome(true, false);
+
     const container = this.add.container(0, 0, [
-      backdrop,
-      panel,
+      this.endBackdrop,
+      this.endPanelGraphics,
+      this.endButtonGraphics,
       this.endTitleText,
       this.endSubtitleText,
       this.endStatsText,
@@ -1475,56 +1537,111 @@ export class UIScene extends Phaser.Scene {
 
   private createStatAllocationPanel(): Phaser.GameObjects.Container {
     const viewWidth = GAME_WIDTH;
-    const viewHeight = GAME_HEIGHT;
+    const centerX = viewWidth / 2;
+    const panelY = 605;
+    const tileY = 622;
 
-    const panel = this.add.rectangle(viewWidth / 2, viewHeight - 106, 760, 96, 0x08111f, 0.96)
-    panel.setStrokeStyle(1, 0x38bdf8, 0.86);
+    this.statPanelGraphics = this.add.graphics().setScrollFactor(0);
+    drawDoodleCard(this.statPanelGraphics, {
+      cx: centerX,
+      cy: panelY,
+      width: 744,
+      height: 152,
+      cornerRadius: 18,
+      seed: 1301,
+      jitter: 1.5,
+      fillColor: DOODLE_COLORS.paperWarm,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 3,
+      shadowOffsetX: 3,
+      shadowOffsetY: 4,
+      shadowAlpha: 0.36,
+    });
+    drawDoodleCard(this.statPanelGraphics, {
+      cx: centerX,
+      cy: panelY,
+      width: 726,
+      height: 136,
+      cornerRadius: 15,
+      seed: 1307,
+      jitter: 1.1,
+      fillColor: DOODLE_COLORS.paper,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2,
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+      shadowAlpha: 0,
+    });
+    drawDoodleCard(this.statPanelGraphics, {
+      cx: centerX - 262,
+      cy: 554,
+      width: 184,
+      height: 28,
+      cornerRadius: 10,
+      seed: 1313,
+      jitter: 0.7,
+      fillColor: DOODLE_COLORS.paperGold,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2,
+      shadowOffsetX: 1,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.25,
+    });
 
     this.statPointText = this.add
-      .text(viewWidth / 2 - 354, viewHeight - 144, 'STAT POINTS 0', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
-        color: '#bae6fd',
+      .text(centerX - 262, 554, 'STAT POINTS 0', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 0.6,
       })
-      .setOrigin(0, 0.5)
+      .setOrigin(0.5)
       .setScrollFactor(0);
 
     this.statHelpText = this.add
-      .text(viewWidth / 2 + 354, viewHeight - 144, 'Tap a stat to spend', {
-        fontFamily: 'Trebuchet MS, sans-serif',
+      .text(centerX + 344, 554, 'Tap a stat to spend', {
+        fontFamily: DOODLE_FONTS.body,
         fontSize: '13px',
-        color: '#cbd5e1',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
       })
       .setOrigin(1, 0.5)
       .setScrollFactor(0);
 
-    const children: Phaser.GameObjects.GameObject[] = [panel, this.statPointText, this.statHelpText];
-    const startX = viewWidth / 2 - 260;
+    const children: Phaser.GameObjects.GameObject[] = [this.statPanelGraphics, this.statPointText, this.statHelpText];
+    const startX = centerX - 260;
 
     TANK_STAT_IDS.forEach((statId, index) => {
       const definition = TANK_STAT_DEFINITIONS[statId];
       const x = startX + index * 174;
-      const button = this.add.rectangle(x, viewHeight - 96, 162, 62, 0x132033, 0.98).setScrollFactor(0);
-      button.setStrokeStyle(1, 0x334155, 0.95);
+      const tileGraphics = this.add.graphics().setScrollFactor(0);
+
+      // Transparent interactive hitbox matching (540, 624) and (888, 624) E2E stat tap contracts
+      const button = this.add.rectangle(x, tileY, 160, 92, DOODLE_COLORS.paper, 0).setOrigin(0.5).setScrollFactor(0);
       button.setInteractive({ useHandCursor: true });
       button.on('pointerdown', (pointer: Phaser.Input.Pointer) => this.allocateTankStat(statId, pointer));
       button.on('pointerover', () => this.applyStatButtonHover(statId, true));
       button.on('pointerout', () => this.applyStatButtonHover(statId, false));
 
       const label = this.add
-        .text(x, viewHeight - 96, `${definition.shortLabel} 0/${definition.maxLevel}\n${definition.summary}`, {
-          fontFamily: 'Trebuchet MS, sans-serif',
-          fontSize: '14px',
-          color: '#e0f2fe',
+        .text(x, tileY - 14, `${definition.shortLabel} 0/${definition.maxLevel}\n${definition.summary}`, {
+          fontFamily: DOODLE_FONTS.body,
+          fontSize: '13px',
+          fontStyle: 'bold',
+          color: DOODLE_HEX.ink,
           align: 'center',
-          lineSpacing: 3,
+          lineSpacing: 4,
         })
         .setOrigin(0.5)
         .setScrollFactor(0);
 
       this.statButtons[statId] = button;
+      this.statButtonGraphics[statId] = tileGraphics;
       this.statButtonLabels[statId] = label;
-      children.push(button, label);
+      this.statButtonVisualKeys[statId] = '';
+      this.renderStatTileGraphics(statId, x, tileY, 0, definition.maxLevel, true, false);
+      children.push(tileGraphics, button, label);
     });
 
     const container = this.add.container(0, 0, children);
@@ -1844,73 +1961,119 @@ export class UIScene extends Phaser.Scene {
   private createPauseMenuOverlay(): Phaser.GameObjects.Container {
     const viewWidth = GAME_WIDTH;
     const viewHeight = GAME_HEIGHT;
-    const backdrop = this.add.rectangle(0, 0, viewWidth, viewHeight, 0x020617, 0.62).setOrigin(0).setScrollFactor(0);
-    backdrop.setInteractive();
+    const centerX = viewWidth / 2;
+    const centerY = viewHeight / 2;
 
-    const panel = this.add.rectangle(viewWidth / 2, viewHeight / 2, 480, 390, 0x0f172a, 0.98).setScrollFactor(0);
-    panel.setStrokeStyle(2, 0x475569, 1);
+    this.pauseMenuBackdrop = this.add
+      .rectangle(0, 0, viewWidth, viewHeight, 0x0b0a14, 0.64)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setInteractive();
+
+    this.pauseMenuPanelGraphics = this.add.graphics().setScrollFactor(0);
+    drawDoodleFieldNotebook(this.pauseMenuPanelGraphics, centerX, centerY + 4, 560, 514);
+
+    // Notebook title ribbon & taped summary note card
+    drawDoodleCard(this.pauseMenuPanelGraphics, {
+      cx: centerX,
+      cy: 166,
+      width: 256,
+      height: 50,
+      cornerRadius: 14,
+      seed: 1401,
+      jitter: 1.1,
+      fillColor: DOODLE_COLORS.gold,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 3,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.3,
+    });
+    drawDoodleCard(this.pauseMenuPanelGraphics, {
+      cx: centerX,
+      cy: 248,
+      width: 456,
+      height: 74,
+      cornerRadius: 12,
+      seed: 1409,
+      jitter: 0.9,
+      fillColor: DOODLE_COLORS.paperWarm,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2.2,
+      shadowOffsetX: 2,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.22,
+    });
 
     const heading = this.add
-      .text(viewWidth / 2, viewHeight / 2 - 142, 'Paused', {
-        fontFamily: 'Georgia, serif',
-        fontSize: '38px',
-        color: '#f8fafc',
+      .text(centerX, 166, 'PAUSED', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '34px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        letterSpacing: 2,
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
 
     this.pauseMenuSummaryText = this.add
-      .text(viewWidth / 2, viewHeight / 2 - 96, '', {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '16px',
-        color: '#bfdbfe',
+      .text(centerX, 248, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '15px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
         align: 'center',
-        wordWrap: { width: 400 },
+        lineSpacing: 5,
+        wordWrap: { width: 432 },
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    const resumeButton = this.createPauseMenuButton(viewWidth / 2, viewHeight / 2 - 28, 'Resume', (pointer) => {
-      this.closePauseMenu(pointer);
-    });
-    const restartButton = this.createPauseMenuButton(viewWidth / 2, viewHeight / 2 + 48, 'Restart Run', () => {
-      this.restartRun();
-    });
-    const menuButton = this.createPauseMenuButton(viewWidth / 2, viewHeight / 2 + 124, 'Return to Main Menu', () => {
-      this.returnToMainMenu();
-    });
-
-    const resumeIcon = this.createUiButtonIconImage(
-      'close',
-      resumeButton.x - resumeButton.displayWidth / 2 + 13,
-      resumeButton.y,
-      18,
-    );
-    const restartIcon = this.createUiButtonIconImage(
-      'retry',
-      restartButton.x - restartButton.displayWidth / 2 + 13,
-      restartButton.y,
-      18,
-    );
-    this.pauseMenuButtonIcons.close = resumeIcon ?? undefined;
-    this.pauseMenuButtonIcons.retry = restartIcon ?? undefined;
-    this.pauseMenuButtons.push(resumeButton, restartButton, menuButton);
+    const buttonSpecs: Array<{
+      label: string;
+      y: number;
+      iconId: UiButtonAssetId;
+      onClick: (pointer: ActivePointerLike) => void;
+    }> = [
+      { label: 'Resume', y: 342, iconId: 'play', onClick: (pointer) => this.closePauseMenu(pointer) },
+      { label: 'Restart Run', y: 424, iconId: 'retry', onClick: () => this.restartRun() },
+      { label: 'Return to Main Menu', y: 506, iconId: 'close', onClick: () => this.returnToMainMenu() },
+    ];
 
     const pauseMenuChildren: Phaser.GameObjects.GameObject[] = [
-      backdrop,
-      panel,
+      this.pauseMenuBackdrop,
+      this.pauseMenuPanelGraphics,
       heading,
       this.pauseMenuSummaryText,
-      resumeButton,
-      restartButton,
-      menuButton,
     ];
-    if (resumeIcon) {
-      pauseMenuChildren.push(resumeIcon);
-    }
-    if (restartIcon) {
-      pauseMenuChildren.push(restartIcon);
-    }
+
+    buttonSpecs.forEach((spec, index) => {
+      const btnGraphics = this.add.graphics().setScrollFactor(0);
+      this.pauseMenuButtonGraphics.push(btnGraphics);
+      this.pauseMenuButtonVisualKeys.push('');
+
+      const button = this.createPauseMenuButton(index, centerX, spec.y, spec.label, spec.onClick);
+      this.pauseMenuButtons.push(button);
+
+      const iconImage = this.createUiButtonIconImage(spec.iconId, 646, spec.y, 22);
+      if (iconImage) {
+        iconImage.setAlpha(1);
+      }
+
+      if (spec.iconId === 'play') {
+        this.pauseMenuPlayIcon = iconImage;
+      } else if (spec.iconId === 'retry') {
+        this.pauseMenuButtonIcons.retry = iconImage ?? undefined;
+      } else if (spec.iconId === 'close') {
+        this.pauseMenuButtonIcons.close = iconImage ?? undefined;
+      }
+
+      this.renderPauseMenuButtonChrome(index, spec.y, spec.iconId, Boolean(iconImage), false);
+      pauseMenuChildren.push(btnGraphics, button);
+      if (iconImage) {
+        pauseMenuChildren.push(iconImage);
+      }
+    });
 
     const container = this.add.container(0, 0, pauseMenuChildren);
     container.setDepth(110);
@@ -1921,6 +2084,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createPauseMenuButton(
+    index: number,
     x: number,
     y: number,
     text: string,
@@ -1928,21 +2092,118 @@ export class UIScene extends Phaser.Scene {
   ): Phaser.GameObjects.Text {
     const button = this.add
       .text(x, y, text, {
-        fontFamily: 'Trebuchet MS, sans-serif',
-        fontSize: '23px',
-        color: '#f8fafc',
-        backgroundColor: '#1f2937',
-        padding: { left: 26, right: 26, top: 13, bottom: 13 },
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '21px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        fixedWidth: 376,
+        fixedHeight: 58,
+        padding: { left: 28, top: 16, bottom: 10 },
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
 
     button.on('pointerdown', (pointer: ActivePointerLike) => onClick(pointer));
-    button.on('pointerover', () => button.setStyle({ color: '#ffffff', backgroundColor: '#334155' }));
-    button.on('pointerout', () => button.setStyle({ color: '#f8fafc', backgroundColor: '#1f2937' }));
+    button.on('pointerover', () => this.applyPauseMenuButtonHover(index, true));
+    button.on('pointerout', () => this.applyPauseMenuButtonHover(index, false));
 
     return button;
+  }
+
+  private getPauseMenuButtonStyle(index: number, hovered: boolean): { fill: number; strokeWidth: number } {
+    if (index === 0) {
+      return { fill: hovered ? 0x86efac : DOODLE_COLORS.mint, strokeWidth: hovered ? 3.5 : 3 };
+    }
+    if (index === 1) {
+      return { fill: hovered ? 0xfde68a : DOODLE_COLORS.paperGold, strokeWidth: hovered ? 3.5 : 3 };
+    }
+    return { fill: hovered ? 0xe9d5ff : DOODLE_COLORS.paperPurple, strokeWidth: hovered ? 3.5 : 3 };
+  }
+
+  private renderPauseMenuButtonChrome(
+    index: number,
+    y: number,
+    iconId: UiButtonAssetId,
+    hasTextureIcon: boolean,
+    hovered: boolean,
+  ): void {
+    const g = this.pauseMenuButtonGraphics[index];
+    if (!g) {
+      return;
+    }
+
+    const key = `${index}:${hasTextureIcon ? 1 : 0}:${hovered ? 1 : 0}`;
+    if (this.pauseMenuButtonVisualKeys[index] === key) {
+      return;
+    }
+    this.pauseMenuButtonVisualKeys[index] = key;
+
+    const style = this.getPauseMenuButtonStyle(index, hovered);
+    g.clear();
+    drawDoodleCard(g, {
+      cx: GAME_WIDTH / 2,
+      cy: y,
+      width: 376,
+      height: 58,
+      cornerRadius: 16,
+      seed: 1430 + index * 19,
+      jitter: 1.1,
+      fillColor: style.fill,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: style.strokeWidth,
+      shadowOffsetX: hovered ? 4 : 3,
+      shadowOffsetY: hovered ? 5 : 3,
+      shadowAlpha: hovered ? 0.42 : 0.3,
+    });
+
+    // Dedicated left circular icon well for play / retry / exit semantics
+    drawDoodleCircle(g, {
+      cx: 646,
+      cy: y,
+      radius: 17,
+      fillColor: DOODLE_COLORS.paperHover,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2,
+      seed: 1460 + index * 13,
+      segments: 14,
+      jitter: 0.45,
+    });
+
+    if (!hasTextureIcon) {
+      if (iconId === 'play') {
+        drawDoodlePlayTriangle(g, 647, y, 7, DOODLE_COLORS.mint, DOODLE_COLORS.ink);
+      } else if (iconId === 'retry') {
+        drawDoodleRetryLoop(g, 646, y, 7, DOODLE_COLORS.ink);
+      } else {
+        drawDoodleCloseX(g, 646, y, 6, DOODLE_COLORS.ink);
+      }
+    }
+  }
+
+  private applyPauseMenuButtonHover(index: number, hovered: boolean): void {
+    const button = this.pauseMenuButtons[index];
+    if (!button?.visible || !this.pauseMenuContainer.visible) {
+      return;
+    }
+
+    if (hovered) {
+      this.pauseMenuHoveredIndex = index;
+    } else if (this.pauseMenuHoveredIndex === index) {
+      this.pauseMenuHoveredIndex = null;
+    }
+
+    const iconIds: UiButtonAssetId[] = ['play', 'retry', 'close'];
+    const iconId = iconIds[index] ?? 'close';
+    const hasTextureIcon = Boolean(
+      index === 0
+        ? this.pauseMenuPlayIcon
+        : index === 1
+          ? this.pauseMenuButtonIcons.retry
+          : this.pauseMenuButtonIcons.close,
+    );
+    this.renderPauseMenuButtonChrome(index, button.y, iconId, hasTextureIcon, hovered);
   }
 
   private refreshPauseControls(
@@ -1972,10 +2233,31 @@ export class UIScene extends Phaser.Scene {
       this.pauseButton.disableInteractive();
     }
 
-    this.pauseMenuContainer.setVisible(pauseMenuActive && !endActive && !levelUpActive && !classChoiceActive && !this.orientationHintContainer.visible);
-    if (!this.pauseMenuContainer.visible) {
+    const pauseVisible = pauseMenuActive && !endActive && !levelUpActive && !classChoiceActive && !this.orientationHintContainer.visible;
+    this.pauseMenuContainer.setVisible(pauseVisible);
+    if (!pauseVisible) {
+      this.pauseMenuHoveredIndex = null;
+      this.pauseMenuBackdrop?.disableInteractive();
+      for (const button of this.pauseMenuButtons) {
+        button.disableInteractive();
+      }
       return;
     }
+
+    this.pauseMenuBackdrop?.setInteractive();
+    const iconIds: UiButtonAssetId[] = ['play', 'retry', 'close'];
+    this.pauseMenuButtons.forEach((button, index) => {
+      button.setInteractive({ useHandCursor: true });
+      const iconId = iconIds[index] ?? 'close';
+      const hasTextureIcon = Boolean(
+        index === 0
+          ? this.pauseMenuPlayIcon
+          : index === 1
+            ? this.pauseMenuButtonIcons.retry
+            : this.pauseMenuButtonIcons.close,
+      );
+      this.renderPauseMenuButtonChrome(index, button.y, iconId, hasTextureIcon, this.pauseMenuHoveredIndex === index);
+    });
 
     const bossStatus = stagePhase === 'boss' ? 'Boss active' : 'Boss pending';
     this.setTextIfChanged(
@@ -2293,15 +2575,179 @@ export class UIScene extends Phaser.Scene {
     const subtitle = String(this.registry.get('run.endSubtitle') ?? '');
     const goldEarned = Number(this.registry.get('run.goldEarned') ?? 0);
 
+    this.drawEndOverlayChrome(victory, newBestScore);
+    this.renderEndButtonChrome(victory, this.endButtonHovered);
+
     this.setTextIfChanged(this.endTitleText, title);
-    this.endTitleText.setColor(victory ? '#fef08a' : '#fca5a5');
+    this.endTitleText.setColor(victory ? DOODLE_HEX.ink : '#7f1d1d');
     this.setTextIfChanged(this.endSubtitleText, subtitle);
+    this.endSubtitleText.setColor(victory ? DOODLE_HEX.inkMuted : '#6b21a8');
     this.setTextIfChanged(
       this.endStatsText,
       `Score ${finalScore}${newBestScore ? '  NEW BEST' : ''}\nBest ${bestScore}\nTime ${this.formatTime(elapsedMs)}  Kills ${kills}  Gold +${goldEarned}`,
     );
-    this.endStatsText.setColor(newBestScore ? '#fef08a' : '#bfdbfe');
+    this.endStatsText.setColor(DOODLE_HEX.ink);
     this.setTextIfChanged(this.endLeaderboardText, this.formatLeaderboard(leaderboard));
+  }
+
+  private drawEndOverlayChrome(victory: boolean, newBestScore: boolean): void {
+    const stateKey = `${victory ? '1' : '0'}:${newBestScore ? '1' : '0'}`;
+    if (this.endVisualStateKey === stateKey || !this.endPanelGraphics) {
+      return;
+    }
+
+    this.endVisualStateKey = stateKey;
+    const centerX = GAME_WIDTH / 2;
+    const g = this.endPanelGraphics;
+    g.clear();
+
+    // Distinct Victory (mint & gold celebratory poster) vs Defeat (coral-red & muted purple sticker sheet)
+    drawDoodleCard(g, {
+      cx: centerX,
+      cy: 366,
+      width: 860,
+      height: 568,
+      cornerRadius: 24,
+      seed: 1201,
+      jitter: 1.8,
+      fillColor: victory ? DOODLE_COLORS.mint : 0xc4b5fd,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 3.5,
+      shadowOffsetX: 6,
+      shadowOffsetY: 7,
+      shadowAlpha: 0.48,
+    });
+
+    drawDoodleCard(g, {
+      cx: centerX,
+      cy: 366,
+      width: 832,
+      height: 540,
+      cornerRadius: 20,
+      seed: 1207,
+      jitter: 1.4,
+      fillColor: DOODLE_COLORS.paper,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2.8,
+      shadowOffsetX: 0,
+      shadowOffsetY: 0,
+      shadowAlpha: 0,
+    });
+
+    // Header banner & thematic decorations
+    drawDoodleCard(g, {
+      cx: centerX,
+      cy: 146,
+      width: 480,
+      height: 58,
+      cornerRadius: 16,
+      seed: 1213,
+      jitter: 1.3,
+      fillColor: victory ? DOODLE_COLORS.gold : DOODLE_COLORS.paperDanger,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 3,
+      shadowOffsetX: 3,
+      shadowOffsetY: 4,
+      shadowAlpha: 0.35,
+    });
+
+    if (victory) {
+      drawDoodleVictoryCrown(g, centerX - 278, 146, 1.05);
+      drawDoodleVictoryCrown(g, centerX + 278, 146, 1.05);
+      drawDoodleStar(g, centerX - 332, 160, 11, 5, 5, DOODLE_COLORS.gold, DOODLE_COLORS.ink, 1.8);
+      drawDoodleStar(g, centerX + 332, 160, 11, 5, 5, DOODLE_COLORS.mint, DOODLE_COLORS.ink, 1.8);
+    } else {
+      drawDoodleDefeatSticker(g, centerX - 276, 146, 1.05);
+      drawDoodleDefeatSticker(g, centerX + 276, 146, 1.05);
+      // Worn defeat corner patch accent
+      drawDoodleCard(g, {
+        cx: centerX - 372,
+        cy: 122,
+        width: 48,
+        height: 18,
+        cornerRadius: 5,
+        seed: 1221,
+        jitter: 0.6,
+        fillColor: DOODLE_COLORS.paperDanger,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeWidth: 2,
+        shadowOffsetX: 1,
+        shadowOffsetY: 1,
+        shadowAlpha: 0.2,
+      });
+    }
+
+    // Score & supporting run stats card
+    drawDoodleCard(g, {
+      cx: centerX,
+      cy: 274,
+      width: 740,
+      height: 104,
+      cornerRadius: 16,
+      seed: 1231,
+      jitter: 1.2,
+      fillColor: newBestScore ? DOODLE_COLORS.paperGold : victory ? 0xecfdf5 : DOODLE_COLORS.paperWarm,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: newBestScore ? 2.8 : 2.2,
+      shadowOffsetX: 2,
+      shadowOffsetY: 3,
+      shadowAlpha: 0.25,
+    });
+
+    if (newBestScore) {
+      drawDoodleStar(g, centerX - 338, 240, 11, 5, 5, DOODLE_COLORS.gold, DOODLE_COLORS.ink, 1.8);
+      drawDoodleStar(g, centerX + 338, 240, 11, 5, 5, DOODLE_COLORS.gold, DOODLE_COLORS.ink, 1.8);
+    }
+
+    // Local Top 5 leaderboard ledger card
+    drawDoodleCard(g, {
+      cx: centerX,
+      cy: 424,
+      width: 740,
+      height: 158,
+      cornerRadius: 14,
+      seed: 1241,
+      jitter: 1.1,
+      fillColor: DOODLE_COLORS.paperHover,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2.4,
+      shadowOffsetX: 2,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.2,
+    });
+    g.lineStyle(1.6, DOODLE_COLORS.inkMuted, 0.35);
+    g.lineBetween(centerX - 320, 381, centerX + 320, 381);
+  }
+
+  private renderEndButtonChrome(victory: boolean, hovered: boolean): void {
+    const key = `${victory ? '1' : '0'}:${hovered ? '1' : '0'}`;
+    if (this.endButtonVisualKey === key || !this.endButtonGraphics) {
+      return;
+    }
+
+    this.endButtonVisualKey = key;
+    this.endButtonGraphics.clear();
+    drawDoodleCard(this.endButtonGraphics, {
+      cx: GAME_WIDTH / 2,
+      cy: 560,
+      width: 320,
+      height: 56,
+      cornerRadius: 16,
+      seed: 1255,
+      jitter: 1.1,
+      fillColor: victory
+        ? hovered
+          ? 0x86efac
+          : DOODLE_COLORS.mint
+        : hovered
+          ? 0xfde68a
+          : DOODLE_COLORS.gold,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: hovered ? 3.5 : 3,
+      shadowOffsetX: hovered ? 4 : 3,
+      shadowOffsetY: hovered ? 5 : 4,
+      shadowAlpha: 0.38,
+    });
   }
 
   private refreshLevelUpChoices(
@@ -2387,14 +2833,21 @@ export class UIScene extends Phaser.Scene {
     this.statAllocationContainer.setVisible(shouldShow);
 
     if (!shouldShow) {
+      this.statHoveredId = null;
+      for (const statId of TANK_STAT_IDS) {
+        this.statButtons[statId]?.disableInteractive();
+      }
       return;
     }
 
     this.setTextIfChanged(this.statPointText, `STAT POINTS ${statPoints}`);
     this.setTextIfChanged(this.statHelpText, statPoints > 0 ? 'Tap a stat to spend' : 'Current run stat levels');
-    this.statHelpText.setColor(statPoints > 0 ? '#fef08a' : '#94a3b8');
+    this.statHelpText.setColor(statPoints > 0 ? DOODLE_HEX.ink : DOODLE_HEX.inkMuted);
 
-    for (const statId of TANK_STAT_IDS) {
+    const startX = GAME_WIDTH / 2 - 260;
+    const tileY = 622;
+
+    TANK_STAT_IDS.forEach((statId, index) => {
       const definition = TANK_STAT_DEFINITIONS[statId];
       const level = levels[statId] ?? 0;
       const button = this.statButtons[statId];
@@ -2402,15 +2855,84 @@ export class UIScene extends Phaser.Scene {
       const canSpend = statPoints > 0 && level < definition.maxLevel;
 
       if (!button || !label) {
-        continue;
+        return;
+      }
+
+      if (!canSpend && this.statHoveredId === statId) {
+        this.statHoveredId = null;
+      }
+
+      if (canSpend) {
+        button.setInteractive({ useHandCursor: true });
+      } else {
+        button.disableInteractive();
       }
 
       button.setData('canSpend', canSpend);
-      button.setFillStyle(canSpend ? 0x132033 : 0x0f172a, canSpend ? 0.98 : 0.72);
-      button.setStrokeStyle(1, canSpend ? 0x38bdf8 : 0x334155, canSpend ? 0.95 : 0.72);
+      button.setData('statLevel', level);
       this.setTextIfChanged(label, `${definition.shortLabel} ${level}/${definition.maxLevel}\n${definition.summary}`);
-      label.setColor(canSpend ? '#e0f2fe' : '#94a3b8');
+      label.setColor(canSpend ? DOODLE_HEX.ink : DOODLE_HEX.inkMuted);
+
+      const x = startX + index * 174;
+      this.renderStatTileGraphics(statId, x, tileY, level, definition.maxLevel, canSpend, this.statHoveredId === statId);
+    });
+  }
+
+  private getStatTileAccent(statId: TankStatId): { pip: number; well: number; hoverStroke: number } {
+    switch (statId) {
+      case 'bulletDamage':
+        return { pip: DOODLE_COLORS.hp, well: 0xffe4e6, hoverStroke: DOODLE_COLORS.hp };
+      case 'reload':
+        return { pip: DOODLE_COLORS.xp, well: DOODLE_COLORS.paperSky, hoverStroke: DOODLE_COLORS.xp };
+      case 'moveSpeed':
+        return { pip: DOODLE_COLORS.gold, well: DOODLE_COLORS.paperGold, hoverStroke: DOODLE_COLORS.gold };
+      case 'hpRegen':
+      default:
+        return { pip: DOODLE_COLORS.mint, well: DOODLE_OVERLAY_COLORS.supportBadge, hoverStroke: DOODLE_COLORS.mint };
     }
+  }
+
+  private renderStatTileGraphics(
+    statId: TankStatId,
+    x: number,
+    y: number,
+    level: number,
+    maxLevel: number,
+    canSpend: boolean,
+    hovered: boolean,
+  ): void {
+    const g = this.statButtonGraphics[statId];
+    if (!g) {
+      return;
+    }
+
+    const key = `${level}:${canSpend ? 1 : 0}:${hovered && canSpend ? 1 : 0}`;
+    if (this.statButtonVisualKeys[statId] === key) {
+      return;
+    }
+    this.statButtonVisualKeys[statId] = key;
+
+    const accent = this.getStatTileAccent(statId);
+    const statIndex = Math.max(0, TANK_STAT_IDS.indexOf(statId));
+    g.clear();
+
+    drawDoodleCard(g, {
+      cx: x,
+      cy: y,
+      width: 160,
+      height: 92,
+      cornerRadius: 12,
+      seed: 1330 + statIndex * 17,
+      jitter: 0.9,
+      fillColor: !canSpend ? DOODLE_COLORS.paperDisabled : hovered ? DOODLE_COLORS.paperHover : accent.well,
+      strokeColor: !canSpend ? DOODLE_COLORS.inkMuted : hovered ? accent.hoverStroke : DOODLE_COLORS.ink,
+      strokeWidth: !canSpend ? 1.8 : hovered ? 3.2 : 2.5,
+      shadowOffsetX: canSpend ? (hovered ? 3 : 2) : 0,
+      shadowOffsetY: canSpend ? (hovered ? 4 : 3) : 0,
+      shadowAlpha: canSpend ? 0.3 : 0,
+    });
+
+    drawDoodleRankPips(g, x, y + 27, maxLevel, level, accent.pip, !canSpend);
   }
 
   private canSpendAnyTankStat(statPoints: number, levels: TankStatLevels): boolean {
@@ -3527,12 +4049,23 @@ export class UIScene extends Phaser.Scene {
 
   private applyStatButtonHover(statId: TankStatId, hovered: boolean): void {
     const button = this.statButtons[statId];
-    if (!button?.visible || !button.getData('canSpend')) {
+    const canSpend = Boolean(button?.visible && button.getData('canSpend'));
+    if (!canSpend) {
+      if (this.statHoveredId === statId) {
+        this.statHoveredId = null;
+      }
       return;
     }
 
-    button.setFillStyle(hovered ? 0x1e3a5f : 0x132033, 0.98);
-    button.setStrokeStyle(1, hovered ? 0x7dd3fc : 0x38bdf8, 0.98);
+    if (hovered) {
+      this.statHoveredId = statId;
+    } else if (this.statHoveredId === statId) {
+      this.statHoveredId = null;
+    }
+
+    const level = Number(button?.getData('statLevel') ?? 0);
+    const maxLevel = TANK_STAT_DEFINITIONS[statId].maxLevel;
+    this.renderStatTileGraphics(statId, button!.x, button!.y, level, maxLevel, canSpend, hovered);
   }
 
   private applyClassChoiceCardHover(index: number, hovered: boolean): void {
@@ -3601,8 +4134,19 @@ export class UIScene extends Phaser.Scene {
     this.classChoiceEmblemVisualKeys = [];
     this.classChoiceHoveredIndex = null;
     this.statButtons = {};
+    this.statButtonGraphics = {};
     this.statButtonLabels = {};
+    this.statButtonVisualKeys = {};
+    this.statHoveredId = null;
+    this.statPointPillKey = '';
+    this.endVisualStateKey = '';
+    this.endButtonVisualKey = '';
+    this.endButtonHovered = false;
     this.pauseMenuButtons = [];
+    this.pauseMenuButtonGraphics = [];
+    this.pauseMenuButtonVisualKeys = [];
+    this.pauseMenuHoveredIndex = null;
+    this.pauseMenuPlayIcon = null;
     this.pauseMenuButtonIcons = {};
     this.goldIconImage = null;
     this.hpIconImage = null;

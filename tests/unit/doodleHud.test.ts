@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { VITALITY_REGEN_PER_SECOND } from '../../src/game/config/playerBalance';
 import { TANK_CLASS_DEFINITIONS } from '../../src/game/data/tankClasses';
+import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS } from '../../src/game/data/tankStats';
 import { UPGRADE_POOL, type UpgradeDefinition } from '../../src/game/data/upgrades';
 import {
   DOODLE_COLORS,
@@ -207,7 +208,22 @@ vi.mock('phaser', () => {
   class MockScene {
     registry = new Map<string, unknown>();
     textures = { exists: vi.fn(() => true) };
-    input = { keyboard: { on: vi.fn(), off: vi.fn() } };
+    private keyboardListeners = new Map<string, Array<{ cb: () => void; ctx: unknown }>>();
+    input = {
+      keyboard: {
+        on: vi.fn((event: string, cb: () => void, ctx?: unknown) => {
+          const list = this.keyboardListeners.get(event) ?? [];
+          list.push({ cb, ctx });
+          this.keyboardListeners.set(event, list);
+        }),
+        off: vi.fn(),
+        emit: (event: string) => {
+          for (const entry of this.keyboardListeners.get(event) ?? []) {
+            entry.cb.call(entry.ctx);
+          }
+        },
+      },
+    };
     events = { once: vi.fn(), off: vi.fn() };
     scale = { displaySize: { width: 1600, height: 720 } };
     scene = {
@@ -259,6 +275,10 @@ function createUiFixture(options: { texturesExist?: boolean; viewportWidth?: num
 
   const runSceneStub = {
     openManualPauseMenu: vi.fn(),
+    closeManualPauseMenu: vi.fn(),
+    restartRun: vi.fn(),
+    exitToMenu: vi.fn(),
+    allocateTankStat: vi.fn(),
     activateBreakoutPulse: vi.fn(),
     selectLevelUp: vi.fn(),
     selectTankClass: vi.fn(),
@@ -699,6 +719,246 @@ describe('UIScene R3G-C1 distinct level-up and class evolution overlays', () => 
       expect(runSceneStub.selectTankClass).toHaveBeenNthCalledWith(2, 'sniper', ptr);
 
       // All decorative Graphics created for overlays never intercept pointer input
+      const createdGraphics = (ui.add.graphics as ReturnType<typeof vi.fn>).mock.results.map((r) => r.value);
+      for (const g of createdGraphics) {
+        expect(g.setInteractive).not.toHaveBeenCalled();
+      }
+    } finally {
+      restoreViewport();
+    }
+  });
+});
+
+describe('UIScene R3G-C2 stat allocation, pause menu, and run results', () => {
+  test('renders stat workbench with real TANK_STAT_DEFINITIONS, immediate tap spend, disabled maxed tiles, and overlay hiding', () => {
+    const { ui, runSceneStub, restoreViewport } = createUiFixture({ viewportWidth: 844, viewportHeight: 390 });
+    try {
+      ui.registry.set('run.statPoints', 2);
+      ui.registry.set('run.tankStatLevels', {
+        bulletDamage: 2,
+        reload: 5,
+        moveSpeed: 1,
+        hpRegen: 0,
+      });
+      ui.update();
+
+      const snap = ui.getHudSnapshot();
+      expect(snap.statPanelVisible).toBe(true);
+
+      const internals = ui as unknown as {
+        statPointText: { text: string };
+        statButtons: Record<string, {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+          input: { enabled: boolean } | null;
+          getData: (k: string) => unknown;
+          emit: (e: string, ...args: unknown[]) => void;
+        }>;
+        statButtonLabels: Record<string, { text: string; style: { color: string } }>;
+        statButtonVisualKeys: Record<string, string>;
+      };
+
+      expect(internals.statPointText.text).toBe('STAT POINTS 2');
+      expect(Object.keys(internals.statButtons)).toEqual(TANK_STAT_IDS);
+      expect(internals.statButtonLabels.bulletDamage.text).toBe(
+        `${TANK_STAT_DEFINITIONS.bulletDamage.shortLabel} 2/${TANK_STAT_DEFINITIONS.bulletDamage.maxLevel}\n${TANK_STAT_DEFINITIONS.bulletDamage.summary}`,
+      );
+      expect(internals.statButtonLabels.reload.text).toBe(
+        `${TANK_STAT_DEFINITIONS.reload.shortLabel} 5/${TANK_STAT_DEFINITIONS.reload.maxLevel}\n${TANK_STAT_DEFINITIONS.reload.summary}`,
+      );
+      expect(internals.statButtonLabels.moveSpeed.text).toBe(
+        `${TANK_STAT_DEFINITIONS.moveSpeed.shortLabel} 1/${TANK_STAT_DEFINITIONS.moveSpeed.maxLevel}\n${TANK_STAT_DEFINITIONS.moveSpeed.summary}`,
+      );
+      expect(internals.statButtonLabels.hpRegen.text).toBe(
+        `${TANK_STAT_DEFINITIONS.hpRegen.shortLabel} 0/${TANK_STAT_DEFINITIONS.hpRegen.maxLevel}\n${TANK_STAT_DEFINITIONS.hpRegen.summary}`,
+      );
+
+      // Spendable stats stay visually active & interactive; maxed stats (reload 5/5) are disabled
+      expect(internals.statButtons.bulletDamage.getData('canSpend')).toBe(true);
+      expect(internals.statButtons.bulletDamage.input?.enabled).toBe(true);
+      expect(internals.statButtons.reload.getData('canSpend')).toBe(false);
+      expect(internals.statButtons.reload.input?.enabled).toBe(false);
+      expect(internals.statButtonLabels.reload.style.color).toBe(DOODLE_HEX.inkMuted);
+      expect(internals.statButtonVisualKeys.reload).toBe('5:0:0');
+
+      // Preserves existing E2E tap coordinates (540, 624) for DMG and (888, 624) for SPD
+      const dmgBtn = internals.statButtons.bulletDamage;
+      const spdBtn = internals.statButtons.moveSpeed;
+      expect(540).toBeGreaterThanOrEqual(dmgBtn.x - dmgBtn.width / 2);
+      expect(540).toBeLessThanOrEqual(dmgBtn.x + dmgBtn.width / 2);
+      expect(624).toBeGreaterThanOrEqual(dmgBtn.y - dmgBtn.height / 2);
+      expect(624).toBeLessThanOrEqual(dmgBtn.y + dmgBtn.height / 2);
+      expect(888).toBeGreaterThanOrEqual(spdBtn.x - spdBtn.width / 2);
+      expect(888).toBeLessThanOrEqual(spdBtn.x + spdBtn.width / 2);
+
+      // Workbench panel does not overlap MOVE (right <= 382), AIM (left >= 1218), or PULSE (bottom <= 444)
+      expect(dmgBtn.x - dmgBtn.width / 2).toBeGreaterThan(382);
+      expect(internals.statButtons.hpRegen.x + internals.statButtons.hpRegen.width / 2).toBeLessThan(1218);
+      expect(dmgBtn.y - dmgBtn.height / 2).toBeGreaterThan(444);
+
+      const ptr = { id: 12 };
+      dmgBtn.emit('pointerdown', ptr);
+      spdBtn.emit('pointerdown', ptr);
+      expect(runSceneStub.allocateTankStat).toHaveBeenNthCalledWith(1, 'bulletDamage', ptr);
+      expect(runSceneStub.allocateTankStat).toHaveBeenNthCalledWith(2, 'moveSpeed', ptr);
+
+      // Hides cleanly under conflicting overlays
+      ui.registry.set('run.levelUpActive', true);
+      ui.registry.set('run.levelUpChoices', [pickUpgrade('vitality')]);
+      ui.update();
+      expect(ui.getHudSnapshot().statPanelVisible).toBe(false);
+      expect(internals.statButtons.bulletDamage.input?.enabled).toBe(false);
+
+      ui.registry.set('run.levelUpActive', false);
+      ui.registry.set('run.classChoiceActive', true);
+      ui.registry.set('run.classChoiceChoices', [TANK_CLASS_DEFINITIONS.twin, TANK_CLASS_DEFINITIONS.sniper]);
+      ui.update();
+      expect(ui.getHudSnapshot().statPanelVisible).toBe(false);
+
+      ui.registry.set('run.classChoiceActive', false);
+      ui.registry.set('run.endActive', true);
+      ui.update();
+      expect(ui.getHudSnapshot().statPanelVisible).toBe(false);
+    } finally {
+      restoreViewport();
+    }
+  });
+
+  test('renders field-notebook pause menu with live summary, semantic button icons, input blocking, and fallback graphics', () => {
+    const { ui, runSceneStub, restoreViewport } = createUiFixture({ viewportWidth: 844, viewportHeight: 390 });
+    try {
+      ui.registry.set('run.score', 3450);
+      ui.registry.set('run.goldEarned', 78);
+      ui.registry.set('run.stagePhase', 'boss');
+      ui.registry.set('run.tankClass', { title: 'Sniper' });
+      ui.registry.set('run.pauseMenuActive', true);
+      ui.update();
+
+      const snap = ui.getHudSnapshot();
+      expect(snap.pauseMenuVisible).toBe(true);
+      expect(snap.pauseButtonVisible).toBe(false);
+      expect(snap.activeAbilityButtonVisible).toBe(false);
+      expect(snap.pauseMenuButtons).toEqual(['Resume', 'Restart Run', 'Return to Main Menu']);
+      expect(snap.pauseMenuButtonBounds).toHaveLength(3);
+      expect(snap.uiButtonIconVisible).toEqual({ close: true, retry: true });
+
+      const internals = ui as unknown as {
+        pauseMenuBackdrop: { setInteractive: ReturnType<typeof vi.fn>; input: { enabled: boolean } | null };
+        pauseMenuSummaryText: { text: string };
+        pauseMenuButtons: Array<{ emit: (e: string, ...args: unknown[]) => void }>;
+        pauseMenuPlayIcon: { textureKey: string; alpha: number; visible: boolean; y: number } | null;
+        pauseMenuButtonIcons: {
+          retry?: { textureKey: string; alpha: number; y: number };
+          close?: { textureKey: string; alpha: number; y: number };
+        };
+      };
+
+      expect(internals.pauseMenuBackdrop.setInteractive).toHaveBeenCalled();
+      expect(internals.pauseMenuBackdrop.input?.enabled).toBe(true);
+      expect(internals.pauseMenuSummaryText.text).toBe('LV 7 Sniper  |  02:00  |  Score 3450\nRun Gold 78  |  Boss active');
+
+      // Resume pairs with play icon rather than close; Return to Main Menu uses close
+      expect(internals.pauseMenuPlayIcon?.textureKey).toBe('ui-button-play');
+      expect(internals.pauseMenuPlayIcon?.alpha).toBe(1);
+      expect(internals.pauseMenuButtonIcons.retry?.textureKey).toBe('ui-button-retry');
+      expect(internals.pauseMenuButtonIcons.close?.textureKey).toBe('ui-button-close');
+      expect(internals.pauseMenuButtonIcons.close?.y).toBeGreaterThan(internals.pauseMenuButtonIcons.retry?.y ?? 0);
+
+      const ptr = { id: 3 };
+      internals.pauseMenuButtons[0].emit('pointerdown', ptr);
+      internals.pauseMenuButtons[1].emit('pointerdown', ptr);
+      internals.pauseMenuButtons[2].emit('pointerdown', ptr);
+      expect(runSceneStub.closeManualPauseMenu).toHaveBeenCalledWith(ptr);
+      expect(runSceneStub.restartRun).toHaveBeenCalledTimes(1);
+      expect(runSceneStub.exitToMenu).toHaveBeenCalledTimes(1);
+
+      // Missing textures cleanly omit PNG images and rely on procedural fallbacks
+      const noTex = createUiFixture({ texturesExist: false });
+      try {
+        noTex.ui.registry.set('run.pauseMenuActive', true);
+        noTex.ui.update();
+        const noTexSnap = noTex.ui.getHudSnapshot();
+        expect(noTexSnap.pauseMenuVisible).toBe(true);
+        expect(noTexSnap.uiButtonIconVisible).toEqual({ close: false, retry: false });
+      } finally {
+        noTex.restoreViewport();
+      }
+    } finally {
+      restoreViewport();
+    }
+  });
+
+  test('renders distinct Victory and Defeat posters, real stats/NEW BEST/leaderboard, empty leaderboard fallback, and Enter/Space/click exit', () => {
+    const { ui, runSceneStub, restoreViewport } = createUiFixture({ viewportWidth: 1280, viewportHeight: 720 });
+    try {
+      const internals = ui as unknown as {
+        endTitleText: { text: string; style: { color: string } };
+        endSubtitleText: { text: string };
+        endButton: { text: string; input: { enabled: boolean } | null; emit: (e: string) => void };
+        endVisualStateKey: string;
+      };
+      const keyboard = (ui.input as unknown as { keyboard: { emit: (e: string) => void } }).keyboard;
+
+      // Confirm hidden end overlay does not respond to Enter/Space or consume pointer input
+      keyboard.emit('keydown-ENTER');
+      expect(runSceneStub.exitToMenu).not.toHaveBeenCalled();
+
+      // 1. Defeat state with empty leaderboard and newBestScore = false
+      ui.registry.set('run.endActive', true);
+      ui.registry.set('run.victory', false);
+      ui.registry.set('run.endTitle', 'Run Ended');
+      ui.registry.set('run.endSubtitle', 'Overwhelmed in sector 2');
+      ui.registry.set('run.finalScore', 420);
+      ui.registry.set('run.bestScore', 900);
+      ui.registry.set('run.newBestScore', false);
+      ui.registry.set('run.kills', 18);
+      ui.registry.set('run.goldEarned', 35);
+      ui.registry.set('run.elapsedMs', 95_000);
+      ui.registry.set('run.localLeaderboard', []);
+      ui.update();
+
+      let snap = ui.getHudSnapshot();
+      expect(internals.endTitleText.text).toBe('Run Ended');
+      expect(internals.endTitleText.style.color).toBe('#7f1d1d');
+      expect(internals.endSubtitleText.text).toBe('Overwhelmed in sector 2');
+      expect(internals.endVisualStateKey).toBe('0:0');
+      expect(snap.endStats).toBe('Score 420\nBest 900\nTime 01:35  Kills 18  Gold +35');
+      expect(snap.endStats).not.toContain('NEW BEST');
+      expect(snap.leaderboard).toBe('Local Top 5\nNo local runs recorded yet.');
+
+      // 2. Victory state with newBestScore = true and populated leaderboard
+      ui.registry.set('run.victory', true);
+      ui.registry.set('run.endTitle', 'Victory');
+      ui.registry.set('run.endSubtitle', 'Guardian core cleared');
+      ui.registry.set('run.finalScore', 5400);
+      ui.registry.set('run.bestScore', 5400);
+      ui.registry.set('run.newBestScore', true);
+      ui.registry.set('run.kills', 142);
+      ui.registry.set('run.goldEarned', 310);
+      ui.registry.set('run.elapsedMs', 900_000);
+      ui.registry.set('run.localLeaderboard', [
+        { score: 5400, classTitle: 'Sniper', level: 12, kills: 142, timeSurvivedMs: 900_000, timestamp: 1700000000000 },
+      ]);
+      ui.update();
+
+      snap = ui.getHudSnapshot();
+      expect(internals.endTitleText.text).toBe('Victory');
+      expect(internals.endTitleText.style.color).toBe(DOODLE_HEX.ink);
+      expect(internals.endVisualStateKey).toBe('1:1');
+      expect(snap.endStats).toBe('Score 5400  NEW BEST\nBest 5400\nTime 15:00  Kills 142  Gold +310');
+      expect(snap.leaderboard).toContain('Local Top 5');
+      expect(snap.leaderboard).toContain('1. 5400  Sniper  LV 12  K 142  15:00');
+      expect(internals.endButton.text).toBe('Return to Menu');
+      expect(internals.endButton.input?.enabled).toBe(true);
+
+      internals.endButton.emit('pointerdown');
+      keyboard.emit('keydown-ENTER');
+      keyboard.emit('keydown-SPACE');
+      expect(runSceneStub.exitToMenu).toHaveBeenCalledTimes(3);
+
+      // Decorative Graphics across all three R3G-C2 surfaces remain strictly non-interactive
       const createdGraphics = (ui.add.graphics as ReturnType<typeof vi.fn>).mock.results.map((r) => r.value);
       for (const g of createdGraphics) {
         expect(g.setInteractive).not.toHaveBeenCalled();
