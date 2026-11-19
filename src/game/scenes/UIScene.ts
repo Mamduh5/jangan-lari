@@ -11,7 +11,22 @@ import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import type { ActivePointerLike } from '../input/MovementInputController';
-import { getDualJoystickLayout, type DualJoystickLayout, type JoystickZoneLayout } from '../input/joystickLayout';
+import {
+  DEFAULT_ATTACK_CONTROL_MODE,
+  sanitizeAttackControlMode,
+  type AttackControlMode,
+} from '../input/attackControlMode';
+import {
+  getDualJoystickLayout,
+  getManualAttackControlLayout,
+  type DualJoystickLayout,
+  type JoystickZoneLayout,
+  type ManualAttackControlLayout,
+} from '../input/joystickLayout';
+import {
+  createIdleManualAttackHudState,
+  type ManualAttackHudState,
+} from '../systems/manualAttackResolver';
 import { getUpgradeRewardType, upgradeHasWeaponRewardTag, type UpgradeRewardType } from '../systems/rewardClassification';
 import {
   getBranchUpgradeIconAssetSlot,
@@ -199,7 +214,9 @@ export class UIScene extends Phaser.Scene {
   private statHoveredId: TankStatId | null = null;
   private statPointPillKey = '';
   private controlGuideMode: ControlGuideMode = 'subtle';
+  private attackControlMode: AttackControlMode = DEFAULT_ATTACK_CONTROL_MODE;
   private joystickLayout: DualJoystickLayout = getDualJoystickLayout(GAME_WIDTH, GAME_HEIGHT);
+  private manualAttackLayout: ManualAttackControlLayout = getManualAttackControlLayout(GAME_WIDTH, GAME_HEIGHT);
   private controlGuideVisualContainer!: Phaser.GameObjects.Container;
   private controlGuideHitRings: Phaser.GameObjects.Arc[] = [];
   private controlGuideZones: Phaser.GameObjects.Arc[] = [];
@@ -208,7 +225,23 @@ export class UIScene extends Phaser.Scene {
   private controlGuideLabels: Phaser.GameObjects.Text[] = [];
   private controlGuideSubLabels: Phaser.GameObjects.Text[] = [];
   private controlGuideVisualStateKey = '';
+  private manualAttackContainer!: Phaser.GameObjects.Container;
+  private manualAttackHitRing!: Phaser.GameObjects.Arc;
+  private manualAttackAimRing!: Phaser.GameObjects.Arc;
+  private manualAttackChromeGraphics!: Phaser.GameObjects.Graphics;
+  private manualAttackPrimaryText!: Phaser.GameObjects.Text;
+  private manualAttackSubText!: Phaser.GameObjects.Text;
+  private manualAttackAimKnob!: Phaser.GameObjects.Arc;
+  private manualAttackStatusTagGraphics!: Phaser.GameObjects.Graphics;
+  private manualAttackStatusTagText!: Phaser.GameObjects.Text;
+  private manualAttackCancelHitRing!: Phaser.GameObjects.Arc;
+  private manualAttackCancelGraphics!: Phaser.GameObjects.Graphics;
+  private manualAttackCancelLabel!: Phaser.GameObjects.Text;
+  private manualAttackVisualStateKey = '';
+  private manualAttackCancelVisualStateKey = '';
+  private manualAttackPhase: ManualAttackHudState['phase'] = 'idle';
   private controlHintContainer!: Phaser.GameObjects.Container;
+  private controlHintText!: Phaser.GameObjects.Text;
   private controlGuideToggleButton!: Phaser.GameObjects.Text;
   private controlHintPanelGraphics!: Phaser.GameObjects.Graphics;
   private pauseButtonGraphics!: Phaser.GameObjects.Graphics;
@@ -308,13 +341,18 @@ export class UIScene extends Phaser.Scene {
     this.endVisualStateKey = '';
     this.endButtonVisualKey = '';
     this.endButtonHovered = false;
+    this.attackControlMode = DEFAULT_ATTACK_CONTROL_MODE;
     this.joystickLayout = getDualJoystickLayout(GAME_WIDTH, GAME_HEIGHT);
+    this.manualAttackLayout = getManualAttackControlLayout(GAME_WIDTH, GAME_HEIGHT);
     this.controlGuideHitRings = [];
     this.controlGuideZones = [];
     this.controlGuideKnobs = [];
     this.controlGuideLabels = [];
     this.controlGuideSubLabels = [];
     this.controlGuideVisualStateKey = '';
+    this.manualAttackVisualStateKey = '';
+    this.manualAttackCancelVisualStateKey = '';
+    this.manualAttackPhase = 'idle';
     this.pauseMenuButtons = [];
     this.pauseMenuButtonGraphics = [];
     this.pauseMenuButtonVisualKeys = [];
@@ -819,6 +857,7 @@ export class UIScene extends Phaser.Scene {
     this.statAllocationContainer = this.createStatAllocationPanel();
     this.orientationHintContainer = this.createOrientationHintOverlay();
     this.controlGuideVisualContainer = this.createControlGuideVisuals();
+    this.manualAttackContainer = this.createManualAttackControls();
     this.controlHintContainer = this.createControlHintOverlay();
     this.controlGuideToggleButton = this.createControlGuideToggleButton();
     this.pauseButton = this.createPauseButton();
@@ -1023,9 +1062,16 @@ export class UIScene extends Phaser.Scene {
     leaderboard: string;
     orientationHintVisible: boolean;
     controlGuideMode: ControlGuideMode;
+    attackControlMode: AttackControlMode;
     controlGuidesVisible: boolean;
     joystickGuidesVisible: boolean;
     joystickLayout: DualJoystickLayout;
+    manualAttackLayout: ManualAttackControlLayout;
+    manualAttackVisible: boolean;
+    manualAttackPhase: ManualAttackHudState['phase'];
+    manualAttackCancelVisible: boolean;
+    manualAttackPrimaryText: string;
+    manualAttackAimKnob: { x: number; y: number };
     movementJoystickKnob: { x: number; y: number };
     aimJoystickKnob: { x: number; y: number };
     controlHintVisible: boolean;
@@ -1072,9 +1118,19 @@ export class UIScene extends Phaser.Scene {
       leaderboard: this.endLeaderboardText.text,
       orientationHintVisible: this.orientationHintContainer.visible,
       controlGuideMode: this.controlGuideMode,
+      attackControlMode: this.attackControlMode,
       controlGuidesVisible: this.controlGuideVisualContainer.visible,
       joystickGuidesVisible: this.controlGuideVisualContainer.visible,
       joystickLayout: this.joystickLayout,
+      manualAttackLayout: this.manualAttackLayout,
+      manualAttackVisible: this.manualAttackContainer.visible,
+      manualAttackPhase: this.manualAttackPhase,
+      manualAttackCancelVisible: Boolean(this.manualAttackContainer.visible && this.manualAttackCancelHitRing?.visible),
+      manualAttackPrimaryText: this.manualAttackPrimaryText?.text ?? '',
+      manualAttackAimKnob: {
+        x: this.manualAttackAimKnob?.x ?? 0,
+        y: this.manualAttackAimKnob?.y ?? 0,
+      },
       movementJoystickKnob: {
         x: this.controlGuideKnobs[0]?.x ?? 0,
         y: this.controlGuideKnobs[0]?.y ?? 0,
@@ -1798,6 +1854,116 @@ export class UIScene extends Phaser.Scene {
     return container;
   }
 
+  private createManualAttackControls(): Phaser.GameObjects.Container {
+    const atk = this.manualAttackLayout.attackButton;
+    const cancel = this.manualAttackLayout.cancelZone;
+
+    this.manualAttackHitRing = this.add.circle(atk.x, atk.y, atk.hitRadius, DOODLE_COLORS.paper, 0.08);
+    this.manualAttackHitRing.setStrokeStyle(1.8, DOODLE_COLORS.ink, 0.36);
+    this.manualAttackHitRing.setScrollFactor(0);
+
+    this.manualAttackAimRing = this.add.circle(atk.x, atk.y, atk.aimRingRadius, DOODLE_COLORS.paperGold, 0.16);
+    this.manualAttackAimRing.setStrokeStyle(2.5, DOODLE_COLORS.ink, 0.72);
+    this.manualAttackAimRing.setScrollFactor(0);
+    this.manualAttackAimRing.setVisible(false);
+
+    this.manualAttackChromeGraphics = this.add.graphics().setScrollFactor(0);
+
+    this.manualAttackPrimaryText = this.add
+      .text(atk.x, atk.y - 6, 'ATK', {
+        fontFamily: DOODLE_FONTS.display,
+        fontSize: '26px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    this.manualAttackSubText = this.add
+      .text(atk.x, atk.y + 22, 'HOLD: AIM', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+
+    this.manualAttackAimKnob = this.add.circle(atk.x, atk.y, atk.knobRadius, DOODLE_COLORS.gold, 0.88);
+    this.manualAttackAimKnob.setStrokeStyle(2.5, DOODLE_COLORS.ink, 0.92);
+    this.manualAttackAimKnob.setScrollFactor(0);
+    this.manualAttackAimKnob.setVisible(false);
+
+    this.manualAttackStatusTagGraphics = this.add.graphics().setScrollFactor(0);
+    drawDoodleCard(this.manualAttackStatusTagGraphics, {
+      cx: atk.x,
+      cy: atk.y + atk.hitRadius + 14,
+      width: 96,
+      height: 22,
+      cornerRadius: 8,
+      seed: 317,
+      jitter: 0.65,
+      fillColor: DOODLE_COLORS.paperDanger,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: 2,
+      shadowOffsetX: 1,
+      shadowOffsetY: 2,
+      shadowAlpha: 0.24,
+    });
+    this.manualAttackStatusTagGraphics.setVisible(false);
+
+    this.manualAttackStatusTagText = this.add
+      .text(atk.x, atk.y + atk.hitRadius + 14, 'COOLDOWN', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '11px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.danger,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    this.manualAttackCancelHitRing = this.add.circle(cancel.x, cancel.y, cancel.hitRadius, DOODLE_COLORS.paperDanger, 0.14);
+    this.manualAttackCancelHitRing.setStrokeStyle(1.8, DOODLE_COLORS.ink, 0.45);
+    this.manualAttackCancelHitRing.setScrollFactor(0);
+    this.manualAttackCancelHitRing.setVisible(false);
+
+    this.manualAttackCancelGraphics = this.add.graphics().setScrollFactor(0);
+    this.manualAttackCancelGraphics.setVisible(false);
+
+    this.manualAttackCancelLabel = this.add
+      .text(cancel.x, cancel.y + cancel.radius + 18, 'CANCEL', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '12px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.paper,
+        stroke: DOODLE_HEX.ink,
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setVisible(false);
+
+    const container = this.add.container(0, 0, [
+      this.manualAttackHitRing,
+      this.manualAttackAimRing,
+      this.manualAttackChromeGraphics,
+      this.manualAttackPrimaryText,
+      this.manualAttackSubText,
+      this.manualAttackAimKnob,
+      this.manualAttackStatusTagGraphics,
+      this.manualAttackStatusTagText,
+      this.manualAttackCancelHitRing,
+      this.manualAttackCancelGraphics,
+      this.manualAttackCancelLabel,
+    ]);
+    container.setDepth(65);
+    container.setScrollFactor(0);
+    container.setVisible(false);
+
+    return container;
+  }
+
   private createControlHintOverlay(): Phaser.GameObjects.Container {
     this.controlHintPanelGraphics = this.add.graphics().setScrollFactor(0);
     drawDoodleCard(this.controlHintPanelGraphics, {
@@ -1815,7 +1981,7 @@ export class UIScene extends Phaser.Scene {
       shadowAlpha: 0.25,
     });
 
-    const hintText = this.add
+    this.controlHintText = this.add
       .text(GAME_WIDTH / 2, 516, 'Left pad: move\nRight pad: aim\nWeapons fire automatically', {
         fontFamily: DOODLE_FONTS.body,
         fontSize: '15px',
@@ -1827,7 +1993,7 @@ export class UIScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0);
 
-    const container = this.add.container(0, 0, [this.controlHintPanelGraphics, hintText]);
+    const container = this.add.container(0, 0, [this.controlHintPanelGraphics, this.controlHintText]);
     container.setDepth(66);
     container.setScrollFactor(0);
     container.setVisible(false);
@@ -2465,6 +2631,8 @@ export class UIScene extends Phaser.Scene {
       this.controlGuideMode = mode;
     }
 
+    this.attackControlMode = sanitizeAttackControlMode(this.registry.get('run.attackControlMode'));
+    const isManualAttackMode = this.attackControlMode === 'manual-attack';
     const mobileControlUi = this.shouldUseMobileControlUi();
     const modalOverlayActive =
       levelUpActive ||
@@ -2475,21 +2643,40 @@ export class UIScene extends Phaser.Scene {
     const guidesVisible = mobileControlUi && this.controlGuideMode !== 'hidden' && !modalOverlayActive;
     const hintVisible = guidesVisible && Boolean(this.registry.get('run.controlHintVisible'));
 
+    this.setTextIfChanged(
+      this.controlHintText,
+      isManualAttackMode
+        ? 'Left pad: move\nTap ATK: quick attack\nDrag ATK: aim (drag to X to cancel)'
+        : 'Left pad: move\nRight pad: aim\nWeapons fire automatically',
+    );
+
     this.controlGuideVisualContainer.setVisible(guidesVisible);
+    this.setAimGuideVisible(!isManualAttackMode);
     this.controlHintContainer.setVisible(hintVisible);
     this.controlGuideToggleButton.setVisible(false);
     this.controlGuideToggleButton.disableInteractive();
     this.refreshControlGuideButton();
     const joystickState = this.readControlJoystickState();
     this.refreshControlJoystickPositions(joystickState);
-    this.applyControlGuidePresentation(joystickState);
+    this.applyControlGuidePresentation(joystickState, !isManualAttackMode);
+    this.refreshManualAttackControls(isManualAttackMode && !modalOverlayActive);
   }
 
-  private applyControlGuidePresentation(joystickState: ControlJoystickState): void {
+  private setAimGuideVisible(visible: boolean): void {
+    this.controlGuideHitRings[1]?.setVisible(visible);
+    this.controlGuideZones[1]?.setVisible(visible);
+    this.controlGuideKnobs[1]?.setVisible(visible);
+    this.controlGuideLabels[1]?.setVisible(visible);
+    this.controlGuideSubLabels[1]?.setVisible(visible);
+  }
+
+  private applyControlGuidePresentation(joystickState: ControlJoystickState, showAimPad = true): void {
     const isVisibleMode = this.controlGuideMode === 'visible';
-    const activeFlags = [joystickState.movement.active, joystickState.aim.active];
-    const zoneLayouts = [this.joystickLayout.movement, this.joystickLayout.aim];
-    const stateKey = `${this.controlGuideMode}:${activeFlags[0] ? '1' : '0'}:${activeFlags[1] ? '1' : '0'}`;
+    const activeFlags = [joystickState.movement.active, showAimPad ? joystickState.aim.active : false];
+    const zoneLayouts = showAimPad
+      ? [this.joystickLayout.movement, this.joystickLayout.aim]
+      : [this.joystickLayout.movement];
+    const stateKey = `${this.controlGuideMode}:${showAimPad ? 'dual' : 'move-only'}:${activeFlags[0] ? '1' : '0'}:${activeFlags[1] ? '1' : '0'}`;
 
     const presentation = isVisibleMode
       ? {
@@ -2648,6 +2835,230 @@ export class UIScene extends Phaser.Scene {
 
     const scale = distance > zoneLayout.maxKnobTravel ? zoneLayout.maxKnobTravel / distance : 1;
     knob.setPosition(zoneLayout.x + channel.vector.x * scale, zoneLayout.y + channel.vector.y * scale);
+  }
+
+  private readManualAttackState(): ManualAttackHudState {
+    const fallback = createIdleManualAttackHudState(this.attackControlMode === 'manual-attack');
+    const raw = this.registry.get('run.manualAttackState') as Partial<ManualAttackHudState> | undefined;
+    if (!raw) {
+      return fallback;
+    }
+
+    const phase =
+      raw.phase === 'pressed' || raw.phase === 'aiming' || raw.phase === 'canceling' ? raw.phase : 'idle';
+    const rawAim = raw.aimDirection;
+    const aimDirection =
+      rawAim && Number.isFinite(rawAim.x) && Number.isFinite(rawAim.y)
+        ? { x: rawAim.x, y: rawAim.y }
+        : null;
+
+    return {
+      enabled: Boolean(raw.enabled),
+      ready: Boolean(raw.ready),
+      readyWeaponCount: Math.max(0, Math.floor(Number(raw.readyWeaponCount ?? 0))),
+      totalWeaponCount: Math.max(0, Math.floor(Number(raw.totalWeaponCount ?? 0))),
+      nextReadyCooldownMs: Math.max(0, Number(raw.nextReadyCooldownMs ?? 0)),
+      nextReadyCooldownTotalMs: Math.max(1, Number(raw.nextReadyCooldownTotalMs ?? 1)),
+      phase,
+      aimDirection,
+      knobOffset: this.sanitizePoint(raw.knobOffset, { x: 0, y: 0 }),
+      cancelHighlighted: Boolean(raw.cancelHighlighted),
+      cooldownFeedbackMs: Math.max(0, Number(raw.cooldownFeedbackMs ?? 0)),
+    };
+  }
+
+  private refreshManualAttackControls(visible: boolean): void {
+    this.manualAttackContainer.setVisible(visible);
+    if (!visible) {
+      this.manualAttackPhase = 'idle';
+      return;
+    }
+
+    const state = this.readManualAttackState();
+    this.manualAttackPhase = state.phase;
+    const atk = this.manualAttackLayout.attackButton;
+    const cancel = this.manualAttackLayout.cancelZone;
+
+    const isAiming = state.phase === 'aiming';
+    const isCanceling = state.phase === 'canceling';
+    const showAimUi = isAiming || isCanceling;
+    const showCooldownFlash = state.cooldownFeedbackMs > 0;
+    const ready = state.ready;
+
+    this.manualAttackHitRing.setFillStyle(
+      showCooldownFlash ? DOODLE_COLORS.paperDanger : DOODLE_COLORS.paper,
+      showAimUi ? 0.1 : 0.07,
+    );
+    this.manualAttackHitRing.setStrokeStyle(
+      showAimUi || showCooldownFlash ? 2.2 : 1.8,
+      showCooldownFlash ? DOODLE_COLORS.danger : DOODLE_COLORS.ink,
+      showAimUi || showCooldownFlash ? 0.65 : 0.36,
+    );
+
+    this.manualAttackAimRing.setVisible(showAimUi);
+    if (showAimUi) {
+      this.manualAttackAimRing.setFillStyle(
+        isCanceling ? DOODLE_COLORS.paperDanger : DOODLE_COLORS.paperGold,
+        isCanceling ? 0.18 : 0.16,
+      );
+      this.manualAttackAimRing.setStrokeStyle(
+        2.5,
+        isCanceling ? DOODLE_COLORS.danger : DOODLE_COLORS.ink,
+        isCanceling ? 0.78 : 0.72,
+      );
+    }
+
+    // Clamp visual knob cleanly to maxKnobTravel along the aimed offset (hide during cancel so ATK/CANCEL text stays crisp)
+    this.manualAttackAimKnob.setVisible(isAiming);
+    if (isAiming) {
+      const dist = Math.hypot(state.knobOffset.x, state.knobOffset.y);
+      const scale = dist > atk.maxKnobTravel && dist > 0 ? atk.maxKnobTravel / dist : 1;
+      const knobX = atk.x + state.knobOffset.x * scale;
+      const knobY = atk.y + state.knobOffset.y * scale;
+      this.manualAttackAimKnob.setPosition(knobX, knobY);
+      this.manualAttackAimKnob.setFillStyle(
+        ready ? DOODLE_COLORS.gold : DOODLE_COLORS.paperDisabled,
+        0.9,
+      );
+      this.manualAttackAimKnob.setStrokeStyle(2.5, DOODLE_COLORS.ink, 0.95);
+    } else {
+      this.manualAttackAimKnob.setPosition(atk.x, atk.y);
+    }
+
+    const primaryText = ready
+      ? 'ATK'
+      : `${Math.max(0.1, state.nextReadyCooldownMs / 1000).toFixed(1)}s`;
+    const subText = isCanceling
+      ? 'CANCEL'
+      : isAiming
+        ? ready
+          ? 'RELEASE'
+          : 'RECHARGING'
+        : showCooldownFlash
+          ? 'WAIT'
+          : state.totalWeaponCount > 1
+            ? `${state.readyWeaponCount}/${state.totalWeaponCount} READY`
+            : ready
+              ? 'TAP / DRAG'
+              : 'COOLDOWN';
+
+    this.setTextIfChanged(this.manualAttackPrimaryText, primaryText);
+    this.manualAttackPrimaryText.setColor(ready ? DOODLE_HEX.ink : DOODLE_HEX.inkMuted);
+    this.setTextIfChanged(this.manualAttackSubText, subText);
+    this.manualAttackSubText.setColor(
+      isCanceling || showCooldownFlash ? DOODLE_HEX.danger : ready ? DOODLE_HEX.ink : DOODLE_HEX.inkMuted,
+    );
+
+    this.manualAttackStatusTagGraphics.setVisible(showCooldownFlash);
+    this.manualAttackStatusTagText.setVisible(showCooldownFlash);
+
+    const aimBucket =
+      isAiming && state.aimDirection
+        ? `${Math.round(state.aimDirection.x * 20)}:${Math.round(state.aimDirection.y * 20)}`
+        : 'none';
+    const atkVisualKey = `${ready ? 1 : 0}:${state.phase}:${showCooldownFlash ? 1 : 0}:${aimBucket}`;
+    if (this.manualAttackVisualStateKey !== atkVisualKey) {
+      this.manualAttackVisualStateKey = atkVisualKey;
+      const g = this.manualAttackChromeGraphics;
+      g.clear();
+
+      const fillColor = showCooldownFlash
+        ? DOODLE_COLORS.paperDanger
+        : isCanceling
+          ? DOODLE_COLORS.paperWarm
+          : !ready
+            ? DOODLE_COLORS.paperDisabled
+            : state.phase === 'pressed' || isAiming
+              ? DOODLE_COLORS.gold
+              : DOODLE_COLORS.paperGold;
+      const strokeColor = showCooldownFlash || isCanceling ? DOODLE_COLORS.danger : DOODLE_COLORS.ink;
+
+      drawDoodleCircle(g, {
+        cx: atk.x,
+        cy: atk.y,
+        radius: atk.buttonRadius,
+        seed: 311,
+        segments: 26,
+        jitter: 1.15,
+        fillColor,
+        fillAlpha: showAimUi ? 0.55 : 0.92,
+        strokeColor,
+        strokeWidth: state.phase === 'pressed' || showAimUi ? 3.5 : 3,
+        shadowOffsetX: 2,
+        shadowOffsetY: 3,
+        shadowAlpha: showAimUi ? 0.16 : 0.3,
+      });
+
+      // Directional rim chevron on aim ring matching exact aimDirection
+      if (isAiming && state.aimDirection) {
+        const dir = state.aimDirection;
+        const pipTipX = atk.x + dir.x * (atk.aimRingRadius + 10);
+        const pipTipY = atk.y + dir.y * (atk.aimRingRadius + 10);
+        const baseDist = atk.aimRingRadius - 4;
+        const perpX = -dir.y;
+        const perpY = dir.x;
+        const pipPts = [
+          { x: pipTipX, y: pipTipY },
+          { x: atk.x + dir.x * baseDist + perpX * 8, y: atk.y + dir.y * baseDist + perpY * 8 },
+          { x: atk.x + dir.x * baseDist - perpX * 8, y: atk.y + dir.y * baseDist - perpY * 8 },
+        ];
+        g.fillStyle(ready ? DOODLE_COLORS.gold : DOODLE_COLORS.paperDisabled, 0.95);
+        g.fillPoints(pipPts, true, true);
+        g.lineStyle(2.2, DOODLE_COLORS.ink, 0.92);
+        g.strokePoints(pipPts, true, true);
+      }
+    }
+
+    // Cancel target badge (upper-right) appears ONLY while aiming or canceling
+    this.manualAttackCancelHitRing.setVisible(showAimUi);
+    this.manualAttackCancelGraphics.setVisible(showAimUi);
+    this.manualAttackCancelLabel.setVisible(showAimUi);
+
+    if (showAimUi) {
+      const highlighted = state.cancelHighlighted;
+      this.manualAttackCancelHitRing.setFillStyle(
+        highlighted ? DOODLE_COLORS.hp : DOODLE_COLORS.paperDanger,
+        highlighted ? 0.28 : 0.14,
+      );
+      this.manualAttackCancelHitRing.setStrokeStyle(
+        highlighted ? 2.5 : 1.8,
+        highlighted ? DOODLE_COLORS.danger : DOODLE_COLORS.ink,
+        highlighted ? 0.85 : 0.45,
+      );
+      this.setTextIfChanged(this.manualAttackCancelLabel, highlighted ? 'RELEASE: CANCEL' : 'CANCEL');
+      this.manualAttackCancelLabel.setColor(highlighted ? DOODLE_HEX.paper : DOODLE_HEX.paperWarm);
+
+      const cancelKey = highlighted ? 'hot' : 'idle';
+      if (this.manualAttackCancelVisualStateKey !== cancelKey) {
+        this.manualAttackCancelVisualStateKey = cancelKey;
+        const cg = this.manualAttackCancelGraphics;
+        cg.clear();
+
+        drawDoodleCircle(cg, {
+          cx: cancel.x,
+          cy: cancel.y,
+          radius: cancel.radius,
+          seed: 331,
+          segments: 20,
+          jitter: 1.0,
+          fillColor: highlighted ? DOODLE_COLORS.hp : DOODLE_COLORS.paperDanger,
+          fillAlpha: highlighted ? 0.96 : 0.88,
+          strokeColor: highlighted ? DOODLE_COLORS.ink : DOODLE_COLORS.danger,
+          strokeWidth: highlighted ? 3.5 : 2.6,
+          shadowOffsetX: 2,
+          shadowOffsetY: 3,
+          shadowAlpha: 0.28,
+        });
+
+        drawDoodleCloseX(
+          cg,
+          cancel.x,
+          cancel.y,
+          14,
+          highlighted ? DOODLE_COLORS.paper : DOODLE_COLORS.danger,
+        );
+      }
+    }
   }
 
   private readControlJoystickState(): ControlJoystickState {

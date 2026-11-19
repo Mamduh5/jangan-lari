@@ -19,6 +19,12 @@ import {
   type GameSaveData,
   type LocalLeaderboardEntry,
 } from '../save/saveData';
+import {
+  getAttackControlModeMetadata,
+  getSessionAttackControlMode,
+  toggleSessionAttackControlMode,
+  type AttackControlMode,
+} from '../input/attackControlMode';
 import { isHeroUnlocked, selectHero, unlockHero } from '../save/saveHeroes';
 import {
   CODEX_CATEGORIES,
@@ -68,6 +74,9 @@ export class MenuScene extends Phaser.Scene {
   private menuBackdropGraphics!: Phaser.GameObjects.Graphics;
   private topGuidePillGraphics!: Phaser.GameObjects.Graphics;
   private topGuideVisualKey = '';
+  private attackControlPillGraphics!: Phaser.GameObjects.Graphics;
+  private attackControlVisualKey = '';
+  private attackControlButton: Phaser.GameObjects.Text | null = null;
   private topGoldIconImage: Phaser.GameObjects.Image | null = null;
   private featuredHeroChromeGraphics!: Phaser.GameObjects.Graphics;
   private featuredHeroVisualKey = '';
@@ -193,6 +202,7 @@ export class MenuScene extends Phaser.Scene {
     this.metaButton = null;
     this.codexButton = null;
     this.guideButton = null;
+    this.attackControlButton = null;
     this.codexCloseButton = null;
     this.codexBackdrop = null;
     this.codexOverlay = null;
@@ -240,6 +250,7 @@ export class MenuScene extends Phaser.Scene {
     this.topGoldIconImage = null;
     this.featuredHeroWeaponIconImage = null;
     this.topGuideVisualKey = '';
+    this.attackControlVisualKey = '';
     this.featuredHeroVisualKey = '';
     this.bottomButtonHover = { start: false, upgrades: false, codex: false };
 
@@ -353,6 +364,37 @@ export class MenuScene extends Phaser.Scene {
     this.guideButton.on('pointerover', () => this.refreshGuideButton(true));
     this.guideButton.on('pointerout', () => this.refreshGuideButton(false));
     this.refreshGuideButton();
+
+    // ── Top-center pre-run Attack Control Mode selector (session-only) ────
+    this.attackControlPillGraphics = this.add.graphics().setDepth(1);
+    this.add
+      .text(758, 49, 'ATTACK MODE • TAP TO SWITCH', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '10.5px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.inkMuted,
+        letterSpacing: 0.7,
+      })
+      .setOrigin(0.5)
+      .setDepth(2);
+    this.attackControlButton = this.add
+      .text(758, 66, '', {
+        fontFamily: DOODLE_FONTS.body,
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: DOODLE_HEX.ink,
+        align: 'center',
+        fixedWidth: 376,
+        fixedHeight: 54,
+        padding: { top: 24 },
+      })
+      .setOrigin(0.5)
+      .setDepth(2)
+      .setInteractive({ useHandCursor: true });
+    this.attackControlButton.on('pointerdown', () => this.toggleAttackControlMode());
+    this.attackControlButton.on('pointerover', () => this.refreshAttackControlButton(true));
+    this.attackControlButton.on('pointerout', () => this.refreshAttackControlButton(false));
+    this.refreshAttackControlButton();
 
     // ── Left Featured Hero Inspector (x: 232..656) ────────────────────────
     this.featuredHeroChromeGraphics = this.add.graphics().setDepth(2);
@@ -1283,6 +1325,7 @@ export class MenuScene extends Phaser.Scene {
       this.disableInteractiveControl(this.metaButton);
       this.disableInteractiveControl(this.codexButton);
       this.disableInteractiveControl(this.guideButton);
+      this.disableInteractiveControl(this.attackControlButton);
       for (const panel of this.heroPanels) {
         this.disableInteractiveControl(panel);
       }
@@ -1303,6 +1346,7 @@ export class MenuScene extends Phaser.Scene {
     this.enableInteractiveControl(this.metaButton);
     this.enableInteractiveControl(this.codexButton);
     this.enableInteractiveControl(this.guideButton);
+    this.enableInteractiveControl(this.attackControlButton);
     for (const panel of this.heroPanels) {
       this.enableInteractiveControl(panel);
     }
@@ -1316,6 +1360,9 @@ export class MenuScene extends Phaser.Scene {
     gameHeight: number;
     controlGuideMode: ControlGuideMode;
     guideButtonText: string;
+    attackControlMode: AttackControlMode;
+    attackControlButtonText: string;
+    attackControlButton: { x: number; y: number };
     startButton: { x: number; y: number };
     startButtonIconVisible: boolean;
     guideButton: { x: number; y: number };
@@ -1325,6 +1372,9 @@ export class MenuScene extends Phaser.Scene {
       gameHeight: GAME_HEIGHT,
       controlGuideMode: this.saveData.controlGuideMode,
       guideButtonText: this.guideButton?.text ?? '',
+      attackControlMode: getSessionAttackControlMode(),
+      attackControlButtonText: this.attackControlButton?.text ?? '',
+      attackControlButton: { x: this.attackControlButton?.x ?? 0, y: this.attackControlButton?.y ?? 0 },
       startButton: { x: this.startButton?.x ?? 0, y: this.startButton?.y ?? 0 },
       startButtonIconVisible: Boolean(this.startButtonIcon?.visible),
       guideButton: { x: this.guideButton?.x ?? 0, y: this.guideButton?.y ?? 0 },
@@ -1393,6 +1443,56 @@ export class MenuScene extends Phaser.Scene {
     this.saveData = updateControlGuideMode(this.saveData, nextMode);
     this.setStatusMessage(`Control guide: ${this.getControlGuideModeLabel(nextMode)}.`);
     this.refreshGuideButton(false);
+  }
+
+  private toggleAttackControlMode(): void {
+    const nextMode = toggleSessionAttackControlMode();
+    const metadata = getAttackControlModeMetadata(nextMode);
+    this.setStatusMessage(
+      nextMode === 'manual-attack'
+        ? `Controls: ${metadata.label} (session only).`
+        : `Controls: ${metadata.label}.`,
+    );
+    this.refreshAttackControlButton(false);
+  }
+
+  private refreshAttackControlButton(hovered = false): void {
+    const mode = getSessionAttackControlMode();
+    const metadata = getAttackControlModeMetadata(mode);
+    this.attackControlButton?.setText(metadata.label);
+    this.attackControlButton?.setColor(DOODLE_HEX.ink);
+
+    const key = `${mode}:${hovered ? 1 : 0}`;
+    if (this.attackControlVisualKey === key || !this.attackControlPillGraphics) {
+      return;
+    }
+    this.attackControlVisualKey = key;
+
+    const fillColor =
+      mode === 'manual-attack'
+        ? hovered
+          ? DOODLE_COLORS.gold
+          : DOODLE_COLORS.paperGold
+        : hovered
+          ? DOODLE_COLORS.paperHover
+          : DOODLE_COLORS.paper;
+
+    drawDoodleCard(this.attackControlPillGraphics, {
+      cx: 758,
+      cy: 66,
+      width: 376,
+      height: 54,
+      cornerRadius: 16,
+      seed: 247,
+      jitter: 1.0,
+      fillColor,
+      strokeColor: DOODLE_COLORS.ink,
+      strokeWidth: mode === 'manual-attack' ? 3 : 2.5,
+      shadowOffsetX: 2,
+      shadowOffsetY: hovered ? 4 : 3,
+      shadowAlpha: 0.34,
+      clear: true,
+    });
   }
 
   private setStatusMessage(message: string): void {
@@ -2779,6 +2879,7 @@ export class MenuScene extends Phaser.Scene {
     this.metaButton = null;
     this.codexButton = null;
     this.guideButton = null;
+    this.attackControlButton = null;
     this.codexCloseButton = null;
     this.codexBackdrop = null;
     this.codexOverlay = null;
@@ -2817,6 +2918,7 @@ export class MenuScene extends Phaser.Scene {
     this.startButtonIcon = null;
     this.codexCloseButtonIcon = null;
     this.topGuideVisualKey = '';
+    this.attackControlVisualKey = '';
     this.featuredHeroVisualKey = '';
     this.bottomButtonGraphics = { start: null, upgrades: null, codex: null, lastRun: null };
   }

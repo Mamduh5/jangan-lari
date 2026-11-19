@@ -1175,4 +1175,108 @@ describe('UIScene R3G-C2 stat allocation, pause menu, and run results', () => {
       restoreViewport();
     }
   });
+
+  test('renders non-interactive experimental ATTACK + CANCEL controls in manual-attack mode while keeping auto-fire unchanged', () => {
+    const { ui, restoreViewport } = createUiFixture({ viewportWidth: 844, viewportHeight: 390 });
+    try {
+      // Mode A (default): auto-fire keeps MOVE + AIM visible and hides manual attack controls
+      let snap = ui.getHudSnapshot();
+      expect(snap.attackControlMode).toBe('auto-fire');
+      expect(snap.manualAttackVisible).toBe(false);
+      expect(snap.manualAttackCancelVisible).toBe(false);
+
+      const internals = ui as unknown as {
+        controlGuideZones: Array<{ visible: boolean; setInteractive: ReturnType<typeof vi.fn> }>;
+        manualAttackHitRing: { setInteractive: ReturnType<typeof vi.fn> };
+        manualAttackAimRing: { setInteractive: ReturnType<typeof vi.fn> };
+        manualAttackAimKnob: { setInteractive: ReturnType<typeof vi.fn> };
+        manualAttackCancelHitRing: { setInteractive: ReturnType<typeof vi.fn> };
+        manualAttackStatusTagText: { visible: boolean; text: string };
+      };
+      expect(internals.controlGuideZones[0].visible).toBe(true);
+      expect(internals.controlGuideZones[1].visible).toBe(true);
+
+      // Mode B (manual-attack): hides AIM pad, shows ATTACK button, keeps MOVE pad active
+      ui.registry.set('run.attackControlMode', 'manual-attack');
+      ui.registry.set('run.manualAttackState', {
+        enabled: true,
+        ready: true,
+        readyWeaponCount: 2,
+        totalWeaponCount: 2,
+        nextReadyCooldownMs: 0,
+        nextReadyCooldownTotalMs: 1,
+        phase: 'idle',
+        aimDirection: null,
+        knobOffset: { x: 0, y: 0 },
+        cancelHighlighted: false,
+        cooldownFeedbackMs: 0,
+      });
+      ui.update();
+
+      snap = ui.getHudSnapshot();
+      expect(snap.attackControlMode).toBe('manual-attack');
+      expect(snap.manualAttackVisible).toBe(true);
+      expect(snap.manualAttackCancelVisible).toBe(false);
+      expect(snap.manualAttackPrimaryText).toBe('ATK');
+      expect(internals.controlGuideZones[0].visible).toBe(true);
+      expect(internals.controlGuideZones[1].visible).toBe(false);
+
+      // Aiming shows cancel zone and aligns aim knob with knobOffset
+      ui.registry.set('run.manualAttackState', {
+        enabled: true,
+        ready: true,
+        readyWeaponCount: 1,
+        totalWeaponCount: 2,
+        nextReadyCooldownMs: 0,
+        nextReadyCooldownTotalMs: 1,
+        phase: 'aiming',
+        aimDirection: { x: 0, y: -1 },
+        knobOffset: { x: 0, y: -50 },
+        cancelHighlighted: false,
+        cooldownFeedbackMs: 0,
+      });
+      ui.update();
+      snap = ui.getHudSnapshot();
+      expect(snap.manualAttackPhase).toBe('aiming');
+      expect(snap.manualAttackCancelVisible).toBe(true);
+      expect(snap.manualAttackAimKnob.x).toBeCloseTo(snap.manualAttackLayout.attackButton.x);
+      expect(snap.manualAttackAimKnob.y).toBeCloseTo(snap.manualAttackLayout.attackButton.y - 50);
+
+      // Cooldown feedback displays live remaining time and COOLDOWN pill
+      ui.registry.set('run.manualAttackState', {
+        enabled: true,
+        ready: false,
+        readyWeaponCount: 0,
+        totalWeaponCount: 2,
+        nextReadyCooldownMs: 420,
+        nextReadyCooldownTotalMs: 980,
+        phase: 'idle',
+        aimDirection: null,
+        knobOffset: { x: 0, y: 0 },
+        cancelHighlighted: false,
+        cooldownFeedbackMs: 360,
+      });
+      ui.update();
+      snap = ui.getHudSnapshot();
+      expect(snap.manualAttackPrimaryText).toBe('0.4s');
+      expect(internals.manualAttackStatusTagText.visible).toBe(true);
+
+      // Modal overlays hide manual ATTACK controls cleanly
+      ui.registry.set('run.pauseMenuActive', true);
+      ui.update();
+      expect(ui.getHudSnapshot().manualAttackVisible).toBe(false);
+      ui.registry.set('run.pauseMenuActive', false);
+      ui.registry.set('run.levelUpActive', true);
+      ui.update();
+      expect(ui.getHudSnapshot().manualAttackVisible).toBe(false);
+
+      // All experimental manual attack visuals stay strictly non-interactive
+      expect(internals.manualAttackHitRing.setInteractive).not.toHaveBeenCalled();
+      expect(internals.manualAttackAimRing.setInteractive).not.toHaveBeenCalled();
+      expect(internals.manualAttackAimKnob.setInteractive).not.toHaveBeenCalled();
+      expect(internals.manualAttackCancelHitRing.setInteractive).not.toHaveBeenCalled();
+    } finally {
+      restoreViewport();
+    }
+  });
 });

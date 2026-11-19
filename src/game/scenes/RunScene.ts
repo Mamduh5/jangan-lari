@@ -163,6 +163,15 @@ import {
   shouldSpawnBossSummons,
 } from '../systems/bossSummons';
 import { getUpgradeRewardType, upgradeHasWeaponRewardTag } from '../systems/rewardClassification';
+import {
+  createIdleManualAttackHudState,
+  dispatchManualAttackCommand,
+  summarizeManualAttackReadiness,
+  type ManualAttackHudState,
+} from '../systems/manualAttackResolver';
+import { getSessionAttackControlMode, type AttackControlMode } from '../input/attackControlMode';
+import { ManualAttackController } from '../input/ManualAttackController';
+import { DOODLE_COLORS } from '../ui/doodleTheme';
 import { SpawnDirector } from '../systems/SpawnDirector';
 import { getEnemyProjectileVisual, getEnemyXpReward, getXpGemVisual, type ProjectileVisual } from '../systems/readabilityVisuals';
 import { chooseSafeSpawnPoint } from '../systems/spawnSafety';
@@ -281,6 +290,10 @@ export class RunScene extends Phaser.Scene {
   private spawnDirector!: SpawnDirector;
   private saveData!: GameSaveData;
   private movementInput!: MovementInputController;
+  private attackControlMode: AttackControlMode = 'auto-fire';
+  private manualAttack: ManualAttackController | null = null;
+  private manualAimPreviewGraphics: Phaser.GameObjects.Graphics | null = null;
+  private manualAttackCooldownFeedbackMs = 0;
   private lastMovementInput: MovementInputSnapshot = {
     movement: { x: 0, y: 0 },
     facing: { x: 1, y: 0 },
@@ -575,7 +588,20 @@ export class RunScene extends Phaser.Scene {
     this.bossStateEndsAtMs = Number.POSITIVE_INFINITY;
     this.bossStateActionDone = false;
     this.bossSummonCompositionIndex = 0;
-    this.movementInput = new MovementInputController(this, createMovementKeys(this));
+    this.attackControlMode = getSessionAttackControlMode();
+    this.manualAttackCooldownFeedbackMs = 0;
+    this.movementInput = new MovementInputController(this, createMovementKeys(this), {
+      disableAimPointer: this.attackControlMode === 'manual-attack',
+    });
+    if (this.attackControlMode === 'manual-attack') {
+      this.manualAttack = new ManualAttackController(this, {
+        isPointerClaimedExternally: (pointerId) => this.movementInput.isPointerClaimed(pointerId),
+      });
+      this.manualAimPreviewGraphics = this.add.graphics().setDepth(7);
+    } else {
+      this.manualAttack = null;
+      this.manualAimPreviewGraphics = null;
+    }
     this.lastMovementInput = {
       movement: { x: 0, y: 0 },
       facing: { x: 1, y: 0 },
@@ -730,8 +756,37 @@ export class RunScene extends Phaser.Scene {
 
     const movementInput = this.movementInput.getMovementInput();
     this.lastMovementInput = movementInput;
-    this.dismissControlHintIfNeeded(movementInput);
-    this.player.setFacingDirection(new Phaser.Math.Vector2(movementInput.facing.x, movementInput.facing.y));
+
+    let effectiveFacing = movementInput.facing;
+    let manualInteractionActive = false;
+
+    if (this.attackControlMode === 'manual-attack' && this.manualAttack) {
+      this.manualAttackCooldownFeedbackMs = Math.max(0, this.manualAttackCooldownFeedbackMs - delta);
+      const manualGuide = this.manualAttack.getGuideState();
+      if (manualGuide.active) {
+        manualInteractionActive = true;
+      }
+      if (manualGuide.phase === 'aiming' && manualGuide.aimDirection) {
+        effectiveFacing = manualGuide.aimDirection;
+      }
+
+      const pendingAttack = this.manualAttack.consumePendingCommand();
+      if (pendingAttack) {
+        manualInteractionActive = true;
+        const hasActiveMove = movementInput.movement.x !== 0 || movementInput.movement.y !== 0;
+        const fallbackDirection = hasActiveMove ? movementInput.movement : effectiveFacing;
+        const dispatch = dispatchManualAttackCommand(this.weapons, this.time.now, pendingAttack, fallbackDirection);
+        if (dispatch.firedCount > 0 && dispatch.resolvedFacingDirection) {
+          effectiveFacing = dispatch.resolvedFacingDirection;
+          this.movementInput.setFacingDirection(dispatch.resolvedFacingDirection);
+        } else if (dispatch.firedCount === 0 && dispatch.blockedByCooldownCount > 0) {
+          this.manualAttackCooldownFeedbackMs = 480;
+        }
+      }
+    }
+
+    this.dismissControlHintIfNeeded(movementInput, manualInteractionActive);
+    this.player.setFacingDirection(new Phaser.Math.Vector2(effectiveFacing.x, effectiveFacing.y));
     this.player.move(new Phaser.Math.Vector2(movementInput.movement.x, movementInput.movement.y), false);
     this.applyPlayerSurfaceSlide(playerContactNormals);
     this.player.updateVisualState(this.time.now);
@@ -753,10 +808,12 @@ export class RunScene extends Phaser.Scene {
     this.player.updateHpRegen(delta);
     this.updateGems();
 
+    const autoFireEnabled = this.attackControlMode !== 'manual-attack';
     for (const weapon of this.weapons) {
-      weapon.update(this.time.now, delta);
+      weapon.update(this.time.now, delta, { autoFire: autoFireEnabled });
     }
 
+    this.renderManualAimPreview();
     this.updateRunEventState();
     this.publishHudState();
   }
@@ -790,6 +847,7 @@ export class RunScene extends Phaser.Scene {
   public openManualPauseMenu(overlayPointer?: ActivePointerLike): void {
     if (isActivePointerLike(overlayPointer)) {
       this.movementInput?.clearOverlaySelectionPointer(overlayPointer);
+      this.manualAttack?.clearOverlaySelectionPointer(overlayPointer);
     }
 
     if (this.isEnded || this.isTransitioningToMenu || this.isLevelingUp || this.isChoosingTankClass || this.isManualPaused) {
@@ -1229,6 +1287,7 @@ export class RunScene extends Phaser.Scene {
 
     if (overlayPointer) {
       this.movementInput.ignoreOverlaySelectionPointer(overlayPointer);
+      this.manualAttack?.ignoreOverlaySelectionPointer(overlayPointer);
     }
 
     this.isResolvingLevelUpChoice = true;
@@ -1255,6 +1314,7 @@ export class RunScene extends Phaser.Scene {
 
     if (overlayPointer) {
       this.movementInput?.clearOverlaySelectionPointer(overlayPointer);
+      this.manualAttack?.clearOverlaySelectionPointer(overlayPointer);
     }
 
     const result = this.tankStats.spendPoint(statId);
@@ -1295,6 +1355,7 @@ export class RunScene extends Phaser.Scene {
 
     if (overlayPointer) {
       this.movementInput.ignoreOverlaySelectionPointer(overlayPointer);
+      this.manualAttack?.ignoreOverlaySelectionPointer(overlayPointer);
     }
 
     this.applyTankClass(getTankClassDefinition(classId));
@@ -1735,6 +1796,7 @@ export class RunScene extends Phaser.Scene {
   public activateBreakoutPulse(overlayPointer?: ActivePointerLike): boolean {
     if (isActivePointerLike(overlayPointer)) {
       this.movementInput?.clearOverlaySelectionPointer(overlayPointer);
+      this.manualAttack?.clearOverlaySelectionPointer(overlayPointer);
     }
 
     if (!this.canActivateBreakoutPulse()) {
@@ -4906,6 +4968,8 @@ export class RunScene extends Phaser.Scene {
 
   private pauseGameplaySystems(instructionText?: string): void {
     this.movementInput?.suspendForOverlay();
+    this.manualAttack?.suspendForOverlay();
+    this.clearManualAimPreview();
 
     if (this.player?.active) {
       this.player.move(new Phaser.Math.Vector2(0, 0));
@@ -4937,6 +5001,7 @@ export class RunScene extends Phaser.Scene {
     }
 
     this.movementInput?.resumeAfterOverlay({ ignoredPointer });
+    this.manualAttack?.resumeAfterOverlay({ ignoredPointer });
     this.physics.resume();
     if (this.spawnTimer) {
       this.spawnTimer.paused = false;
@@ -5030,6 +5095,8 @@ export class RunScene extends Phaser.Scene {
     this.registry.set('run.controlGuideMode', this.saveData.controlGuideMode);
     this.registry.set('run.controlHintVisible', this.controlHintVisible);
     this.registry.set('run.controlJoysticks', this.movementInput.getPointerGuideState());
+    this.registry.set('run.attackControlMode', this.attackControlMode);
+    this.registry.set('run.manualAttackState', this.buildManualAttackHudState());
     this.registry.set('run.inputSuppressed', this.movementInput.isSuppressed());
     this.registry.set('run.formationPressureEnabled', this.runElapsedMs >= WAVE_FORMATION_ENABLE_TIME_MS);
     this.registry.set('run.lastFormationType', this.lastFormationType);
@@ -5068,7 +5135,7 @@ export class RunScene extends Phaser.Scene {
     this.showRewardToast('Stats maxed', '#bfdbfe');
   }
 
-  private dismissControlHintIfNeeded(movementInput: MovementInputSnapshot): void {
+  private dismissControlHintIfNeeded(movementInput: MovementInputSnapshot, manualAttackUsed = false): void {
     if (!this.controlHintVisible) {
       return;
     }
@@ -5077,12 +5144,126 @@ export class RunScene extends Phaser.Scene {
     const hasAim = movementInput.aimActive;
     const hasTimedOut = this.runElapsedMs >= 5500;
 
-    if (!hasMovement && !hasAim && !hasTimedOut) {
+    if (!hasMovement && !hasAim && !manualAttackUsed && !hasTimedOut) {
       return;
     }
 
     this.controlHintVisible = false;
     this.saveData = markControlHintDismissed(this.saveData);
+  }
+
+  private buildManualAttackHudState(): ManualAttackHudState {
+    if (this.attackControlMode !== 'manual-attack' || !this.manualAttack) {
+      return createIdleManualAttackHudState(false);
+    }
+
+    const readiness = summarizeManualAttackReadiness(this.weapons, this.time.now);
+    const guide = this.manualAttack.getGuideState();
+
+    return {
+      enabled: true,
+      ready: readiness.ready,
+      readyWeaponCount: readiness.readyWeaponCount,
+      totalWeaponCount: readiness.totalWeaponCount,
+      nextReadyCooldownMs: readiness.nextReadyCooldownMs,
+      nextReadyCooldownTotalMs: readiness.nextReadyCooldownTotalMs,
+      phase: guide.phase,
+      aimDirection: guide.aimDirection ? { ...guide.aimDirection } : null,
+      knobOffset: { ...guide.knobOffset },
+      cancelHighlighted: guide.cancelHighlighted,
+      cooldownFeedbackMs: Math.max(0, Math.ceil(this.manualAttackCooldownFeedbackMs)),
+    };
+  }
+
+  private clearManualAimPreview(): void {
+    this.manualAimPreviewGraphics?.clear();
+  }
+
+  private renderManualAimPreview(): void {
+    const g = this.manualAimPreviewGraphics;
+    if (!g) {
+      return;
+    }
+
+    g.clear();
+
+    if (
+      this.attackControlMode !== 'manual-attack' ||
+      !this.manualAttack ||
+      !this.player?.active ||
+      !this.player.isAlive() ||
+      this.isManualPaused ||
+      this.isSystemPaused ||
+      this.isEnded ||
+      this.isLevelingUp ||
+      this.isChoosingTankClass
+    ) {
+      return;
+    }
+
+    const guide = this.manualAttack.getGuideState();
+    if (guide.phase !== 'aiming' || !guide.aimDirection) {
+      return;
+    }
+
+    const readiness = summarizeManualAttackReadiness(this.weapons, this.time.now);
+    const dir = guide.aimDirection;
+    const strokeColor = readiness.ready ? DOODLE_COLORS.gold : DOODLE_COLORS.paperDisabled;
+    const inkAlpha = readiness.ready ? 0.72 : 0.45;
+    const fillAlpha = readiness.ready ? 0.85 : 0.55;
+
+    if (readiness.hasOnlyRadialReady) {
+      // Compact dashed nova preview for radial-only ready loadouts (e.g. Sunwheel)
+      const ringRadius = Math.min(130, Math.max(82, readiness.primaryReadyRange * 0.5));
+      const segments = 16;
+      for (let index = 0; index < segments; index += 2) {
+        const a0 = (index / segments) * Math.PI * 2;
+        const a1 = ((index + 1) / segments) * Math.PI * 2;
+        const x0 = this.player.x + Math.cos(a0) * ringRadius;
+        const y0 = this.player.y + Math.sin(a0) * ringRadius;
+        const x1 = this.player.x + Math.cos(a1) * ringRadius;
+        const y1 = this.player.y + Math.sin(a1) * ringRadius;
+        g.lineStyle(4.5, DOODLE_COLORS.ink, inkAlpha * 0.75);
+        g.lineBetween(x0, y0, x1, y1);
+        g.lineStyle(2.5, strokeColor, fillAlpha);
+        g.lineBetween(x0, y0, x1, y1);
+      }
+      return;
+    }
+
+    // Compact, non-intrusive doodle directional preview arrow from player along exact aimDirection
+    const previewLength = Math.min(210, Math.max(130, readiness.primaryReadyRange * 0.58));
+    const startOffset = 34;
+    const dashStep = 26;
+    const dashLen = 14;
+
+    for (let dist = startOffset; dist < previewLength - 18; dist += dashStep) {
+      const segEnd = Math.min(dist + dashLen, previewLength - 14);
+      const sx = this.player.x + dir.x * dist;
+      const sy = this.player.y + dir.y * dist;
+      const ex = this.player.x + dir.x * segEnd;
+      const ey = this.player.y + dir.y * segEnd;
+      g.lineStyle(5.5, DOODLE_COLORS.ink, inkAlpha);
+      g.lineBetween(sx, sy, ex, ey);
+      g.lineStyle(3, strokeColor, fillAlpha);
+      g.lineBetween(sx, sy, ex, ey);
+    }
+
+    const tipX = this.player.x + dir.x * previewLength;
+    const tipY = this.player.y + dir.y * previewLength;
+    const perpX = -dir.y;
+    const perpY = dir.x;
+    const headBaseX = tipX - dir.x * 16;
+    const headBaseY = tipY - dir.y * 16;
+    const headPoints = [
+      { x: tipX, y: tipY },
+      { x: headBaseX + perpX * 10, y: headBaseY + perpY * 10 },
+      { x: headBaseX - perpX * 10, y: headBaseY - perpY * 10 },
+    ];
+    g.fillStyle(strokeColor, fillAlpha);
+    g.fillPoints(headPoints, true, true);
+    g.lineStyle(2.4, DOODLE_COLORS.ink, inkAlpha);
+    g.strokePoints(headPoints, true, true);
   }
 
   private calculateCurrentRunScore(): number {
@@ -5409,6 +5590,11 @@ export class RunScene extends Phaser.Scene {
     window.removeEventListener('blur', this.handleWindowBlur);
     window.removeEventListener('focus', this.handleWindowFocus);
     this.movementInput?.destroy();
+    this.manualAttack?.destroy();
+    this.manualAttack = null;
+    this.manualAimPreviewGraphics?.destroy();
+    this.manualAimPreviewGraphics = null;
+    this.manualAttackCooldownFeedbackMs = 0;
     this.combatResponse.clear({ suppressCallbacks: true });
 
     this.spawnTimer?.remove(false);

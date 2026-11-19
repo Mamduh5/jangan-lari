@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { playWeaponFireCue } from '../audio/audioCuePlayer';
-import type { WeaponDefinition, WeaponStatPatch, WeaponStats } from '../data/weapons';
+import type { WeaponDefinition, WeaponFirePattern, WeaponStatPatch, WeaponStats } from '../data/weapons';
 import { Enemy } from '../entities/Enemy';
 import { NeutralShape } from '../entities/NeutralShape';
 import { Player } from '../entities/Player';
@@ -12,6 +12,32 @@ type WeaponTarget = {
 };
 
 type FireDirectionProvider = () => { x: number; y: number };
+
+export type WeaponUpdateOptions = {
+  autoFire?: boolean;
+};
+
+export type WeaponTapTargetResolution = {
+  direction: { x: number; y: number };
+  targetKind: 'enemy' | 'neutral';
+  distanceSq: number;
+};
+
+export type WeaponAttackCommand = {
+  kind: 'tap' | 'aimed';
+  direction?: { x: number; y: number } | null;
+  fallbackDirection: { x: number; y: number };
+};
+
+export type WeaponAttackExecutionResult = {
+  weaponId: string;
+  fired: boolean;
+  reason: 'fired' | 'cooldown' | 'inactive-owner' | 'invalid-direction';
+  cooldownRemainingMs: number;
+  firePattern: WeaponFirePattern;
+  resolvedDirection: { x: number; y: number } | null;
+  targetKind: 'aimed' | 'enemy' | 'neutral' | 'fallback' | 'radial' | 'none';
+};
 
 export class AutoFireWeapon {
   private readonly projectileGroup: Phaser.Physics.Arcade.Group;
@@ -114,8 +140,12 @@ export class AutoFireWeapon {
     }
   }
 
-  update(currentTime: number, deltaMs: number): void {
+  update(currentTime: number, deltaMs: number, options?: WeaponUpdateOptions): void {
     this.updateProjectiles(deltaMs);
+
+    if (options?.autoFire === false) {
+      return;
+    }
 
     if (!this.owner.isAlive() || currentTime < this.nextFireTime) {
       return;
@@ -126,16 +156,151 @@ export class AutoFireWeapon {
       return;
     }
 
-    if (this.stats.firePattern === 'radial') {
-      this.lastFireDirection = { x: fireDirection.x, y: fireDirection.y };
-      this.fireRadialBurst();
-    } else {
-      this.fireInDirection(fireDirection);
+    this.fireWithResolvedDirection(currentTime, fireDirection);
+  }
+
+  isReadyToFire(currentTime: number): boolean {
+    return this.owner.isAlive() && currentTime >= this.nextFireTime;
+  }
+
+  getCooldownRemainingMs(currentTime: number): number {
+    return Math.max(0, Math.ceil(this.nextFireTime - currentTime));
+  }
+
+  findTapTargetDirection(): WeaponTapTargetResolution | null {
+    const maxRangeSq = this.stats.range * this.stats.range;
+    const enemy = this.findNearestEnemy(maxRangeSq);
+    if (enemy) {
+      const dx = enemy.x - this.owner.x;
+      const dy = enemy.y - this.owner.y;
+      const distanceSq = dx * dx + dy * dy;
+      if (distanceSq > 0) {
+        const length = Math.sqrt(distanceSq);
+        return {
+          direction: { x: dx / length, y: dy / length },
+          targetKind: 'enemy',
+          distanceSq,
+        };
+      }
     }
 
-    this.createMuzzleFlash();
-    playWeaponFireCue(this.stats);
-    this.nextFireTime = currentTime + this.stats.fireCooldownMs;
+    const neutral = this.findNearestNeutralShape(maxRangeSq);
+    if (neutral) {
+      const dx = neutral.x - this.owner.x;
+      const dy = neutral.y - this.owner.y;
+      const distanceSq = dx * dx + dy * dy;
+      if (distanceSq > 0) {
+        const length = Math.sqrt(distanceSq);
+        return {
+          direction: { x: dx / length, y: dy / length },
+          targetKind: 'neutral',
+          distanceSq,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  executeAttackCommand(currentTime: number, command: WeaponAttackCommand): WeaponAttackExecutionResult {
+    const firePattern: WeaponFirePattern = this.stats.firePattern === 'radial' ? 'radial' : 'targeted';
+
+    if (!this.owner.isAlive()) {
+      return {
+        weaponId: this.stats.id,
+        fired: false,
+        reason: 'inactive-owner',
+        cooldownRemainingMs: 0,
+        firePattern,
+        resolvedDirection: null,
+        targetKind: 'none',
+      };
+    }
+
+    if (currentTime < this.nextFireTime) {
+      return {
+        weaponId: this.stats.id,
+        fired: false,
+        reason: 'cooldown',
+        cooldownRemainingMs: this.getCooldownRemainingMs(currentTime),
+        firePattern,
+        resolvedDirection: null,
+        targetKind: 'none',
+      };
+    }
+
+    if (firePattern === 'radial') {
+      const referenceDir =
+        this.toNormalizedVector(command.direction) ??
+        this.toNormalizedVector(command.fallbackDirection) ??
+        this.toNormalizedVector(this.lastFireDirection) ??
+        new Phaser.Math.Vector2(1, 0);
+
+      this.fireWithResolvedDirection(currentTime, referenceDir);
+      return {
+        weaponId: this.stats.id,
+        fired: true,
+        reason: 'fired',
+        cooldownRemainingMs: this.stats.fireCooldownMs,
+        firePattern,
+        resolvedDirection: { x: referenceDir.x, y: referenceDir.y },
+        targetKind: 'radial',
+      };
+    }
+
+    let chosenVector: Phaser.Math.Vector2 | null = null;
+    let targetKind: WeaponAttackExecutionResult['targetKind'] = 'fallback';
+
+    if (command.kind === 'aimed') {
+      chosenVector = this.toNormalizedVector(command.direction);
+      if (!chosenVector) {
+        return {
+          weaponId: this.stats.id,
+          fired: false,
+          reason: 'invalid-direction',
+          cooldownRemainingMs: 0,
+          firePattern,
+          resolvedDirection: null,
+          targetKind: 'none',
+        };
+      }
+      targetKind = 'aimed';
+    } else {
+      const targetResolution = this.findTapTargetDirection();
+      if (targetResolution) {
+        chosenVector = new Phaser.Math.Vector2(targetResolution.direction.x, targetResolution.direction.y);
+        targetKind = targetResolution.targetKind;
+      } else {
+        chosenVector =
+          this.toNormalizedVector(command.direction) ??
+          this.toNormalizedVector(command.fallbackDirection) ??
+          this.toNormalizedVector(this.lastFireDirection);
+        targetKind = 'fallback';
+      }
+    }
+
+    if (!chosenVector) {
+      return {
+        weaponId: this.stats.id,
+        fired: false,
+        reason: 'invalid-direction',
+        cooldownRemainingMs: 0,
+        firePattern,
+        resolvedDirection: null,
+        targetKind: 'none',
+      };
+    }
+
+    this.fireWithResolvedDirection(currentTime, chosenVector);
+    return {
+      weaponId: this.stats.id,
+      fired: true,
+      reason: 'fired',
+      cooldownRemainingMs: this.stats.fireCooldownMs,
+      firePattern,
+      resolvedDirection: { x: chosenVector.x, y: chosenVector.y },
+      targetKind,
+    };
   }
 
   destroy(): void {
@@ -278,14 +443,34 @@ export class AutoFireWeapon {
     return projectile;
   }
 
-  private resolveFireDirection(): Phaser.Math.Vector2 | null {
-    const direction = this.getFireDirection();
+  private fireWithResolvedDirection(currentTime: number, fireDirection: Phaser.Math.Vector2): void {
+    if (this.stats.firePattern === 'radial') {
+      this.lastFireDirection = { x: fireDirection.x, y: fireDirection.y };
+      this.fireRadialBurst();
+    } else {
+      this.fireInDirection(fireDirection);
+    }
+
+    this.createMuzzleFlash();
+    playWeaponFireCue(this.stats);
+    this.nextFireTime = currentTime + this.stats.fireCooldownMs;
+  }
+
+  private toNormalizedVector(direction?: { x: number; y: number } | null): Phaser.Math.Vector2 | null {
+    if (!direction || !Number.isFinite(direction.x) || !Number.isFinite(direction.y)) {
+      return null;
+    }
+
     const vector = new Phaser.Math.Vector2(direction.x, direction.y);
     if (vector.lengthSq() === 0) {
       return null;
     }
 
     return vector.normalize();
+  }
+
+  private resolveFireDirection(): Phaser.Math.Vector2 | null {
+    return this.toNormalizedVector(this.getFireDirection());
   }
 
   private createMuzzleFlash(): void {

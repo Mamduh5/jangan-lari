@@ -240,7 +240,12 @@ export function resolveMovementInput({
   };
 }
 
+export type MovementInputControllerOptions = {
+  disableAimPointer?: boolean;
+};
+
 export class MovementInputController {
+  private readonly disableAimPointer: boolean;
   private movementPointerId: number | null = null;
   private movementPointerStart: MovementVector = { x: 0, y: 0 };
   private movementPointerCurrent: MovementVector = { x: 0, y: 0 };
@@ -288,7 +293,7 @@ export class MovementInputController {
       return;
     }
 
-    if (this.aimPointerId !== null) {
+    if (this.disableAimPointer || this.aimPointerId !== null) {
       return;
     }
 
@@ -326,7 +331,9 @@ export class MovementInputController {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly keys: MovementKeys,
+    options: MovementInputControllerOptions = {},
   ) {
+    this.disableAimPointer = Boolean(options.disableAimPointer);
     this.scene.input.on('pointerdown', this.handlePointerDown);
     this.scene.input.on('pointermove', this.handlePointerMove);
     this.scene.input.on('pointerup', this.handlePointerUp);
@@ -414,9 +421,22 @@ export class MovementInputController {
     });
 
     this.applyPointerChannelState('movement', reconciled.movement);
-    this.applyPointerChannelState('aim', reconciled.aim);
+    this.applyPointerChannelState('aim', this.disableAimPointer ? createEmptyPointerChannelState() : reconciled.aim);
     this.suspendedMovementPointer = createEmptyPointerChannelState();
     this.suspendedAimPointer = createEmptyPointerChannelState();
+  }
+
+  isPointerClaimed(pointerId: number): boolean {
+    return this.movementPointerId === pointerId || this.aimPointerId === pointerId;
+  }
+
+  setFacingDirection(direction: MovementVector): void {
+    const normalized = normalizeMovementVector(direction);
+    if (normalized.x === 0 && normalized.y === 0) {
+      return;
+    }
+
+    this.lastFacing = normalized;
   }
 
   ignoreOverlaySelectionPointer(pointer: ActivePointerLike): void {

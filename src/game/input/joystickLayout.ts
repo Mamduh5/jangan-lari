@@ -34,6 +34,32 @@ export type JoystickSample = {
   knobPosition: JoystickPoint;
 };
 
+export type ManualAttackButtonLayout = {
+  x: number;
+  y: number;
+  buttonRadius: number;
+  hitRadius: number;
+  aimRingRadius: number;
+  knobRadius: number;
+  maxKnobTravel: number;
+  dragThreshold: number;
+  aimDeadzone: number;
+};
+
+export type ManualAttackCancelZoneLayout = {
+  x: number;
+  y: number;
+  radius: number;
+  hitRadius: number;
+};
+
+export type ManualAttackControlLayout = {
+  viewportWidth: number;
+  viewportHeight: number;
+  attackButton: ManualAttackButtonLayout;
+  cancelZone: ManualAttackCancelZoneLayout;
+};
+
 /**
  * Canonical mobile dual-joystick geometry in Phaser virtual game coordinates (1600x720).
  * Both MovementInputController (touch hit testing & vector calculation) and UIScene
@@ -52,6 +78,29 @@ export const DEFAULT_JOYSTICK_HIT_RADIUS = 108;
 export const DEFAULT_JOYSTICK_KNOB_RADIUS = 28;
 export const DEFAULT_JOYSTICK_MAX_KNOB_TRAVEL = 64;
 export const DEFAULT_JOYSTICK_DEADZONE = 12;
+
+/**
+ * Experimental MOBA-inspired ATTACK button and CANCEL zone geometry in 1600x720 virtual space.
+ * Clearances at 1600x720:
+ * - ATTACK center (1310, 552), hitRadius 88:
+ *   - PULSE (1244, 400, hitRadius 44): distance 165.7px -> 33.7px clear gap
+ *   - Stat Allocation panel (right edge 1172): 1310 - 88 = 1222 -> 50px clear gap
+ * - CANCEL center (1468, 376), hitRadius 54:
+ *   - ATTACK center (1310, 552): distance 236.5px -> 94.5px clear gap
+ *   - PULSE center (1244, 400): distance 225.3px -> 127.3px clear gap
+ *   - Pause button (1556, 39): 337px vertical clearance
+ */
+export const DEFAULT_MANUAL_ATTACK_BUTTON_RADIUS = 68;
+export const DEFAULT_MANUAL_ATTACK_HIT_RADIUS = 88;
+export const DEFAULT_MANUAL_ATTACK_AIM_RING_RADIUS = 92;
+export const DEFAULT_MANUAL_ATTACK_KNOB_RADIUS = 24;
+export const DEFAULT_MANUAL_ATTACK_MAX_KNOB_TRAVEL = 68;
+export const DEFAULT_MANUAL_ATTACK_DRAG_THRESHOLD = 22;
+export const DEFAULT_MANUAL_ATTACK_AIM_DEADZONE = 12;
+export const DEFAULT_MANUAL_CANCEL_CENTER_X = 1468;
+export const DEFAULT_MANUAL_CANCEL_CENTER_Y = 376;
+export const DEFAULT_MANUAL_CANCEL_RADIUS = 42;
+export const DEFAULT_MANUAL_CANCEL_HIT_RADIUS = 54;
 
 export function getDualJoystickLayout(
   viewportWidth = GAME_WIDTH,
@@ -161,4 +210,64 @@ export function sampleJoystickPointer(point: JoystickPoint, zone: JoystickZoneLa
       y: zone.y + knobOffsetY,
     },
   };
+}
+
+export function getManualAttackControlLayout(
+  viewportWidth = GAME_WIDTH,
+  viewportHeight?: number,
+): ManualAttackControlLayout {
+  const safeWidth = Number.isFinite(viewportWidth) && viewportWidth > 0 ? viewportWidth : GAME_WIDTH;
+  const derivedHeight = Math.round((safeWidth / GAME_WIDTH) * GAME_HEIGHT);
+  const safeHeight =
+    typeof viewportHeight === 'number' && Number.isFinite(viewportHeight) && viewportHeight > 0
+      ? viewportHeight
+      : derivedHeight;
+
+  const scaleX = safeWidth / GAME_WIDTH;
+  const scaleY = safeHeight / GAME_HEIGHT;
+  const radiusScale = Math.min(scaleX, scaleY);
+
+  return {
+    viewportWidth: safeWidth,
+    viewportHeight: safeHeight,
+    attackButton: {
+      x: safeWidth - DEFAULT_JOYSTICK_CENTER_X_OFFSET * scaleX,
+      y: DEFAULT_JOYSTICK_CENTER_Y * scaleY,
+      buttonRadius: DEFAULT_MANUAL_ATTACK_BUTTON_RADIUS * radiusScale,
+      hitRadius: DEFAULT_MANUAL_ATTACK_HIT_RADIUS * radiusScale,
+      aimRingRadius: DEFAULT_MANUAL_ATTACK_AIM_RING_RADIUS * radiusScale,
+      knobRadius: DEFAULT_MANUAL_ATTACK_KNOB_RADIUS * radiusScale,
+      maxKnobTravel: DEFAULT_MANUAL_ATTACK_MAX_KNOB_TRAVEL * radiusScale,
+      dragThreshold: DEFAULT_MANUAL_ATTACK_DRAG_THRESHOLD * radiusScale,
+      aimDeadzone: DEFAULT_MANUAL_ATTACK_AIM_DEADZONE * radiusScale,
+    },
+    cancelZone: {
+      x: DEFAULT_MANUAL_CANCEL_CENTER_X * scaleX,
+      y: DEFAULT_MANUAL_CANCEL_CENTER_Y * scaleY,
+      radius: DEFAULT_MANUAL_CANCEL_RADIUS * radiusScale,
+      hitRadius: DEFAULT_MANUAL_CANCEL_HIT_RADIUS * radiusScale,
+    },
+  };
+}
+
+export function isPointInsideManualAttackButton(
+  point: JoystickPoint,
+  layout: ManualAttackControlLayout = getManualAttackControlLayout(),
+): boolean {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    return false;
+  }
+
+  return Math.hypot(point.x - layout.attackButton.x, point.y - layout.attackButton.y) <= layout.attackButton.hitRadius;
+}
+
+export function isPointInsideManualCancelZone(
+  point: JoystickPoint,
+  layout: ManualAttackControlLayout = getManualAttackControlLayout(),
+): boolean {
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    return false;
+  }
+
+  return Math.hypot(point.x - layout.cancelZone.x, point.y - layout.cancelZone.y) <= layout.cancelZone.hitRadius;
 }

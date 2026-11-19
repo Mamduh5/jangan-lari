@@ -3,6 +3,7 @@ import { ENEMY_ARCHETYPES } from '../../src/game/data/enemies';
 import { HEROES, HERO_LIST } from '../../src/game/data/heroes';
 import { WEAPON_DEFINITIONS } from '../../src/game/data/weapons';
 import { createDefaultSaveData, writeGameSave, type GameSaveData } from '../../src/game/save/saveData';
+import { resetSessionAttackControlMode } from '../../src/game/input/attackControlMode';
 
 vi.mock('../../src/game/audio/audioCuePlayer', () => ({
   primeAudioContext: vi.fn(),
@@ -656,5 +657,41 @@ describe('MenuScene R3G-D2B complete Field Codex library', () => {
     expect(finalInternals.startButton.input?.enabled).toBe(true);
     finalInternals.startButton.emit('pointerdown');
     expect(scene.scene.start).toHaveBeenLastCalledWith('RunScene');
+  });
+
+  test('defaults attack control mode to Auto-Fire — Original and toggles session-only Manual Attack — Experimental without touching save data', () => {
+    resetSessionAttackControlMode();
+    const scene = createMenuFixture();
+    try {
+      const beforeSave = window.localStorage.getItem('jangan-lari-save-v1');
+      expect(scene.getMenuSnapshot().attackControlMode).toBe('auto-fire');
+      expect(scene.getMenuSnapshot().attackControlButtonText).toBe('Auto-Fire — Original');
+
+      const internals = scene as unknown as {
+        attackControlButton: { input: { enabled: boolean } | null; emit: (e: string) => void };
+        codexButton: { emit: (e: string) => void };
+        codexCloseButton: { emit: (e: string) => void };
+      };
+      expect(internals.attackControlButton.input?.enabled).toBe(true);
+
+      // Toggle to experimental manual attack mode
+      internals.attackControlButton.emit('pointerdown');
+      expect(scene.getMenuSnapshot().attackControlMode).toBe('manual-attack');
+      expect(scene.getMenuSnapshot().attackControlButtonText).toBe('Manual Attack — Experimental');
+      expect(window.localStorage.getItem('jangan-lari-save-v1')).toBe(beforeSave);
+
+      // Codex disables the menu control toggle cleanly and restores it on close
+      internals.codexButton.emit('pointerdown');
+      expect(internals.attackControlButton.input?.enabled).toBe(false);
+      internals.codexCloseButton.emit('pointerdown');
+      expect(internals.attackControlButton.input?.enabled).toBe(true);
+
+      // Toggle back to Auto-Fire — Original
+      internals.attackControlButton.emit('pointerdown');
+      expect(scene.getMenuSnapshot().attackControlMode).toBe('auto-fire');
+      expect(scene.getMenuSnapshot().attackControlButtonText).toBe('Auto-Fire — Original');
+    } finally {
+      resetSessionAttackControlMode();
+    }
   });
 });

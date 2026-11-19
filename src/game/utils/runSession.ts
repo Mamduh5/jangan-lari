@@ -8,6 +8,8 @@
   LEVEL_UP_AUTO_PICK_MS,
   RUN_ACTIVE_DELTA_CAP_MS,
 } from '../config/constants';
+import { DEFAULT_ATTACK_CONTROL_MODE } from '../input/attackControlMode';
+import { createIdleManualAttackHudState } from '../systems/manualAttackResolver';
 
 export type RunSessionState = {
   runElapsedMs: number;
@@ -201,6 +203,8 @@ export function writeFreshRunRegistryState(registry: RegistryLike, selectedHeroN
     'run.localLeaderboardEntryCount': 0,
     'run.goldEarned': 0,
     'run.totalGold': totalGold,
+    'run.attackControlMode': DEFAULT_ATTACK_CONTROL_MODE,
+    'run.manualAttackState': createIdleManualAttackHudState(false),
   };
 
   for (const [key, value] of Object.entries(state)) {
@@ -279,6 +283,8 @@ export function clearRunRegistryState(registry: RegistryLike, totalGold: number)
     'run.localLeaderboardEntryCount': 0,
     'run.goldEarned': 0,
     'run.totalGold': totalGold,
+    'run.attackControlMode': DEFAULT_ATTACK_CONTROL_MODE,
+    'run.manualAttackState': createIdleManualAttackHudState(false),
   };
 
   for (const [key, value] of Object.entries(state)) {
