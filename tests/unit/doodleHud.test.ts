@@ -3,6 +3,7 @@ import { VITALITY_REGEN_PER_SECOND } from '../../src/game/config/playerBalance';
 import { TANK_CLASS_DEFINITIONS } from '../../src/game/data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS } from '../../src/game/data/tankStats';
 import { UPGRADE_POOL, type UpgradeDefinition } from '../../src/game/data/upgrades';
+import { getDualJoystickLayout } from '../../src/game/input/joystickLayout';
 import {
   DOODLE_COLORS,
   DOODLE_HEX,
@@ -499,6 +500,91 @@ describe('UIScene R3G-B doodle combat HUD', () => {
       for (const z of guideZones) {
         expect(z.setInteractive).not.toHaveBeenCalled();
       }
+      const guideHitRings = (ui as unknown as { controlGuideHitRings: Array<{ setInteractive: ReturnType<typeof vi.fn> }> }).controlGuideHitRings;
+      expect(guideHitRings).toHaveLength(2);
+      for (const ring of guideHitRings) {
+        expect(ring.setInteractive).not.toHaveBeenCalled();
+      }
+    } finally {
+      restoreViewport();
+    }
+  });
+
+  test('aligns visible MOVE/AIM joystick circles and knob clamping with shared joystickLayout and forwards HUD button pointers', () => {
+    const { ui, runSceneStub, restoreViewport } = createUiFixture({ viewportWidth: 844, viewportHeight: 390 });
+    try {
+      const expectedLayout = getDualJoystickLayout(1600, 720);
+      const initialSnap = ui.getHudSnapshot();
+      expect(initialSnap.joystickLayout).toEqual(expectedLayout);
+      expect(initialSnap.movementJoystickKnob).toEqual({ x: expectedLayout.movement.x, y: expectedLayout.movement.y });
+      expect(initialSnap.aimJoystickKnob).toEqual({ x: expectedLayout.aim.x, y: expectedLayout.aim.y });
+
+      const internals = ui as unknown as {
+        controlGuideHitRings: Array<{ x: number; y: number; width: number }>;
+        controlGuideZones: Array<{ x: number; y: number; width: number }>;
+        pauseButton: { emit: (event: string, ...args: unknown[]) => void };
+        activeAbilityButtonHitArea: { emit: (event: string, ...args: unknown[]) => void };
+      };
+      expect(internals.controlGuideHitRings[0]).toMatchObject({
+        x: expectedLayout.movement.x,
+        y: expectedLayout.movement.y,
+        width: expectedLayout.movement.hitRadius * 2,
+      });
+      expect(internals.controlGuideHitRings[1]).toMatchObject({
+        x: expectedLayout.aim.x,
+        y: expectedLayout.aim.y,
+        width: expectedLayout.aim.hitRadius * 2,
+      });
+      expect(internals.controlGuideZones[0]).toMatchObject({
+        x: expectedLayout.movement.x,
+        y: expectedLayout.movement.y,
+        width: expectedLayout.movement.baseRadius * 2,
+      });
+      expect(internals.controlGuideZones[1]).toMatchObject({
+        x: expectedLayout.aim.x,
+        y: expectedLayout.aim.y,
+        width: expectedLayout.aim.baseRadius * 2,
+      });
+
+      // Vector inside deadzone keeps knob centered; vector beyond maxKnobTravel clamps to maxKnobTravel along exact angle
+      ui.registry.set('run.controlJoysticks', {
+        movement: {
+          active: true,
+          start: { x: expectedLayout.movement.x, y: expectedLayout.movement.y },
+          current: { x: expectedLayout.movement.x + 4, y: expectedLayout.movement.y + 3 },
+          vector: { x: 4, y: 3 },
+        },
+        aim: {
+          active: true,
+          start: { x: expectedLayout.aim.x, y: expectedLayout.aim.y },
+          current: { x: expectedLayout.aim.x + 150, y: expectedLayout.aim.y - 200 },
+          vector: { x: 150, y: -200 },
+        },
+      });
+      ui.update();
+
+      const activeSnap = ui.getHudSnapshot();
+      expect(activeSnap.movementJoystickKnob).toEqual({ x: expectedLayout.movement.x, y: expectedLayout.movement.y });
+      expect(activeSnap.aimJoystickKnob.x).toBeCloseTo(expectedLayout.aim.x + 0.6 * expectedLayout.aim.maxKnobTravel);
+      expect(activeSnap.aimJoystickKnob.y).toBeCloseTo(expectedLayout.aim.y - 0.8 * expectedLayout.aim.maxKnobTravel);
+
+      // Releasing returns both knobs to exact joystick centers
+      ui.registry.set('run.controlJoysticks', {
+        movement: { active: false, start: { x: expectedLayout.movement.x, y: expectedLayout.movement.y }, current: { x: expectedLayout.movement.x, y: expectedLayout.movement.y }, vector: { x: 0, y: 0 } },
+        aim: { active: false, start: { x: expectedLayout.aim.x, y: expectedLayout.aim.y }, current: { x: expectedLayout.aim.x, y: expectedLayout.aim.y }, vector: { x: 0, y: 0 } },
+      });
+      ui.update();
+      const idleSnap = ui.getHudSnapshot();
+      expect(idleSnap.movementJoystickKnob).toEqual({ x: expectedLayout.movement.x, y: expectedLayout.movement.y });
+      expect(idleSnap.aimJoystickKnob).toEqual({ x: expectedLayout.aim.x, y: expectedLayout.aim.y });
+
+      // PULSE and Pause forward pointer payload so RunScene can clear/ignore UI button touches
+      const pulsePointer = { id: 5, x: 1244, y: 400, isDown: true, downTime: 50 };
+      const pausePointer = { id: 6, x: 1556, y: 39, isDown: true, downTime: 60 };
+      internals.activeAbilityButtonHitArea.emit('pointerdown', pulsePointer);
+      internals.pauseButton.emit('pointerdown', pausePointer);
+      expect(runSceneStub.activateBreakoutPulse).toHaveBeenCalledWith(pulsePointer);
+      expect(runSceneStub.openManualPauseMenu).toHaveBeenCalledWith(pausePointer);
     } finally {
       restoreViewport();
     }

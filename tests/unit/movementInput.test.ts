@@ -1,4 +1,16 @@
 import {
+  DEFAULT_JOYSTICK_BASE_RADIUS,
+  DEFAULT_JOYSTICK_CENTER_X_OFFSET,
+  DEFAULT_JOYSTICK_CENTER_Y,
+  DEFAULT_JOYSTICK_DEADZONE,
+  DEFAULT_JOYSTICK_HIT_RADIUS,
+  DEFAULT_JOYSTICK_KNOB_RADIUS,
+  DEFAULT_JOYSTICK_MAX_KNOB_TRAVEL,
+  getDualJoystickLayout,
+  hitTestJoystickZone,
+  sampleJoystickPointer,
+} from '../../src/game/input/joystickLayout';
+import {
   MovementInputController,
   type ActivePointerLike,
   getPointerControlZone,
@@ -11,7 +23,7 @@ import {
 const zero: MovementVector = { x: 0, y: 0 };
 const right: MovementVector = { x: 1, y: 0 };
 
-describe('movement input helpers', () => {
+describe('movement input helpers and shared joystick layout', () => {
   test('normalizes diagonal movement vectors', () => {
     const movement = normalizeMovementVector({ x: 3, y: 4 });
 
@@ -131,42 +143,126 @@ describe('movement input helpers', () => {
     expect(underDeadzone).toMatchObject({ movement: zero, facing: right, source: 'idle' });
   });
 
-  test('classifies left and right screen halves for dual-zone touch controls', () => {
-    expect(getPointerControlZone(120, 800)).toBe('movement');
-    expect(getPointerControlZone(520, 800)).toBe('aim');
+  test('defines symmetric shared joystick geometry clear of PULSE, Pause, and Stat Allocation', () => {
+    const layout = getDualJoystickLayout(1600, 720);
+
+    expect(layout.movement).toEqual({
+      id: 'movement',
+      x: DEFAULT_JOYSTICK_CENTER_X_OFFSET,
+      y: DEFAULT_JOYSTICK_CENTER_Y,
+      baseRadius: DEFAULT_JOYSTICK_BASE_RADIUS,
+      hitRadius: DEFAULT_JOYSTICK_HIT_RADIUS,
+      knobRadius: DEFAULT_JOYSTICK_KNOB_RADIUS,
+      maxKnobTravel: DEFAULT_JOYSTICK_MAX_KNOB_TRAVEL,
+      deadzone: DEFAULT_JOYSTICK_DEADZONE,
+    });
+    expect(layout.aim.x).toBe(1600 - DEFAULT_JOYSTICK_CENTER_X_OFFSET);
+    expect(layout.aim.y).toBe(DEFAULT_JOYSTICK_CENTER_Y);
+    expect(layout.movement.maxKnobTravel + layout.movement.knobRadius).toBeLessThanOrEqual(layout.movement.baseRadius);
+
+    // PULSE button (1244, 400) with hitRadius 44 must stay clear of AIM hitRadius
+    const pulseDistance = Math.hypot(layout.aim.x - 1244, layout.aim.y - 400);
+    expect(pulseDistance).toBeGreaterThan(44 + layout.aim.hitRadius);
+
+    // Stat allocation panel occupies x in [428, 1172]
+    expect(layout.movement.x + layout.movement.hitRadius).toBeLessThan(428);
+    expect(layout.aim.x - layout.aim.hitRadius).toBeGreaterThan(1172);
   });
 
-  test('reconciles held left and right pointers using their original control starts', () => {
+  test('hit-tests only inside MOVE and AIM joystick bounds and rejects screen-half arena or HUD touches', () => {
+    const layout = getDualJoystickLayout(1600, 720);
+
+    // Inside MOVE (center, base, and outer forgiving boundary)
+    expect(getPointerControlZone(layout.movement.x, layout.movement.y, 1600, 720)).toBe('movement');
+    expect(getPointerControlZone(layout.movement.x + 80, layout.movement.y - 40, 1600, 720)).toBe('movement');
+    expect(getPointerControlZone(layout.movement.x + layout.movement.hitRadius, layout.movement.y, 1600, 720)).toBe('movement');
+
+    // Inside AIM
+    expect(getPointerControlZone(layout.aim.x, layout.aim.y, 1600, 720)).toBe('aim');
+    expect(getPointerControlZone(layout.aim.x - 60, layout.aim.y - 70, 1600, 720)).toBe('aim');
+    expect(getPointerControlZone(layout.aim.x - layout.aim.hitRadius, layout.aim.y, 1600, 720)).toBe('aim');
+
+    // Outside both pads (open left/right arena, center, PULSE, Pause, Stat panel)
+    expect(getPointerControlZone(140, 300, 1600, 720)).toBeNull();
+    expect(getPointerControlZone(1260, 300, 1600, 720)).toBeNull();
+    expect(getPointerControlZone(800, 360, 1600, 720)).toBeNull();
+    expect(getPointerControlZone(1244, 400, 1600, 720)).toBeNull(); // PULSE center
+    expect(getPointerControlZone(1244 + 30, 400 + 32, 1600, 720)).toBeNull(); // PULSE lower-right hit rim
+    expect(getPointerControlZone(1556, 39, 1600, 720)).toBeNull(); // Pause button
+    expect(getPointerControlZone(540, 622, 1600, 720)).toBeNull(); // Stat tile 1
+    expect(getPointerControlZone(888, 622, 1600, 720)).toBeNull(); // Stat tile 3
+    expect(getPointerControlZone(layout.movement.x + layout.movement.hitRadius + 1, layout.movement.y, 1600, 720)).toBeNull();
+
+    // Proportional scaling for alternate virtual dimensions
+    const halfLayout = getDualJoystickLayout(800, 360);
+    expect(hitTestJoystickZone(halfLayout.movement.x, halfLayout.movement.y, halfLayout)).toBe('movement');
+    expect(hitTestJoystickZone(halfLayout.aim.x, halfLayout.aim.y, halfLayout)).toBe('aim');
+    expect(hitTestJoystickZone(400, 180, halfLayout)).toBeNull();
+  });
+
+  test('sampleJoystickPointer aligns knob offset with center-relative input vector and clamps to maxKnobTravel', () => {
+    const { movement } = getDualJoystickLayout(1600, 720);
+
+    const inDeadzone = sampleJoystickPointer({ x: movement.x + 5, y: movement.y - 5 }, movement);
+    expect(inDeadzone.engaged).toBe(false);
+    expect(inDeadzone.direction).toEqual(zero);
+    expect(inDeadzone.knobOffset).toEqual(zero);
+    expect(inDeadzone.knobPosition).toEqual({ x: movement.x, y: movement.y });
+
+    const midDrag = sampleJoystickPointer({ x: movement.x + 30, y: movement.y - 40 }, movement);
+    expect(midDrag.engaged).toBe(true);
+    expect(midDrag.direction.x).toBeCloseTo(0.6);
+    expect(midDrag.direction.y).toBeCloseTo(-0.8);
+    expect(midDrag.knobOffset).toEqual({ x: 30, y: -40 });
+
+    const farDrag = sampleJoystickPointer({ x: movement.x + 300, y: movement.y + 400 }, movement);
+    expect(farDrag.engaged).toBe(true);
+    expect(farDrag.direction.x).toBeCloseTo(0.6);
+    expect(farDrag.direction.y).toBeCloseTo(0.8);
+    expect(Math.hypot(farDrag.knobOffset.x, farDrag.knobOffset.y)).toBeCloseTo(movement.maxKnobTravel);
+    expect(farDrag.knobOffset.x).toBeCloseTo(0.6 * movement.maxKnobTravel);
+    expect(farDrag.knobOffset.y).toBeCloseTo(0.8 * movement.maxKnobTravel);
+  });
+
+  test('reconciles held movement and aim pointers anchored to fixed joystick centers even if dragged outside', () => {
+    const layout = getDualJoystickLayout(1600, 720);
     const reconciled = reconcilePointerChannels({
       viewportWidth: 1600,
+      viewportHeight: 720,
       activePointers: [
-        { id: 1, x: 260, y: 300, isDown: true, downTime: 10 },
-        { id: 2, x: 1260, y: 220, isDown: true, downTime: 20 },
+        { id: 1, x: 480, y: 420, isDown: true, downTime: 10 }, // dragged outside MOVE while held
+        { id: 2, x: 1120, y: 380, isDown: true, downTime: 20 }, // dragged outside AIM while held
       ],
       previousMovement: {
         pointerId: 1,
-        start: { x: 140, y: 300 },
-        current: { x: 240, y: 300 },
+        start: { x: layout.movement.x, y: layout.movement.y },
+        current: { x: 440, y: 440 },
       },
       previousAim: {
         pointerId: 2,
-        start: { x: 1260, y: 300 },
-        current: { x: 1260, y: 240 },
+        start: { x: layout.aim.x, y: layout.aim.y },
+        current: { x: 1150, y: 400 },
       },
     });
 
     expect(reconciled.movement.pointerId).toBe(1);
-    expect(reconciled.movement.start).toEqual({ x: 140, y: 300 });
-    expect(reconciled.movement.current).toEqual({ x: 260, y: 300 });
+    expect(reconciled.movement.start).toEqual({ x: layout.movement.x, y: layout.movement.y });
+    expect(reconciled.movement.current).toEqual({ x: 480, y: 420 });
     expect(reconciled.aim.pointerId).toBe(2);
-    expect(reconciled.aim.start).toEqual({ x: 1260, y: 300 });
-    expect(reconciled.aim.current).toEqual({ x: 1260, y: 220 });
+    expect(reconciled.aim.start).toEqual({ x: layout.aim.x, y: layout.aim.y });
+    expect(reconciled.aim.current).toEqual({ x: 1120, y: 380 });
   });
 
-  test('ignores an overlay selection pointer during reconciliation', () => {
+  test('reconciliation ignores pointers outside joystick hit areas and ignored overlay pointers', () => {
+    const layout = getDualJoystickLayout(1600, 720);
     const reconciled = reconcilePointerChannels({
       viewportWidth: 1600,
-      activePointers: [{ id: 9, x: 240, y: 360, isDown: true, downTime: 90 }],
+      viewportHeight: 720,
+      activePointers: [
+        { id: 7, x: 140, y: 300, isDown: true, downTime: 50 }, // outside MOVE
+        { id: 8, x: 1244, y: 400, isDown: true, downTime: 60 }, // PULSE button
+        { id: 9, x: layout.movement.x + 20, y: layout.movement.y, isDown: true, downTime: 90 }, // inside MOVE but ignored
+      ],
       ignoredPointerIds: [9],
     });
 
@@ -174,13 +270,147 @@ describe('movement input helpers', () => {
     expect(reconciled.aim.pointerId).toBeNull();
   });
 
+  test('ignores touches starting outside joysticks even when dragged across a joystick circle', () => {
+    const { controller, emit, setActivePointers, layout } = createControllerHarness();
+    const strayLeft = createPointer(1, 140, 300, 10);
+    const pulseTap = createPointer(2, 1244, 400, 20);
+
+    setActivePointers([strayLeft, pulseTap]);
+    emit('pointerdown', strayLeft);
+    emit('pointerdown', pulseTap);
+
+    // Drag both stray pointers right through the MOVE and AIM circles
+    strayLeft.x = layout.movement.x + 50;
+    strayLeft.y = layout.movement.y;
+    emit('pointermove', strayLeft);
+    pulseTap.x = layout.aim.x;
+    pulseTap.y = layout.aim.y - 50;
+    emit('pointermove', pulseTap);
+
+    const input = controller.getMovementInput();
+    const guides = controller.getPointerGuideState();
+    expect(input.source).toBe('idle');
+    expect(input.movement).toEqual(zero);
+    expect(input.aimActive).toBe(false);
+    expect(guides.movement.active).toBe(false);
+    expect(guides.aim.active).toBe(false);
+  });
+
+  test('calculates joystick vector from fixed joystick center on immediate off-center touch and respects deadzone', () => {
+    const { controller, emit, setActivePointers, layout } = createControllerHarness();
+
+    // 1. Touch inside deadzone near center -> captured, zero movement, knob stays centered
+    const centerTouch = createPointer(1, layout.movement.x + 5, layout.movement.y + 4, 10);
+    setActivePointers([centerTouch]);
+    emit('pointerdown', centerTouch);
+
+    expect(controller.getMovementInput().source).toBe('idle');
+    expect(controller.getPointerGuideState().movement).toMatchObject({
+      active: true,
+      start: { x: layout.movement.x, y: layout.movement.y },
+      vector: zero,
+    });
+
+    // Release and tap immediately off-center inside MOVE ring (no pointermove needed!)
+    centerTouch.isDown = false;
+    setActivePointers([]);
+    emit('pointerup', centerTouch);
+
+    const offCenterMove = createPointer(2, layout.movement.x + 48, layout.movement.y, 20);
+    setActivePointers([offCenterMove]);
+    emit('pointerdown', offCenterMove);
+
+    const moveSnapshot = controller.getMovementInput();
+    expect(moveSnapshot.source).toBe('pointer');
+    expect(moveSnapshot.movement.x).toBeCloseTo(1);
+    expect(moveSnapshot.movement.y).toBeCloseTo(0);
+    expect(controller.getPointerGuideState().movement.vector).toEqual({ x: 48, y: 0 });
+  });
+
+  test('tracks pointer outside ring once started inside, clamps knob to radius, supports fast reversals, and resets cleanly', () => {
+    const { controller, emit, setActivePointers, layout } = createControllerHarness();
+    const movePointer = createPointer(1, layout.movement.x + 20, layout.movement.y, 10);
+
+    setActivePointers([movePointer]);
+    emit('pointerdown', movePointer);
+
+    // Drag far outside the MOVE circle (even into the right half of the screen)
+    movePointer.x = layout.movement.x + 300;
+    movePointer.y = layout.movement.y - 400;
+    emit('pointermove', movePointer);
+
+    const farDiagonal = controller.getMovementInput();
+    const farGuide = controller.getPointerGuideState().movement;
+    expect(farDiagonal.source).toBe('pointer');
+    expect(farDiagonal.movement.x).toBeCloseTo(0.6);
+    expect(farDiagonal.movement.y).toBeCloseTo(-0.8);
+    expect(Math.hypot(farGuide.vector.x, farGuide.vector.y)).toBeCloseTo(layout.movement.maxKnobTravel);
+    expect(farGuide.vector.x / layout.movement.maxKnobTravel).toBeCloseTo(farDiagonal.movement.x);
+    expect(farGuide.vector.y / layout.movement.maxKnobTravel).toBeCloseTo(farDiagonal.movement.y);
+
+    // Fast direction reversal to straight left
+    movePointer.x = layout.movement.x - 120;
+    movePointer.y = layout.movement.y;
+    emit('pointermove', movePointer);
+
+    const reversed = controller.getMovementInput();
+    const reversedGuide = controller.getPointerGuideState().movement;
+    expect(reversed.movement.x).toBeCloseTo(-1);
+    expect(reversed.movement.y).toBeCloseTo(0);
+    expect(reversedGuide.vector.x).toBeCloseTo(-layout.movement.maxKnobTravel);
+    expect(reversedGuide.vector.y).toBeCloseTo(0);
+
+    // Release resets movement & knob cleanly
+    movePointer.isDown = false;
+    setActivePointers([]);
+    emit('pointerupoutside', movePointer);
+
+    const afterRelease = controller.getMovementInput();
+    expect(afterRelease.source).toBe('idle');
+    expect(afterRelease.movement).toEqual(zero);
+    expect(controller.getPointerGuideState().movement.active).toBe(false);
+    expect(controller.getPointerGuideState().movement.vector).toEqual(zero);
+  });
+
+  test('supports simultaneous MOVE + AIM multitouch and resists second touch stealing or PULSE tapping', () => {
+    const { controller, emit, setActivePointers, layout } = createControllerHarness();
+    const movePointer = createPointer(1, layout.movement.x - 50, layout.movement.y, 10);
+    const aimPointer = createPointer(2, layout.aim.x, layout.aim.y - 50, 20);
+    const thirdTouchInMove = createPointer(3, layout.movement.x + 60, layout.movement.y, 30);
+
+    setActivePointers([movePointer, aimPointer, thirdTouchInMove]);
+    emit('pointerdown', movePointer);
+    emit('pointerdown', aimPointer);
+    emit('pointerdown', thirdTouchInMove); // must NOT steal MOVE
+
+    const combined = controller.getMovementInput();
+    expect(combined.source).toBe('pointer');
+    expect(combined.movement.x).toBeCloseTo(-1);
+    expect(combined.aimActive).toBe(true);
+    expect(combined.aim.y).toBeCloseTo(-1);
+
+    // Release AIM and tap PULSE while MOVE stays held
+    aimPointer.isDown = false;
+    emit('pointerup', aimPointer);
+    const pulseTap = createPointer(4, 1244, 400, 40);
+    setActivePointers([movePointer, pulseTap]);
+    controller.clearOverlaySelectionPointer(pulseTap);
+    emit('pointerdown', pulseTap);
+
+    const afterPulse = controller.getMovementInput();
+    expect(afterPulse.source).toBe('pointer');
+    expect(afterPulse.movement.x).toBeCloseTo(-1);
+    expect(afterPulse.aimActive).toBe(false);
+    expect(controller.getPointerGuideState().aim.active).toBe(false);
+  });
+
   test('suspend suppresses output while preserving explicit aim', () => {
-    const { controller, emit, setActivePointers } = createControllerHarness();
-    const aimPointer = createPointer(2, 1260, 300, 20);
+    const { controller, emit, setActivePointers, layout } = createControllerHarness();
+    const aimPointer = createPointer(2, layout.aim.x, layout.aim.y - 10, 20);
 
     setActivePointers([aimPointer]);
     emit('pointerdown', aimPointer);
-    aimPointer.y = 220;
+    aimPointer.y = layout.aim.y - 80;
     emit('pointermove', aimPointer);
 
     const activeAim = controller.getMovementInput();
@@ -198,16 +428,16 @@ describe('movement input helpers', () => {
   });
 
   test('resume reacquires held movement and aim pointers without a new pointerdown', () => {
-    const { controller, emit, setActivePointers } = createControllerHarness();
-    const movementPointer = createPointer(1, 140, 300, 10);
-    const aimPointer = createPointer(2, 1260, 300, 20);
+    const { controller, emit, setActivePointers, layout } = createControllerHarness();
+    const movementPointer = createPointer(1, layout.movement.x, layout.movement.y, 10);
+    const aimPointer = createPointer(2, layout.aim.x, layout.aim.y, 20);
 
     setActivePointers([movementPointer, aimPointer]);
     emit('pointerdown', movementPointer);
-    movementPointer.x = 250;
+    movementPointer.x = layout.movement.x + 140; // dragged outside ring before overlay
     emit('pointermove', movementPointer);
     emit('pointerdown', aimPointer);
-    aimPointer.y = 220;
+    aimPointer.y = layout.aim.y - 140; // dragged outside ring before overlay
     emit('pointermove', aimPointer);
 
     controller.suspendForOverlay();
@@ -224,13 +454,11 @@ describe('movement input helpers', () => {
   });
 
   test('resume with no active pointer leaves movement idle and preserves aim', () => {
-    const { controller, emit, setActivePointers } = createControllerHarness();
-    const aimPointer = createPointer(2, 1260, 300, 20);
+    const { controller, emit, setActivePointers, layout } = createControllerHarness();
+    const aimPointer = createPointer(2, layout.aim.x, layout.aim.y - 60, 20);
 
     setActivePointers([aimPointer]);
     emit('pointerdown', aimPointer);
-    aimPointer.y = 220;
-    emit('pointermove', aimPointer);
     controller.getMovementInput();
 
     controller.suspendForOverlay();
@@ -249,8 +477,8 @@ describe('movement input helpers', () => {
   });
 
   test('overlay selection pointer does not become control and same id works after release', () => {
-    const { controller, emit, setActivePointers } = createControllerHarness();
-    const selectionPointer = createPointer(9, 220, 360, 90);
+    const { controller, emit, setActivePointers, layout } = createControllerHarness();
+    const selectionPointer = createPointer(9, layout.movement.x + 30, layout.movement.y, 90);
 
     controller.suspendForOverlay();
     setActivePointers([selectionPointer]);
@@ -263,11 +491,9 @@ describe('movement input helpers', () => {
     setActivePointers([]);
     emit('pointerup', selectionPointer);
 
-    const nextPointer = createPointer(9, 140, 300, 110);
+    const nextPointer = createPointer(9, layout.movement.x + 50, layout.movement.y, 110);
     setActivePointers([nextPointer]);
     emit('pointerdown', nextPointer);
-    nextPointer.x = 240;
-    emit('pointermove', nextPointer);
 
     const freshTouch = controller.getMovementInput();
     expect(freshTouch.source).toBe('pointer');
@@ -279,6 +505,7 @@ function createControllerHarness(): {
   controller: MovementInputController;
   emit: (eventName: string, pointer: ActivePointerLike) => void;
   setActivePointers: (nextPointers: ActivePointerLike[]) => void;
+  layout: ReturnType<typeof getDualJoystickLayout>;
 } {
   const handlers = new Map<string, Array<(pointer: ActivePointerLike) => void>>();
   const manager: { pointers: ActivePointerLike[]; mousePointer?: ActivePointerLike } = { pointers: [] };
@@ -296,7 +523,7 @@ function createControllerHarness(): {
     },
   };
   const scene = {
-    scale: { width: 1600 },
+    scale: { width: 1600, height: 720 },
     input,
   };
   const key = { isDown: false };
@@ -323,6 +550,7 @@ function createControllerHarness(): {
       manager.pointers = nextPointers;
       input.activePointer = nextPointers[0];
     },
+    layout: getDualJoystickLayout(1600, 720),
   };
 }
 

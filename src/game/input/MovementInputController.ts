@@ -1,5 +1,26 @@
 import Phaser from 'phaser';
+import { GAME_WIDTH } from '../config/constants';
 import type { MovementKeys } from './createMovementKeys';
+import {
+  DEFAULT_JOYSTICK_DEADZONE,
+  getDualJoystickLayout,
+  hitTestJoystickZone,
+  sampleJoystickPointer,
+  type DualJoystickLayout,
+  type JoystickId,
+  type JoystickZoneLayout,
+} from './joystickLayout';
+
+export {
+  getDualJoystickLayout,
+  hitTestJoystickZone,
+  isPointInsideJoystick,
+  sampleJoystickPointer,
+  type DualJoystickLayout,
+  type JoystickId,
+  type JoystickSample,
+  type JoystickZoneLayout,
+} from './joystickLayout';
 
 export type MovementVector = {
   x: number;
@@ -53,6 +74,7 @@ export type PointerChannelState = {
 export type ReconcilePointerChannelsOptions = {
   activePointers: ActivePointerLike[];
   viewportWidth: number;
+  viewportHeight?: number;
   previousMovement?: PointerChannelState;
   previousAim?: PointerChannelState;
   ignoredPointerIds?: Iterable<number>;
@@ -73,8 +95,8 @@ export type ResolveMovementInputOptions = {
 };
 
 const DEFAULT_FACING: MovementVector = { x: 1, y: 0 };
-const POINTER_DEADZONE_PX = 12;
-export type PointerControlZone = 'movement' | 'aim';
+const POINTER_DEADZONE_PX = DEFAULT_JOYSTICK_DEADZONE;
+export type PointerControlZone = JoystickId;
 
 export function normalizeMovementVector(vector: MovementVector): MovementVector {
   const length = Math.hypot(vector.x, vector.y);
@@ -89,8 +111,14 @@ export function normalizeMovementVector(vector: MovementVector): MovementVector 
   };
 }
 
-export function getPointerControlZone(pointerX: number, viewportWidth: number): PointerControlZone {
-  return pointerX < viewportWidth / 2 ? 'movement' : 'aim';
+export function getPointerControlZone(
+  pointerX: number,
+  pointerY: number,
+  viewportWidth = GAME_WIDTH,
+  viewportHeight?: number,
+): PointerControlZone | null {
+  const layout = getDualJoystickLayout(viewportWidth, viewportHeight);
+  return hitTestJoystickZone(pointerX, pointerY, layout);
 }
 
 export function createEmptyPointerChannelState(): PointerChannelState {
@@ -104,10 +132,12 @@ export function createEmptyPointerChannelState(): PointerChannelState {
 export function reconcilePointerChannels({
   activePointers,
   viewportWidth,
+  viewportHeight,
   previousMovement = createEmptyPointerChannelState(),
   previousAim = createEmptyPointerChannelState(),
   ignoredPointerIds = [],
 }: ReconcilePointerChannelsOptions): ReconciledPointerChannels {
+  const layout = getDualJoystickLayout(viewportWidth, viewportHeight);
   const ignored = new Set(ignoredPointerIds);
   const candidates = activePointers
     .filter((pointer) => pointer.isDown && !ignored.has(pointer.id))
@@ -116,12 +146,40 @@ export function reconcilePointerChannels({
       const rightDownTime = right.downTime ?? Number.MAX_SAFE_INTEGER;
       return leftDownTime === rightDownTime ? left.id - right.id : leftDownTime - rightDownTime;
     });
-  const movementCandidates = candidates.filter((pointer) => getPointerControlZone(pointer.x, viewportWidth) === 'movement');
-  const aimCandidates = candidates.filter((pointer) => getPointerControlZone(pointer.x, viewportWidth) === 'aim');
+
+  const claimedPointerIds = new Set<number>();
+
+  const resumedMovement = findResumedPointer(candidates, previousMovement, claimedPointerIds);
+  if (resumedMovement) {
+    claimedPointerIds.add(resumedMovement.id);
+  }
+
+  const resumedAim = findResumedPointer(candidates, previousAim, claimedPointerIds);
+  if (resumedAim) {
+    claimedPointerIds.add(resumedAim.id);
+  }
+
+  const movementPointer =
+    resumedMovement ??
+    candidates.find(
+      (pointer) =>
+        !claimedPointerIds.has(pointer.id) && hitTestJoystickZone(pointer.x, pointer.y, layout) === 'movement',
+    ) ??
+    null;
+  if (movementPointer) {
+    claimedPointerIds.add(movementPointer.id);
+  }
+
+  const aimPointer =
+    resumedAim ??
+    candidates.find(
+      (pointer) => !claimedPointerIds.has(pointer.id) && hitTestJoystickZone(pointer.x, pointer.y, layout) === 'aim',
+    ) ??
+    null;
 
   return {
-    movement: reconcilePointerChannel(movementCandidates, previousMovement),
-    aim: reconcilePointerChannel(aimCandidates, previousAim),
+    movement: buildReconciledChannelState(movementPointer, layout.movement),
+    aim: buildReconciledChannelState(aimPointer, layout.aim),
   };
 }
 
@@ -212,7 +270,12 @@ export class MovementInputController {
       return;
     }
 
-    const zone = getPointerControlZone(pointer.x, this.scene.scale.width);
+    const layout = this.getJoystickLayout();
+    const zone = hitTestJoystickZone(pointer.x, pointer.y, layout);
+
+    if (!zone) {
+      return;
+    }
 
     if (zone === 'movement') {
       if (this.movementPointerId !== null) {
@@ -220,7 +283,7 @@ export class MovementInputController {
       }
 
       this.movementPointerId = pointer.id;
-      this.movementPointerStart = { x: pointer.x, y: pointer.y };
+      this.movementPointerStart = { x: layout.movement.x, y: layout.movement.y };
       this.movementPointerCurrent = { x: pointer.x, y: pointer.y };
       return;
     }
@@ -230,7 +293,7 @@ export class MovementInputController {
     }
 
     this.aimPointerId = pointer.id;
-    this.aimPointerStart = { x: pointer.x, y: pointer.y };
+    this.aimPointerStart = { x: layout.aim.x, y: layout.aim.y };
     this.aimPointerCurrent = { x: pointer.x, y: pointer.y };
   };
 
@@ -288,12 +351,14 @@ export class MovementInputController {
       return snapshot;
     }
 
+    const layout = this.getJoystickLayout();
     const snapshot = resolveMovementInput({
       keyboard: this.readKeyboardInput(),
-      pointer: this.readMovementPointerInput(),
-      aimPointer: this.readAimPointerInput(),
+      pointer: this.readMovementPointerInput(layout),
+      aimPointer: this.readAimPointerInput(layout),
       previousFacing: this.lastFacing,
       hasExplicitAim: this.hasExplicitAim,
+      deadzone: layout.movement.deadzone,
     });
 
     this.lastFacing = snapshot.facing;
@@ -342,6 +407,7 @@ export class MovementInputController {
     const reconciled = reconcilePointerChannels({
       activePointers,
       viewportWidth: this.scene.scale.width,
+      viewportHeight: this.scene.scale.height,
       previousMovement: this.suspendedMovementPointer,
       previousAim: this.suspendedAimPointer,
       ignoredPointerIds: this.ignoredPointers.keys(),
@@ -375,14 +441,25 @@ export class MovementInputController {
   }
 
   getPointerGuideState(): PointerGuideState {
+    const layout = this.getJoystickLayout();
     return {
       movement: this.createPointerGuideChannel(
         !this.inputSuppressed && this.movementPointerId !== null,
-        this.movementPointerStart,
+        layout.movement,
         this.movementPointerCurrent,
       ),
-      aim: this.createPointerGuideChannel(!this.inputSuppressed && this.aimPointerId !== null, this.aimPointerStart, this.aimPointerCurrent),
+      aim: this.createPointerGuideChannel(
+        !this.inputSuppressed && this.aimPointerId !== null,
+        layout.aim,
+        this.aimPointerCurrent,
+      ),
     };
+  }
+
+  getJoystickLayout(): DualJoystickLayout {
+    const width = this.scene.scale?.width ?? GAME_WIDTH;
+    const height = this.scene.scale?.height;
+    return getDualJoystickLayout(width, height);
   }
 
   destroy(): void {
@@ -410,35 +487,46 @@ export class MovementInputController {
     };
   }
 
-  private readMovementPointerInput(): MovementChannelInput {
+  private readMovementPointerInput(layout: DualJoystickLayout): MovementChannelInput {
     return {
       vector: {
-        x: this.movementPointerCurrent.x - this.movementPointerStart.x,
-        y: this.movementPointerCurrent.y - this.movementPointerStart.y,
+        x: this.movementPointerCurrent.x - layout.movement.x,
+        y: this.movementPointerCurrent.y - layout.movement.y,
       },
       active: this.movementPointerId !== null,
     };
   }
 
-  private readAimPointerInput(): MovementChannelInput {
+  private readAimPointerInput(layout: DualJoystickLayout): MovementChannelInput {
     return {
       vector: {
-        x: this.aimPointerCurrent.x - this.aimPointerStart.x,
-        y: this.aimPointerCurrent.y - this.aimPointerStart.y,
+        x: this.aimPointerCurrent.x - layout.aim.x,
+        y: this.aimPointerCurrent.y - layout.aim.y,
       },
       active: this.aimPointerId !== null,
     };
   }
 
-  private createPointerGuideChannel(active: boolean, start: MovementVector, current: MovementVector): PointerGuideChannel {
+  private createPointerGuideChannel(
+    active: boolean,
+    zone: JoystickZoneLayout,
+    current: MovementVector,
+  ): PointerGuideChannel {
+    if (!active) {
+      return {
+        active: false,
+        start: { x: zone.x, y: zone.y },
+        current: { x: zone.x, y: zone.y },
+        vector: { x: 0, y: 0 },
+      };
+    }
+
+    const sample = sampleJoystickPointer(current, zone);
     return {
-      active,
-      start: { ...start },
+      active: true,
+      start: { x: zone.x, y: zone.y },
       current: { ...current },
-      vector: {
-        x: active ? current.x - start.x : 0,
-        y: active ? current.y - start.y : 0,
-      },
+      vector: sample.knobOffset,
     };
   }
 
@@ -536,20 +624,29 @@ export class MovementInputController {
   }
 }
 
-function reconcilePointerChannel(candidates: ActivePointerLike[], previous: PointerChannelState): PointerChannelState {
-  const selected =
-    candidates.find((pointer) => previous.pointerId !== null && pointer.id === previous.pointerId) ?? candidates[0] ?? null;
+function findResumedPointer(
+  candidates: ActivePointerLike[],
+  previous: PointerChannelState,
+  claimedPointerIds: Set<number>,
+): ActivePointerLike | null {
+  if (previous.pointerId === null) {
+    return null;
+  }
 
+  return candidates.find((pointer) => pointer.id === previous.pointerId && !claimedPointerIds.has(pointer.id)) ?? null;
+}
+
+function buildReconciledChannelState(
+  selected: ActivePointerLike | null,
+  zone: JoystickZoneLayout,
+): PointerChannelState {
   if (!selected) {
     return createEmptyPointerChannelState();
   }
 
-  const resumedPreviousPointer = previous.pointerId === selected.id;
-  const start = resumedPreviousPointer ? previous.start : { x: selected.x, y: selected.y };
-
   return {
     pointerId: selected.id,
-    start: { ...start },
+    start: { x: zone.x, y: zone.y },
     current: { x: selected.x, y: selected.y },
   };
 }

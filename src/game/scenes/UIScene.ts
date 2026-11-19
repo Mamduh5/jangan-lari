@@ -11,6 +11,7 @@ import type { TankClassDefinition } from '../data/tankClasses';
 import { TANK_STAT_DEFINITIONS, TANK_STAT_IDS, type TankStatId, type TankStatLevels } from '../data/tankStats';
 import { WEAPON_DEFINITIONS, findWeaponDefinitionByName, type WeaponDefinition } from '../data/weapons';
 import type { ActivePointerLike } from '../input/MovementInputController';
+import { getDualJoystickLayout, type DualJoystickLayout, type JoystickZoneLayout } from '../input/joystickLayout';
 import { getUpgradeRewardType, upgradeHasWeaponRewardTag, type UpgradeRewardType } from '../systems/rewardClassification';
 import {
   getBranchUpgradeIconAssetSlot,
@@ -198,11 +199,15 @@ export class UIScene extends Phaser.Scene {
   private statHoveredId: TankStatId | null = null;
   private statPointPillKey = '';
   private controlGuideMode: ControlGuideMode = 'subtle';
+  private joystickLayout: DualJoystickLayout = getDualJoystickLayout(GAME_WIDTH, GAME_HEIGHT);
   private controlGuideVisualContainer!: Phaser.GameObjects.Container;
+  private controlGuideHitRings: Phaser.GameObjects.Arc[] = [];
   private controlGuideZones: Phaser.GameObjects.Arc[] = [];
+  private controlGuideDecorationGraphics!: Phaser.GameObjects.Graphics;
   private controlGuideKnobs: Phaser.GameObjects.Arc[] = [];
   private controlGuideLabels: Phaser.GameObjects.Text[] = [];
   private controlGuideSubLabels: Phaser.GameObjects.Text[] = [];
+  private controlGuideVisualStateKey = '';
   private controlHintContainer!: Phaser.GameObjects.Container;
   private controlGuideToggleButton!: Phaser.GameObjects.Text;
   private controlHintPanelGraphics!: Phaser.GameObjects.Graphics;
@@ -303,10 +308,13 @@ export class UIScene extends Phaser.Scene {
     this.endVisualStateKey = '';
     this.endButtonVisualKey = '';
     this.endButtonHovered = false;
+    this.joystickLayout = getDualJoystickLayout(GAME_WIDTH, GAME_HEIGHT);
+    this.controlGuideHitRings = [];
     this.controlGuideZones = [];
     this.controlGuideKnobs = [];
     this.controlGuideLabels = [];
     this.controlGuideSubLabels = [];
+    this.controlGuideVisualStateKey = '';
     this.pauseMenuButtons = [];
     this.pauseMenuButtonGraphics = [];
     this.pauseMenuButtonVisualKeys = [];
@@ -1017,6 +1025,7 @@ export class UIScene extends Phaser.Scene {
     controlGuideMode: ControlGuideMode;
     controlGuidesVisible: boolean;
     joystickGuidesVisible: boolean;
+    joystickLayout: DualJoystickLayout;
     movementJoystickKnob: { x: number; y: number };
     aimJoystickKnob: { x: number; y: number };
     controlHintVisible: boolean;
@@ -1065,6 +1074,7 @@ export class UIScene extends Phaser.Scene {
       controlGuideMode: this.controlGuideMode,
       controlGuidesVisible: this.controlGuideVisualContainer.visible,
       joystickGuidesVisible: this.controlGuideVisualContainer.visible,
+      joystickLayout: this.joystickLayout,
       movementJoystickKnob: {
         x: this.controlGuideKnobs[0]?.x ?? 0,
         y: this.controlGuideKnobs[0]?.y ?? 0,
@@ -1705,23 +1715,39 @@ export class UIScene extends Phaser.Scene {
   }
 
   private createControlGuideVisuals(): Phaser.GameObjects.Container {
-    const zoneConfigs = [
-      { x: 290, y: 552, knobColor: DOODLE_COLORS.xp, label: 'MOVE', subLabel: 'LEFT SIDE' },
-      { x: 1310, y: 552, knobColor: DOODLE_COLORS.gold, label: 'AIM', subLabel: 'RIGHT SIDE' },
+    const zoneConfigs: Array<{
+      layout: JoystickZoneLayout;
+      knobColor: number;
+      label: string;
+      subLabel: string;
+    }> = [
+      { layout: this.joystickLayout.movement, knobColor: DOODLE_COLORS.xp, label: 'MOVE', subLabel: '' },
+      { layout: this.joystickLayout.aim, knobColor: DOODLE_COLORS.gold, label: 'AIM', subLabel: '' },
     ];
-    const children: Phaser.GameObjects.GameObject[] = [];
+    const hitRings: Phaser.GameObjects.Arc[] = [];
+    const zones: Phaser.GameObjects.Arc[] = [];
+    const knobs: Phaser.GameObjects.Arc[] = [];
+    const labels: Phaser.GameObjects.Text[] = [];
+    const subLabels: Phaser.GameObjects.Text[] = [];
+
+    this.controlGuideDecorationGraphics = this.add.graphics().setScrollFactor(0);
 
     for (const config of zoneConfigs) {
-      const zone = this.add.circle(config.x, config.y, 92, DOODLE_COLORS.paper, 0.1);
-      zone.setStrokeStyle(2.5, DOODLE_COLORS.ink, 0.36);
+      const { layout } = config;
+      const hitRing = this.add.circle(layout.x, layout.y, layout.hitRadius, DOODLE_COLORS.paper, 0.05);
+      hitRing.setStrokeStyle(1.8, DOODLE_COLORS.ink, 0.3);
+      hitRing.setScrollFactor(0);
+
+      const zone = this.add.circle(layout.x, layout.y, layout.baseRadius, DOODLE_COLORS.paper, 0.14);
+      zone.setStrokeStyle(2.5, DOODLE_COLORS.ink, 0.52);
       zone.setScrollFactor(0);
 
-      const knob = this.add.circle(config.x, config.y, 28, config.knobColor, 0.36);
-      knob.setStrokeStyle(2, DOODLE_COLORS.ink, 0.55);
+      const knob = this.add.circle(layout.x, layout.y, layout.knobRadius, config.knobColor, 0.5);
+      knob.setStrokeStyle(2.2, DOODLE_COLORS.ink, 0.68);
       knob.setScrollFactor(0);
 
       const label = this.add
-        .text(config.x, config.y - 124, config.label, {
+        .text(layout.x, layout.y - layout.hitRadius - 18, config.label, {
           fontFamily: DOODLE_FONTS.body,
           fontSize: '19px',
           fontStyle: 'bold',
@@ -1733,7 +1759,7 @@ export class UIScene extends Phaser.Scene {
         .setScrollFactor(0);
 
       const subLabel = this.add
-        .text(config.x, config.y - 101, config.subLabel, {
+        .text(layout.x, layout.y + layout.hitRadius + 14, config.subLabel, {
           fontFamily: DOODLE_FONTS.body,
           fontSize: '11px',
           fontStyle: 'bold',
@@ -1744,14 +1770,27 @@ export class UIScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setScrollFactor(0);
 
+      this.controlGuideHitRings.push(hitRing);
       this.controlGuideZones.push(zone);
       this.controlGuideKnobs.push(knob);
       this.controlGuideLabels.push(label);
       this.controlGuideSubLabels.push(subLabel);
-      children.push(zone, knob, label, subLabel);
+
+      hitRings.push(hitRing);
+      zones.push(zone);
+      knobs.push(knob);
+      labels.push(label);
+      subLabels.push(subLabel);
     }
 
-    const container = this.add.container(0, 0, children);
+    const container = this.add.container(0, 0, [
+      ...hitRings,
+      ...zones,
+      this.controlGuideDecorationGraphics,
+      ...knobs,
+      ...labels,
+      ...subLabels,
+    ]);
     container.setDepth(64);
     container.setScrollFactor(0);
     container.setVisible(false);
@@ -1777,7 +1816,7 @@ export class UIScene extends Phaser.Scene {
     });
 
     const hintText = this.add
-      .text(GAME_WIDTH / 2, 516, 'Left side: move\nRight side: aim\nWeapons fire automatically', {
+      .text(GAME_WIDTH / 2, 516, 'Left pad: move\nRight pad: aim\nWeapons fire automatically', {
         fontFamily: DOODLE_FONTS.body,
         fontSize: '15px',
         fontStyle: 'bold',
@@ -1875,7 +1914,7 @@ export class UIScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
 
-    button.on('pointerdown', () => this.openPauseMenu());
+    button.on('pointerdown', (pointer?: Phaser.Input.Pointer) => this.openPauseMenu(pointer));
     button.on('pointerover', () => {
       this.pauseButtonHovered = true;
       this.drawPauseButtonGraphics();
@@ -1955,7 +1994,7 @@ export class UIScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    this.activeAbilityButtonHitArea.on('pointerdown', () => this.activateBreakoutPulse());
+    this.activeAbilityButtonHitArea.on('pointerdown', (pointer?: Phaser.Input.Pointer) => this.activateBreakoutPulse(pointer));
     this.activeAbilityButtonHitArea.on('pointerover', () => {
       this.activeAbilityHovered = true;
       this.refreshActiveAbilityButtonStyle();
@@ -2365,22 +2404,30 @@ export class UIScene extends Phaser.Scene {
     this.activeAbilityButtonLabel.setColor(ready ? DOODLE_HEX.ink : DOODLE_HEX.inkMuted);
   }
 
-  private openPauseMenu(): void {
+  private openPauseMenu(pointer?: ActivePointerLike): void {
     if (!this.scene.isActive('RunScene')) {
       return;
     }
 
     const runScene = this.scene.get('RunScene') as RunScene;
-    runScene.openManualPauseMenu();
+    if (pointer) {
+      runScene.openManualPauseMenu(pointer);
+    } else {
+      runScene.openManualPauseMenu();
+    }
   }
 
-  private activateBreakoutPulse(): void {
+  private activateBreakoutPulse(pointer?: ActivePointerLike): void {
     if (!this.scene.isActive('RunScene')) {
       return;
     }
 
     const runScene = this.scene.get('RunScene') as RunScene;
-    runScene.activateBreakoutPulse();
+    if (pointer) {
+      runScene.activateBreakoutPulse(pointer);
+    } else {
+      runScene.activateBreakoutPulse();
+    }
   }
 
   private closePauseMenu(pointer?: ActivePointerLike): void {
@@ -2433,54 +2480,174 @@ export class UIScene extends Phaser.Scene {
     this.controlGuideToggleButton.setVisible(false);
     this.controlGuideToggleButton.disableInteractive();
     this.refreshControlGuideButton();
-    this.refreshControlJoystickPositions();
-    this.applyControlGuidePresentation();
+    const joystickState = this.readControlJoystickState();
+    this.refreshControlJoystickPositions(joystickState);
+    this.applyControlGuidePresentation(joystickState);
   }
 
-  private applyControlGuidePresentation(): void {
-    const presentation =
-      this.controlGuideMode === 'visible'
-        ? { fillAlpha: 0.22, strokeAlpha: 0.78, knobAlpha: 0.68, labelAlpha: 0.95, subLabelAlpha: 0.8 }
-        : { fillAlpha: 0.08, strokeAlpha: 0.34, knobAlpha: 0.32, labelAlpha: 0.48, subLabelAlpha: 0.38 };
+  private applyControlGuidePresentation(joystickState: ControlJoystickState): void {
+    const isVisibleMode = this.controlGuideMode === 'visible';
+    const activeFlags = [joystickState.movement.active, joystickState.aim.active];
+    const zoneLayouts = [this.joystickLayout.movement, this.joystickLayout.aim];
+    const stateKey = `${this.controlGuideMode}:${activeFlags[0] ? '1' : '0'}:${activeFlags[1] ? '1' : '0'}`;
+
+    const presentation = isVisibleMode
+      ? {
+          hitFillAlpha: 0.09,
+          hitStrokeAlpha: 0.52,
+          hitActiveStrokeAlpha: 0.72,
+          fillAlpha: 0.24,
+          strokeAlpha: 0.82,
+          activeStrokeAlpha: 0.95,
+          knobAlpha: 0.74,
+          knobActiveAlpha: 0.94,
+          knobStrokeAlpha: 0.88,
+          labelAlpha: 0.96,
+          subLabelAlpha: 0.82,
+          decorAlpha: 0.68,
+        }
+      : {
+          hitFillAlpha: 0.05,
+          hitStrokeAlpha: 0.32,
+          hitActiveStrokeAlpha: 0.48,
+          fillAlpha: 0.14,
+          strokeAlpha: 0.52,
+          activeStrokeAlpha: 0.72,
+          knobAlpha: 0.5,
+          knobActiveAlpha: 0.8,
+          knobStrokeAlpha: 0.65,
+          labelAlpha: 0.72,
+          subLabelAlpha: 0.56,
+          decorAlpha: 0.42,
+        };
 
     for (let index = 0; index < this.controlGuideZones.length; index += 1) {
+      const hitRing = this.controlGuideHitRings[index];
       const zone = this.controlGuideZones[index];
+      const knob = this.controlGuideKnobs[index];
+      const isActive = activeFlags[index] ?? false;
       const knobColor = index === 0 ? DOODLE_COLORS.xp : DOODLE_COLORS.gold;
-      zone.setFillStyle(DOODLE_COLORS.paper, presentation.fillAlpha);
-      zone.setStrokeStyle(this.controlGuideMode === 'visible' ? 3 : 2, DOODLE_COLORS.ink, presentation.strokeAlpha);
-      this.controlGuideKnobs[index].setFillStyle(knobColor, presentation.knobAlpha);
-      this.controlGuideKnobs[index].setStrokeStyle(
-        this.controlGuideMode === 'visible' ? 2.5 : 1.5,
+
+      hitRing?.setFillStyle(DOODLE_COLORS.paper, isActive ? presentation.hitFillAlpha + 0.03 : presentation.hitFillAlpha);
+      hitRing?.setStrokeStyle(
+        isVisibleMode || isActive ? 2 : 1.5,
         DOODLE_COLORS.ink,
-        presentation.strokeAlpha,
+        isActive ? presentation.hitActiveStrokeAlpha : presentation.hitStrokeAlpha,
       );
-      this.controlGuideLabels[index].setAlpha(presentation.labelAlpha);
+
+      zone.setFillStyle(DOODLE_COLORS.paper, isActive ? presentation.fillAlpha + 0.05 : presentation.fillAlpha);
+      zone.setStrokeStyle(
+        isVisibleMode || isActive ? 3 : 2.2,
+        DOODLE_COLORS.ink,
+        isActive ? presentation.activeStrokeAlpha : presentation.strokeAlpha,
+      );
+
+      knob.setFillStyle(knobColor, isActive ? presentation.knobActiveAlpha : presentation.knobAlpha);
+      knob.setStrokeStyle(
+        isVisibleMode || isActive ? 2.5 : 1.8,
+        DOODLE_COLORS.ink,
+        isActive ? Math.min(1, presentation.knobStrokeAlpha + 0.2) : presentation.knobStrokeAlpha,
+      );
+      this.controlGuideLabels[index].setAlpha(isActive ? Math.min(1, presentation.labelAlpha + 0.12) : presentation.labelAlpha);
       this.controlGuideSubLabels[index].setAlpha(presentation.subLabelAlpha);
+    }
+
+    if (this.controlGuideDecorationGraphics && this.controlGuideVisualStateKey !== stateKey) {
+      this.controlGuideVisualStateKey = stateKey;
+      this.drawControlGuideDecorations(zoneLayouts, activeFlags, presentation.decorAlpha);
     }
   }
 
-  private refreshControlJoystickPositions(): void {
-    const joystickState = this.readControlJoystickState();
-    this.positionControlGuideKnob(0, joystickState.movement);
-    this.positionControlGuideKnob(1, joystickState.aim);
+  private drawControlGuideDecorations(
+    zoneLayouts: JoystickZoneLayout[],
+    activeFlags: boolean[],
+    baseAlpha: number,
+  ): void {
+    const g = this.controlGuideDecorationGraphics;
+    g.clear();
+
+    for (let index = 0; index < zoneLayouts.length; index += 1) {
+      const zone = zoneLayouts[index];
+      const isActive = activeFlags[index] ?? false;
+      const alpha = isActive ? Math.min(0.9, baseAlpha + 0.16) : baseAlpha;
+
+      // Hand-drawn doodle accent ring matching the primary joystick base
+      drawDoodleCircle(g, {
+        cx: zone.x,
+        cy: zone.y,
+        radius: zone.baseRadius,
+        seed: 191 + index * 17,
+        segments: 28,
+        jitter: 1.1,
+        fillAlpha: 0,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeAlpha: alpha * 0.65,
+        strokeWidth: 1.6,
+        shadowAlpha: 0,
+      });
+
+      // Subtle center deadzone ring so neutral thumb rest position is legible
+      drawDoodleCircle(g, {
+        cx: zone.x,
+        cy: zone.y,
+        radius: zone.deadzone,
+        seed: 223 + index * 13,
+        segments: 14,
+        jitter: 0.45,
+        fillAlpha: 0,
+        strokeColor: DOODLE_COLORS.ink,
+        strokeAlpha: alpha * 0.72,
+        strokeWidth: 1.5,
+        shadowAlpha: 0,
+      });
+
+      g.lineStyle(1.8, DOODLE_COLORS.ink, alpha * 0.78);
+      if (zone.id === 'movement') {
+        const inner = zone.baseRadius - 20;
+        const outer = zone.baseRadius - 8;
+        g.lineBetween(zone.x, zone.y - inner, zone.x, zone.y - outer);
+        g.lineBetween(zone.x, zone.y + inner, zone.x, zone.y + outer);
+        g.lineBetween(zone.x - inner, zone.y, zone.x - outer, zone.y);
+        g.lineBetween(zone.x + inner, zone.y, zone.x + outer, zone.y);
+      } else {
+        const inner = zone.deadzone + 10;
+        const outer = zone.baseRadius - 14;
+        g.lineBetween(zone.x, zone.y - inner, zone.x, zone.y - outer);
+        g.lineBetween(zone.x, zone.y + inner, zone.x, zone.y + outer);
+        g.lineBetween(zone.x - inner, zone.y, zone.x - outer, zone.y);
+        g.lineBetween(zone.x + inner, zone.y, zone.x + outer, zone.y);
+      }
+    }
   }
 
-  private positionControlGuideKnob(index: number, channel: ControlJoystickChannel): void {
-    const zone = this.controlGuideZones[index];
+  private refreshControlJoystickPositions(joystickState: ControlJoystickState = this.readControlJoystickState()): void {
+    this.positionControlGuideKnob(0, this.joystickLayout.movement, joystickState.movement);
+    this.positionControlGuideKnob(1, this.joystickLayout.aim, joystickState.aim);
+  }
+
+  private positionControlGuideKnob(
+    index: number,
+    zoneLayout: JoystickZoneLayout,
+    channel: ControlJoystickChannel,
+  ): void {
     const knob = this.controlGuideKnobs[index];
-    if (!zone || !knob) {
+    if (!knob) {
       return;
     }
 
     if (!channel.active) {
-      knob.setPosition(zone.x, zone.y);
+      knob.setPosition(zoneLayout.x, zoneLayout.y);
       return;
     }
 
-    const radius = 62;
     const distance = Math.hypot(channel.vector.x, channel.vector.y);
-    const scale = distance > radius && distance > 0 ? radius / distance : 1;
-    knob.setPosition(zone.x + channel.vector.x * scale, zone.y + channel.vector.y * scale);
+    if (!Number.isFinite(distance) || distance < zoneLayout.deadzone || distance === 0) {
+      knob.setPosition(zoneLayout.x, zoneLayout.y);
+      return;
+    }
+
+    const scale = distance > zoneLayout.maxKnobTravel ? zoneLayout.maxKnobTravel / distance : 1;
+    knob.setPosition(zoneLayout.x + channel.vector.x * scale, zoneLayout.y + channel.vector.y * scale);
   }
 
   private readControlJoystickState(): ControlJoystickState {

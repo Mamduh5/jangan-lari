@@ -787,7 +787,11 @@ export class RunScene extends Phaser.Scene {
     sceneManager.start('MenuScene');
   }
 
-  public openManualPauseMenu(): void {
+  public openManualPauseMenu(overlayPointer?: ActivePointerLike): void {
+    if (isActivePointerLike(overlayPointer)) {
+      this.movementInput?.clearOverlaySelectionPointer(overlayPointer);
+    }
+
     if (this.isEnded || this.isTransitioningToMenu || this.isLevelingUp || this.isChoosingTankClass || this.isManualPaused) {
       return;
     }
@@ -1728,7 +1732,11 @@ export class RunScene extends Phaser.Scene {
     return Math.max(0, Math.ceil(this.breakoutPulseCooldownRemainingMs));
   }
 
-  public activateBreakoutPulse(): boolean {
+  public activateBreakoutPulse(overlayPointer?: ActivePointerLike): boolean {
+    if (isActivePointerLike(overlayPointer)) {
+      this.movementInput?.clearOverlaySelectionPointer(overlayPointer);
+    }
+
     if (!this.canActivateBreakoutPulse()) {
       this.publishHudState();
       return false;
@@ -5549,6 +5557,19 @@ export class RunScene extends Phaser.Scene {
       this.neutralShapeSpawnTimer.paused = false;
     }
   }
+}
+
+function isActivePointerLike(value: unknown): value is ActivePointerLike {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<ActivePointerLike>;
+  return (
+    typeof candidate.id === 'number' &&
+    typeof candidate.x === 'number' &&
+    typeof candidate.y === 'number'
+  );
 }
 
 
